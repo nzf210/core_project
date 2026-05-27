@@ -1,2 +1,27 @@
-
+# Environments
 .env
+.env.*
+
+# Logs and PIDs
+*.log
+*.pid
+
+# Go Binaries
+bin/
+accounting
+billing-service
+
+# Dependencies
+node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Uploads
+uploads/
+
+# OS & Editor
+.DS_Store
+.vscode/
+.idea/
