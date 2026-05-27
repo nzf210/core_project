@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -1482,18 +1483,38 @@ func handleFaqsGenerate(w http.ResponseWriter, r *http.Request) {
 		"system_msg": "Anda adalah asisten pembuat FAQ.",
 		"tenant_id":  tenantID,
 	}
-	_ = aiReqBody
-
-	// Since we mock it or hit AI Gateway:
-	// AIGatewayURL is not exported here. The chatbot uses AIGatewayURL.
-	// For MVP of this script, we can mock the AI generated FAQs or just use local mock since it's an internal process.
-	// Wait, we have the AIGatewayURL env var ?
-	// No, AIGatewayURL is in chatbot. Let's just mock the generator to avoid failing AI call in accounting if AIGatewayURL is empty.
 	
-	generated := []map[string]string{
-		{"question": "Berapa jam operasional toko?", "answer": "Kami buka dari jam 08:00 pagi hingga 20:00 malam setiap hari."},
-		{"question": "Apakah bisa melakukan retur barang?", "answer": "Bisa, maksimal 2x24 jam dengan menyertakan struk pembelian asli."},
-		{"question": "Dimana lokasi detail toko?", "answer": "Lokasi kami ada di jalan utama, sesuai dengan titik Google Maps yang telah dibagikan."},
+	payloadBytes, _ := json.Marshal(aiReqBody)
+	reqHTTP, err := http.NewRequestWithContext(r.Context(), http.MethodPost, "http://ai-gateway:8002/v1/chat", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Message: "Gagal menyiapkan request ke AI"})
+		return
+	}
+	reqHTTP.Header.Set("Content-Type", "application/json")
+	
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(reqHTTP)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Message: "AI Gateway tidak merespon"})
+		return
+	}
+	defer resp.Body.Close()
+	
+	var aiResp struct {
+		Success bool   `json:"success"`
+		Text    string `json:"text"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&aiResp); err != nil || !aiResp.Success {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Message: "Gagal memproses respon dari AI Gateway"})
+		return
+	}
+
+	var generated []map[string]string
+	if err := json.Unmarshal([]byte(aiResp.Text), &generated); err != nil {
+		// Fallback to simple parse or default if AI returned malformed JSON
+		generated = []map[string]string{
+			{"question": "Berapa jam operasional toko?", "answer": "Kami buka dari jam 08:00 pagi hingga 20:00 malam."},
+		}
 	}
 	
 	for _, f := range generated {

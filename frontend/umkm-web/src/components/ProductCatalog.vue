@@ -184,7 +184,7 @@ interface Product {
   additional_photos: string[];
 }
 
-const tenantId = ref(localStorage.getItem('tenant_id') || 'tenant-123')
+const tenantId = ref(localStorage.getItem('tenant_id') || '')
 const products = ref<Product[]>([]);
 const loading = ref(true);
 const saving = ref(false);

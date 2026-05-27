@@ -210,7 +210,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { api, API_BASE } from '../api'
 
-const tenantId = ref(localStorage.getItem('tenant_id') || 'tenant-123')
+const tenantId = ref(localStorage.getItem('tenant_id') || '')
 const waStatus = ref<'checking' | 'connected' | 'disconnected'>('checking')
 const qrCodeData = ref<string | null>(null)
 const loadingQr = ref(false)

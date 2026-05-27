@@ -185,7 +185,7 @@ const handleOCR = async (e: Event) => {
     const data = await res.json()
     if (data.success) {
       alert("Nota berhasil di-scan!\n" + JSON.stringify(data.data, null, 2))
-      // Mock saving directly for demo
+
       await api.post('/api/umkm/transactions', data.data)
       fetchTransactions()
     } else {

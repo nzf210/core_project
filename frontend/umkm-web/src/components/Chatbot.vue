@@ -40,6 +40,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
+import { api } from '../api'
 
 const isOpen = ref(false)
 
@@ -68,29 +69,18 @@ const sendMessage = async () => {
   scrollToBottom()
 
   try {
-    const res = await fetch('/api/umkm/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': 'mock-tenant' },
-      body: JSON.stringify({ message: userText })
-    })
+    const data = await api.post('/api/umkm/chat', { message: userText })
 
-    if (res.ok) {
-      const data = await res.json()
-      messages.value.push({ role: 'assistant', content: data.data.reply })
+    if (data.success) {
+      messages.value.push({ role: 'assistant', content: data.data.reply || data.data })
     } else {
-      throw new Error('API Error')
+      throw new Error(data.message || 'API Error')
     }
-  } catch (e) {
-    // Fallback if backend is down
-    setTimeout(() => {
-      messages.value.push({ 
-        role: 'assistant', 
-        content: 'Maaf, sistem sedang offline. (Simulasi: Laba Anda bulan ini meningkat 15% dari bulan lalu. Terus pertahankan!)' 
-      })
-      isLoading.value = false
-      scrollToBottom()
-    }, 1000)
-    return
+  } catch (e: any) {
+    messages.value.push({ 
+      role: 'assistant', 
+      content: 'Maaf, sistem AI Chatbot sedang bermasalah atau belum terhubung.' 
+    })
   }
 
   isLoading.value = false
