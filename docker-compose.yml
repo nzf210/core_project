@@ -1,9 +1,5 @@
 version: '3.8'
-
 services:
-  # ==========================================
-  # Infrastructure
-  # ==========================================
   postgres:
     image: postgres:15-alpine
     container_name: wch-postgres
@@ -12,43 +8,46 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-wch_core}
     ports:
-      - "5433:5432"
+      - 127.0.0.1:5433:5432
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${DB_USER:-postgres}
       interval: 5s
       timeout: 5s
       retries: 5
-
+    restart: unless-stopped
   redis:
     image: redis:7-alpine
     container_name: wch-redis
     ports:
-      - "6380:6379"
+      - 127.0.0.1:6380:6379
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        - CMD
+        - redis-cli
+        - ping
       interval: 5s
       timeout: 5s
       retries: 5
-
-  # ==========================================
-  # Core Services
-  # ==========================================
+    restart: unless-stopped
   api-gateway:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: wch-api-gateway
-    command: ["api-gateway"]
+    command:
+      - api-gateway
     environment:
       - APP_ENV=production
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
       - REDIS_HOST=redis
     ports:
-      - "8000:8000"
+      - 8000:8000
     depends_on:
       auth-service:
         condition: service_started
@@ -58,13 +57,14 @@ services:
         condition: service_started
       campaign-api:
         condition: service_started
-
+    restart: unless-stopped
   auth-service:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: wch-auth-service
-    command: ["auth-service"]
+    command:
+      - auth-service
     environment:
       - APP_ENV=production
       - DB_HOST=postgres
@@ -75,20 +75,19 @@ services:
       - DB_SSLMODE=disable
       - REDIS_HOST=redis
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
-    ports:
-      - "8001:8001"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-
+    restart: unless-stopped
   ai-gateway:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: wch-ai-gateway
-    command: ["ai-gateway"]
+    command:
+      - ai-gateway
     environment:
       - APP_ENV=production
       - REDIS_HOST=redis
@@ -100,22 +99,17 @@ services:
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_BASE_URL=${LLM_BASE_URL}
       - LLM_MODEL=${LLM_MODEL}
-    ports:
-      - "8003:8002"
     depends_on:
       redis:
         condition: service_healthy
-
-  # ==========================================
-  # Apps / Products
-  # ==========================================
-
+    restart: unless-stopped
   umkm-accounting:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: wch-umkm-accounting
-    command: ["umkm-accounting"]
+    command:
+      - umkm-accounting
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -123,18 +117,17 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
-    ports:
-      - "8201:8201"
     depends_on:
       postgres:
         condition: service_healthy
-
+    restart: unless-stopped
   umkm-business:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: wch-umkm-business
-    command: ["umkm-business"]
+    command:
+      - umkm-business
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -144,14 +137,12 @@ services:
       - DB_SSLMODE=disable
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
       - REDIS_HOST=redis
-    ports:
-      - "9005:9005"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-
+    restart: unless-stopped
   n8n:
     image: n8nio/n8n:latest
     container_name: wch-n8n
@@ -164,20 +155,20 @@ services:
       - NODE_ENV=production
       - WEBHOOK_URL=http://localhost:5678/
       - GENERIC_TIMEZONE=Asia/Jakarta
-      # Database setup using existing postgres
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_DATABASE=${DB_NAME:-wch_core}
       - DB_POSTGRESDB_HOST=postgres
       - DB_POSTGRESDB_PORT=5432
       - DB_POSTGRESDB_USER=${DB_USER:-postgres}
       - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD:-postgres}
-      # Security (Basic Auth)
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=admin
       - N8N_BASIC_AUTH_PASSWORD=n8n_secure_admin_password_123
-    entrypoint: ["/bin/sh", "/infra/n8n/init.sh"]
+    entrypoint:
+      - /bin/sh
+      - /infra/n8n/init.sh
     ports:
-      - "5678:5678"
+      - 127.0.0.1:5678:5678
     volumes:
       - n8n_data:/home/node/.n8n
       - ./infra/n8n/workflows:/workflows
@@ -185,13 +176,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
   umkm-chatbot:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: wch-umkm-chatbot
-    command: ["umkm-chatbot"]
+    command:
+      - umkm-chatbot
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -200,8 +191,6 @@ services:
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
       - AI_GATEWAY_URL=http://ai-gateway:8002/v1/chat
-    ports:
-      - "8203:8203"
     depends_on:
       postgres:
         condition: service_healthy
@@ -209,13 +198,14 @@ services:
         condition: service_started
       wa-gateway:
         condition: service_started
-
+    restart: unless-stopped
   crypto-api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: wch-crypto-api
-    command: ["crypto-api"]
+    command:
+      - crypto-api
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -226,20 +216,19 @@ services:
       - REDIS_HOST=redis
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-12345678901234567890123456789012}
-    ports:
-      - "8101:8101"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-
+    restart: unless-stopped
   crypto-worker:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: wch-crypto-worker
-    command: ["crypto-worker"]
+    command:
+      - crypto-worker
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -257,13 +246,14 @@ services:
         condition: service_healthy
       ai-gateway:
         condition: service_started
-
+    restart: unless-stopped
   campaign-api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: wch-campaign-api
-    command: ["campaign-api"]
+    command:
+      - campaign-api
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -271,18 +261,17 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
-    ports:
-      - "9002:9002"
     depends_on:
       postgres:
         condition: service_healthy
-
+    restart: unless-stopped
   wa-gateway:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: wch-wa-gateway
-    command: ["wa-gateway"]
+    command:
+      - wa-gateway
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -290,13 +279,21 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
-    ports:
-      - "8202:8202"
     depends_on:
       postgres:
         condition: service_healthy
-
+    restart: unless-stopped
+  umkm-frontend:
+    build:
+      context: ./frontend/umkm-web
+      dockerfile: Dockerfile
+    container_name: wch-umkm-frontend
+    ports:
+      - 80:80
+    restart: unless-stopped
+    depends_on:
+      - api-gateway
 volumes:
-  pgdata:
-  redisdata:
-  n8n_data:
+  pgdata: null
+  redisdata: null
+  n8n_data: null

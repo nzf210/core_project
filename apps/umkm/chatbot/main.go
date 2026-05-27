@@ -14,6 +14,8 @@ import (
 
 	"core_project/shared/sdk/config"
 	"net/url"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type APIResponse struct {
@@ -24,6 +26,7 @@ type APIResponse struct {
 
 var AIGatewayURL = "http://localhost:8002/v1/chat"
 var AccountingURL = "http://localhost:8201"
+var redisClient *redis.Client
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -45,6 +48,19 @@ func main() {
 		os.Exit(1)
 	}
 	defer DB.Close()
+
+	redisHost := os.Getenv("REDIS_HOST")
+	if redisHost == "" {
+		redisHost = "localhost"
+	}
+	redisClient = redis.NewClient(&redis.Options{
+		Addr: redisHost + ":6379",
+	})
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		slog.Error("Failed to connect to Redis", "error", err)
+	} else {
+		slog.Info("Connected to Redis for Queue")
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/chat", handleChat)
@@ -170,18 +186,35 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 
 // Queue setup
 type ChatJob struct {
-	Sender   string
-	Message  string
-	TenantID string
+	Sender   string `json:"sender"`
+	Message  string `json:"message"`
+	TenantID string `json:"tenant_id"`
 }
 
-var JobQueue = make(chan ChatJob, 5000)
+const redisQueueKey = "chatbot:queue"
 
 func startWorkerPool(numWorkers int) {
 	for i := 0; i < numWorkers; i++ {
 		go func(workerID int) {
-			for job := range JobQueue {
-				processChatJob(job)
+			ctx := context.Background()
+			for {
+				// BRPOP blocks until an item is available or timeout (0 = wait forever)
+				res, err := redisClient.BRPop(ctx, 0, redisQueueKey).Result()
+				if err != nil {
+					slog.Error("Redis BRPOP error", "worker", workerID, "error", err)
+					time.Sleep(2 * time.Second)
+					continue
+				}
+
+				// BRPOP returns [key, value]
+				if len(res) == 2 {
+					var job ChatJob
+					if err := json.Unmarshal([]byte(res[1]), &job); err == nil {
+						processChatJob(job)
+					} else {
+						slog.Error("Failed to unmarshal chat job", "error", err, "data", res[1])
+					}
+				}
 			}
 		}(i)
 	}
@@ -231,12 +264,18 @@ func handleWAWebhook(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":true,"message":"queued"}`))
 
-	// Enqueue the job for async processing
-	select {
-	case JobQueue <- ChatJob{Sender: sender, Message: message, TenantID: tenantID}:
-		slog.Info("Job queued successfully", "sender", sender)
-	default:
-		slog.Error("JobQueue is full! Dropping message from", "sender", sender)
+	// Enqueue the job for async processing via Redis
+	job := ChatJob{Sender: sender, Message: message, TenantID: tenantID}
+	jobBytes, err := json.Marshal(job)
+	if err == nil {
+		errRedis := redisClient.LPush(r.Context(), redisQueueKey, jobBytes).Err()
+		if errRedis != nil {
+			slog.Error("Failed to enqueue job to Redis", "sender", sender, "error", errRedis)
+		} else {
+			slog.Info("Job queued to Redis successfully", "sender", sender)
+		}
+	} else {
+		slog.Error("Failed to marshal chat job", "error", err)
 	}
 }
 

@@ -223,7 +223,7 @@ const loadingQris = ref(false)
 
 const reportEnabled = ref(false)
 const reportTime = ref('07:00')
-const loadingReport = ref(false)
+
 
 const toast = ref({ visible: false, message: '', type: 'success' })
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -448,28 +448,7 @@ const saveQrisSettings = async () => {
   }
 }
 
-const saveReportSettings = async () => {
-  loadingReport.value = true
-  try {
-    const payload = {
-      qris_enabled: qrisEnabled.value,
-      xendit_api_key: xenditApiKey.value,
-      xendit_webhook_token: xenditWebhookToken.value,
-      report_enabled: reportEnabled.value,
-      report_time: reportTime.value
-    }
-    const data = await api.put('/api/umkm/settings', payload)
-    if (data.success) {
-      showToast('Pengaturan Laporan berhasil disimpan')
-    } else {
-      showToast(data.message || 'Gagal menyimpan', 'error')
-    }
-  } catch (err) {
-    showToast('Kesalahan jaringan', 'error')
-  } finally {
-    loadingReport.value = false
-  }
-}
+
 
 // FAQ Management
 const faqs = ref<any[]>([])
