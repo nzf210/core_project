@@ -1,0 +1,170 @@
+{
+  "name": "UMKM - Master Automation Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "* * * * *"
+            }
+          ]
+        }
+      },
+      "id": "e456678d-6c1e-4361-b50a-e24177d704af",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-umkm-accounting:8201/internal/automations/due",
+        "options": {}
+      },
+      "id": "8471c26b-f41f-442b-ab82-d8174fec7a11",
+      "name": "Get Due Automations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        440,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.data.length > 0 }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "2bcda8af-c146-4e56-b0ff-90a8a7de400b",
+      "name": "If Has Due Automations",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        660,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "d040854d-dafa-4e78-bad1-c91f63c8112c",
+      "name": "Item Lists",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [
+        880,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wch-umkm-accounting:8201/internal/automations/execute",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"automation_id\": \"{{ $json.automation_id }}\",\n  \"tenant_id\": \"{{ $json.tenant_id }}\",\n  \"type\": \"{{ $json.type }}\"\n}",
+        "options": {}
+      },
+      "id": "2521bc16-fc33-4f93-bc42-df9dfb8c278e",
+      "name": "Execute Automation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1100,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wch-wa-gateway:8202/api/wa/send",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"target\": \"{{ $(\\\"Item Lists\\\").item.json.wa_number }}\",\n  \"message\": \"{{ $json.data.message }}\"\n}",
+        "options": {}
+      },
+      "id": "b06828da-c9ba-4700-9e66-6abf1d4f216f",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1320,
+        260
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Due Automations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Due Automations": {
+      "main": [
+        [
+          {
+            "node": "If Has Due Automations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has Due Automations": {
+      "main": [
+        [
+          {
+            "node": "Item Lists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Item Lists": {
+      "main": [
+        [
+          {
+            "node": "Execute Automation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Automation": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "versionId": "488ebfbd-2ba3-4bb7-b4d5-8f640f074d61",
+  "id": "abcdefghijklm123"
+}

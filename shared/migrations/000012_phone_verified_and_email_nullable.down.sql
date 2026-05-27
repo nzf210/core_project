@@ -1,0 +1,2 @@
+ALTER TABLE users DROP COLUMN IF EXISTS is_phone_verified;
+ALTER TABLE users ALTER COLUMN email SET NOT NULL;

@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS journal_lines CASCADE;
+DROP TABLE IF EXISTS journal_entries CASCADE;
+DROP TABLE IF EXISTS chart_of_accounts CASCADE;

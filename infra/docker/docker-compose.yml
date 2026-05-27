@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: wch_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-wch_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_postgres_password_123}
+      POSTGRES_DB: ${DB_NAME:-wch_platform}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - wch_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: wch_redis
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD:-secure_redis_password_123}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - wch_network
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: wch_n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${DB_NAME:-wch_platform}
+      - DB_POSTGRESDB_USER=${DB_USER:-wch_admin}
+      - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD:-secure_postgres_password_123}
+      - DB_POSTGRESDB_SCHEMA=n8n
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+    depends_on:
+      - postgres
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - wch_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  n8n_data:
+    driver: local
+
+networks:
+  wch_network:
+    driver: bridge

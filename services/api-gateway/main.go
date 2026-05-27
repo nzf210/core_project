@@ -1,0 +1,310 @@
+package main
+
+import (
+	"encoding/base64"
+	"log/slog"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"os"
+	"sync"
+	"time"
+
+	"core_project/shared/sdk/auth"
+	"core_project/shared/sdk/config"
+	"core_project/shared/sdk/cache"
+	"core_project/shared/sdk/response"
+)
+
+var (
+	rateLimitWindow  = 60 * time.Second
+	rateLimitPublic  = 30
+	rateLimitAuth    = 10
+	rateLimitPerIP   = 200
+	mu               sync.Mutex
+)
+
+func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
+	cfg := config.LoadConfig(".env")
+
+	if err := cache.InitRedis(cfg); err != nil {
+		slog.Warn("Redis not available, rate limiting disabled", "error", err)
+	}
+
+	mux := http.NewServeMux()
+
+	getTarget := func(service string, port string) string {
+		if cfg.Env == "production" {
+			return "http://" + service + ":" + port
+		}
+		return "http://localhost:" + port
+	}
+
+	// Public routes (Auth & Public Campaign API) — rate limited
+	mux.Handle("/auth/", rateLimitMiddleware(rateLimitPublic)(http.StripPrefix("/auth", newProxy(getTarget("auth-service", "8001")))))
+	mux.Handle("/api/public/campaign/", rateLimitMiddleware(rateLimitPublic)(http.StripPrefix("/api/public/campaign", newProxy(getTarget("campaign-api", "9002")))))
+
+	// Uploads — public static files
+	mux.Handle("/uploads/", http.StripPrefix("/uploads", newProxy(getTarget("auth-service", "8001")+"/static")))
+
+	// Superadmin routes — protected with auth + role check
+	mux.Handle("/api/superadmin/", auth.Middleware(http.StripPrefix("/api/superadmin", newTenantProxy(getTarget("auth-service", "8001")+"/superadmin"))))
+	mux.Handle("/api/superadmin/n8n/", auth.Middleware(http.StripPrefix("/api/superadmin/n8n", n8nProxy(getTarget("n8n", "5678")))))
+
+	// Profile routes — user can edit own profile
+	mux.Handle("/api/profile", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api", newTenantProxy(getTarget("auth-service", "8001"))))))
+	mux.Handle("/api/profile/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api", newTenantProxy(getTarget("auth-service", "8001"))))))
+	mux.Handle("/api/ai/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/ai", newTenantProxy(getTarget("ai-gateway", "8002")))))))
+	mux.Handle("/api/umkm/business/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/umkm/business", newTenantProxy(getTarget("umkm-business", "9005"))))))
+	mux.Handle("/api/umkm/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/umkm", newTenantProxy(getTarget("umkm-accounting", "8201")))))))
+	mux.Handle("/api/campaign/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/campaign", newTenantProxy(getTarget("campaign-api", "9002")))))))
+	mux.Handle("/api/billing/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/billing", newTenantProxy(getTarget("billing-service", "8003"))))))
+	mux.Handle("/api/crypto/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/crypto", newTenantProxy(getTarget("crypto-api", "8101")+"/api/v1"))))))
+
+	server := &http.Server{
+		Addr:         ":8000",
+		Handler:      corsMiddleware(ipRateLimitMiddleware(mux)),
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	slog.Info("API Gateway listening", "port", 8000)
+	if err := server.ListenAndServe(); err != nil {
+		slog.Error("Failed to start API Gateway", "error", err)
+	}
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		} else {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-ID, X-Tenant-ID")
+		w.Header().Set("Access-Control-Max-Age", "86400")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+		if r.Method == http.MethodOptions || r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func newProxy(targetHost string) *httputil.ReverseProxy {
+	url, _ := url.Parse(targetHost)
+	proxy := httputil.NewSingleHostReverseProxy(url)
+	proxy.ModifyResponse = func(r *http.Response) error {
+		r.Header.Del("Access-Control-Allow-Origin")
+		r.Header.Del("Access-Control-Allow-Methods")
+		r.Header.Del("Access-Control-Allow-Headers")
+		r.Header.Del("Access-Control-Allow-Credentials")
+		return nil
+	}
+	return proxy
+}
+
+func n8nProxy(targetHost string) *httputil.ReverseProxy {
+	targetURL, _ := url.Parse(targetHost)
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+
+	originalDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		originalDirector(req)
+		req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("admin:n8n_secure_admin_password_123")))
+	}
+
+	proxy.ModifyResponse = func(r *http.Response) error {
+		r.Header.Del("Access-Control-Allow-Origin")
+		r.Header.Del("Access-Control-Allow-Methods")
+		r.Header.Del("Access-Control-Allow-Headers")
+		r.Header.Del("Access-Control-Allow-Credentials")
+		r.Header.Del("X-Frame-Options")
+		r.Header.Del("Content-Security-Policy")
+		return nil
+	}
+	return proxy
+}
+
+func newTenantProxy(targetHost string) *httputil.ReverseProxy {
+	targetURL, _ := url.Parse(targetHost)
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+
+	originalDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		originalDirector(req)
+
+		req.Header.Del("X-Tenant-ID")
+		req.Header.Del("X-User-ID")
+		req.Header.Del("X-User-Role")
+
+		if tenantID, ok := req.Context().Value(auth.TenantIDKey).(string); ok {
+			req.Header.Set("X-Tenant-ID", tenantID)
+		}
+		if userID, ok := req.Context().Value(auth.UserIDKey).(string); ok {
+			req.Header.Set("X-User-ID", userID)
+		}
+		if role, ok := req.Context().Value(auth.RoleKey).(string); ok {
+			req.Header.Set("X-User-Role", role)
+		}
+	}
+
+	proxy.ModifyResponse = func(r *http.Response) error {
+		r.Header.Del("Access-Control-Allow-Origin")
+		r.Header.Del("Access-Control-Allow-Methods")
+		r.Header.Del("Access-Control-Allow-Headers")
+		r.Header.Del("Access-Control-Allow-Credentials")
+		return nil
+	}
+
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		slog.Error("Proxy error", "target", targetHost, "error", err)
+		response.Error(w, http.StatusBadGateway, "Service unavailable", err)
+	}
+
+	return proxy
+}
+
+func quotaMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := r.Context().Value(auth.TenantIDKey).(string)
+		if !ok || tenantID == "" {
+			response.Error(w, http.StatusUnauthorized, "Tenant ID missing in context", nil)
+			return
+		}
+
+		plan := auth.GetPlan(tenantID)
+
+		if plan.Tier == "free" && r.Method != http.MethodGet && r.Method != http.MethodOptions {
+			ok, used := auth.CheckQuota(tenantID, "transactions")
+			if !ok {
+				response.Error(w, http.StatusPaymentRequired,
+					"Free tier quota exceeded. Upgrade to Lite plan to continue.", nil)
+				slog.Warn("Quota exceeded", "tenant", tenantID, "resource", "transactions", "used", used)
+				return
+			}
+			go auth.IncrementUsage(tenantID, "transactions", 1)
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func getClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		return xff
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+	return r.RemoteAddr
+}
+
+func ipRateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if cache.Client == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		ip := getClientIP(r)
+		key := "rate_limit:ip:" + ip
+
+		count, err := cache.Client.Incr(r.Context(), key).Result()
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if count == 1 {
+			cache.Client.Expire(r.Context(), key, rateLimitWindow)
+		}
+
+		if count > int64(rateLimitPerIP) {
+			response.Error(w, http.StatusTooManyRequests, "Rate limit exceeded. Try again later.", nil)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func rateLimitMiddleware(limit int) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if cache.Client == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			ip := getClientIP(r)
+			key := "rate_limit:public:" + ip
+
+			count, err := cache.Client.Incr(r.Context(), key).Result()
+			if err != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if count == 1 {
+				cache.Client.Expire(r.Context(), key, rateLimitWindow)
+			}
+
+			if count > int64(limit) {
+				response.Error(w, http.StatusTooManyRequests, "Too many requests. Please wait.", nil)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func tenantRateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if cache.Client == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		tenantID, ok := r.Context().Value(auth.TenantIDKey).(string)
+		if !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		plan := auth.GetPlan(tenantID)
+		limits := map[string]int{"free": 60, "lite": 300, "pro": 1000, "enterprise": 999999}
+		limit := limits[plan.Tier]
+		if limit == 0 {
+			limit = 60
+		}
+
+		key := "rate_limit:tenant:" + tenantID
+		count, err := cache.Client.Incr(r.Context(), key).Result()
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if count == 1 {
+			cache.Client.Expire(r.Context(), key, rateLimitWindow)
+		}
+
+		if count > int64(limit) {
+			response.Error(w, http.StatusTooManyRequests, "Tenant rate limit exceeded, upgrade for higher limits.", nil)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}

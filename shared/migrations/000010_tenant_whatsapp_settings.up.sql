@@ -1,0 +1,2 @@
+ALTER TABLE tenants ADD COLUMN fonnte_token VARCHAR(255);
+ALTER TABLE tenants ADD COLUMN wa_number VARCHAR(50);

@@ -1,0 +1,3 @@
+{"time":"2026-05-27T19:23:31.430898693+07:00","level":"INFO","msg":"✅ Connected to PostgreSQL (Campaign API via Repository)"}
+{"time":"2026-05-27T19:23:31.431522543+07:00","level":"INFO","msg":"Campaign API Server listening","port":9002}
+{"time":"2026-05-27T19:23:31.43186226+07:00","level":"ERROR","msg":"Failed to start server","error":"listen tcp :9002: bind: address already in use"}

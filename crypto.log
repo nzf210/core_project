@@ -1,0 +1,7 @@
+{"time":"2026-05-27T19:23:31.462886874+07:00","level":"INFO","msg":"✅ PostgreSQL connected successfully"}
+{"time":"2026-05-27T19:23:31.468029078+07:00","level":"INFO","msg":"✅ Redis connected successfully"}
+{"time":"2026-05-27T19:23:31.468315204+07:00","level":"INFO","msg":"Starting Crypto Worker Engines..."}
+{"time":"2026-05-27T19:23:31.468390045+07:00","level":"INFO","msg":"Starting Price Monitor","symbols":["BTCUSDT","ETHUSDT","SOLUSDT"]}
+{"time":"2026-05-27T21:42:23.520575891+07:00","level":"ERROR","msg":"Binance WS Error","symbol":"SOLUSDT","error":"read tcp 172.16.0.2:42998->18.179.238.87:9443: read: connection reset by peer"}
+{"time":"2026-05-27T21:42:23.520585428+07:00","level":"ERROR","msg":"Binance WS Error","symbol":"ETHUSDT","error":"read tcp 172.16.0.2:42992->18.179.238.87:9443: read: connection reset by peer"}
+{"time":"2026-05-27T21:42:24.031198976+07:00","level":"ERROR","msg":"Binance WS Error","symbol":"BTCUSDT","error":"read tcp 172.16.0.2:42988->18.179.238.87:9443: read: connection reset by peer"}

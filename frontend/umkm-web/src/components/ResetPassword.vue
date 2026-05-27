@@ -1,0 +1,134 @@
+<template>
+  <div class="auth-split-container">
+    <div class="auth-image-side">
+      <div class="glass-overlay">
+        <h1 class="text-gradient">WCH UMKM</h1>
+        <p>Dashboard terpadu dengan asisten AI akuntansi pertama di Indonesia.</p>
+      </div>
+    </div>
+
+    <div class="auth-form-side">
+      <div class="auth-form-wrapper glass-card animate-fade-in">
+        <div style="margin-bottom: 2.5rem;">
+          <h2>Buat Kata Sandi Baru</h2>
+          <p class="text-muted">Masukkan token reset yang Anda peroleh beserta kata sandi baru Anda.</p>
+        </div>
+
+        <form @submit.prevent="handleReset">
+          <div class="form-group">
+            <label>Token Reset</label>
+            <input v-model="token" type="text" class="form-control" placeholder="Masukkan 32-karakter token" required />
+          </div>
+
+          <div class="form-group" style="margin-bottom: 2rem;">
+            <label>Kata Sandi Baru</label>
+            <input v-model="newPassword" type="password" class="form-control" placeholder="Minimal 8 karakter"
+              required />
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;" :disabled="loading">
+            {{ loading ? 'Memproses...' : 'Ubah Kata Sandi' }}
+          </button>
+
+          <div v-if="errorMsg" class="error-msg text-center"
+            style="margin-top: 1rem; color: #ef4444; font-size: 0.875rem;">
+            {{ errorMsg }}
+          </div>
+        </form>
+
+        <p class="text-center" style="margin-top: 2rem; color: var(--text-secondary);">
+          Batal mengubah? <router-link to="/login" style="color: var(--accent-primary);">Masuk di sini</router-link>
+        </p>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { api } from '../api';
+
+const router = useRouter()
+
+const props = defineProps<{
+  initialEmail?: string
+}>()
+
+const token = ref('')
+const newPassword = ref('')
+const loading = ref(false)
+const errorMsg = ref('')
+
+const handleReset = async () => {
+  loading.value = true
+  errorMsg.value = ''
+
+  try {
+    const data = await api.resetPassword(token.value, newPassword.value)
+    if (data.success) {
+      alert("Kata sandi berhasil diubah! Silakan login dengan kata sandi baru Anda.")
+      router.push('/login')
+    } else {
+      errorMsg.value = data.message || 'Gagal mengubah kata sandi.'
+    }
+  } catch (e) {
+    console.error(e)
+    errorMsg.value = 'Terjadi kesalahan jaringan.'
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<style scoped>
+.auth-split-container {
+  display: flex;
+  min-height: 80vh;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  background: var(--surface-0);
+}
+
+.auth-image-side {
+  flex: 1;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(30, 58, 138, 0.9)), url('https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&q=80');
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: overlay;
+  position: relative;
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .auth-image-side {
+    display: block;
+  }
+}
+
+.glass-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 3rem;
+  background: linear-gradient(to top, rgba(15, 23, 42, 0.9), transparent);
+  color: white;
+}
+
+.auth-form-side {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: var(--bg-color);
+}
+
+.auth-form-wrapper {
+  width: 100%;
+  max-width: 450px;
+  padding: 2.5rem;
+}
+</style>

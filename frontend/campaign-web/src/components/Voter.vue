@@ -1,0 +1,132 @@
+<template>
+  <div class="voters">
+    <h3 style="margin-bottom: 1rem; color: var(--text-secondary)">Pendaftaran Pemilih Baru</h3>
+    <form @submit.prevent="addVoter" class="flex flex-col gap-4" style="max-width: 500px; margin-bottom: 2rem;">
+      <input v-model="form.nik" placeholder="NIK (Akan Dienkripsi)" required class="input-field" />
+      <input v-model="form.name" placeholder="Nama Lengkap" required class="input-field" />
+      <input v-model="form.address" placeholder="Alamat Lengkap" required class="input-field" />
+      <input v-model="form.phone" placeholder="Nomor Telepon" required class="input-field" />
+      <select v-model="form.status" required class="input-field">
+        <option value="" disabled>-- Pilih Status --</option>
+        <option value="uncontacted">Belum Dihubungi</option>
+        <option value="undecided">Belum Ada Pilihan (Potensi)</option>
+        <option value="supported">Pendukung</option>
+        <option value="rejected">Menolak</option>
+      </select>
+      <select v-model="form.potential_level" class="input-field">
+        <option value="" disabled>-- Potensi Suara --</option>
+        <option value="high">Pasti (High)</option>
+        <option value="medium">Ragu (Medium)</option>
+        <option value="low">Lemah (Low)</option>
+      </select>
+      <input v-model="form.competitor_support" placeholder="Mendukung Calon Lain (Sebutkan jika ada)" class="input-field" />
+      <button type="submit" class="btn-primary" style="align-self: flex-start;">Registrasi Pemilih</button>
+    </form>
+
+    <h3 style="margin-bottom: 1rem; color: var(--text-secondary)">Daftar Pemilih</h3>
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID Pemilih</th>
+            <th>Status Relasi</th>
+            <th>Potensi</th>
+            <th>Pendukung Calon Lain</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="voters.length === 0">
+            <td colspan="4" style="text-align: center; color: var(--text-muted);">Belum ada data pemilih terdaftar.</td>
+          </tr>
+          <tr v-for="v in voters" :key="v.id">
+            <td><code>{{ v.id.substring(0, 8) }}...</code></td>
+            <td><span class="badge badge-primary">{{ v.status }}</span></td>
+            <td><span class="badge badge-secondary">{{ v.potential_level || '-' }}</span></td>
+            <td><span class="badge badge-error">{{ v.competitor_support || '-' }}</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { apiClient } from '../api'
+import { ref, onMounted } from 'vue'
+
+const voters = ref<any[]>([])
+const form = ref({ nik: '', name: '', address: '', phone: '', status: '', potential_level: '', competitor_support: '' })
+
+const fetchVoters = async () => {
+  try {
+    const res = await apiClient('/voters', {
+      headers: { 'X-Tenant-ID': 'default' }
+    })
+    const data = await res.json()
+    if (data.success) {
+      voters.value = data.data
+    }
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+const addVoter = async () => {
+  try {
+    const res = await apiClient('/voters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': 'default' },
+      body: JSON.stringify(form.value)
+    })
+    const data = await res.json()
+    if (data.success) {
+      form.value = { nik: '', name: '', address: '', phone: '', status: '', potential_level: '', competitor_support: '' }
+      fetchVoters()
+    }
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+onMounted(fetchVoters)
+</script>
+
+<style scoped>
+.input-field {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  outline: none;
+  font-family: inherit;
+  width: 100%;
+}
+.input-field:focus {
+  border-color: var(--accent-primary);
+}
+.btn-primary {
+  background: var(--accent-gradient);
+  color: white;
+  border: none;
+  padding: 0.5rem 1.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 600;
+}
+.table-container {
+  overflow-x: auto;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th, .data-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+.data-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  background-color: var(--bg-tertiary);
+}
+</style>

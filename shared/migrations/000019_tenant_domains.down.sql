@@ -1,0 +1,3 @@
+ALTER TABLE tenants
+DROP COLUMN IF EXISTS custom_domain,
+DROP COLUMN IF EXISTS subdomain;

@@ -1,0 +1,3 @@
+{"time":"2026-05-27T19:23:32.476409119+07:00","level":"INFO","msg":"✅ Connected to PostgreSQL"}
+{"time":"2026-05-27T19:23:32.476611388+07:00","level":"INFO","msg":"UMKM Chatbot listening","port":8203}
+{"time":"2026-05-27T19:23:32.476918053+07:00","level":"ERROR","msg":"Failed to start server","error":"listen tcp :8203: bind: address already in use"}
