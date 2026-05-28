@@ -18,6 +18,7 @@ import (
 type MockRepository struct {
 	Bots []domain.Bot
 	Keys []domain.ExchangeAPIKey
+	Notifications []domain.CryptoNotification
 }
 
 func (m *MockRepository) CreateAPIKey(ctx context.Context, apiKey *domain.ExchangeAPIKey) error {
@@ -84,6 +85,27 @@ func (m *MockRepository) GetDashboardStats(ctx context.Context, tenantID, userID
 		TotalTrades:         5,
 		WinRate:             0,
 	}, nil
+}
+
+func (m *MockRepository) CreateNotification(ctx context.Context, notif *domain.CryptoNotification) error {
+	notif.ID = "test-notif-id"
+	notif.CreatedAt = time.Now()
+	m.Notifications = append(m.Notifications, *notif)
+	return nil
+}
+
+func (m *MockRepository) ListNotifications(ctx context.Context, tenantID, userID string) ([]domain.CryptoNotification, error) {
+	return m.Notifications, nil
+}
+
+func (m *MockRepository) MarkNotificationRead(ctx context.Context, id, tenantID, userID string) error {
+	for i, n := range m.Notifications {
+		if n.ID == id {
+			m.Notifications[i].IsRead = true
+			return nil
+		}
+	}
+	return nil
 }
 
 func TestCreateAPIKey(t *testing.T) {

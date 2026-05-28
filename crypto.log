@@ -5,3 +5,7 @@
 {"time":"2026-05-27T21:42:23.520575891+07:00","level":"ERROR","msg":"Binance WS Error","symbol":"SOLUSDT","error":"read tcp 172.16.0.2:42998->18.179.238.87:9443: read: connection reset by peer"}
 {"time":"2026-05-27T21:42:23.520585428+07:00","level":"ERROR","msg":"Binance WS Error","symbol":"ETHUSDT","error":"read tcp 172.16.0.2:42992->18.179.238.87:9443: read: connection reset by peer"}
 {"time":"2026-05-27T21:42:24.031198976+07:00","level":"ERROR","msg":"Binance WS Error","symbol":"BTCUSDT","error":"read tcp 172.16.0.2:42988->18.179.238.87:9443: read: connection reset by peer"}
+{"time":"2026-05-28T02:00:59.957064407+07:00","level":"INFO","msg":"Shutting down Crypto Worker..."}
+{"time":"2026-05-28T02:00:59.957210892+07:00","level":"INFO","msg":"Shutdown complete"}
+{"time":"2026-05-28T02:00:59.957391551+07:00","level":"INFO","msg":"Redis connection closed"}
+{"time":"2026-05-28T02:00:59.957680833+07:00","level":"INFO","msg":"PostgreSQL connection closed"}

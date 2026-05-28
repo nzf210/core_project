@@ -528,7 +528,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.ExpectedTenantID != "" && req.ExpectedTenantID != tenantID {
+	if role != "superadmin" && req.ExpectedTenantID != "" && req.ExpectedTenantID != tenantID {
 		slog.Error("Login: user does not belong to expected tenant", "expected", req.ExpectedTenantID, "actual", tenantID)
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Anda tidak terdaftar di tenant ini. Harap periksa URL domain."})
 		return
@@ -1180,7 +1180,7 @@ func handleVerifyPhoneLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.ExpectedTenantID != "" && req.ExpectedTenantID != tenantID {
+	if role != "superadmin" && req.ExpectedTenantID != "" && req.ExpectedTenantID != tenantID {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Nomor WhatsApp Anda tidak terdaftar di tenant ini."})
 		return
 	}

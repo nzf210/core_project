@@ -21,7 +21,7 @@ func main() {
 	email := os.Args[3]
 	phone := os.Args[4]
 
-	cfg := config.LoadConfig("../../../.env")
+	cfg := config.LoadConfig("../../../../.env")
 	dbURL := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		cfg.DB.User, cfg.DB.Password, cfg.DB.Host, cfg.DB.Port, cfg.DB.Name, cfg.DB.SSLMode)
 

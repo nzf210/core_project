@@ -67,14 +67,14 @@ func main() {
 	mux.HandleFunc("/webhook/wa", handleWAWebhook)
 
 	server := &http.Server{
-		Addr:    ":8203", // Chatbot port
+		Addr:    ":8202", // Chatbot port
 		Handler: loggingMiddleware(mux),
 	}
 
 	// Start worker pool for handling WA webhooks concurrently
 	startWorkerPool(100) // 100 concurrent workers
 
-	slog.Info("UMKM Chatbot listening", "port", 8203)
+	slog.Info("UMKM Chatbot listening", "port", 8202)
 	if err := server.ListenAndServe(); err != nil {
 		slog.Error("Failed to start server", "error", err)
 	}

@@ -32,7 +32,7 @@ files_to_auth = ["services/auth-service/main.go", "scripts/e2e/main.go", "fronte
 files_to_ai = ["services/ai-gateway/main.go", "apps/crypto/worker/signal_engine.go", "apps/umkm/chatbot/main.go", "apps/umkm/automation/main.go", "scripts/loadtest/main.go", "scripts/e2e/main.go", "docker-compose.yml"]
 files_to_billing = ["services/billing-service/main.go"]
 files_to_crypto = ["apps/crypto/api/main.go"]
-files_to_umkm_acc = ["apps/umkm/accounting/main.go", "apps/umkm/chatbot/main.go", "apps/umkm/scripts/register_tenant.go", "scripts/e2e/main.go", "frontend/umkm-web/src/components/Dashboard.vue", "frontend/umkm-web/src/components/Journal.vue", "frontend/umkm-web/src/components/Register.vue", "frontend/umkm-web/src/components/AdminDashboard.vue"]
+files_to_umkm_acc = ["apps/umkm/accounting/main.go", "apps/umkm/chatbot/main.go", "apps/umkm/scripts/register_tenant/register_tenant.go", "scripts/e2e/main.go", "frontend/umkm-web/src/components/Dashboard.vue", "frontend/umkm-web/src/components/Journal.vue", "frontend/umkm-web/src/components/Register.vue", "frontend/umkm-web/src/components/AdminDashboard.vue"]
 files_to_umkm_chat = ["apps/umkm/chatbot/main.go"]
 files_to_campaign = ["apps/campaign/api/main.go", "frontend/campaign-web/src/components/ReportGenerator.vue", "frontend/campaign-web/src/components/Voter.vue", "frontend/campaign-web/src/components/TaskBoard.vue", "frontend/campaign-web/src/components/Dashboard.vue", "frontend/campaign-web/src/components/Volunteer.vue", "frontend/campaign-web/src/components/NotificationBell.vue", "frontend/campaign-web/src/components/AccessManager.vue", "frontend/campaign-web/src/components/MapRegion.vue"]
 

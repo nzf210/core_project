@@ -12,7 +12,7 @@ import (
 
 var (
 	AccountingURL = "http://localhost:8201"
-	ChatbotURL    = "http://localhost:8203"
+	ChatbotURL    = "http://localhost:8202"
 	TenantID      = "sim-tenant-123"
 )
 

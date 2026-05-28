@@ -20,7 +20,7 @@ func main() {
 	
 	// 1. Authenticate (Get JWT)
 	fmt.Println("\n[1] Tenant login...")
-	authReq, _ := http.NewRequest("POST", apiGatewayURL+"/auth/login", bytes.NewBuffer([]byte(`{"email":"budi@umkm.com","password":"password123"}`)))
+	authReq, _ := http.NewRequest("POST", apiGatewayURL+"/auth/login", bytes.NewBuffer([]byte(`{"username":"budi@umkm.com","password":"password123"}`)))
 	authReq.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(authReq)
 	if err != nil || resp.StatusCode != 200 {
@@ -29,11 +29,13 @@ func main() {
 	}
 	var authData struct {
 		Data struct {
-			Token string `json:"token"`
+			Token    string `json:"accessToken"`
+			TenantID string `json:"tenantId"`
 		} `json:"data"`
 	}
 	json.NewDecoder(resp.Body).Decode(&authData)
 	token := authData.Data.Token
+	tenantID := authData.Data.TenantID
 	resp.Body.Close()
 
 	if token == "" {
@@ -81,10 +83,9 @@ func main() {
 	time.Sleep(2 * time.Second) // Simulate waiting for payment
 
 	webhookPayload := map[string]interface{}{
-		"invoice_id": subData.Data.InvoiceID,
-		"status":     "PAID",
-		"tenant_id":  "mock-tenant-id", // Should be parsed correctly
-		"plan_id":    "pro",
+		"external_id": "INV-MOCK|" + tenantID,
+		"status":      "PAID",
+		"plan_id":     "pro",
 	}
 	webhookBytes, _ := json.Marshal(webhookPayload)
 	whReq, _ := http.NewRequest("POST", apiGatewayURL+"/api/billing/webhook/payment", bytes.NewBuffer(webhookBytes))

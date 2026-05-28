@@ -58,7 +58,7 @@ func TestGenerateAndValidateToken(t *testing.T) {
 		JWTSecret: "test-secret-key-12345",
 	}
 
-	tokens, err := generateTokens("user-1", "tenant-1", "admin")
+	tokens, err := generateTokens("user-1", "tenant-1", "admin", true)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
