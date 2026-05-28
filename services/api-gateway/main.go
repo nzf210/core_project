@@ -52,7 +52,7 @@ func main() {
 
 	// Superadmin routes — protected with auth + role check
 	mux.Handle("/api/superadmin/", auth.Middleware(http.StripPrefix("/api/superadmin", newTenantProxy(getTarget("auth-service", "8001")+"/superadmin"))))
-	mux.Handle("/api/superadmin/n8n/", auth.Middleware(http.StripPrefix("/api/superadmin/n8n", n8nProxy(getTarget("n8n", "5678")))))
+	mux.Handle("/api/superadmin/n8n/", auth.Middleware(n8nProxy(getTarget("n8n", "5678"))))
 
 	// Profile routes — user can edit own profile
 	mux.Handle("/api/profile", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api", newTenantProxy(getTarget("auth-service", "8001"))))))

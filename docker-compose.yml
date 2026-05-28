@@ -23,7 +23,7 @@ services:
     image: redis:7-alpine
     container_name: wch-redis
     ports:
-      - 127.0.0.1:6380:6379
+      - 127.0.0.1:6381:6379
     volumes:
       - redisdata:/data
     healthcheck:
@@ -279,6 +279,8 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
+    ports:
+      - "8202:8202"
     depends_on:
       postgres:
         condition: service_healthy
@@ -288,8 +290,6 @@ services:
       context: ./frontend/umkm-web
       dockerfile: Dockerfile
     container_name: wch-umkm-frontend
-    ports:
-      - 80:80
     restart: unless-stopped
     depends_on:
       - api-gateway

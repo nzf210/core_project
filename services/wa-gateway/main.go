@@ -6,9 +6,11 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,6 +49,45 @@ func getDBURI() string {
 	if sslmode == "" { sslmode = "disable" }
 	
 	return "postgres://" + user + ":" + pass + "@" + host + ":" + port + "/" + dbname + "?sslmode=" + sslmode
+}
+
+func getTenantID(r *http.Request) string {
+	// 1. Try URL Query parameter
+	tenantID := r.URL.Query().Get("tenant_id")
+	if tenantID != "" {
+		return tenantID
+	}
+
+	// 2. Try Form value
+	tenantID = r.FormValue("tenant_id")
+	if tenantID != "" {
+		return tenantID
+	}
+
+	// 3. Try X-Tenant-ID Header
+	tenantID = r.Header.Get("X-Tenant-ID")
+	if tenantID != "" {
+		return tenantID
+	}
+
+	// 4. Try JSON body if Content-Type is application/json
+	if r.Body != nil && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		// Read body
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err == nil {
+			// Restore r.Body so it can be read again if needed
+			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+			var data map[string]interface{}
+			if err := json.Unmarshal(bodyBytes, &data); err == nil {
+				if tID, ok := data["tenant_id"].(string); ok {
+					return tID
+				}
+			}
+		}
+	}
+
+	return ""
 }
 
 func main() {
@@ -96,7 +137,7 @@ func main() {
 	}
 
 	http.HandleFunc("/api/wa/qr", func(w http.ResponseWriter, r *http.Request) {
-		tenantID := r.URL.Query().Get("tenant_id")
+		tenantID := getTenantID(r)
 		if tenantID == "" {
 			http.Error(w, "tenant_id required", http.StatusBadRequest)
 			return
@@ -178,7 +219,7 @@ func main() {
 	})
 
 	http.HandleFunc("/api/wa/status", func(w http.ResponseWriter, r *http.Request) {
-		tenantID := r.URL.Query().Get("tenant_id")
+		tenantID := getTenantID(r)
 		w.Header().Set("Content-Type", "application/json")
 		
 		clientMu.RLock()
@@ -203,8 +244,7 @@ func main() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		tenantID := r.FormValue("tenant_id")
-		if tenantID == "" { tenantID = r.URL.Query().Get("tenant_id") }
+		tenantID := getTenantID(r)
 		target := r.FormValue("target")
 		message := r.FormValue("message")
 
@@ -248,7 +288,7 @@ func main() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		tenantID := r.URL.Query().Get("tenant_id")
+		tenantID := getTenantID(r)
 		if tenantID == "" {
 			http.Error(w, "tenant_id required", http.StatusBadRequest)
 			return
@@ -316,7 +356,7 @@ func eventHandler(tenantID string, evt interface{}, db *sql.DB) {
 		jsonBody, _ := json.Marshal(payload)
 		
 		// Chatbot runs on 8203 internally
-		webhookURL := "http://umkm-chatbot:8203/webhook/wa?tenant_id=" + tenantID
+		webhookURL := "http://umkm-chatbot:8202/webhook/wa?tenant_id=" + tenantID
 		resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonBody))
 		if err != nil {
 			log.Printf("Failed to forward message to chatbot: %v", err)

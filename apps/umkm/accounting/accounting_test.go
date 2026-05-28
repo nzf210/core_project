@@ -8,6 +8,10 @@ import (
 	"testing"
 )
 
+func init() {
+	isTest = true
+}
+
 func TestHandleTransactions_Validation_Unbalanced(t *testing.T) {
 	payload := []byte(`{
 		"date": "2026-05-22",

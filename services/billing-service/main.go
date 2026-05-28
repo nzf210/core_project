@@ -11,20 +11,36 @@ import (
 
 	"github.com/google/uuid"
 	"core_project/shared/sdk/auth"
+	"core_project/shared/sdk/config"
 	"core_project/shared/sdk/response"
 	xendit "github.com/xendit/xendit-go/v6"
 	invoice "github.com/xendit/xendit-go/v6/invoice"
 )
 
-// In a real app, this connects to DB
-var mockDB = map[string]string{}
 var xenditClient *xendit.APIClient
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	xenditClient = xendit.NewClient(os.Getenv("XENDIT_API_KEY"))
+	// Load shared configuration
+	cfg := config.LoadConfig(".env")
+	if err := initDB(cfg); err != nil {
+		slog.Error("Failed to init DB", "error", err)
+		os.Exit(1)
+	}
+	defer DB.Close()
+
+	if err := ensureSchema(); err != nil {
+		slog.Error("Failed to ensure schema", "error", err)
+		os.Exit(1)
+	}
+
+	xKey := os.Getenv("XENDIT_API_KEY")
+	if xKey == "" {
+		xKey = "xnd_development_mock_key_1234567890"
+	}
+	xenditClient = xendit.NewClient(xKey)
 
 	mux := http.NewServeMux()
 
@@ -40,7 +56,9 @@ func main() {
 	}
 
 	slog.Info("Billing Service listening", "port", 8003)
-	server.ListenAndServe()
+	if err := server.ListenAndServe(); err != nil {
+		slog.Error("Failed to start Billing Service", "error", err)
+	}
 }
 
 type SubscribeReq struct {
@@ -53,7 +71,11 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID := r.Context().Value(auth.TenantIDKey).(string)
+	tenantID, ok := r.Context().Value(auth.TenantIDKey).(string)
+	if !ok || tenantID == "" {
+		response.Error(w, http.StatusUnauthorized, "Missing Tenant ID in token context", nil)
+		return
+	}
 	
 	var req SubscribeReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -68,7 +90,22 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.PlanID == "free" {
-		response.JSON(w, http.StatusOK, "Subscribed to free plan", nil)
+		// Update DB for free plan
+		_, err := DB.Exec(r.Context(), "UPDATE tenants SET plan = 'free' WHERE id = $1", tenantID)
+		if err != nil {
+			slog.Error("Failed to update tenant plan to free", "tenant_id", tenantID, "error", err)
+		}
+		_, err = DB.Exec(r.Context(), `
+			INSERT INTO tenant_subscriptions (tenant_id, plan_id, status, current_period_end, updated_at)
+			VALUES ($1, 'free', 'active', NOW() + INTERVAL '30 days', NOW())
+			ON CONFLICT (tenant_id)
+			DO UPDATE SET plan_id = 'free', status = 'active', current_period_end = NOW() + INTERVAL '30 days', updated_at = NOW()`,
+			tenantID)
+		if err != nil {
+			slog.Error("Failed to upsert tenant subscription to free", "tenant_id", tenantID, "error", err)
+		}
+
+		response.JSON(w, http.StatusOK, "Subscribed to free plan successfully", nil)
 		return
 	}
 
@@ -97,6 +134,14 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 	paymentURL := resp.InvoiceUrl
 
+	// 3. Persist invoice to database
+	_, dbErr := DB.Exec(r.Context(),
+		"INSERT INTO invoices (id, tenant_id, plan_id, amount, status, payment_url) VALUES ($1, $2, $3, $4, $5, $6)",
+		externalID, tenantID, req.PlanID, amount, "pending", paymentURL)
+	if dbErr != nil {
+		slog.Error("Failed to save invoice to database", "invoice_id", externalID, "error", dbErr)
+	}
+
 	slog.Info("Created subscription invoice", "tenant_id", tenantID, "plan", req.PlanID, "invoice_id", *resp.Id)
 
 	response.JSON(w, http.StatusOK, "Invoice created. Please complete payment.", map[string]interface{}{
@@ -117,6 +162,7 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	callbackToken := r.Header.Get("x-callback-token")
 	expectedToken := os.Getenv("XENDIT_WEBHOOK_TOKEN")
 	if expectedToken != "" && callbackToken != expectedToken {
+		slog.Warn("Unauthorized webhook callback attempt", "received_token", callbackToken)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -135,12 +181,40 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		if len(parts) == 2 {
 			tenantID := parts[1]
 			slog.Info("Payment received!", "tenant_id", tenantID, "status", status)
-			
-			// Update tenant_subscriptions DB table to 'active'
-			mockDB[tenantID] = "active"
+
+			// Query invoice detail to get plan_id
+			planID := "lite" // fallback
+			var dbAmount float64
+			err := DB.QueryRow(r.Context(), "SELECT plan_id, amount FROM invoices WHERE id = $1", externalID).Scan(&planID, &dbAmount)
+			if err != nil {
+				slog.Warn("Invoice not found in DB, using fallback", "invoice_id", externalID, "error", err)
+			}
+
+			// 1. Update invoice status
+			_, err = DB.Exec(r.Context(), "UPDATE invoices SET status = 'paid', paid_at = NOW() WHERE id = $1", externalID)
+			if err != nil {
+				slog.Error("Failed to update invoice status in DB", "invoice_id", externalID, "error", err)
+			}
+
+			// 2. Upsert subscription status
+			_, err = DB.Exec(r.Context(), `
+				INSERT INTO tenant_subscriptions (tenant_id, plan_id, status, current_period_end, updated_at)
+				VALUES ($1, $2, 'active', NOW() + INTERVAL '30 days', NOW())
+				ON CONFLICT (tenant_id)
+				DO UPDATE SET plan_id = EXCLUDED.plan_id, status = 'active', current_period_end = EXCLUDED.current_period_end, updated_at = NOW()`,
+				tenantID, planID)
+			if err != nil {
+				slog.Error("Failed to upsert tenant subscription in DB", "tenant_id", tenantID, "error", err)
+			}
+
+			// 3. Update main tenants table
+			_, err = DB.Exec(r.Context(), "UPDATE tenants SET plan = $1 WHERE id = $2", planID, tenantID)
+			if err != nil {
+				slog.Error("Failed to update tenant plan in tenants table", "tenant_id", tenantID, "plan", planID, "error", err)
+			}
 
 			// Send automated WA notification
-			go sendWANotification(tenantID, fmt.Sprintf("Halo! Pembayaran tagihan Anda untuk %s telah berhasil kami terima. Layanan Anda kini sudah aktif. Terima kasih!", externalID))
+			go sendWANotification(tenantID, fmt.Sprintf("Halo! Pembayaran tagihan Anda untuk %s (%s) telah berhasil kami terima. Layanan Anda kini sudah aktif. Terima kasih!", externalID, planID))
 		}
 	}
 
@@ -164,17 +238,22 @@ func sendWANotification(tenantID, message string) {
 	data.Set("target", targetJID)
 	data.Set("message", message)
 
-	resp, err := http.PostForm("http://localhost:8202/api/wa/send", data)
+	waURL := "http://localhost:8202/api/wa/send"
+	if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+		waURL = "http://wa-gateway:8202/api/wa/send"
+	}
+
+	resp, err := http.PostForm(waURL, data)
 	if err != nil {
-		slog.Error("Failed to send WA notification", "error", err)
+		slog.Error("Failed to send WA notification via Gateway", "error", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		slog.Error("WA notification API returned non-OK status", "status", resp.Status)
+		slog.Error("WA Gateway API returned non-OK status", "status", resp.Status)
 		return
 	}
 
-	slog.Info("WA Notification sent successfully", "tenant_id", tenantID, "target", targetJID)
+	slog.Info("WA Notification sent successfully via Gateway", "tenant_id", tenantID, "target", targetJID)
 }
