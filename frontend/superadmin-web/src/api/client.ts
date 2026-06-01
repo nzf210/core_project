@@ -51,6 +51,24 @@ export const api = {
   listVoucherPrograms: () => request('/admin/voucher-programs'),
   createVoucherProgram: (body: any) =>
     request('/admin/voucher-programs', { method: 'POST', body: JSON.stringify(body) }),
+  updateVoucherProgram: (id: string, body: any) =>
+    request(`/admin/voucher-programs/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteVoucherProgram: (id: string) =>
+    request(`/admin/voucher-programs/${id}`, { method: 'DELETE' }),
+  bulkUploadVoucherPrograms: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const headers: Record<string, string> = {}
+    const tok = getToken()
+    if (tok) headers['Authorization'] = `Bearer ${tok}`
+    return fetch(`${API_BASE}/admin/voucher-programs/bulk-upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    }).then(r => r.json())
+  },
+  getVoucherAnalytics: (programId?: string) =>
+    request(`/admin/voucher-analytics${programId ? `?program_id=${programId}` : ''}`),
 
   // Voucher link generation
   generateVoucherLinks: (body: any) =>

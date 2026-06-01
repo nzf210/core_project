@@ -6,6 +6,7 @@ const programs = ref<any[]>([])
 const plans = ref<any[]>([])
 const loading = ref(true)
 const showCreate = ref(false)
+const editingId = ref<string | null>(null)
 const form = ref({
   name: '',
   description: '',
@@ -25,7 +26,7 @@ onMounted(async () => {
 async function load() {
   loading.value = true
   try {
-    // For now, show empty (no endpoint yet for list programs, only generate)
+    programs.value = (await api.listVoucherPrograms()).data || []
     plans.value = (await api.listPlans()).data || []
   } catch (e: any) {
     console.error(e)
@@ -46,10 +47,57 @@ async function create() {
       duration_months: Number(form.value.duration_months),
       max_uses: Number(form.value.max_uses),
     })
-    showCreate.value = false
+    resetForm()
     await load()
   } catch (e: any) {
     alert('Gagal: ' + e.message)
+  }
+}
+
+function startEdit(prog: any) {
+  editingId.value = prog.id
+  form.value = { ...prog }
+}
+
+async function saveEdit() {
+  if (!editingId.value) return
+  try {
+    await api.updateVoucherProgram(editingId.value, {
+      ...form.value,
+      discount_value: Number(form.value.discount_value),
+      duration_months: Number(form.value.duration_months),
+      max_uses: Number(form.value.max_uses),
+    })
+    resetForm()
+    await load()
+  } catch (e: any) {
+    alert('Gagal: ' + e.message)
+  }
+}
+
+async function deleteProgram(id: string) {
+  if (!confirm('Hapus program ini?')) return
+  try {
+    await api.deleteVoucherProgram(id)
+    await load()
+  } catch (e: any) {
+    alert('Gagal: ' + e.message)
+  }
+}
+
+function resetForm() {
+  showCreate.value = false
+  editingId.value = null
+  form.value = {
+    name: '',
+    description: '',
+    voucher_type: 'free_months',
+    discount_value: 0,
+    target_plan_id: '',
+    duration_months: 1,
+    max_uses: 0,
+    starts_at: '',
+    expires_at: '',
   }
 }
 </script>
@@ -61,8 +109,8 @@ async function create() {
       <button @click="showCreate = !showCreate">{{ showCreate ? 'Cancel' : '+ New Program' }}</button>
     </div>
 
-    <form v-if="showCreate" class="card form" @submit.prevent="create">
-      <h3>New Voucher Program</h3>
+    <form v-if="showCreate || editingId" class="card form" @submit.prevent="editingId ? saveEdit() : create()">
+      <h3>{{ editingId ? 'Edit Program' : 'New Voucher Program' }}</h3>
       <div class="row">
         <label>Name <input v-model="form.name" placeholder="Promo Juni 2026" required /></label>
         <label>Voucher Type
@@ -90,11 +138,33 @@ async function create() {
         <label>Expires At <input type="datetime-local" v-model="form.expires_at" /></label>
       </div>
       <label>Description <textarea v-model="form.description" rows="2"></textarea></label>
-      <button type="submit">Create Program</button>
+      <div class="form-actions">
+        <button type="submit">{{ editingId ? 'Save' : 'Create' }} Program</button>
+        <button type="button" @click="resetForm">Cancel</button>
+      </div>
     </form>
 
     <div v-if="loading" class="loading">Loading...</div>
-    <div v-else class="empty">Voucher programs will appear here. Use <strong>Generate Links</strong> tab to distribute.</div>
+    <div v-else-if="programs.length === 0" class="empty">Voucher programs will appear here. Use <strong>Generate Links</strong> tab to distribute.</div>
+    <div v-else class="programs-list">
+      <div v-for="prog in programs" :key="prog.id" class="card program-item">
+        <div class="program-header">
+          <div>
+            <h3>{{ prog.name }}</h3>
+            <p class="desc">{{ prog.description }}</p>
+          </div>
+          <div class="actions">
+            <button class="btn-edit" @click="startEdit(prog)">Edit</button>
+            <button class="btn-delete" @click="deleteProgram(prog.id)">Delete</button>
+          </div>
+        </div>
+        <div class="program-details">
+          <div><strong>Value:</strong> {{ prog.discount_value }}</div>
+          <div><strong>Duration:</strong> {{ prog.duration_months }} months</div>
+          <div><strong>Expires:</strong> {{ new Date(prog.expires_at).toLocaleDateString() }}</div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -111,4 +181,19 @@ button:hover { background: #2563eb; }
 .form input, .form select, .form textarea { font-size: 14px; }
 .empty { padding: 40px; text-align: center; color: var(--muted); background: var(--card); border-radius: 10px; border: 1px dashed var(--border); }
 .loading { padding: 40px; text-align: center; color: var(--muted); }
+.programs-list { display: grid; gap: 16px; }
+.program-item { padding: 16px; }
+.program-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px; }
+.program-header h3 { margin: 0; font-size: 16px; }
+.desc { margin: 4px 0 0 0; font-size: 13px; color: var(--muted); }
+.actions { display: flex; gap: 8px; }
+.btn-edit, .btn-delete { font-size: 12px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
+.btn-edit { background: var(--accent); color: white; }
+.btn-edit:hover { background: #2563eb; }
+.btn-delete { background: #ef4444; color: white; }
+.btn-delete:hover { background: #dc2626; }
+.program-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; font-size: 13px; }
+.program-details div { color: var(--muted); }
+.form-actions { display: flex; gap: 12px; margin-top: 16px; }
+.form-actions button { flex: 1; }
 </style>
