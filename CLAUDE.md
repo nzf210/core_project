@@ -1,0 +1,359 @@
+# WCH Platform — Claude AI Project Memory
+
+> **Dokumen ini adalah memori permanen AI coding assistant untuk monorepo WCH Platform.**
+> Dibaca otomatis di setiap sesi. Selalu periksa file ini sebelum membuat perubahan.
+
+---
+
+## 🎯 Identitas Proyek
+
+**WCH Platform** — SaaS multi-produk berbasis **Go (Golang)**. Satu monorepo, satu `go.mod`.
+
+| Produk | Deskripsi | Direktori Utama |
+|:-------|:----------|:----------------|
+| **UMKM** | AI Agent UMKM: Double-Entry Accounting, AI Chatbot WA, POS | `apps/umkm/` |
+| **Crypto** | Trading Bot: DCA, Grid, Signal Bot berbasis Binance API | `apps/crypto/` |
+| **Campaign** | Manajemen Pemilu: Relawan, Real Count, AI Sentiment | `apps/campaign/` |
+
+Semua produk berbagi `services/` (auth, billing, ai-gateway, notification, wa-gateway, api-gateway).
+
+---
+
+## 🏗️ Peta Direktori (Aktual)
+
+```
+core_project/                   ← Root monorepo (satu go.mod)
+├── apps/
+│   ├── umkm/
+│   │   ├── accounting/         ← Accounting engine + POS (Port 8201)
+│   │   │   ├── main.go         ← Semua handler + router (flat pattern)
+│   │   │   └── db.go           ← DB connection pool
+│   │   ├── chatbot/            ← AI Chatbot via WhatsApp (Port 8202)
+│   │   │   ├── main.go
+│   │   │   └── db.go
+│   │   ├── business/           ← Business management API (Port 9001)
+│   │   │   └── main.go
+│   │   └── automation/         ← Background worker (tanpa HTTP server)
+│   │       └── main.go
+│   ├── crypto/
+│   │   ├── api/                ← REST API Crypto (Port 8101)
+│   │   │   ├── main.go
+│   │   │   ├── handlers.go
+│   │   │   └── repository.go
+│   │   ├── domain/             ← Business logic (models, encryption, exchange)
+│   │   │   ├── models.go
+│   │   │   ├── encryption.go
+│   │   │   └── exchange.go
+│   │   └── worker/             ← Trading bot worker (background)
+│   │       ├── main.go
+│   │       ├── dca_engine.go
+│   │       ├── grid_engine.go
+│   │       └── signal_engine.go
+│   └── campaign/
+│       └── api/                ← Campaign REST API (Port 9002)
+│           ├── main.go         ← Router saja
+│           ├── handlers/       ← Handler per-resource (satu file = satu resource)
+│           │   ├── campaign.go
+│           │   ├── volunteer.go
+│           │   ├── voter.go
+│           │   └── responses.go  ← WriteJSON + ExtractTenantID helper
+│           └── repository/
+│               └── db.go       ← DB connection pool
+│
+├── services/
+│   ├── api-gateway/            ← Reverse proxy + routing (Port 8000)
+│   │   └── main.go
+│   ├── auth-service/           ← JWT, Login, Register, RBAC (Port 8001)
+│   │   ├── main.go
+│   │   ├── jwt.go
+│   │   └── db.go
+│   ├── ai-gateway/             ← LLM Proxy + Semantic Cache (Port 8002)
+│   │   ├── main.go
+│   │   └── db.go
+│   ├── billing-service/        ← Xendit subscription (Port 8003)
+│   │   ├── main.go
+│   │   └── db.go
+│   ├── wa-gateway/             ← WhatsApp via whatsmeow (Port 8202)
+│   │   └── main.go
+│   └── notification-service/   ← Telegram/Email notif (Port 8005)
+│       └── main.go
+│
+├── shared/
+│   ├── sdk/
+│   │   ├── config/config.go    ← SATU-SATUNYA cara baca konfigurasi
+│   │   ├── auth/               ← JWT middleware untuk protect routes
+│   │   ├── db/                 ← PostgreSQL connection helper
+│   │   ├── cache/              ← Redis connection helper
+│   │   ├── response/           ← Standard JSON response helper
+│   │   └── webhook/            ← Webhook utilities
+│   └── migrations/             ← Database SQL migrations (000001 — 000024)
+│
+├── frontend/
+│   ├── umkm-web/               ← Vue 3 + Vite (Port 3201)
+│   ├── crypto-web/             ← Vue 3 + Vite (Port 3101)
+│   └── campaign-web/           ← Vue 3 + Vite (Port 3301)
+│
+├── tools/
+│   ├── scripts/               ← Archived fix/patch scripts
+│   └── testdata/              ← Sample data untuk testing manual
+│
+├── docs/                       ← Semua dokumentasi proyek
+├── infra/                      ← Docker, Nginx, n8n, deploy scripts
+├── scripts/                    ← CI/CD, loadtest, e2e, utility scripts
+│
+├── logs/                       ← LOG FILES (jangan edit manual!)
+│   └── *.log                   ← Diisi otomatis oleh make start-all
+├── run/                        ← PID FILES (jangan edit manual!)
+│   └── *.pid                   ← Diisi otomatis oleh make start-all
+├── bin/                        ← BINARY FILES lokal (di-gitignore)
+│   └── <service>               ← Output dari make build-all
+│
+├── CLAUDE.md                   ← File ini (AI memory)
+├── CONTRIBUTING.md             ← Panduan kontribusi & workflow
+├── Makefile                    ← Shortcut commands
+├── Dockerfile                  ← Multi-stage build (semua service)
+├── docker-compose.yml          ← Docker orchestration
+├── go.mod                      ← Go module (satu untuk semua)
+└── .env.example                ← Template environment variables
+```
+
+---
+
+## 📡 Port Registry
+
+| Port | Service | Direktori |
+|:-----|:--------|:----------|
+| `8000` | API Gateway | `services/api-gateway` |
+| `8001` | Auth Service | `services/auth-service` |
+| `8002` | AI Gateway | `services/ai-gateway` |
+| `8003` | Billing Service | `services/billing-service` |
+| `8005` | Notification Service | `services/notification-service` |
+| `8101` | Crypto API | `apps/crypto/api` |
+| `8201` | UMKM Accounting | `apps/umkm/accounting` |
+| `8202` | WA Gateway | `services/wa-gateway` |
+| `8202` | UMKM Chatbot | `apps/umkm/chatbot` ⚠️ Port sama dengan WA Gateway! |
+| `9001` | UMKM Business | `apps/umkm/business` |
+| `9002` | Campaign API | `apps/campaign/api` |
+| `3101` | Frontend Crypto | `frontend/crypto-web` |
+| `3201` | Frontend UMKM | `frontend/umkm-web` |
+| `3301` | Frontend Campaign | `frontend/campaign-web` |
+| `5433` | PostgreSQL (Docker) | docker-compose |
+| `6381` | Redis (Docker) | docker-compose |
+
+> ⚠️ WA Gateway dan UMKM Chatbot sama-sama port 8202. Jalankan hanya satu pada satu waktu saat dev lokal, atau pisahkan port.
+
+---
+
+## ⚙️ Konvensi Kode — WAJIB DIIKUTI
+
+### Go Backend
+
+| Aspek | Aturan | Larangan |
+|:------|:-------|:---------|
+| HTTP Framework | `net/http` standar | ❌ Gin, Echo, Fiber |
+| Database | `github.com/jackc/pgx/v5` | ❌ GORM, `database/sql` + lib/pq |
+| JWT | `github.com/golang-jwt/jwt/v5` | ❌ Library lain |
+| Password | `golang.org/x/crypto/bcrypt` (cost=12) | ❌ MD5, SHA, plain text |
+| Logging | `log/slog` (structured JSON) | ❌ `fmt.Println`, `log.Println` |
+| Config | `config.LoadConfig()` dari `shared/sdk/config` | ❌ `os.Getenv()` langsung |
+| Uang/Harga | `int64` satuan **sen** (1 rupiah = 100 sen) | ❌ `float64` |
+| UUID | `github.com/google/uuid` | ❌ Auto-increment integer |
+| Error Handling | `return error` eksplisit | ❌ `panic()` di luar main |
+| AI/LLM | Via `services/ai-gateway` | ❌ Panggil MiniMax/OpenAI langsung dari `apps/` |
+
+### Pola Kode Handler
+
+```go
+// Pattern WAJIB untuk setiap HTTP handler:
+func handleResource(w http.ResponseWriter, r *http.Request) {
+    // 1. Baca tenant ID dari header (multi-tenant!)
+    tenantID := r.Header.Get("X-Tenant-ID")
+    if tenantID == "" {
+        writeJSON(w, http.StatusBadRequest, Response{Message: "Missing X-Tenant-ID"})
+        return
+    }
+
+    // 2. Dispatch berdasarkan method
+    switch r.Method {
+    case http.MethodGet:
+        // handle GET
+    case http.MethodPost:
+        // handle POST
+    default:
+        writeJSON(w, http.StatusMethodNotAllowed, Response{Message: "Method not allowed"})
+    }
+}
+
+// Pattern standard writeJSON:
+func writeJSON(w http.ResponseWriter, status int, data any) {
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(status)
+    _ = json.NewEncoder(w).Encode(data)
+}
+```
+
+### Pola Database
+
+```go
+// ✅ BENAR — Parameterized query
+rows, err := DB.Query(ctx, "SELECT * FROM users WHERE tenant_id = $1", tenantID)
+
+// ❌ SALAH — String concatenation (SQL Injection!)
+rows, err := DB.Query(ctx, "SELECT * FROM users WHERE tenant_id = '" + tenantID + "'")
+```
+
+### Pola Struct Response
+
+```go
+// Gunakan struct ini secara konsisten:
+type Response struct {
+    Success bool        `json:"success"`
+    Message string      `json:"message"`
+    Data    interface{} `json:"data,omitempty"`
+}
+```
+
+---
+
+## 🗄️ Konvensi Database
+
+### Aturan Tabel Baru
+
+```sql
+-- SETIAP tabel harus punya kolom ini:
+CREATE TABLE nama_tabel (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),  -- ✅ UUID, bukan SERIAL
+    tenant_id  UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE, -- ✅ Multi-tenant
+    -- ... kolom bisnis ...
+    created_at TIMESTAMPTZ DEFAULT NOW(),   -- ✅ Wajib
+    updated_at TIMESTAMPTZ DEFAULT NOW()    -- ✅ Wajib
+);
+-- ✅ Index pada tenant_id wajib:
+CREATE INDEX idx_nama_tabel_tenant_id ON nama_tabel(tenant_id);
+```
+
+### Tipe Data
+
+| Data | SQL | Go |
+|:-----|:----|:---|
+| ID | `UUID` | `string` |
+| Uang/Harga | `BIGINT` (satuan sen) | `int64` |
+| Timestamp | `TIMESTAMPTZ` | `time.Time` |
+| JSON fleksibel | `JSONB` | `map[string]interface{}` |
+| Data terenkripsi | `TEXT` | `string` (ciphertext AES-GCM) |
+
+### Penamaan File Migration
+
+```
+# Format: nomor_urut_nama_fitur.up.sql / .down.sql
+shared/migrations/000025_nama_feature.up.sql
+shared/migrations/000025_nama_feature.down.sql
+```
+
+---
+
+## 🤖 MiniMax M2.7 — LLM Utama Platform
+
+**SELALU** panggil LLM melalui `services/ai-gateway` — **JANGAN** panggil API AI langsung dari `apps/`.
+
+```go
+// ✅ BENAR — Panggil via AI Gateway
+resp, err := http.Post("http://localhost:8002/v1/chat", "application/json", payload)
+
+// ❌ SALAH — Langsung dari apps/
+client := openai.NewClient(cfg.AI.MiniMaxAPIKey)
+```
+
+AI Gateway sudah menangani:
+- Semantic caching via Redis (key: `ai:cache:{sha256(prompt)}`)
+- Billing tracking per-tenant di tabel `ai_usage_logs`
+- Fallback ke Gemini jika MiniMax gagal
+
+---
+
+## 🔒 Keamanan — KRITIS
+
+| Data Sensitif | Metode | Lokasi DB |
+|:--------------|:-------|:----------|
+| API Key Exchange Crypto | AES-256-GCM | `encrypted_api_key` |
+| NIK Pemilih (Campaign) | AES-256-GCM | `encrypted_nik` |
+| Refresh Token | SHA-256 hash | Redis + `refresh_tokens` |
+| Password User | bcrypt (cost=12) | `password_hash` |
+
+- Kunci enkripsi: `cfg.EncryptionKey` — **wajib** 32 byte
+- Contoh enkripsi: `apps/crypto/domain/encryption.go`
+
+---
+
+## 🚫 Larangan Keras
+
+1. ❌ **JANGAN** commit file `.env` ke git
+2. ❌ **JANGAN** hardcode API key, password, atau secret di kode
+3. ❌ **JANGAN** gunakan `float64` untuk kalkulasi uang
+4. ❌ **JANGAN** panggil MiniMax/OpenAI/Gemini langsung dari `apps/`
+5. ❌ **JANGAN** hapus/modifikasi `shared/sdk/config/config.go` tanpa diskusi
+6. ❌ **JANGAN** simpan data PII (NIK, password) tanpa enkripsi/hashing
+7. ❌ **JANGAN** gunakan string concatenation di SQL query
+8. ❌ **JANGAN** `panic()` di luar fungsi `main()`
+
+---
+
+## 📋 Perintah Cepat
+
+```bash
+# Jalankan semua service di background
+make start-all
+# Log otomatis ke logs/*.log, PID ke run/*.pid
+
+# Matikan semua service
+make stop-all
+
+# Cek status semua port
+make status
+
+# Jalankan service individual
+make run-auth          # Auth Service (port 8001)
+make run-ai            # AI Gateway (port 8002)
+make run-accounting    # UMKM Accounting (port 8201)
+make run-chatbot       # UMKM Chatbot (port 8202)
+make run-crypto-api    # Crypto API (port 8101)
+make run-campaign      # Campaign API (port 9002)
+make run-frontend      # Semua frontend
+
+# Build binary ke bin/ (BUKAN ke root!)
+make build-all         # Semua service → bin/<service>
+make build             # Compile check saja (go build ./...)
+
+# Pantau log
+make logs-auth         # tail -f logs/auth.log
+make logs-accounting   # tail -f logs/accounting.log
+make logs-all          # tail -f logs/*.log
+
+# Testing & Quality
+go test ./...          # Test semua package
+go build ./...         # Compile check
+go vet ./...           # Linting
+go mod tidy            # Bersihkan dependencies
+make check             # tidy + vet + build + test sekaligus
+
+# Cleanup
+make clean-logs        # Hapus semua file di logs/
+make clean-build       # Hapus semua binary di bin/
+make clean             # clean-logs + clean-build
+
+# Frontend UMKM
+cd frontend/umkm-web && npm run dev
+```
+
+---
+
+## 📖 Dokumentasi Referensi
+
+| Dokumen | Tujuan |
+|:--------|:-------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Panduan lengkap menambah & mengubah fitur |
+| [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Skenario-skenario pengembangan + contoh kode |
+| [docs/FEATURE_MAP.md](docs/FEATURE_MAP.md) | Quick cheat sheet: di mana menulis kode apa |
+| [docs/MIGRATION_REGISTRY.md](docs/MIGRATION_REGISTRY.md) | Daftar semua migrasi database |
+| [docs/master_plan.md](docs/master_plan.md) | Rencana bisnis & roadmap produk |
+| [docs/deployment.md](docs/deployment.md) | Panduan deploy ke production |

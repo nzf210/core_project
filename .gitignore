@@ -1,27 +1,89 @@
-# Environments
+# =============================================================================
+# WCH Platform — .gitignore
+# =============================================================================
+
+# Environment Variables (JANGAN pernah commit ini!)
 .env
 .env.*
+!.env.example
 
-# Logs and PIDs
-*.log
-*.pid
+# =============================================================================
+# Go Artifacts — Compiled Binaries
+# =============================================================================
+# Binaries yang mungkin ter-build ke root secara tidak sengaja
+/accounting
+/billing-service
+/auth-service
+/api-gateway
+/ai-gateway
+/umkm-accounting
+/umkm-business
+/umkm-chatbot
+/crypto-api
+/crypto-worker
+/campaign-api
+/wa-gateway
+/notification-service
 
-# Go Binaries
-bin/
-accounting
-billing-service
+# bin/ — Local build output (binary go build)
+# Ignore semua isi bin/ kecuali .gitkeep
+bin/*
+!bin/.gitkeep
 
-# Dependencies
+# =============================================================================
+# Logs — Disimpan di logs/
+# =============================================================================
+# Ignore semua isi logs/ kecuali .gitkeep
+logs/*
+!logs/.gitkeep
+# Legacy safety: *.log di mana saja di root
+/*.log
+
+# =============================================================================
+# PID Files — Disimpan di run/
+# =============================================================================
+# Ignore semua isi run/ kecuali .gitkeep
+run/*
+!run/.gitkeep
+# Legacy safety: *.pid di mana saja di root
+/*.pid
+
+# =============================================================================
+# Frontend
+# =============================================================================
 node_modules/
+.next/
+dist/
+.nuxt/
+.vite/
 
-# Python
+# =============================================================================
+# Python (tools/scripts)
+# =============================================================================
 __pycache__/
 *.py[cod]
+*.pyc
+.venv/
+venv/
 
-# Uploads
+# =============================================================================
+# Uploads (file yang di-upload user — jangan commit ke git!)
+# =============================================================================
 uploads/
 
+# =============================================================================
+# Temporary Files & Legacy
+# =============================================================================
+# Folder untuk temporary/legacy files yang akan dihapus
+temp/
+
+# =============================================================================
 # OS & Editor
+# =============================================================================
 .DS_Store
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+Thumbs.db

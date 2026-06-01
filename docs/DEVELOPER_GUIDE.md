@@ -2,6 +2,8 @@
 
 > Dokumen ini menjelaskan **langkah demi langkah** cara menambahkan feature baru di project WCH Platform.
 > Untuk setiap skenario, dijelaskan **file mana yang perlu dibuat/diubah** dan **contoh kode nyata** dari project ini.
+>
+> **💡 Rekomendasi:** Lihat [CONTRIBUTING.md](../CONTRIBUTING.md) untuk panduan yang lebih ringkas dan up-to-date.
 
 ---
 
@@ -54,19 +56,23 @@ core_project/                         ← Root monorepo (satu go.mod)
 │               └── db.go             ← Database connection pool
 │
 ├── services/                         ← Shared services (lintas produk)
-│   ├── auth-service/                 ← JWT login/register (Port 8000)
+│   ├── api-gateway/                  ← Reverse proxy + routing (Port 8000)
+│   │   └── main.go
+│   ├── auth-service/                 ← JWT login/register (Port 8001)
 │   │   ├── main.go                   ← Semua handler + router
 │   │   ├── jwt.go                    ← Token generate & validate
 │   │   ├── db.go                     ← DB connection
 │   │   └── auth_test.go              ← Unit tests
-│   ├── ai-gateway/                   ← LLM proxy + semantic cache (Port 8003)
+│   ├── ai-gateway/                   ← LLM proxy + semantic cache (Port 8002)
 │   │   ├── main.go
 │   │   ├── db.go
 │   │   └── gateway_test.go
-│   ├── billing-service/              ← Subscription & payment (Port 8004)
+│   ├── billing-service/              ← Subscription & payment (Port 8003)
 │   │   ├── main.go
 │   │   └── schema.sql
-│   └── api-gateway/                  ← Reverse proxy + routing (Port 8000)
+│   ├── wa-gateway/                   ← WhatsApp via whatsmeow (Port 8202)
+│   │   └── main.go
+│   └── notification-service/         ← Notifikasi Telegram/Email (Port 8005)
 │       └── main.go
 │
 ├── shared/                           ← Kode yang dipakai bersama
@@ -839,13 +845,16 @@ CREATE INDEX idx_<table>_tenant_id ON <table>(tenant_id);
 
 ```bash
 # === DEVELOPMENT ===
-make run-auth          # Jalankan auth service (port 8000)
-make run-ai            # Jalankan AI gateway (port 8003)
-make run-accounting    # Jalankan UMKM accounting (port 9001)
-make run-chatbot       # Jalankan UMKM chatbot (port 9002)
+make run-auth          # Jalankan auth service (port 8001)
+make run-ai            # Jalankan AI gateway (port 8002)
+make run-accounting    # Jalankan UMKM accounting (port 8201)
+make run-chatbot       # Jalankan UMKM chatbot (port 8202)
+make run-campaign      # Jalankan Campaign API (port 9002)
+make run-crypto-api    # Jalankan Crypto API (port 8101)
 make run-crypto        # Jalankan Crypto worker
 make start-all         # Jalankan semua di background
 make stop-all          # Matikan semua
+make status            # Cek status semua port
 
 # === TESTING ===
 go test ./...                              # Test semua
