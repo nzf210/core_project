@@ -26,6 +26,7 @@ function doLogout() {
         <RouterLink to="/">Dashboard</RouterLink>
         <RouterLink to="/vouchers/programs">Voucher Programs</RouterLink>
         <RouterLink to="/vouchers/generate">Generate Links</RouterLink>
+        <RouterLink to="/vouchers/analytics">Analytics</RouterLink>
         <RouterLink to="/frozen-accounts">Frozen Accounts</RouterLink>
       </nav>
       <div class="user-info">
