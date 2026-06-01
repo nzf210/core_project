@@ -87,6 +87,12 @@ type cachedTenant struct {
 	expiresAt time.Time
 }
 
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
@@ -111,6 +117,9 @@ func main() {
 	xenditClient = xendit.NewClient(xKey)
 
 	mux := http.NewServeMux()
+
+	// Health check
+	mux.HandleFunc("GET /health", handleHealth)
 
 	// Public routes
 	mux.HandleFunc("/plans", handleListPlans)

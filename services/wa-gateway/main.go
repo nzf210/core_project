@@ -91,6 +91,12 @@ func getTenantID(r *http.Request) string {
 	return ""
 }
 
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status": "ok"}`))
+}
+
 func main() {
 	// Load .env file
 	_ = godotenv.Load(".env")
@@ -141,6 +147,7 @@ func main() {
 		}
 	}
 
+	http.HandleFunc("/health", handleHealth)
 	http.HandleFunc("/api/wa/qr", func(w http.ResponseWriter, r *http.Request) {
 		tenantID := getTenantID(r)
 		if tenantID == "" {

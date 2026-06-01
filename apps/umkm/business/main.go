@@ -147,6 +147,12 @@ var moduleLabels = map[string]string{
 	"booking":             "Booking / Reservasi",
 }
 
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
@@ -160,6 +166,7 @@ func main() {
 	defer DB.Close()
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", handleHealth)
 	mux.HandleFunc("/api/umkm/business-types", handleGetBusinessTypes)
 	mux.HandleFunc("/api/umkm/onboarding", handleOnboarding)
 	mux.HandleFunc("/api/umkm/dashboard", handleGetDashboard)

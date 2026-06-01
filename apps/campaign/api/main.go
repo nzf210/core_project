@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
@@ -28,7 +29,10 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	
+
+	// Health check
+	mux.HandleFunc("GET /health", handleHealth)
+
 	// Public Routes
 	mux.HandleFunc("/dashboard", handlers.HandlePublicDashboard)
 
@@ -69,6 +73,12 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		slog.Error("Failed to start server", "error", err)
 	}
+}
+
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {
