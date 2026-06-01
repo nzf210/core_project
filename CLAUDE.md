@@ -75,6 +75,8 @@ core_project/                   ← Root monorepo (satu go.mod)
 │   │   └── db.go
 │   ├── wa-gateway/             ← WhatsApp via whatsmeow (Port 8202)
 │   │   └── main.go
+│   ├── subscription-worker/    ← Freeze expired tenants (Port 8006)
+│   │   └── main.go
 │   └── notification-service/   ← Telegram/Email notif (Port 8005)
 │       └── main.go
 │
@@ -85,8 +87,9 @@ core_project/                   ← Root monorepo (satu go.mod)
 │   │   ├── db/                 ← PostgreSQL connection helper
 │   │   ├── cache/              ← Redis connection helper
 │   │   ├── response/           ← Standard JSON response helper
+│   │   ├── migrate/            ← Auto-migration runner (shared/sdk/migrate)
 │   │   └── webhook/            ← Webhook utilities
-│   └── migrations/             ← Database SQL migrations (000001 — 000024)
+│   └── migrations/             ← Database SQL migrations (000001 — 000027)
 │
 ├── frontend/
 │   ├── umkm-web/               ← Vue 3 + Vite (Port 3201)
@@ -128,6 +131,7 @@ core_project/                   ← Root monorepo (satu go.mod)
 | `8002` | AI Gateway | `services/ai-gateway` |
 | `8003` | Billing Service | `services/billing-service` |
 | `8005` | Notification Service | `services/notification-service` |
+| `8006` | Subscription Worker | `services/subscription-worker` |
 | `8101` | Crypto API | `apps/crypto/api` |
 | `8201` | UMKM Accounting | `apps/umkm/accounting` |
 | `8202` | WA Gateway | `services/wa-gateway` |
@@ -249,6 +253,33 @@ CREATE INDEX idx_nama_tabel_tenant_id ON nama_tabel(tenant_id);
 shared/migrations/000025_nama_feature.up.sql
 shared/migrations/000025_nama_feature.down.sql
 ```
+
+### Auto-Migration (AKTIF)
+
+**Semua services jalankan migration otomatis saat startup.** Tidak perlu `psql` manual.
+
+- Package: `shared/sdk/migrate` — migration runner + tracker
+- Table: `schema_migrations` — daftar versi yang sudah dijalankan
+- Setiap migration dieksekusi dalam **transaction** (gagal → rollback)
+- Idempotent: migration yang sudah jalan tidak dijalankan lagi
+
+```bash
+# Tambah migration baru
+make migrate-new NAME=add_invoice_table
+# → shared/migrations/000029_add_invoice_table.up.sql
+# → shared/migrations/000029_add_invoice_table.down.sql
+
+# Cek status migrations
+make migrate-status
+```
+
+**Services yang sudah terintegrasi auto-migration:**
+- `services/auth-service` ✅
+- `services/billing-service` ✅
+- `apps/umkm/accounting` ✅
+- `apps/umkm/chatbot` ✅
+- `apps/crypto/api` ✅
+- `apps/campaign/api` ✅
 
 ---
 

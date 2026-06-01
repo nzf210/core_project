@@ -14,7 +14,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready -U ${DB_USER:-postgres}
+        - pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-wch_core}
       interval: 5s
       timeout: 5s
       retries: 5
@@ -162,8 +162,13 @@ services:
       - DB_POSTGRESDB_USER=${DB_USER:-postgres}
       - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD:-postgres}
       - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=admin
-      - N8N_BASIC_AUTH_PASSWORD=n8n_secure_admin_password_123
+      - N8N_BASIC_AUTH_USER=${N8N_ADMIN_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_ADMIN_PASSWORD:-change_me_in_env}
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_METRICS=false
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+      - OWNER_TELEGRAM_CHAT_ID=${OWNER_TELEGRAM_CHAT_ID:-}
     entrypoint:
       - /bin/sh
       - /infra/n8n/init.sh
@@ -173,6 +178,12 @@ services:
       - n8n_data:/home/node/.n8n
       - ./infra/n8n/workflows:/workflows
       - ./infra/n8n/init.sh:/infra/n8n/init.sh
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -284,6 +295,90 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
+  billing-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wch-billing-service
+    command:
+      - billing-service
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-wch_core}
+      - DB_SSLMODE=disable
+      - XENDIT_API_KEY=${XENDIT_API_KEY}
+      - XENDIT_WEBHOOK_TOKEN=${XENDIT_WEBHOOK_TOKEN}
+    ports:
+      - "8003:8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wch-notification-service
+    command:
+      - notification-service
+    environment:
+      - APP_ENV=production
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    ports:
+      - "8005:8005"
+    depends_on:
+      wa-gateway:
+        condition: service_started
+    restart: unless-stopped
+  subscription-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wch-subscription-worker
+    command:
+      - subscription-worker
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-wch_core}
+      - DB_SSLMODE=disable
+      - FREEZE_CHECK_INTERVAL=${FREEZE_CHECK_INTERVAL:-1h}
+      - GRACE_PERIOD_HOURS=${GRACE_PERIOD_HOURS:-0}
+    ports:
+      - "8006:8006"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+  umkm-automation:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wch-umkm-automation
+    command:
+      - umkm-automation
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-wch_core}
+      - DB_SSLMODE=disable
+      - WA_GATEWAY_URL=http://wa-gateway:8202/api/wa/send
+      - AI_GATEWAY_URL=http://ai-gateway:8002/v1/chat
+    ports:
+      - "8203:8203"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      wa-gateway:
+        condition: service_started
     restart: unless-stopped
   umkm-frontend:
     build:

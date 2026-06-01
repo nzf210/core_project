@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -50,8 +52,18 @@ func main() {
 	// Uploads — public static files
 	mux.Handle("/uploads/", http.StripPrefix("/uploads", newProxy(getTarget("auth-service", "8001")+"/static")))
 
+	// Webhooks — public, lenient rate limit, signature-verified by downstream service
+	// Path convention: /webhooks/<service>/<event>
+	// - Xendit: POST /webhooks/xendit/{invoice.paid,subscription.activated,subscription.expired}
+	// - wa-gateway: POST /webhooks/wa/{message.status,device.status} (whatsmeow internal)
+	// - n8n:    POST /webhooks/n8n/{workflow_name}  (custom workflow trigger)
+	mux.Handle("/webhooks/xendit/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks", newProxy(getTarget("billing-service", "8003")))))
+	mux.Handle("/webhooks/wa/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks", newProxy(getTarget("wa-gateway", "8202")))))
+	mux.Handle("/webhooks/n8n/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks", newProxy(getTarget("n8n", "5678")))))
+
 	// Superadmin routes — protected with auth + role check
 	mux.Handle("/api/superadmin/", auth.Middleware(http.StripPrefix("/api/superadmin", newTenantProxy(getTarget("auth-service", "8001")+"/superadmin"))))
+	mux.Handle("/api/superadmin/billing/", auth.Middleware(http.StripPrefix("/api/superadmin/billing", newTenantProxy(getTarget("billing-service", "8003")+"/admin"))))
 	mux.Handle("/api/superadmin/n8n/", auth.Middleware(n8nProxy(getTarget("n8n", "5678"))))
 
 	// Profile routes — user can edit own profile
@@ -59,10 +71,16 @@ func main() {
 	mux.Handle("/api/profile/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api", newTenantProxy(getTarget("auth-service", "8001"))))))
 	mux.Handle("/api/ai/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/ai", newTenantProxy(getTarget("ai-gateway", "8002")))))))
 	mux.Handle("/api/umkm/business/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/umkm/business", newTenantProxy(getTarget("umkm-business", "9005"))))))
+	mux.Handle("/api/umkm/automation/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/umkm/automation", newTenantProxy(getTarget("umkm-automation", "8203"))))))
 	mux.Handle("/api/umkm/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/umkm", newTenantProxy(getTarget("umkm-accounting", "8201")))))))
 	mux.Handle("/api/campaign/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/campaign", newTenantProxy(getTarget("campaign-api", "9002")))))))
 	mux.Handle("/api/billing/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/billing", newTenantProxy(getTarget("billing-service", "8003"))))))
 	mux.Handle("/api/crypto/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/crypto", newTenantProxy(getTarget("crypto-api", "8101")+"/api/v1"))))))
+	mux.Handle("/api/wa/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/wa", newTenantProxy(getTarget("wa-gateway", "8202"))))))
+	mux.Handle("/api/notifications/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/notifications", newTenantProxy(getTarget("notification-service", "8005"))))))
+
+	// Aggregated health check — panggil semua service & return ringkas
+	mux.HandleFunc("/healthz", handleAggregatedHealthz(getTarget, cfg))
 
 	server := &http.Server{
 		Addr:         ":8000",
@@ -184,11 +202,11 @@ func quotaMiddleware(next http.Handler) http.Handler {
 
 		plan := auth.GetPlan(tenantID)
 
-		if plan.Tier == "free" && r.Method != http.MethodGet && r.Method != http.MethodOptions {
+		if plan.Tier == "lite" && r.Method != http.MethodGet && r.Method != http.MethodOptions {
 			ok, used := auth.CheckQuota(tenantID, "transactions")
 			if !ok {
 				response.Error(w, http.StatusPaymentRequired,
-					"Free tier quota exceeded. Upgrade to Lite plan to continue.", nil)
+					"Lite tier quota exceeded. Upgrade to Pro plan to continue.", nil)
 				slog.Warn("Quota exceeded", "tenant", tenantID, "resource", "transactions", "used", used)
 				return
 			}
@@ -197,6 +215,64 @@ func quotaMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// handleAggregatedHealthz melakukan ping cepat ke semua downstream service
+// dan mengembalikan status agregat. Berguna untuk monitoring & orchestration
+// (Kubernetes liveness probe, uptime monitoring, dsb).
+func handleAggregatedHealthz(getTarget func(string, string) string, cfg *config.Config) http.HandlerFunc {
+	services := []struct {
+		name string
+		port string
+	}{
+		{"auth-service", "8001"},
+		{"ai-gateway", "8002"},
+		{"billing-service", "8003"},
+		{"notification-service", "8005"},
+		{"subscription-worker", "8006"},
+		{"umkm-accounting", "8201"},
+		{"wa-gateway", "8202"},
+		{"crypto-api", "8101"},
+		{"campaign-api", "9002"},
+		{"umkm-business", "9005"},
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		results := make(map[string]string, len(services))
+		allHealthy := true
+
+		for _, svc := range services {
+			healthURL := getTarget(svc.name, svc.port) + "/healthz"
+			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil || resp.StatusCode >= 500 {
+				results[svc.name] = "down"
+				allHealthy = false
+				continue
+			}
+			if resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			results[svc.name] = "up"
+		}
+
+		status := http.StatusOK
+		if !allHealthy {
+			status = http.StatusServiceUnavailable
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":   map[bool]string{true: "healthy", false: "degraded"}[allHealthy],
+			"env":      cfg.Env,
+			"services": results,
+			"checked_at": time.Now().UTC().Format(time.RFC3339),
+		})
+	}
 }
 
 func getClientIP(r *http.Request) string {

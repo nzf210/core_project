@@ -25,8 +25,13 @@ func main() {
 	}
 	defer db.CloseDB()
 
+	if err := runMigrations(); err != nil {
+		slog.Error("Failed to run migrations", "error", err)
+		os.Exit(1)
+	}
+
 	repo := NewRepository()
-	handlers := NewHandlers(repo)
+	handlers := NewHandlers(repo, cfg.EncryptionKey)
 
 	mux := http.NewServeMux()
 

@@ -45,8 +45,12 @@ type Config struct {
 	}
 
 	// WhatsApp Gateway
+	//
+	// SEMUA pesan WA di WCH Platform lewat wa-gateway internal (port 8202,
+	// library whatsmeow). Tidak ada lagi integrasi Fonnte third-party.
+	// Lihat docs/WHATSAPP_GATEWAY_PLAN.md untuk arsitektur lengkap.
 	WhatsApp struct {
-		FonnteToken string
+		GatewayURL string // Override base URL wa-gateway (default: http://wa-gateway:8202)
 	}
 }
 
@@ -97,8 +101,8 @@ func LoadConfig(envPath string) *Config {
 	cfg.AI.CacheTTL = getEnvAsInt("AI_CACHE_TTL_SECONDS", 600)
 	cfg.AI.CostAlertUSD = 10.00 // Default $10/day alert
 
-	// WA
-	cfg.WhatsApp.FonnteToken = getEnv("FONNTE_TOKEN", "")
+	// WA Gateway (internal — replaces legacy Fonnte integration)
+	cfg.WhatsApp.GatewayURL = getEnv("WA_GATEWAY_URL", "http://wa-gateway:8202")
 
 	GlobalConfig = cfg
 	return cfg

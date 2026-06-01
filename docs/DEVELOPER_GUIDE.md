@@ -30,12 +30,13 @@
 core_project/                         ← Root monorepo (satu go.mod)
 ├── apps/                             ← Produk/Aplikasi bisnis
 │   ├── crypto/                       ← Trading bot
-│   │   ├── api/                      ← REST API (belum diisi)
-│   │   ├── domain/                   ← Business logic (belum diisi)
+│   │   ├── api/                      ← REST API Crypto (Port 8101)
+│   │   ├── domain/                   ← Business logic (models, encryption, exchange)
 │   │   └── worker/main.go            ← Background worker
 │   ├── umkm/                         ← UMKM SaaS
-│   │   ├── accounting/main.go        ← Accounting engine (Port 9001)
-│   │   ├── chatbot/main.go           ← AI Chatbot (Port 9002)
+│   │   ├── accounting/main.go        ← Accounting engine (Port 8201)
+│   │   ├── chatbot/main.go           ← AI Chatbot via WhatsApp (Port 8202)
+│   │   ├── business/main.go          ← Business management API (Port 9001)
 │   │   └── automation/main.go        ← Background automation worker
 │   └── campaign/                     ← Campaign management
 │       └── api/                      ← REST API (Port 9002)
@@ -72,6 +73,8 @@ core_project/                         ← Root monorepo (satu go.mod)
 │   │   └── schema.sql
 │   ├── wa-gateway/                   ← WhatsApp via whatsmeow (Port 8202)
 │   │   └── main.go
+│   ├── subscription-worker/          ← Freeze expired tenants (Port 8006)
+│   │   └── main.go
 │   └── notification-service/         ← Notifikasi Telegram/Email (Port 8005)
 │       └── main.go
 │
@@ -81,13 +84,13 @@ core_project/                         ← Root monorepo (satu go.mod)
 │   │   ├── auth/middleware.go        ← JWT middleware untuk protect routes
 │   │   ├── db/postgres.go            ← PostgreSQL connection pool helper
 │   │   ├── cache/redis.go            ← Redis connection helper
+│   │   ├── migrate/migrate.go        ← Auto-migration runner (dipakai tiap startup)
 │   │   └── response/http.go          ← Standard JSON response helper
-│   └── migrations/                   ← Database migration files
+│   └── migrations/                   ← Database migration files (000001 — 000028)
 │       ├── 000001_init_schema.up.sql
 │       ├── 000002_accounting_schema.up.sql
-│       ├── 000003_chatbot_schema.up.sql
-│       ├── 000004_campaign_schema.up.sql
-│       └── 20260522_campaign_features_2.up.sql
+│       ├── ...                       ← (000003 — 000027)
+│       └── 000028_campaign_features_2.up.sql
 │
 ├── frontend/                         ← Frontend apps
 │   ├── umkm-web/                     ← Vue 3 + Vite (UMKM dashboard)

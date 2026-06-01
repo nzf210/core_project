@@ -14,9 +14,13 @@ COPY . .
 RUN go build -o /bin/auth-service ./services/auth-service
 RUN go build -o /bin/api-gateway ./services/api-gateway
 RUN go build -o /bin/ai-gateway ./services/ai-gateway
+RUN go build -o /bin/billing-service ./services/billing-service
+RUN go build -o /bin/notification-service ./services/notification-service
+RUN go build -o /bin/subscription-worker ./services/subscription-worker
 RUN go build -o /bin/umkm-accounting ./apps/umkm/accounting
 RUN go build -o /bin/umkm-business ./apps/umkm/business
 RUN go build -o /bin/umkm-chatbot ./apps/umkm/chatbot
+RUN go build -o /bin/umkm-automation ./apps/umkm/automation
 RUN go build -o /bin/crypto-worker ./apps/crypto/worker
 RUN go build -o /bin/crypto-api ./apps/crypto/api
 RUN go build -o /bin/campaign-api ./apps/campaign/api
@@ -30,9 +34,13 @@ WORKDIR /app
 COPY --from=builder /bin/auth-service /usr/local/bin/
 COPY --from=builder /bin/api-gateway /usr/local/bin/
 COPY --from=builder /bin/ai-gateway /usr/local/bin/
+COPY --from=builder /bin/billing-service /usr/local/bin/
+COPY --from=builder /bin/notification-service /usr/local/bin/
+COPY --from=builder /bin/subscription-worker /usr/local/bin/
 COPY --from=builder /bin/umkm-accounting /usr/local/bin/
 COPY --from=builder /bin/umkm-business /usr/local/bin/
 COPY --from=builder /bin/umkm-chatbot /usr/local/bin/
+COPY --from=builder /bin/umkm-automation /usr/local/bin/
 COPY --from=builder /bin/crypto-worker /usr/local/bin/
 COPY --from=builder /bin/crypto-api /usr/local/bin/
 COPY --from=builder /bin/campaign-api /usr/local/bin/

@@ -1,22 +1,26 @@
 #!/bin/sh
+# Import semua workflow di /workflows/*.json ke n8n.
+# Tandai .workflow_imported supaya idempotent (tidak re-import setiap restart).
 
-# Tunggu database siap (jika perlu)
+set -e
+
 sleep 5
 
-# Cek apakah workflow sudah pernah di-import
-if [ ! -f /home/node/.n8n/.workflow_imported ]; then
-  echo "Meng-import Master Automations Workflow..."
-  n8n import:workflow --input=/workflows/master_automations.json
-  
-  if [ $? -eq 0 ]; then
-    echo "Import berhasil."
-    touch /home/node/.n8n/.workflow_imported
-  else
-    echo "Gagal meng-import workflow."
-  fi
+IMPORT_DIR="/workflows"
+MARKER="/home/node/.n8n/.workflow_imported"
+
+if [ ! -f "$MARKER" ]; then
+  echo "Importing n8n workflows from $IMPORT_DIR ..."
+  for wf in "$IMPORT_DIR"/*.json; do
+    [ -e "$wf" ] || continue
+    name=$(basename "$wf")
+    echo "  → $name"
+    n8n import:workflow --input="$wf" || echo "    failed: $name"
+  done
+  touch "$MARKER"
+  echo "All workflows imported."
 else
-  echo "Workflow sudah pernah di-import, melewati langkah ini."
+  echo "Workflows already imported, skipping. Delete $MARKER to force re-import."
 fi
 
-# Mulai n8n
 exec n8n start

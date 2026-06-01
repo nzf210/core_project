@@ -123,6 +123,111 @@ Requests ke API Gateway diarahkan berdasarkan prefix URL:
 
 ---
 
+## Multi-Store (UMKM)
+
+1 owner bisa membuat banyak toko dengan business_type berbeda (restoran + cafe, dll) di bawah 1 subscription. Quota di-enforce via `plan_features.feature_key='max_stores'`.
+
+| Endpoint | Method | Tujuan |
+|:---------|:-------|:-------|
+| `/api/umkm/stores` | GET | List semua toko milik owner (include `max_stores` & `can_add` quota info) |
+| `/api/umkm/stores` | POST | Buat toko baru (cek quota) |
+| `/api/umkm/stores/{id}` | GET | Detail 1 toko |
+| `/api/umkm/stores/{id}` | PATCH | Update nama/alamat/business_type/is_active |
+| `/api/umkm/stores/{id}` | DELETE | Hapus toko |
+
+**Quota Default:**
+
+| Tier | max_stores |
+|:-----|:-----------|
+| Lite | 1 |
+| Pro | 1 |
+| Business | 5 |
+
+Quota di-baca langsung dari `plan_features` table — superadmin bisa ubah via endpoint `/admin/plan-features` di `services/billing-service/` (port 8003) tanpa tulis migration baru.
+
+**Superadmin Dynamic Plan Features:**
+
+| Endpoint | Method | Tujuan |
+|:---------|:-------|:-------|
+| `/admin/plan-features?plan_id=business` | GET | List features per tier (semua kalau tanpa filter) |
+| `/admin/plan-features` | POST | Upsert feature (insert atau update kalau `(plan_id, feature_key)` sudah ada) |
+| `/admin/plan-features/{id}` | PATCH | Edit nama/value/is_enabled |
+| `/admin/plan-features/{id}` | DELETE | Hapus feature |
+
+Header wajib: `X-User-Role: superadmin` (di-inject otomatis oleh api-gateway dari JWT claim).
+
+---
+
+## Voucher Link (Subscription Activation)
+
+**Model:** Voucher = primary activation. Akun freeze otomatis saat `current_period_end` lewat (grace 0 hari). Freeze = read-only + banner, user masih bisa login dan lihat data historis.
+
+**Voucher Lifecycle:**
+
+```
+[Superadmin] /admin/voucher-links/generate
+    { program_id, count, valid_days, base_url }
+    → Returns: { count, expires_at, links: [{token, url}, ...] }
+    → Distribute via WA/email/reseller
+
+[User] Klik link → POST /voucher/redeem-link { token, tenant_id }
+    1. Verify JWT signature
+    2. Lookup voucher_links by SHA-256(token)
+    3. Validate: is_active, not redeemed, not expired
+    4. Check max_uses_per_tenant (default 1)
+    5. Mark link redeemed (tx)
+    6. Extend or create subscription (tx):
+       - If existing active: current_period_end += duration_months
+       - Else: new subscription with period_end = NOW() + duration
+    7. Un-freeze tenant if was frozen
+    8. Generate subscription_tickets + notification
+```
+
+**Key Tables:**
+
+| Table | Purpose |
+|:------|:--------|
+| `voucher_programs` | Program definition (type, plan, duration, max_uses) |
+| `voucher_links` | Individual links (token_hash, expires_at, redeemed_by) |
+| `voucher_generation_logs` | Audit trail (siapa generate berapa) |
+| `tenant_subscriptions.status` | `active` | `frozen` | `cancelled` |
+| `tenants.is_frozen` | Denormalized flag (fast read by middleware) |
+
+**Endpoints:**
+
+| Endpoint | Method | Auth | Purpose |
+|:---------|:-------|:-----|:--------|
+| `/voucher/redeem-link` | POST | public (signed token) | Customer redeem |
+| `/admin/voucher-links/generate` | POST | superadmin | Bulk generate |
+| `/admin/voucher-links?program_id=X` | GET | superadmin | List links per program |
+| `/admin/dashboard` | GET | superadmin | Aggregated overview |
+
+**Freeze Worker (`services/subscription-worker/`, port 8006):**
+
+- Cek `tenant_subscriptions` setiap `FREEZE_CHECK_INTERVAL` (default 1 jam)
+- Subscription dengan `current_period_end < NOW() - GRACE_PERIOD_HOURS` → freeze
+- Batch update: status='frozen', tenants.is_frozen=true
+- Liveness: GET `/healthz`
+- Env: `FREEZE_CHECK_INTERVAL`, `GRACE_PERIOD_HOURS`
+
+**Read-only Enforcement (`shared/sdk/auth/subscription_guard.go`):**
+
+Middleware `auth.RequireActiveSubscription` — block POST/PATCH/PUT/DELETE saat frozen, GET tetap pass. Set header `X-Subscription-Status: active|frozen`. Pakai pattern:
+
+```go
+handler := auth.RequireActiveSubscription(auth.Middleware(mux))
+```
+
+**Superadmin Dashboard (`frontend/superadmin-web/`, port 3401):**
+
+1 unified dashboard (bukan per-product). Sections:
+- **Overview** — tenant counts, voucher stats 30d, revenue (Xendit), subs by plan, recent frozen
+- **Voucher Programs** — list, create new
+- **Generate Links** — bulk generate + download CSV
+- **Frozen Accounts** — list + kirim reminder WA
+
+---
+
 ## Pola Kode (Pattern Reference)
 
 | Situasi | Lihat Contoh |

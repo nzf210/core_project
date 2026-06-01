@@ -1,0 +1,73 @@
+name: research-tech-benchmark
+description: Deep research untuk evaluating technologies, benchmarking solutions, dan eksplorasi tech baru
+
+trigger:
+  - "/deep-research"
+  - "research"
+  - "benchmark"
+  - "evaluate"
+  - "compare"
+  - "what is the best"
+
+input:
+  required:
+    - question
+  optional:
+    - constraints
+    - alternatives
+
+steps:
+  - id: web-search
+    agent: GeneralPurpose
+    model: sonnet
+    prompt: |
+      Research question: {question}
+      Constraints: {constraints}
+      Alternatives to evaluate: {alternatives}
+
+      Use WebSearch to find current (2025-2026) information about this topic.
+      Search for:
+      1. Current best practices and state-of-the-art approaches
+      2. Benchmark data or performance comparisons
+      3. Trade-offs and common pitfalls
+      4. Recommended libraries/frameworks with recent activity
+
+      Return a structured report with:
+      - Key findings (3-5 bullet points)
+      - Comparison table (if comparing alternatives)
+      - Recommended approach with justification
+      - Risks and mitigations
+      - Relevant sources with URLs
+
+  - id: validate
+    agent: GeneralPurpose
+    prompt: |
+      Validate the research findings from the previous step by cross-referencing with
+      what we know about Go ecosystem, PostgreSQL, and distributed systems best practices.
+
+      If any finding contradicts established knowledge, flag it.
+      If any finding is uncertain, mark it as "needs verification".
+
+  - id: synthesize
+    agent: GeneralPurpose
+    model: sonnet
+    prompt: |
+      Synthesize the research into a final recommendation report.
+
+      Research question: {question}
+
+      Format:
+      ## Executive Summary
+      One paragraph answer to the question.
+
+      ## Findings
+      Detailed findings with sources.
+
+      ## Recommendation
+      What should we do and why?
+
+      ## Implementation Notes
+      How to apply this in our monorepo.
+
+      ## Risks
+      What could go wrong and how to mitigate.

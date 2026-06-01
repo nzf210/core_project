@@ -90,14 +90,16 @@ Copy-paste checklist ini dan centang satu per satu:
 #### Step 1 — Buat Migration SQL (jika butuh tabel baru)
 
 ```bash
-# Cari nomor migration terakhir:
-ls shared/migrations/*.up.sql | tail -1
-# Buat file baru dengan nomor berikutnya:
-touch shared/migrations/000025_donors.up.sql
-touch shared/migrations/000025_donors.down.sql
+# Buat file migration baru dengan nomor otomatis:
+make migrate-new NAME=donors
+# → Membuat: shared/migrations/000029_donors.up.sql
+# → Membuat: shared/migrations/000029_donors.down.sql
 ```
 
-**`shared/migrations/000025_donors.up.sql`:**
+> ⚡ **Auto-migration aktif:** Migration dijalankan otomatis saat service start.
+> Tidak perlu `psql` manual. Cukup buat file `.sql`, lalu jalankan service.
+
+**`shared/migrations/NNNNNN_donors.up.sql`:**
 ```sql
 CREATE TABLE donors (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -112,7 +114,7 @@ CREATE TABLE donors (
 CREATE INDEX idx_donors_tenant_id ON donors(tenant_id);
 ```
 
-**`shared/migrations/000025_donors.down.sql`:**
+**`shared/migrations/NNNNNN_donors.down.sql`:**
 ```sql
 DROP TABLE IF EXISTS donors;
 ```
@@ -364,9 +366,17 @@ ls shared/migrations/*.up.sql | grep -oP '0+\d+' | sort -n | tail -1
 ### Buat File Migration
 
 ```bash
-touch shared/migrations/000025_nama_fitur.up.sql
-touch shared/migrations/000025_nama_fitur.down.sql
+# Gunakan make target — nomor urut otomatis:
+make migrate-new NAME=nama_fitur
+# → Membuat: shared/migrations/NNNNNN_nama_fitur.up.sql
+# → Membuat: shared/migrations/NNNNNN_nama_fitur.down.sql
+
+# Cek status migrations:
+make migrate-status
 ```
+
+> ⚡ **Auto-migration:** Setiap service jalankan migration otomatis saat startup.
+> Tambah file SQL → restart service → selesai. Tidak perlu `psql` manual.
 
 ### Aturan Wajib Tabel
 
@@ -717,8 +727,11 @@ go mod tidy       # Bersihkan dependencies
 # === DATABASE ===
 # Lihat migration terakhir:
 ls shared/migrations/*.up.sql | tail -5
-# Jalankan migration manual ke PostgreSQL:
-psql -U wch_admin -d wch_platform -f shared/migrations/000025_donors.up.sql
+# Buat migration baru (nomor otomatis):
+make migrate-new NAME=nama_fitur
+# Cek status migrations:
+make migrate-status
+# ⚡ Migration jalan otomatis saat service start — tidak perlu psql manual!
 
 # === CLEANUP ===
 make clean-logs         # Hapus semua file di logs/

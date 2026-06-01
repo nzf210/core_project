@@ -1,0 +1,53 @@
+{
+  "name": "WCH - Daily Revenue Digest (Telegram to Owner)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 20 * * *" }
+          ]
+        }
+      },
+      "id": "rev-sched-001",
+      "name": "Daily 20:00 WIB",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [220, 280]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://wch-api-gateway:8000/api/superadmin/billing/dashboard",
+        "options": { "timeout": 10000 }
+      },
+      "id": "rev-fetch-001",
+      "name": "Get Billing Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wch-api-gateway:8000/api/notifications/telegram",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"{{ $env.OWNER_TELEGRAM_CHAT_ID }}\",\n  \"text\": \"📊 *Daily Revenue Digest*\\n\\nTenants: {{ $json.data.total_tenants }}\\nActive: {{ $json.data.active_tenants }}\\nFrozen: {{ $json.data.frozen_tenants }}\\nRevenue 30d: Rp {{ $json.data.revenue_30d }}\\n\\nVouchers redeemed 30d: {{ $json.data.vouchers_redeemed_30d }}\"\n}",
+        "options": {}
+      },
+      "id": "rev-tele-001",
+      "name": "Send Telegram Digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 280]
+    }
+  ],
+  "connections": {
+    "Daily 20:00 WIB":    { "main": [[{ "node": "Get Billing Dashboard", "type": "main", "index": 0 }]] },
+    "Get Billing Dashboard": { "main": [[{ "node": "Send Telegram Digest", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {},
+  "id": "wch-revenue-digest-001"
+}

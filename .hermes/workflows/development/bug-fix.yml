@@ -1,0 +1,101 @@
+name: development-bug-fix
+description: Bug fix lifecycle — reproduce, identify root cause, fix, test, prevent regression
+
+trigger:
+  - "fix bug"
+  - "bug fix"
+  - "there's a bug"
+  - "this is broken"
+
+input:
+  required:
+    - bug_description
+    - domain
+  optional:
+    - error_log
+    - steps_to_reproduce
+
+steps:
+  - id: reproduce
+    agent: Explore
+    prompt: |
+      Bug: {bug_description}
+      Domain: {domain}
+      Error log (if provided): {error_log}
+
+      1. Search the codebase for relevant code (error messages, function names mentioned)
+      2. Read the relevant files and understand the current behavior
+      3. If possible, identify the exact line(s) causing the bug
+      4. Trace the data flow: input → processing → output
+
+      Report:
+      - Where the bug likely is (file:line)
+      - What's the expected vs actual behavior
+      - What's causing it (root cause hypothesis)
+
+  - id: fix
+    agent: GeneralPurpose
+    prompt: |
+      Bug: {bug_description}
+      Domain: {domain}
+      Steps to reproduce: {steps_to_reproduce}
+
+      Fix the bug following these rules:
+      1. Make the MINIMUM change necessary to fix the bug
+      2. Do NOT introduce new features or refactor unrelated code
+      3. Follow the Go conventions from CLAUDE.md
+      4. Add a comment explaining WHY this fix works (not WHAT it does)
+
+      CRITICAL:
+      - NEVER use float64 for money
+      - NEVER concatenate strings in SQL
+      - Every DB query MUST filter by tenant_id
+
+      After the fix, run: go build ./... && go vet ./...
+
+  - id: test
+    agent: GeneralPurpose
+    prompt: |
+      Write a regression test for the bug you just fixed.
+
+      1. Create a table-driven test in the appropriate *_test.go file
+      2. Cover the bug case (input that triggered the bug)
+      3. Also cover the normal case (input that should work)
+      4. Run the tests: go test ./... -v -run TestFunctionName
+
+      If the bug is in an edge case (e.g., tax calculation, empty input),
+      the test MUST specifically test that edge case.
+
+  - id: verify
+    agent: Explore
+    prompt: |
+      Verify the fix is complete:
+
+      1. Run: go build ./... && go vet ./... && go test ./...
+      2. Check that the fix didn't break anything else
+      3. If there are integration tests, note which ones to run manually
+
+      Report final test results.
+
+output:
+  format: markdown
+  deliverable: |
+    ## Bug Fix Report
+
+    ### Bug Summary
+    {bug_description}
+
+    ### Root Cause
+    ...
+
+    ### Fix Applied
+    - File: line
+    - Change: ...
+
+    ### Test Added
+    ...
+
+    ### Verification
+    ✅ go build: PASS
+    ✅ go vet: PASS
+    ✅ go test: PASS

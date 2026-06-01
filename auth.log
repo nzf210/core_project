@@ -1,6 +1,0 @@
-{"time":"2026-05-27T19:23:32.753487744+07:00","level":"INFO","msg":"✅ Connected to PostgreSQL"}
-{"time":"2026-05-27T19:23:32.755516629+07:00","level":"INFO","msg":"✅ Connected to Redis"}
-{"time":"2026-05-27T19:23:32.770569299+07:00","level":"INFO","msg":"Superadmin user already exists, skipping seed"}
-{"time":"2026-05-27T19:23:32.77089007+07:00","level":"INFO","msg":"🔑 Starting Auth Service in development mode on port 8001..."}
-{"time":"2026-05-27T19:23:32.771252871+07:00","level":"ERROR","msg":"Failed to start Auth Service","error":"listen tcp :8001: bind: address already in use"}
-exit status 1

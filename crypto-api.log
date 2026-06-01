@@ -1,4 +1,0 @@
-{"time":"2026-05-27T19:23:31.451979648+07:00","level":"INFO","msg":"✅ PostgreSQL connected successfully"}
-{"time":"2026-05-27T19:23:31.453091704+07:00","level":"INFO","msg":"🚀 Starting Crypto API Service in development mode on port 8101..."}
-{"time":"2026-05-27T19:23:31.453572746+07:00","level":"ERROR","msg":"Failed to start server","error":"listen tcp :8101: bind: address already in use"}
-exit status 1

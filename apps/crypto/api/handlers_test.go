@@ -36,6 +36,15 @@ func (m *MockRepository) DeleteAPIKey(ctx context.Context, id, tenantID, userID 
 	return nil
 }
 
+func (m *MockRepository) GetActiveAPIKey(ctx context.Context, tenantID, userID string) (*domain.ExchangeAPIKey, error) {
+	for _, k := range m.Keys {
+		if k.IsActive {
+			return &k, nil
+		}
+	}
+	return nil, nil
+}
+
 func (m *MockRepository) CreateBot(ctx context.Context, b *domain.Bot) error {
 	b.ID = "test-bot-id"
 	b.CreatedAt = time.Now()
@@ -114,7 +123,7 @@ func TestCreateAPIKey(t *testing.T) {
 	}
 
 	mockRepo := &MockRepository{}
-	handlers := NewHandlers(mockRepo)
+	handlers := NewHandlers(mockRepo, "12345678901234567890123456789012")
 
 	reqBody := domain.CreateAPIKeyRequest{
 		Exchange:  domain.ExchangeBinance,
@@ -142,7 +151,7 @@ func TestListBots(t *testing.T) {
 			{ID: "bot-1", Name: "Bot 1", BotType: domain.BotTypeDCA},
 		},
 	}
-	handlers := NewHandlers(mockRepo)
+	handlers := NewHandlers(mockRepo, "12345678901234567890123456789012")
 
 	req := httptest.NewRequest(http.MethodGet, "/bots", nil)
 	req = req.WithContext(context.WithValue(req.Context(), auth.TenantIDKey, "tenant-1"))

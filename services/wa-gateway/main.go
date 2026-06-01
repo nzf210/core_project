@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
@@ -42,9 +43,9 @@ func getDBURI() string {
 	host := os.Getenv("DB_HOST")
 	if host == "" { host = "localhost" }
 	port := os.Getenv("DB_PORT")
-	if port == "" { port = "5432" }
+	if port == "" { port = "5433" }
 	dbname := os.Getenv("DB_NAME")
-	if dbname == "" { dbname = "wch_core" } // it is wch_core, not wch_platform
+	if dbname == "" { dbname = "wch_platform" }
 	sslmode := os.Getenv("DB_SSLMODE")
 	if sslmode == "" { sslmode = "disable" }
 	
@@ -91,6 +92,10 @@ func getTenantID(r *http.Request) string {
 }
 
 func main() {
+	// Load .env file
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("../../.env")
+
 	dbLog := waLog.Stdout("Database", "WARN", true)
 	dbURI := getDBURI()
 	// Initialize Postgres container store

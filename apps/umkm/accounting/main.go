@@ -38,13 +38,19 @@ func main() {
 	}
 	defer DB.Close()
 
-	
+	// Run database migrations automatically
+	if err := runMigrations(DB); err != nil {
+		slog.Error("Failed to run migrations", "error", err)
+		os.Exit(1)
+	}
+
 mux := http.NewServeMux()
 	mux.HandleFunc("/accounts", handleAccounts)
 	mux.HandleFunc("/transactions", handleTransactions)
 	mux.HandleFunc("/reports/income-statement", handleIncomeStatement)
 	mux.HandleFunc("/reports/balance-sheet", handleBalanceSheet)
 	mux.HandleFunc("/reports/cash-flow", handleCashFlow)
+	mux.HandleFunc("/expenses", handleExpenses)
 	mux.HandleFunc("/seed", handleSeed) // Helper endpoint to seed a tenant
 	mux.HandleFunc("/admin/tenants", handleAdminTenants)
 	mux.HandleFunc("/settings", handleSettings)
@@ -451,7 +457,187 @@ func handleBalanceSheet(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCashFlow(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Not implemented yet"})
+	tenantID := r.Header.Get("X-Tenant-ID")
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+	
+	if tenantID == "" || from == "" || to == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing parameters"})
+		return
+	}
+
+	if DB == nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Database connection error"})
+		return
+	}
+
+	// Simplistic Cash Flow: approximated based on transactions affecting '100' (Kas) or '101' (Bank)
+	query := `
+		SELECT e.id, e.date, e.description, l.debit, l.credit
+		FROM journal_lines l
+		JOIN journal_entries e ON l.entry_id = e.id
+		JOIN chart_of_accounts c ON l.account_id = c.id
+		WHERE e.tenant_id = $1 AND c.type = 'asset' AND c.code IN ('100', '101') AND e.date >= $2 AND e.date <= $3
+		ORDER BY e.date ASC
+	`
+	rows, err := DB.Query(r.Context(), query, tenantID, from, to)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		return
+	}
+	defer rows.Close()
+
+	var totalInflow, totalOutflow int64
+	var details []map[string]interface{}
+	for rows.Next() {
+		var id, desc string
+		var debit, credit int64
+		var t time.Time
+		if err := rows.Scan(&id, &t, &desc, &debit, &credit); err == nil {
+			// For cash accounts (asset), debit is inflow, credit is outflow
+			totalInflow += debit
+			totalOutflow += credit
+			details = append(details, map[string]interface{}{
+				"id": id, "date": t.Format("2006-01-02"), "description": desc, "inflow": debit, "outflow": credit,
+			})
+		}
+	}
+
+	netCashFlow := totalInflow - totalOutflow
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true, 
+		Data: map[string]interface{}{
+			"net_cash_flow": netCashFlow,
+			"total_inflow": totalInflow,
+			"total_outflow": totalOutflow,
+			"details": details,
+		},
+	})
+}
+
+func handleExpenses(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		from := r.URL.Query().Get("from")
+		to := r.URL.Query().Get("to")
+		query := `
+			SELECT e.id, e.date, e.description, c.name, l.debit
+			FROM journal_lines l
+			JOIN journal_entries e ON l.entry_id = e.id
+			JOIN chart_of_accounts c ON l.account_id = c.id
+			WHERE e.tenant_id = $1 AND c.type = 'expense'
+		`
+		args := []interface{}{tenantID}
+		if from != "" && to != "" {
+			query += " AND e.date >= $2 AND e.date <= $3 "
+			args = append(args, from, to)
+		}
+		query += " ORDER BY e.date DESC"
+		
+		rows, err := DB.Query(r.Context(), query, args...)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+			return
+		}
+		defer rows.Close()
+
+		var totalExpense int64
+		var details []map[string]interface{}
+		for rows.Next() {
+			var id, desc, accountName string
+			var debit int64
+			var t time.Time
+			if err := rows.Scan(&id, &t, &desc, &accountName, &debit); err == nil {
+				totalExpense += debit
+				details = append(details, map[string]interface{}{
+					"id": id, "date": t.Format("2006-01-02"), "description": desc, "account_name": accountName, "amount": debit,
+				})
+			}
+		}
+		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: map[string]interface{}{
+			"total_expense": totalExpense,
+			"details": details,
+		}})
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		var req struct {
+			Date        string `json:"date"` // YYYY-MM-DD
+			Description string `json:"description"`
+			Amount      int64  `json:"amount"`
+			ExpenseCOA  string `json:"expense_coa"` // e.g. "500"
+			PaymentCOA  string `json:"payment_coa"` // e.g. "100" (Kas) or "101" (Bank)
+			LineItems   []struct {
+				Name   string `json:"name"`
+				Amount int64  `json:"amount"`
+			} `json:"line_items"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+			return
+		}
+
+		if req.Amount == 0 || req.ExpenseCOA == "" || req.PaymentCOA == "" {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Amount, ExpenseCOA, and PaymentCOA required"})
+			return
+		}
+
+		ctx := r.Context()
+		tx, err := DB.Begin(ctx)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+			return
+		}
+		defer tx.Rollback(ctx)
+
+		var expID, payID string
+		err = tx.QueryRow(ctx, "SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = $2", tenantID, req.ExpenseCOA).Scan(&expID)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid Expense COA"})
+			return
+		}
+		err = tx.QueryRow(ctx, "SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = $2", tenantID, req.PaymentCOA).Scan(&payID)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid Payment COA"})
+			return
+		}
+
+		metaBytes, _ := json.Marshal(map[string]interface{}{
+			"type": "expense",
+			"line_items": req.LineItems,
+		})
+
+		var entryID string
+		err = tx.QueryRow(ctx,
+			"INSERT INTO journal_entries (tenant_id, date, description, metadata) VALUES ($1, $2, $3, $4) RETURNING id",
+			tenantID, req.Date, req.Description, string(metaBytes)).Scan(&entryID)
+		
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Insert entry failed"})
+			return
+		}
+
+		_, err = tx.Exec(ctx, "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, $3, $4)", entryID, expID, req.Amount, 0)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Insert lines failed"})
+			return
+		}
+		_, err = tx.Exec(ctx, "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, $3, $4)", entryID, payID, 0, req.Amount)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Insert lines failed"})
+			return
+		}
+
+		tx.Commit(ctx)
+		writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Expense recorded", Data: map[string]string{"id": entryID}})
+		return
+	}
 }
 
 func handleGetTransactions(w http.ResponseWriter, r *http.Request) {
@@ -772,20 +958,20 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
-		var fonnteToken, waNumber, xenditApiKey, xenditWebhookToken, reportTime *string
+		var waNumber, xenditApiKey, xenditWebhookToken, waProvider, reportTime *string
 		var qrisEnabled, reportEnabled *bool
-		err := DB.QueryRow(r.Context(), "SELECT fonnte_token, wa_number, xendit_api_key, xendit_webhook_token, qris_enabled, report_enabled, report_time FROM tenants WHERE id = $1", tenantID).Scan(&fonnteToken, &waNumber, &xenditApiKey, &xenditWebhookToken, &qrisEnabled, &reportEnabled, &reportTime)
+		err := DB.QueryRow(r.Context(), "SELECT wa_number, xendit_api_key, xendit_webhook_token, wa_provider, qris_enabled, report_enabled, report_time FROM tenants WHERE id = $1", tenantID).Scan(&waNumber, &xenditApiKey, &xenditWebhookToken, &waProvider, &qrisEnabled, &reportEnabled, &reportTime)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
 			return
 		}
-		
-		fToken, wNum, xApiKey, xWebToken, rTime := "", "", "", "", "07:00"
+
+		wNum, xApiKey, xWebToken, provider, rTime := "", "", "", "internal", "07:00"
 		qEnabled, rEnabled := false, false
-		if fonnteToken != nil { fToken = *fonnteToken }
 		if waNumber != nil { wNum = *waNumber }
 		if xenditApiKey != nil { xApiKey = *xenditApiKey }
 		if xenditWebhookToken != nil { xWebToken = *xenditWebhookToken }
+		if waProvider != nil && *waProvider != "" { provider = *waProvider }
 		if qrisEnabled != nil { qEnabled = *qrisEnabled }
 		if reportEnabled != nil { rEnabled = *reportEnabled }
 		if reportTime != nil { rTime = *reportTime }
@@ -793,8 +979,8 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, APIResponse{
 			Success: true,
 			Data: map[string]interface{}{
-				"fonnte_token": fToken,
 				"wa_number": wNum,
+				"wa_provider": provider,
 				"xendit_api_key": xApiKey,
 				"xendit_webhook_token": xWebToken,
 				"qris_enabled": qEnabled,
@@ -807,7 +993,6 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPut {
 		var req struct {
-			FonnteToken        string `json:"fonnte_token"`
 			WaNumber           string `json:"wa_number"`
 			XenditApiKey       string `json:"xendit_api_key"`
 			XenditWebhookToken string `json:"xendit_webhook_token"`
@@ -819,18 +1004,16 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
 			return
 		}
-		
-		// Preserve existing WhatsApp config if they are not provided by frontend (empty string)
-		var existingFToken, existingWNum *string
-		_ = DB.QueryRow(r.Context(), "SELECT fonnte_token, wa_number FROM tenants WHERE id = $1", tenantID).Scan(&existingFToken, &existingWNum)
-		if req.FonnteToken == "" && existingFToken != nil {
-			req.FonnteToken = *existingFToken
-		}
+
+		// Preserve existing WhatsApp number if not provided by frontend
+		var existingWNum *string
+		_ = DB.QueryRow(r.Context(), "SELECT wa_number FROM tenants WHERE id = $1", tenantID).Scan(&existingWNum)
 		if req.WaNumber == "" && existingWNum != nil {
 			req.WaNumber = *existingWNum
 		}
-		
-		_, err := DB.Exec(r.Context(), "UPDATE tenants SET fonnte_token = $1, wa_number = $2, xendit_api_key = $3, xendit_webhook_token = $4, qris_enabled = $5, report_enabled = $6, report_time = $7, updated_at = NOW() WHERE id = $8", req.FonnteToken, req.WaNumber, req.XenditApiKey, req.XenditWebhookToken, req.QrisEnabled, req.ReportEnabled, req.ReportTime, tenantID)
+
+		// WA provider is always 'internal' — legacy Fonnte token is no longer supported.
+		_, err := DB.Exec(r.Context(), "UPDATE tenants SET wa_number = $1, wa_provider = 'internal', xendit_api_key = $2, xendit_webhook_token = $3, qris_enabled = $4, report_enabled = $5, report_time = $6, updated_at = NOW() WHERE id = $7", req.WaNumber, req.XenditApiKey, req.XenditWebhookToken, req.QrisEnabled, req.ReportEnabled, req.ReportTime, tenantID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to update settings"})
 			return

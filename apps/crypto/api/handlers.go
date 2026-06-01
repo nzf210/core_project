@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -15,6 +16,7 @@ import (
 type RepositoryInterface interface {
 	CreateAPIKey(ctx context.Context, apiKey *domain.ExchangeAPIKey) error
 	ListAPIKeys(ctx context.Context, tenantID, userID string) ([]domain.ExchangeAPIKey, error)
+	GetActiveAPIKey(ctx context.Context, tenantID, userID string) (*domain.ExchangeAPIKey, error)
 	DeleteAPIKey(ctx context.Context, id, tenantID, userID string) error
 	CreateBot(ctx context.Context, b *domain.Bot) error
 	ListBots(ctx context.Context, tenantID, userID string) ([]domain.Bot, error)
@@ -31,11 +33,12 @@ type RepositoryInterface interface {
 }
 
 type Handlers struct {
-	repo RepositoryInterface
+	repo           RepositoryInterface
+	encryptionKey  string
 }
 
-func NewHandlers(repo RepositoryInterface) *Handlers {
-	return &Handlers{repo: repo}
+func NewHandlers(repo RepositoryInterface, encryptionKey string) *Handlers {
+	return &Handlers{repo: repo, encryptionKey: encryptionKey}
 }
 
 func (h *Handlers) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -404,20 +407,105 @@ func (h *Handlers) ExecuteQuickTrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In a real app we'd trigger a service to execute via Exchange Client.
-	// For MVP, we simulate success immediately and create a notification.
 	tenantID, _ := r.Context().Value(auth.TenantIDKey).(string)
 	userID, _ := r.Context().Value(auth.UserIDKey).(string)
+	ctx := r.Context()
 
+	// Get active API key for the user
+	apiKey, err := h.repo.GetActiveAPIKey(ctx, tenantID, userID)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "No active API key found. Please add an exchange API key first.", err)
+		return
+	}
+
+	// Decrypt API credentials
+	apiKeyDecrypted, err := domain.Decrypt(apiKey.EncryptedAPIKey, h.encryptionKey)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to decrypt API key", err)
+		return
+	}
+	apiSecretDecrypted, err := domain.Decrypt(apiKey.EncryptedAPISecret, h.encryptionKey)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to decrypt API secret", err)
+		return
+	}
+
+	// Create exchange client
+	exchangeClient, err := domain.NewExchangeClient(apiKey.Exchange, apiKeyDecrypted, apiSecretDecrypted)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "Unsupported exchange: "+apiKey.Exchange, err)
+		return
+	}
+
+	// Get current price
+	price, err := exchangeClient.GetPrice(ctx, req.Pair)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to get current price for "+req.Pair, err)
+		return
+	}
+
+	// Determine base and quote assets from pair (e.g., BTCUSDT -> base=BTC, quote=USDT)
+	quoteAsset := strings.TrimPrefix(req.Pair, "BTC")
+	quoteAsset = strings.TrimPrefix(quoteAsset, "ETH")
+	quoteAsset = strings.TrimPrefix(quoteAsset, "BNB")
+	if quoteAsset == req.Pair {
+		quoteAsset = "USDT" // default
+	}
+
+	// For buying: check quote asset balance (e.g., USDT)
+	// For selling: check base asset balance (e.g., BTC)
+	var checkAsset string
+	if req.Side == domain.OrderSideBuy {
+		checkAsset = quoteAsset
+	} else {
+		checkAsset = strings.TrimSuffix(req.Pair, quoteAsset)
+	}
+
+	balance, err := exchangeClient.GetBalance(ctx, checkAsset)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to get balance for "+checkAsset, err)
+		return
+	}
+
+	// Calculate required balance based on amount and price
+	priceFloat := domain.CentsToUSDT(price)
+	requiredBalance := req.Amount / priceFloat
+
+	if req.Side == domain.OrderSideBuy && balance < req.Amount {
+		response.Error(w, http.StatusBadRequest, fmt.Sprintf("Insufficient %s balance. Required: %.2f, Available: %.2f", checkAsset, req.Amount, balance), nil)
+		return
+	}
+	if req.Side == domain.OrderSideSell && balance < requiredBalance {
+		response.Error(w, http.StatusBadRequest, fmt.Sprintf("Insufficient %s balance. Required: %.8f, Available: %.8f", checkAsset, requiredBalance, balance), nil)
+		return
+	}
+
+	// Place the order (market order)
+	orderID, err := exchangeClient.PlaceOrder(ctx, req.Pair, req.Side, requiredBalance, 0)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to place order: "+err.Error(), err)
+		return
+	}
+
+	// Create success notification
 	notif := &domain.CryptoNotification{
 		TenantID: tenantID,
 		UserID:   userID,
 		Title:    "Quick Trade Executed",
-		Message:  "Successfully placed " + req.Side + " order for " + req.Pair,
+		Message:  fmt.Sprintf("Successfully placed %s order for %.8f %s at %s (Order ID: %s)", req.Side, requiredBalance, req.Pair, fmt.Sprintf("$%.2f", priceFloat), orderID),
 		Type:     "success",
 		IsRead:   false,
 	}
-	_ = h.repo.CreateNotification(r.Context(), notif)
+	_ = h.repo.CreateNotification(ctx, notif)
 
-	response.JSON(w, http.StatusOK, "Quick trade executed successfully", nil)
+	response.JSON(w, http.StatusOK, "Quick trade executed successfully", map[string]interface{}{
+		"success":      true,
+		"order_id":     orderID,
+		"pair":         req.Pair,
+		"side":         req.Side,
+		"quantity":     requiredBalance,
+		"price":        priceFloat,
+		"total":        req.Amount,
+		"quote_asset":  quoteAsset,
+	})
 }

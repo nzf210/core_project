@@ -1,5 +1,15 @@
 <template>
   <div class="app-container">
+    <!-- Read-only banner: tampil saat akun freeze. User bisa login & lihat data, tapi tidak bisa input baru. -->
+    <div v-if="isLoggedIn && isFrozen" class="frozen-banner">
+      <span class="frozen-icon">❄️</span>
+      <div class="frozen-text">
+        <strong>Akun Anda dalam masa freeze.</strong>
+        Anda masih bisa melihat data historis, tetapi tidak bisa input transaksi baru.
+        <a href="/redeem" class="redeem-link">Redeem voucher →</a>
+      </div>
+    </div>
+
     <header class="app-header" v-if="isLoggedIn">
       <div class="container flex items-center justify-between">
         <h1 class="logo text-gradient">WCH UMKM</h1>
@@ -62,6 +72,7 @@ const userRole = ref('user')
 const isMobileMenuOpen = ref(false)
 const businessName = ref('')
 const plan = ref('free')
+const isFrozen = ref(false)
 
 const checkAuth = async () => {
   if (localStorage.getItem('access_token') && localStorage.getItem('tenant_id')) {
@@ -70,11 +81,21 @@ const checkAuth = async () => {
     businessName.value = localStorage.getItem('business_name') || ''
     plan.value = localStorage.getItem('plan') || 'free'
 
+    // Read X-Subscription-Status header yang di-set oleh RequireActiveSubscription middleware
+    // Backend set header ini di setiap response. Frontend cache di sessionStorage supaya
+    // tidak perlu parse header di setiap navigasi.
+    const cachedStatus = sessionStorage.getItem('subscription_status')
+    isFrozen.value = cachedStatus === 'frozen'
+
     try {
       const data = await api.get('/api/profile')
       if (data.success && data.data && data.data.business_name) {
         businessName.value = data.data.business_name
         localStorage.setItem('business_name', data.data.business_name)
+      }
+      if (data.data && typeof data.data.is_frozen === 'boolean') {
+        isFrozen.value = data.data.is_frozen
+        sessionStorage.setItem('subscription_status', isFrozen.value ? 'frozen' : 'active')
       }
     } catch (e) {
       console.error('Failed to sync profile', e)
@@ -203,6 +224,32 @@ onMounted(() => {
   flex: 1;
   padding: 2rem 1.5rem;
 }
+
+.frozen-banner {
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
+  color: white;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.frozen-icon { font-size: 20px; }
+.frozen-text { flex: 1; }
+.redeem-link {
+  color: white;
+  text-decoration: underline;
+  font-weight: 600;
+  margin-left: 8px;
+  padding: 4px 10px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
+}
+.redeem-link:hover { background: rgba(255,255,255,0.3); }
 
 .mobile-menu-btn {
   display: none;

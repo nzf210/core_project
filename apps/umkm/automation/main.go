@@ -11,10 +11,13 @@ import (
 	"time"
 
 	"core_project/shared/sdk/config"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
 var AIGatewayURL = "http://localhost:8002/v1/chat"
+var NotificationServiceURL = "http://localhost:8005/api/notification/send"
+var DB *pgxpool.Pool
 
 type EventPayload struct {
 	TenantID string `json:"tenant_id"`
@@ -26,6 +29,15 @@ func main() {
 	slog.SetDefault(logger)
 
 	cfg := config.LoadConfig(".env")
+
+	var err error
+	DB, err = initDB(cfg)
+	if err != nil {
+		slog.Error("Failed to initialize database", "error", err)
+		os.Exit(1)
+	}
+	defer DB.Close()
+
 	client := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 		Password: cfg.Redis.Password,
@@ -35,6 +47,12 @@ func main() {
 	if err := client.Ping(context.Background()).Err(); err != nil {
 		slog.Error("Failed to connect to Redis", "error", err)
 		os.Exit(1)
+	}
+
+	if os.Getenv("NOTIFICATION_URL") != "" {
+		NotificationServiceURL = os.Getenv("NOTIFICATION_URL")
+	} else if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+		NotificationServiceURL = "http://notification-service:8005/api/notification/send"
 	}
 
 	pubsub := client.Subscribe(context.Background(), "tenant_events")
@@ -92,8 +110,74 @@ func handleMonthlyReport(tenantID string) {
 	}
 	json.NewDecoder(resp.Body).Decode(&aiResp)
 
-	slog.Info("✅ AI PDF Report Generated", "snippet", aiResp.Text[:min(50, len(aiResp.Text))]+"...")
-	slog.Info("📧 Simulated Email Sent", "to", "owner_"+tenantID+"@umkm.local", "subject", "Laporan Keuangan Bulanan")
+	reportText := aiResp.Text
+	slog.Info("✅ AI Report Generated", "snippet", reportText[:min(50, len(reportText))]+"...")
+
+	// Fetch Notification Settings
+	var notifyEmail, notifyWA, notifyTelegram bool
+	var telegramChatID string
+	var waNumber string
+	var email string
+
+	// Defaults and queries
+	DB.QueryRow(context.Background(), `
+		SELECT s.notify_email, s.notify_wa, s.notify_telegram, s.telegram_chat_id, t.wa_number, u.email
+		FROM tenants t
+		LEFT JOIN tenant_notification_settings s ON t.id = s.tenant_id
+		LEFT JOIN users u ON t.id = u.tenant_id AND u.role = 'owner'
+		WHERE t.id = $1 LIMIT 1
+	`, tenantID).Scan(&notifyEmail, &notifyWA, &notifyTelegram, &telegramChatID, &waNumber, &email)
+
+	// Send Notifications
+	if notifyEmail && email != "" {
+		slog.Info("📧 Simulated Email Sent", "to", email, "subject", "Laporan Keuangan Bulanan")
+	}
+
+	if notifyWA && waNumber != "" {
+		sendNotification(tenantID, "wa", waNumber, reportText)
+	}
+
+	if notifyTelegram && telegramChatID != "" {
+		sendNotification(tenantID, "telegram", telegramChatID, reportText)
+	}
+}
+
+func sendNotification(tenantID, channel, target, message string) {
+	payload := map[string]interface{}{
+		"target":  target,
+		"message": message,
+		"type":    channel,
+	}
+	body, _ := json.Marshal(payload)
+
+	req, _ := http.NewRequest("POST", NotificationServiceURL, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", tenantID)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Error("Failed to send notification request", "channel", channel, "error", err)
+		return
+	}
+	defer resp.Body.Close()
+	slog.Info("Notification sent via service", "channel", channel, "target", target)
+}
+
+func initDB(cfg *config.Config) (*pgxpool.Pool, error) {
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		cfg.DB.User, cfg.DB.Password, cfg.DB.Host, cfg.DB.Port, cfg.DB.Name, cfg.DB.SSLMode)
+
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create connection pool: %w", err)
+	}
+
+	if err := pool.Ping(context.Background()); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	return pool, nil
 }
 
 func min(a, b int) int {

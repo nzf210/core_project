@@ -116,6 +116,9 @@
           <button class="btn btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; margin-right: 0.5rem;" @click="showAddTenant = true">
             Tambah Tenant Baru
           </button>
+          <button class="btn" style="background: rgba(168, 85, 247, 0.15); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.3); padding: 0.35rem 0.75rem; font-size: 0.8rem; margin-right: 0.5rem;" @click="openPlanEditor">
+            Kelola Paket
+          </button>
           <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" @click="fetchTenants"
             :disabled="loadingTenants">
             {{ loadingTenants ? '...' : 'Refresh' }}
@@ -308,7 +311,7 @@
       </div>
     </div>
 
-    <!-- Delete Confirmation Modal -->
+    <!-- Modal Delete Confirmation -->
     <div v-if="deleteTarget" class="modal-overlay" @click.self="deleteTarget = null">
       <div class="modal-card">
         <h3 style="margin: 0 0 0.75rem 0;">Hapus Tenant?</h3>
@@ -326,6 +329,69 @@
           </button>
         </div>
         <div v-if="deleteError" style="margin-top: 1rem; color: #ef4444; font-size: 0.85rem;">{{ deleteError }}</div>
+      </div>
+    </div>
+
+    <!-- Modal Paket Langganan (Edit Harga) -->
+    <div v-if="showPlanEditor" class="modal-overlay" @click.self="showPlanEditor = false">
+      <div class="modal-card" style="max-width: 520px;">
+        <h3 style="margin: 0 0 0.25rem 0;">Kelola Paket Langganan</h3>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem;">
+          Ubah harga paket SaaS untuk semua tenant.
+        </p>
+
+        <div v-if="loadingPlans" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+          Memuat...
+        </div>
+
+        <div v-else>
+          <div v-for="plan in editablePlans" :key="plan.id" class="plan-editor-row">
+            <div class="plan-editor-header">
+              <div>
+                <span class="badge" :class="['badge-' + plan.id]">{{ plan.name.toUpperCase() }}</span>
+              </div>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <label style="font-size: 0.75rem; color: var(--text-secondary);">Aktif</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" v-model="plan.is_active" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+            <div class="plan-editor-fields">
+              <div class="form-group">
+                <label>Harga Bulanan (Rp)</label>
+                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                  <span style="font-size: 0.85rem; color: var(--text-secondary);">Rp</span>
+                  <input v-model.number="plan.price_monthly_display" type="number" class="form-control" min="0"
+                    step="1000" style="width: 100%;" @input="syncPlanPrice(plan, 'monthly')" />
+                </div>
+                <small style="color: var(--text-secondary); font-size: 0.7rem;">
+                  Dalam sen: {{ plan.price_monthly?.toLocaleString() }} sen
+                </small>
+              </div>
+              <div class="form-group">
+                <label>Harga Tahunan (Rp)</label>
+                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                  <span style="font-size: 0.85rem; color: var(--text-secondary);">Rp</span>
+                  <input v-model.number="plan.price_yearly_display" type="number" class="form-control" min="0"
+                    step="1000" style="width: 100%;" @input="syncPlanPrice(plan, 'yearly')" />
+                </div>
+                <small style="color: var(--text-secondary); font-size: 0.7rem;">
+                  Dalam sen: {{ plan.price_yearly?.toLocaleString() }} sen
+                </small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem;">
+          <button class="btn btn-secondary" @click="showPlanEditor = false" :disabled="savingPlans">Tutup</button>
+          <button class="btn btn-primary" @click="savePlanPrices" :disabled="savingPlans">
+            {{ savingPlans ? 'Menyimpan...' : 'Simpan Semua' }}
+          </button>
+        </div>
+        <div v-if="planError" style="margin-top: 0.75rem; color: #ef4444; font-size: 0.85rem;">{{ planError }}</div>
       </div>
     </div>
 
@@ -677,6 +743,73 @@ const closeAddModal = () => {
   formData.value = { name: '', username: '', password: 'Password123', email: '', phone_number: '', role: 'owner', plan: 'free', subdomain: '', custom_domain: '' }
 }
 
+// ── Plan Editor ──────────────────────────────────────────────────────────────────
+
+const showPlanEditor = ref(false)
+const editablePlans = ref<any[]>([])
+const loadingPlans = ref(false)
+const savingPlans = ref(false)
+const planError = ref('')
+
+const openPlanEditor = async () => {
+  showPlanEditor.value = true
+  planError.value = ''
+  loadingPlans.value = true
+  try {
+    const data = await superadminApi.getPlans()
+    const plans = data.data || (data.success ? data.data : null)
+    if (plans && Array.isArray(plans)) {
+      editablePlans.value = plans.map((p: any) => ({
+        ...p,
+        price_monthly_display: Math.round((p.price_monthly || 0) / 100),
+        price_yearly_display: Math.round((p.price_yearly || 0) / 100),
+      }))
+    } else {
+      planError.value = 'Gagal memuat daftar paket'
+    }
+  } catch (e) {
+    planError.value = 'Kesalahan jaringan'
+  } finally {
+    loadingPlans.value = false
+  }
+}
+
+const syncPlanPrice = (plan: any, kind: 'monthly' | 'yearly') => {
+  if (kind === 'monthly') {
+    plan.price_monthly = (plan.price_monthly_display || 0) * 100
+  } else {
+    plan.price_yearly = (plan.price_yearly_display || 0) * 100
+  }
+}
+
+const savePlanPrices = async () => {
+  savingPlans.value = true
+  planError.value = ''
+  try {
+    let allOk = true
+    for (const plan of editablePlans.value) {
+      const result = await superadminApi.updatePlan(plan.id, {
+        price_monthly: plan.price_monthly || 0,
+        price_yearly: plan.price_yearly || 0,
+        is_active: plan.is_active,
+        sort_order: plan.sort_order || 0,
+      })
+      if (!result.success && result.status !== 200) {
+        allOk = false
+        planError.value = `Gagal menyimpan paket ${plan.name}: ${result.message}`
+      }
+    }
+    if (allOk) {
+      showToast('Harga paket berhasil diperbarui')
+      showPlanEditor.value = false
+    }
+  } catch (e) {
+    planError.value = 'Kesalahan jaringan'
+  } finally {
+    savingPlans.value = false
+  }
+}
+
 const saveNewTenant = async () => {
   try {
     const data = await api.post('/api/umkm/admin/tenants', {
@@ -876,6 +1009,11 @@ onMounted(() => {
   color: #60a5fa;
 }
 
+.badge-business {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+}
+
 .toast-notification {
   position: fixed;
   bottom: 2rem;
@@ -1034,6 +1172,76 @@ onMounted(() => {
   .data-table td {
     padding: 0.5rem;
     font-size: 0.8rem;
+  }
+}
+
+/* Plan Editor */
+.plan-editor-row {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.plan-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.plan-editor-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(100, 116, 139, 0.4);
+  border-radius: 22px;
+  transition: 0.2s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #10b981;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(18px);
+}
+
+@media (max-width: 480px) {
+  .plan-editor-fields {
+    grid-template-columns: 1fr;
   }
 }
 </style>

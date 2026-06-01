@@ -1,0 +1,171 @@
+// Package main — subscription-worker
+//
+// Background worker: cek tenant_subscriptions setiap interval (default 1 jam).
+// Kalau current_period_end < NOW() dan status masih 'active' → freeze akun
+// (status='frozen', tenants.is_frozen=true, kirim notifikasi).
+//
+// Grace period: 0 hari (langsung freeze). Bisa di-override via env GRACE_PERIOD_HOURS.
+//
+// Endpoint: GET /healthz untuk liveness check (port 8006).
+package main
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"time"
+
+	"core_project/shared/sdk/config"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+var DB *pgxpool.Pool
+
+func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
+	cfg := config.LoadConfig(".env")
+
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		cfg.DB.User, cfg.DB.Password, cfg.DB.Host, cfg.DB.Port, cfg.DB.Name, cfg.DB.SSLMode)
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		slog.Error("Failed to connect DB", "error", err)
+		os.Exit(1)
+	}
+	if err := pool.Ping(context.Background()); err != nil {
+		slog.Error("Failed to ping DB", "error", err)
+		os.Exit(1)
+	}
+	DB = pool
+	defer DB.Close()
+
+	intervalStr := os.Getenv("FREEZE_CHECK_INTERVAL")
+	interval := 1 * time.Hour
+	if intervalStr != "" {
+		if d, err := time.ParseDuration(intervalStr); err == nil {
+			interval = d
+		}
+	}
+
+	graceHours := 0
+	if v := os.Getenv("GRACE_PERIOD_HOURS"); v != "" {
+		fmt.Sscanf(v, "%d", &graceHours)
+	}
+
+	// Health endpoint
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		if err := DB.Ping(r.Context()); err != nil {
+			http.Error(w, "db down", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+	go http.ListenAndServe(":8006", mux)
+
+	slog.Info("Subscription worker started", "interval", interval.String(), "grace_hours", graceHours)
+
+	// Run once at startup, then on ticker
+	runFreezePass(graceHours)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for range ticker.C {
+		runFreezePass(graceHours)
+	}
+}
+
+func runFreezePass(graceHours int) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	cutoff := time.Now().Add(-time.Duration(graceHours) * time.Hour)
+
+	// Find subscriptions that should be frozen
+	rows, err := DB.Query(ctx, `
+		SELECT ts.tenant_id, t.name, t.plan, ts.current_period_end
+		FROM tenant_subscriptions ts
+		JOIN tenants t ON t.id = ts.tenant_id
+		WHERE ts.status = 'active'
+		  AND ts.current_period_end IS NOT NULL
+		  AND ts.current_period_end < $1
+		LIMIT 500
+	`, cutoff)
+	if err != nil {
+		slog.Error("Freeze pass query failed", "error", err)
+		return
+	}
+
+	type frozenItem struct {
+		tenantID string
+		name string
+		plan string
+		expiredAt time.Time
+	}
+	items := []frozenItem{}
+	for rows.Next() {
+		var it frozenItem
+		var exp *time.Time
+		if err := rows.Scan(&it.tenantID, &it.name, &it.plan, &exp); err == nil && exp != nil {
+			it.expiredAt = *exp
+			items = append(items, it)
+		}
+	}
+	rows.Close()
+
+	if len(items) == 0 {
+		slog.Info("Freeze pass: nothing to freeze")
+		return
+	}
+
+	// Batch update: set status=frozen, set tenants.is_frozen
+	tx, err := DB.Begin(ctx)
+	if err != nil {
+		slog.Error("Freeze pass tx failed", "error", err)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	ids := make([]string, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.tenantID)
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE tenant_subscriptions
+		SET status = 'frozen', frozen_at = NOW(), frozen_reason = 'subscription period ended',
+		    updated_at = NOW()
+		WHERE tenant_id = ANY($1) AND status = 'active'
+	`, ids)
+	if err != nil {
+		slog.Error("Freeze update subscriptions failed", "error", err)
+		return
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE tenants
+		SET is_frozen = true, frozen_at = NOW()
+		WHERE id = ANY($1)
+	`, ids)
+	if err != nil {
+		slog.Error("Freeze update tenants failed", "error", err)
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		slog.Error("Freeze commit failed", "error", err)
+		return
+	}
+
+	slog.Info("Freeze pass: tenants frozen", "count", len(items))
+	for _, it := range items {
+		slog.Info("Tenant frozen", "tenant_id", it.tenantID, "name", it.name, "plan", it.plan, "expired_at", it.expiredAt.Format(time.RFC3339))
+	}
+
+	// TODO: kirim notifikasi reminder "Akun Anda freeze, redeem voucher"
+	// via notification-service (async, non-blocking, best effort)
+}

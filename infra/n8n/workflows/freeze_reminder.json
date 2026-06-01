@@ -1,0 +1,65 @@
+{
+  "name": "WCH - Freeze Reminder (Subscription H-3, H-1, H0)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 8 * * *" }
+          ]
+        }
+      },
+      "id": "freeze-sched-001",
+      "name": "Daily 08:00 WIB",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [220, 280]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://wch-api-gateway:8000/api/superadmin/billing/subscriptions/expiring?days=3",
+        "options": { "timeout": 10000 }
+      },
+      "id": "freeze-fetch-001",
+      "name": "Fetch Expiring (H-3, H-1, H0)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 280]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "freeze-split-001",
+      "name": "Split Tenants",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [660, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wch-api-gateway:8000/api/wa/send",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tenant_id\": \"{{ $json.tenant_id }}\",\n  \"target\": \"{{ $json.owner_phone }}\",\n  \"template\": \"subscription_expiring\",\n  \"vars\": {\n    \"business_name\": \"{{ $json.name }}\",\n    \"days_left\": {{ $json.days_left }},\n    \"redeem_url\": \"https://app.wch.id/redeem\"\n  }\n}",
+        "options": {}
+      },
+      "id": "freeze-wa-001",
+      "name": "Send WA Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 280]
+    }
+  ],
+  "connections": {
+    "Daily 08:00 WIB":        { "main": [[{ "node": "Fetch Expiring (H-3, H-1, H0)", "type": "main", "index": 0 }]] },
+    "Fetch Expiring (H-3, H-1, H0)": { "main": [[{ "node": "Split Tenants",     "type": "main", "index": 0 }]] },
+    "Split Tenants":          { "main": [[{ "node": "Send WA Reminder",   "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {},
+  "id": "wch-freeze-reminder-001"
+}

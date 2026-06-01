@@ -120,10 +120,12 @@ func main() {
 	}
 	defer Redis.Close()
 
-	if err := ensureSchema(); err != nil {
-		slog.Error("Failed to ensure schema", "error", err)
+	// Run database migrations automatically
+	if err := runMigrations(DB); err != nil {
+		slog.Error("Failed to run migrations", "error", err)
 		os.Exit(1)
 	}
+
 	if err := ensureSuperadmin(); err != nil {
 		slog.Error("Failed to seed superadmin", "error", err)
 		os.Exit(1)
@@ -178,8 +180,8 @@ func main() {
 func ensureSchema() error {
 	ctx := context.Background()
 	migrations := []string{
-		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS fonnte_token VARCHAR(255)`,
 		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS wa_number VARCHAR(50)`,
+		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS wa_provider VARCHAR(20) NOT NULL DEFAULT 'internal'`,
 		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_type VARCHAR(50) DEFAULT 'umum'`,
 		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE`,
 		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_name VARCHAR(255)`,
@@ -456,7 +458,7 @@ func handleVerifyData(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(r.Body).Decode(&req) // Ignore errors, it's mocked anyway
 
-	_, err = DB.Exec(context.Background(), "UPDATE users SET is_data_verified = true WHERE id = $1", claims.UserID)
+	_, err = DB.Exec(context.Background(), "UPDATE users SET is_phone_verified = true WHERE id = $1", claims.UserID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to verify data"})
 		return
@@ -503,7 +505,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	var isDataVerified bool
 
 	err := DB.QueryRow(ctx, 
-		"SELECT id, tenant_id, role, password_hash, is_data_verified FROM users WHERE username = $1 OR email = $1", 
+		"SELECT id, tenant_id, role, password_hash, is_phone_verified FROM users WHERE username = $1 OR email = $1", 
 		req.Username,
 	).Scan(&userID, &tenantID, &rolePtr, &passwordHash, &isDataVerified)
 
@@ -969,7 +971,7 @@ func handleTenantResolve(w http.ResponseWriter, r *http.Request) {
 	).Scan(&tenantID, &businessName, &logoURL)
 
 	if err == pgx.ErrNoRows {
-		writeJSON(w, http.StatusNotFound, Response{Success: false, Message: "Tenant not found"})
+		writeJSON(w, http.StatusOK, Response{Success: false, Message: "Tenant not found"})
 		return
 	} else if err != nil {
 		slog.Error("Failed to resolve tenant", "error", err)
@@ -1171,7 +1173,7 @@ func handleVerifyPhoneLogin(w http.ResponseWriter, r *http.Request) {
 	var userID, tenantID, role string
 	var isDataVerified bool
 	err = DB.QueryRow(ctx,
-		"SELECT id, tenant_id, role, is_data_verified FROM users WHERE phone_number = $1",
+		"SELECT id, tenant_id, role, is_phone_verified FROM users WHERE phone_number = $1",
 		req.PhoneNumber,
 	).Scan(&userID, &tenantID, &role, &isDataVerified)
 
@@ -1226,7 +1228,7 @@ func handleSuperAdminLogin(w http.ResponseWriter, r *http.Request) {
 	var userID, tenantID, passwordHash, role string
 	var isDataVerified bool
 	err := DB.QueryRow(ctx,
-		"SELECT id, tenant_id, role, password_hash, is_data_verified FROM users WHERE username = $1 AND role = 'superadmin'",
+		"SELECT id, tenant_id, role, password_hash, is_phone_verified FROM users WHERE username = $1 AND role = 'superadmin'",
 		req.Username,
 	).Scan(&userID, &tenantID, &role, &passwordHash, &isDataVerified)
 
@@ -1284,15 +1286,36 @@ func handleVerifierStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := http.Get("http://wa-gateway:8202/api/wa/status?tenant_id=verifier")
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("http://localhost:8202/api/wa/status?tenant_id=verifier")
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to check WA verifier status"})
+		slog.Warn("WA Gateway not reachable", "error", err)
+		writeJSON(w, http.StatusOK, Response{Success: true, Data: map[string]interface{}{
+			"status": "unavailable",
+			"message": "WA Gateway tidak berjalan. Verifier WhatsApp tidak tersedia.",
+		}})
 		return
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("WA Gateway returned non-200", "status", resp.StatusCode)
+		writeJSON(w, http.StatusOK, Response{Success: true, Data: map[string]interface{}{
+			"status": "unavailable",
+			"message": "WA Gateway tidak merespon dengan benar.",
+		}})
+		return
+	}
+
 	var status map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&status)
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		slog.Warn("Failed to decode WA Gateway response", "error", err)
+		writeJSON(w, http.StatusOK, Response{Success: true, Data: map[string]interface{}{
+			"status": "unavailable",
+			"message": "Gagal membaca status WA Gateway.",
+		}})
+		return
+	}
 
 	writeJSON(w, http.StatusOK, Response{Success: true, Data: status})
 }
@@ -1303,7 +1326,8 @@ func handleVerifierQR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := http.Get("http://wa-gateway:8202/api/wa/qr?tenant_id=verifier")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("http://localhost:8202/api/wa/qr?tenant_id=verifier")
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to get QR code"})
 		return
@@ -1325,8 +1349,9 @@ func handleVerifierDisconnect(w http.ResponseWriter, r *http.Request) {
 	// msisdn parameter is no longer required as we logout using tenant_id=verifier
 
 	// Use WA Gateway's logout endpoint
-	req, _ := http.NewRequest(http.MethodPost, "http://wa-gateway:8202/api/wa/logout?tenant_id=verifier", nil)
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, _ := http.NewRequest(http.MethodPost, "http://localhost:8202/api/wa/logout?tenant_id=verifier", nil)
+	resp, err := client.Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to disconnect verifier"})
 		return

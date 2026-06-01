@@ -11,7 +11,7 @@
 .PHONY: help start-all stop-all status \
         run-gateway run-auth run-ai run-billing run-notification run-wa-gateway \
         run-accounting run-chatbot run-business run-automation \
-        run-crypto-api run-crypto run-campaign \
+        run-crypto-api run-crypto run-campaign run-subscription-worker \
         run-frontend \
         build build-all \
         test test-verbose test-race \
@@ -45,6 +45,7 @@ help:
 	@echo "    make run-billing      — Billing Service (port 8003)"
 	@echo "    make run-notification — Notification Service (port 8005)"
 	@echo "    make run-wa-gateway   — WhatsApp Gateway (port 8202)"
+	@echo "    make run-subscription-worker — Subscription Worker (port 8006)"
 	@echo ""
 	@echo "  APPS:"
 	@echo "    make run-accounting   — UMKM Accounting (port 8201)"
@@ -161,6 +162,13 @@ run-crypto: _ensure_dirs
 run-campaign: _ensure_dirs
 	@echo "▶ Starting Campaign API on port 9002..."
 	@go run ./apps/campaign/api
+
+# =============================================================================
+# Subscription Worker
+# =============================================================================
+run-subscription-worker: _ensure_dirs
+	@echo "▶ Starting Subscription Worker on port 8006..."
+	@go run ./services/subscription-worker
 
 # =============================================================================
 # Frontend
@@ -372,3 +380,25 @@ clean-build:
 
 clean: clean-logs clean-build
 	@echo "✓ Cleanup selesai."
+
+# =============================================================================
+# Database Migrations
+# =============================================================================
+# Auto-migration sudah built-in di setiap service saat startup.
+# Target di bawah untuk inspeksi manual dan troubleshooting.
+
+# Tampilkan status semua migrations yang sudah/belum dijalankan
+migrate-status:
+	@echo "▶ Checking migration status..."
+	@go run tools/scripts/test_migrations.go 2>&1 | head -50
+
+# Tambah migration baru (ganti NAME=nama_feature)
+migrate-new:
+	@if [ -z "$(NAME)" ]; then echo "❌ Usage: make migrate-new NAME=nama_feature"; exit 1; fi
+	@NEXT=$$(ls shared/migrations/*.up.sql 2>/dev/null | wc -l); \
+	NEXT=$$((NEXT + 1)); \
+	PAD=$$(printf "%06d" $$NEXT); \
+	touch shared/migrations/$${PAD}_$(NAME).up.sql; \
+	touch shared/migrations/$${PAD}_$(NAME).down.sql; \
+	echo "✓ Created: shared/migrations/$${PAD}_$(NAME).up.sql"; \
+	echo "✓ Created: shared/migrations/$${PAD}_$(NAME).down.sql"

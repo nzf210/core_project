@@ -136,4 +136,18 @@ export const superadminApi = {
     })
     return res.json()
   },
+
+  async getPlans() {
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/plans`)
+    return res.json()
+  },
+
+  async updatePlan(planId: string, data: { price_monthly: number; price_yearly: number; is_active?: boolean; sort_order?: number }) {
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/plans/${encodeURIComponent(planId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  },
 }

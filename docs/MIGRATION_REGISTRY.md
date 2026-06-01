@@ -1,6 +1,6 @@
 # Database Migration Registry
 
-This document provides a comprehensive overview of all database migrations in the WCH Platform project, covering migrations 000001 through 000024.
+This document provides a comprehensive overview of all database migrations in the WCH Platform project, covering migrations 000001 through 000028.
 
 ---
 
@@ -32,6 +32,10 @@ This document provides a comprehensive overview of all database migrations in th
 | 000022 | add_hotel_business | Hotel/Penginapan business type | business_types (modified) |
 | 000023 | add_coupons_table | Coupon/discount system | coupons, tenant_coupons |
 | 000024 | tenant_notification_settings | Multi-channel notification preferences | tenant_notification_settings |
+| 000025 | add_saas_plans | SaaS tiered plans + Voucher programs + Subscription tickets | saas_plans, plan_features, voucher_programs, voucher_codes, subscription_tickets |
+| 000026 | multi_store | Multi-store per owner (UMKM) + max_stores quota per tier | stores, plan_features (max_stores seed) |
+| 000027 | voucher_links_and_freeze | Link-based voucher redemption (1 link = 1 klaim), subscription status enum, freeze worker support | voucher_links, voucher_generation_logs, tenant_subscriptions (status/frozen_at/frozen_reason), tenants (is_frozen/frozen_at/current_plan_expires_at) |
+| 000028 | campaign_features_2 | Task management, notification center, RBAC system for Campaign | tasks, task_assignments, notifications (campaign), roles, role_permissions, audit_logs |
 
 ---
 
@@ -908,6 +912,95 @@ Added business type:
 
 ---
 
+## Migration 000025: add_saas_plans
+
+**Purpose:** Full SaaS tiered plans (Lite/Pro/Business), multi-tier voucher programs with codes, and auto-delivery subscription tickets via WhatsApp/Telegram/Email.
+
+**Tables Created:**
+
+#### saas_plans
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | VARCHAR(20) | PRIMARY KEY | 'lite', 'pro', 'business' |
+| name | VARCHAR(50) | NOT NULL | Display name |
+| description | TEXT | | Plan description |
+| price_monthly | BIGINT | NOT NULL | Price in sen (15000000 = 150k IDR) |
+| price_yearly | BIGINT | | Yearly price (sen) |
+| is_active | BOOLEAN | DEFAULT true | Plan availability |
+| sort_order | INT | DEFAULT 0 | Display order |
+
+#### plan_features
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | Feature identifier |
+| plan_id | VARCHAR(20) | FK -> saas_plans | Parent plan |
+| feature_key | VARCHAR(100) | NOT NULL | e.g. 'chatbot', 'api_access' |
+| feature_name | VARCHAR(255) | NOT NULL | Human-readable label |
+| feature_value | VARCHAR(50) | NOT NULL | 'true', '100', 'unlimited' |
+| is_enabled | BOOLEAN | DEFAULT true | Enabled flag |
+
+**Key Constraint:** UNIQUE(plan_id, feature_key)
+
+#### voucher_programs
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | Program identifier |
+| tenant_id | UUID | FK -> tenants(id) | NULL = global voucher |
+| name | VARCHAR(255) | NOT NULL | Program name |
+| description | TEXT | | Description |
+| voucher_type | VARCHAR(20) | NOT NULL | 'discount_percent', 'discount_fixed', 'free_months', 'plan_upgrade' |
+| discount_value | INT | DEFAULT 0 | Discount amount |
+| target_plan_id | VARCHAR(20) | | Plan this voucher applies to |
+| duration_months | INT | DEFAULT 1 | Subscription months granted |
+| max_uses | INT | DEFAULT 0 | 0 = unlimited |
+| starts_at | TIMESTAMPTZ | DEFAULT NOW() | Program start |
+| expires_at | TIMESTAMPTZ | | Expiration date |
+
+#### voucher_codes
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | Code identifier |
+| program_id | UUID | FK -> voucher_programs | Parent program |
+| code | VARCHAR(50) | UNIQUE | Redeemable code (e.g. 'LITE50-OFF') |
+| used_by | UUID | FK -> tenants | Tenant who redeemed |
+| used_at | TIMESTAMPTZ | | Redemption timestamp |
+| expires_at | TIMESTAMPTZ | | Code expiration |
+| is_redeemed | BOOLEAN | DEFAULT false | Redemption status |
+
+#### subscription_tickets
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | Ticket identifier |
+| tenant_id | UUID | FK -> tenants | Ticket owner |
+| ticket_number | VARCHAR(30) | UNIQUE | e.g. 'TKT-2026-0601-0001' |
+| plan_id | VARCHAR(20) | NOT NULL | Subscribed plan |
+| plan_name | VARCHAR(50) | NOT NULL | Plan display name |
+| activated_at | TIMESTAMPTZ | DEFAULT NOW() | Activation time |
+| expires_at | TIMESTAMPTZ | | Expiration time |
+| status | VARCHAR(20) | DEFAULT 'active' | 'active', 'expired', 'cancelled' |
+| notify_wa | BOOLEAN | DEFAULT false | Send via WhatsApp |
+| notify_telegram | BOOLEAN | DEFAULT false | Send via Telegram |
+| notify_email | BOOLEAN | DEFAULT false | Send via Email |
+| wa_sent_at | TIMESTAMPTZ | | WhatsApp sent timestamp |
+| telegram_sent_at | TIMESTAMPTZ | | Telegram sent timestamp |
+| email_sent_at | TIMESTAMPTZ | | Email sent timestamp |
+| ticket_payload | JSONB | | Rendered message content |
+
+**Table Modifications:**
+
+#### tenant_subscriptions (Modified)
+- Added: `plan_tier VARCHAR(20) DEFAULT 'lite'`
+- Added: `period_days INT DEFAULT 30`
+- Added: `ticket_id UUID REFERENCES subscription_tickets(id)`
+- Added: `voucher_code_id UUID REFERENCES voucher_codes(id)`
+- Added: `activated_by VARCHAR(50) DEFAULT 'payment'`
+
+**Seeded Data:**
+- Plans: Lite (150k IDR/mo), Pro (450k IDR/mo), Business (1.5M IDR/mo)
+- Default voucher codes: LITE50-OFF, PRO3-FREE, BIZ30-OFF, FREE1MONTH
+
+---
+
 ## Legacy Migrations
 
 ### migration.sql
@@ -925,7 +1018,7 @@ Added business type:
 
 ---
 
-## Campaign Features Part 2 (20260522)
+## Migration 000028: campaign_features_2
 
 **Purpose:** Adds task management, notification center, and RBAC system.
 

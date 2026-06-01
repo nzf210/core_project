@@ -18,8 +18,13 @@ func main() {
 	cfg := config.LoadConfig(".env")
 	if err := repository.InitDB(cfg); err != nil {
 		slog.Error("Failed to init DB", "error", err)
-	} else {
-		defer repository.CloseDB()
+		os.Exit(1)
+	}
+	defer repository.CloseDB()
+
+	if err := runMigrations(); err != nil {
+		slog.Error("Failed to run migrations", "error", err)
+		os.Exit(1)
 	}
 
 	mux := http.NewServeMux()

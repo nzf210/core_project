@@ -1,4 +1,0 @@
-{"time":"2026-05-27T19:23:31.44877043+07:00","level":"INFO","msg":"✅ Connected to PostgreSQL"}
-{"time":"2026-05-27T19:23:31.454996907+07:00","level":"INFO","msg":"✅ Connected to Redis"}
-{"time":"2026-05-27T19:23:31.455245323+07:00","level":"INFO","msg":"🤖 AI Gateway starting","env":"development","primary_model":"MiniMax-M2.7-highspeed","cache_enabled":true}
-{"time":"2026-05-27T19:23:31.455583056+07:00","level":"INFO","msg":"AI Gateway listening","port":8003}

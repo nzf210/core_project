@@ -49,6 +49,12 @@ func main() {
 	}
 	defer DB.Close()
 
+	// Run database migrations automatically
+	if err := runMigrations(DB); err != nil {
+		slog.Error("Failed to run migrations", "error", err)
+		os.Exit(1)
+	}
+
 	redisHost := os.Getenv("REDIS_HOST")
 	if redisHost == "" {
 		redisHost = "localhost"
@@ -220,7 +226,7 @@ func startWorkerPool(numWorkers int) {
 	}
 }
 
-// handleWAWebhook processes incoming WhatsApp messages from third party like Fonnte
+// handleWAWebhook processes incoming WhatsApp messages from wa-gateway internal (whatsmeow)
 func handleWAWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -454,17 +460,28 @@ func buildSystemPrompt(ctx context.Context, tenantID, tenantName, message, role 
 	}
 
 	systemPrompt += `
-Jika user bermaksud mencatat transaksi (misal ada pemasukan, pengeluaran, pembelian, penjualan), Anda WAJIB menyertakan blok kode JSON yang berisi struktur transaksi di dalam balasan Anda.
-Gunakan format berikut secara presisi:
+Jika user bermaksud mencatat PENGELUARAN (expense) secara spesifik (misal bayar listrik, beli bahan, dll), Anda WAJIB menyertakan blok kode JSON khusus dengan format:
+` + "```json:expense\n" + `{
+  "date": "2026-05-24",
+  "description": "Pembayaran operasional",
+  "amount": 100000,
+  "expense_coa": "500",
+  "payment_coa": "100",
+  "line_items": [
+    {"name": "Beli barang A", "amount": 100000}
+  ]
+}` + "\n```\n" + `
+Untuk pencatatan transaksi selain pengeluaran (misal pemasukan, penjualan), gunakan format standar:
 ` + "```json\n" + `{
   "date": "2026-05-24",
   "description": "Catatan singkat",
   "reference": "AUTO",
   "lines": [
-    {"account_id": "ID_AKUN_DEBIT_DARI_COA", "debit": 100000, "credit": 0},
-    {"account_id": "ID_AKUN_KREDIT_DARI_COA", "debit": 0, "credit": 100000}
+    {"account_id": "ID_AKUN_DEBIT", "debit": 100000, "credit": 0},
+    {"account_id": "ID_AKUN_KREDIT", "debit": 0, "credit": 100000}
   ]
-}` + "\n```\n" + `PENTING: Gunakan tipe data integer (angka bulat) untuk debit dan credit tanpa titik/koma.
+}` + "\n```\n" + `PENTING: Gunakan tipe data integer (angka bulat).
+
 
 Jika ada pertanyaan yang TIDAK BISA ANDA JAWAB (tidak ada di FAQ, produk, atau wewenang Anda), DILARANG mengarang jawaban. Anda WAJIB membalas dengan format:
 [FORWARD_TO_ADMIN] {Isi keluhan/pertanyaan user secara ringkas}
@@ -580,25 +597,25 @@ func processAIAnswer(ctx context.Context, tenantID, answer, sender, role string)
 		}()
 	}
 
-	// 2. Process JSON Transaction blocks
-	startIdx := strings.Index(answer, "```json")
-	if startIdx != -1 {
-		endBlock := answer[startIdx+7:]
+	// 2. Process JSON Expense blocks
+	startExpIdx := strings.Index(answer, "```json:expense")
+	if startExpIdx != -1 {
+		endBlock := answer[startExpIdx+15:]
 		endIdx := strings.Index(endBlock, "```")
 		if endIdx != -1 {
 			jsonStr := endBlock[:endIdx]
 			
-			// POST transaction
-			txReq, _ := http.NewRequestWithContext(ctx, "POST", AccountingURL+"/transactions", strings.NewReader(jsonStr))
+			// POST expense
+			txReq, _ := http.NewRequestWithContext(ctx, "POST", AccountingURL+"/expenses", strings.NewReader(jsonStr))
 			txReq.Header.Set("X-Tenant-ID", tenantID)
 			txReq.Header.Set("Content-Type", "application/json")
 			txResp, err := http.DefaultClient.Do(txReq)
 			
-			cleanMsg := strings.Replace(answer, answer[startIdx:startIdx+7+endIdx+3], "", 1)
+			cleanMsg := strings.Replace(answer, answer[startExpIdx:startExpIdx+15+endIdx+3], "", 1)
 			cleanMsg = strings.TrimSpace(cleanMsg)
 			
 			if err == nil && txResp.StatusCode == http.StatusOK {
-				cleanMsg += "\n\n✅ Transaksi telah berhasil dicatat ke sistem akuntansi Anda!"
+				cleanMsg += "\n\n✅ Pengeluaran telah berhasil dicatat ke sistem akuntansi Anda!"
 			} else {
 				errDetail := ""
 				if txResp != nil {
@@ -608,9 +625,46 @@ func processAIAnswer(ctx context.Context, tenantID, answer, sender, role string)
 				} else if err != nil {
 					errDetail = err.Error()
 				}
-				cleanMsg += "\n\n❌ Gagal mencatat transaksi. " + errDetail
+				cleanMsg += "\n\n❌ Gagal mencatat pengeluaran. " + errDetail
 			}
 			return cleanMsg
+		}
+	}
+
+	// 3. Process JSON Transaction blocks
+	startIdx := strings.Index(answer, "```json")
+	if startIdx != -1 {
+		// skip if it's json:expense
+		if !strings.HasPrefix(answer[startIdx:], "```json:expense") {
+			endBlock := answer[startIdx+7:]
+			endIdx := strings.Index(endBlock, "```")
+			if endIdx != -1 {
+				jsonStr := endBlock[:endIdx]
+				
+				// POST transaction
+				txReq, _ := http.NewRequestWithContext(ctx, "POST", AccountingURL+"/transactions", strings.NewReader(jsonStr))
+				txReq.Header.Set("X-Tenant-ID", tenantID)
+				txReq.Header.Set("Content-Type", "application/json")
+				txResp, err := http.DefaultClient.Do(txReq)
+				
+				cleanMsg := strings.Replace(answer, answer[startIdx:startIdx+7+endIdx+3], "", 1)
+				cleanMsg = strings.TrimSpace(cleanMsg)
+				
+				if err == nil && txResp.StatusCode == http.StatusOK {
+					cleanMsg += "\n\n✅ Transaksi telah berhasil dicatat ke sistem akuntansi Anda!"
+				} else {
+					errDetail := ""
+					if txResp != nil {
+						b, _ := io.ReadAll(txResp.Body)
+						errDetail = string(b)
+						txResp.Body.Close()
+					} else if err != nil {
+						errDetail = err.Error()
+					}
+					cleanMsg += "\n\n❌ Gagal mencatat transaksi. " + errDetail
+				}
+				return cleanMsg
+			}
 		}
 	}
 	return answer

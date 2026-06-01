@@ -1,3 +1,0 @@
-{"time":"2026-05-27T19:23:32.479656128+07:00","level":"INFO","msg":"✅ Connected to PostgreSQL"}
-{"time":"2026-05-27T19:23:32.480031182+07:00","level":"INFO","msg":"UMKM Accounting Engine listening","port":8201}
-signal: killed

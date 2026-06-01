@@ -1,0 +1,106 @@
+name: coordination-task-router
+description: Routing task ke workflow/domain agent yang tepat berdasarkan content analysis
+
+trigger:
+  - "new task"
+  - "add task"
+  - "route this"
+  - "break down"
+
+input:
+  required:
+    - task_description
+  optional:
+    - task_type
+    - priority
+
+steps:
+  - id: classify
+    agent: GeneralPurpose
+    model: sonnet
+    prompt: |
+      Analyze the following task and classify it:
+
+      Task: {task_description}
+      Owner-specified type (if any): {task_type}
+
+      Classify into ALL that apply:
+      - TYPE: feature | bugfix | refactor | research | docs | infra | chore
+      - DOMAIN: umkm | crypto | campaign | platform (auth/billing/ai) | infra
+      - COMPLEXITY: low (single file, obvious change) | medium (multiple files, new endpoint) | high (new service, architecture change)
+      - CAN_PARALLEL: yes | no (does it depend on other tasks?)
+
+      Also estimate:
+      - Which existing files will be affected?
+      - Will new files need to be created?
+      - Are there database migrations needed?
+
+      Return your classification in this format:
+      TYPE: ...
+      DOMAIN: ...
+      COMPLEXITY: ...
+      CAN_PARALLEL: ...
+      AFFECTED_FILES: [...]
+      NEW_FILES_NEEDED: [...]
+      DB_MIGRATION: yes | no
+
+  - id: route
+    agent: GeneralPurpose
+    prompt: |
+      Based on the classification, determine which workflow or agent should handle this task.
+
+      Routing rules:
+      - DOMAIN=umkm|crypto|campaign + TYPE=feature → use "development/new-feature.yml"
+      - DOMAIN=umkm|crypto|campaign + TYPE=bugfix → use "development/bug-fix.yml" (or inline if simple)
+      - DOMAIN=umkm|crypto|campaign + TYPE=refactor → use "development/refactor.yml"
+      - TYPE=research → use "research/tech-benchmark.yml"
+      - DOMAIN=platform|infra → use "development/platform-feature.yml"
+      - COMPLEXITY=low + TYPE=chore|docs → handle inline without workflow
+
+      Also check the current sprint backlog to see if this task should be batched with others.
+
+      Return:
+      ROUTE_TO: {workflow_name or "inline"}
+      BATCH_WITH: [list of existing tasks that could be done together]
+      REASON: why this routing decision was made
+
+  - id: breakdown
+    agent: GeneralPurpose
+    model: sonnet
+    prompt: |
+      Create a detailed breakdown for this task using the standard Hermes task breakdown format.
+
+      Task: {task_description}
+      Type: {from classification}
+      Domain: {from classification}
+
+      For each step, specify:
+      - What needs to be understood/verified
+      - What files to create/modify
+      - In what order
+      - What the success criteria are
+
+      Format using the Hermes Task Breakdown Standard from HERMES.md.
+
+output:
+  format: markdown
+  deliverable: |
+    ## Task Classification
+
+    TYPE: ...
+    DOMAIN: ...
+    COMPLEXITY: ...
+    CAN_PARALLEL: ...
+
+    ## Route
+
+    Route to: {workflow_name}
+    Batch with: {tasks}
+
+    ## Breakdown
+
+    {standard Hermes task breakdown}
+
+    ## Acceptance Criteria
+
+    - [ ] ...

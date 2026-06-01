@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/config"
@@ -15,6 +17,24 @@ import (
 )
 
 var DB *pgxpool.Pool
+
+func initDB(cfg *config.Config) error {
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		cfg.DB.User, cfg.DB.Password, cfg.DB.Host, cfg.DB.Port, cfg.DB.Name, cfg.DB.SSLMode)
+
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		return fmt.Errorf("unable to connect to database: %w", err)
+	}
+
+	if err := pool.Ping(context.Background()); err != nil {
+		return fmt.Errorf("unable to ping database: %w", err)
+	}
+
+	DB = pool
+	slog.Info("Connected to PostgreSQL")
+	return nil
+}
 
 type BusinessType struct {
 	ID                    string   `json:"id"`
@@ -92,6 +112,13 @@ var widgetTemplates = map[string][]DashboardWidget{
 		{ID: "customer_retention", Type: "metric", Title: "Retensi Pelanggan", Module: "customers", Config: map[string]string{"metric": "retention_rate"}, Position: 3, Size: "medium"},
 		{ID: "staff_utilization", Type: "chart", Title: "Utilisasi Staff", Module: "staff_performance", Config: map[string]string{"chart": "bar"}, Position: 4, Size: "medium"},
 	},
+	"hotel": {
+		{ID: "room_occupancy", Type: "metric", Title: "Tingkat Okupansi", Module: "room_management", Config: map[string]string{"metric": "occupancy_today"}, Position: 0, Size: "medium"},
+		{ID: "daily_revenue", Type: "metric", Title: "Pendapatan Hari Ini", Module: "reports", Config: map[string]string{"metric": "income_today"}, Position: 1, Size: "medium"},
+		{ID: "booking_status", Type: "list", Title: "Status Booking", Module: "booking", Config: map[string]int{"limit": 5}, Position: 2, Size: "large"},
+		{ID: "income_summary", Type: "chart", Title: "Tren Pendapatan", Module: "reports", Config: map[string]string{"chart": "line"}, Position: 3, Size: "medium"},
+		{ID: "guest_demographics", Type: "chart", Title: "Demografi Tamu", Module: "customers", Config: map[string]string{"chart": "pie"}, Position: 4, Size: "medium"},
+	},
 }
 
 var moduleLabels = map[string]string{
@@ -116,6 +143,8 @@ var moduleLabels = map[string]string{
 	"service_catalog":     "Katalog Layanan",
 	"staff_performance":   "Performa Staff",
 	"quick_actions":       "Aksi Cepat",
+	"room_management":     "Manajemen Kamar",
+	"booking":             "Booking / Reservasi",
 }
 
 func main() {
@@ -124,15 +153,10 @@ func main() {
 
 	cfg := config.LoadConfig(".env")
 
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		cfg.DB.User, cfg.DB.Password, cfg.DB.Host, cfg.DB.Port, cfg.DB.Name, cfg.DB.SSLMode)
-
-	pool, err := pgxpool.New(context.Background(), dsn)
-	if err != nil {
-		slog.Error("Failed to connect to database", "error", err)
+	if err := initDB(cfg); err != nil {
+		slog.Error("Failed to initialize database", "error", err)
 		os.Exit(1)
 	}
-	DB = pool
 	defer DB.Close()
 
 	mux := http.NewServeMux()
@@ -141,6 +165,8 @@ func main() {
 	mux.HandleFunc("/api/umkm/dashboard", handleGetDashboard)
 	mux.HandleFunc("/api/umkm/plan", handleGetPlan)
 	mux.HandleFunc("/api/umkm/upgrade", handleUpgradePlan)
+	mux.HandleFunc("/api/umkm/stores", handleStoresCollection)
+	mux.HandleFunc("/api/umkm/stores/", handleStoresItem)
 
 	handler := auth.QuotaMiddleware(auth.Middleware(mux))
 	port := "9001"
@@ -314,4 +340,307 @@ func handleUpgradePlan(w http.ResponseWriter, r *http.Request) {
 		"tenantId": tenantID,
 		"plan":     req.PlanID,
 	})
+}
+
+// ─────────────────────────────────────────────
+// Multi-Store CRUD
+// 1 owner bisa punya banyak toko (restoran + cafe, dll).
+// Quota max_stores dibaca dari plan_features.feature_key='max_stores'
+// sesuai plan_id tenant aktif. Superadmin bisa ubah via billing-service.
+// ─────────────────────────────────────────────
+
+type Store struct {
+	ID            string `json:"id"`
+	OwnerUserID   string `json:"ownerUserId"`
+	TenantID      string `json:"tenantId"`
+	Name          string `json:"name"`
+	BusinessType  string `json:"businessType"`
+	BusinessName  string `json:"businessName"`
+	Address       string `json:"address"`
+	Phone         string `json:"phone"`
+	LogoURL       string `json:"logoUrl"`
+	IsActive      bool   `json:"isActive"`
+	CreatedAt     string `json:"createdAt"`
+	UpdatedAt     string `json:"updatedAt"`
+}
+
+type StoreRequest struct {
+	Name         string `json:"name"`
+	BusinessType string `json:"businessType"`
+	BusinessName string `json:"businessName"`
+	Address      string `json:"address"`
+	Phone        string `json:"phone"`
+	LogoURL      string `json:"logoUrl"`
+}
+
+type StoreUpdateRequest struct {
+	Name         *string `json:"name,omitempty"`
+	BusinessType *string `json:"businessType,omitempty"`
+	Address      *string `json:"address,omitempty"`
+	Phone        *string `json:"phone,omitempty"`
+	LogoURL      *string `json:"logoUrl,omitempty"`
+	IsActive     *bool   `json:"isActive,omitempty"`
+}
+
+// getMaxStoresForTenant membaca quota dari plan_features DB.
+// -1 = unlimited (untuk tier Business high-end), default ke 1 kalau tidak di-set.
+func getMaxStoresForTenant(ctx context.Context, tenantID string) int {
+	var planTier string
+	if err := DB.QueryRow(ctx, "SELECT COALESCE(plan, 'lite') FROM tenants WHERE id=$1", tenantID).Scan(&planTier); err != nil {
+		return 1
+	}
+
+	var featureValue string
+	err := DB.QueryRow(ctx, `
+		SELECT feature_value FROM plan_features
+		WHERE plan_id = $1 AND feature_key = 'max_stores' AND is_enabled = true
+	`, planTier).Scan(&featureValue)
+	if err != nil {
+		return 1
+	}
+
+	if featureValue == "unlimited" {
+		return -1
+	}
+
+	var n int
+	if _, err := fmt.Sscanf(featureValue, "%d", &n); err != nil {
+		return 1
+	}
+	return n
+}
+
+func handleStoresCollection(w http.ResponseWriter, r *http.Request) {
+	tenantID, _ := r.Context().Value(auth.TenantIDKey).(string)
+	userID, _ := r.Context().Value(auth.UserIDKey).(string)
+
+	switch r.Method {
+	case http.MethodGet:
+		listStores(w, r, tenantID, userID)
+	case http.MethodPost:
+		createStore(w, r, tenantID, userID)
+	default:
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	}
+}
+
+func handleStoresItem(w http.ResponseWriter, r *http.Request) {
+	tenantID, _ := r.Context().Value(auth.TenantIDKey).(string)
+	userID, _ := r.Context().Value(auth.UserIDKey).(string)
+	storeID := strings.TrimPrefix(r.URL.Path, "/api/umkm/stores/")
+	if storeID == "" {
+		response.Error(w, http.StatusBadRequest, "Store ID required", nil)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		getStore(w, r, storeID, tenantID, userID)
+	case http.MethodPatch:
+		updateStore(w, r, storeID, tenantID, userID)
+	case http.MethodDelete:
+		deleteStore(w, r, storeID, tenantID, userID)
+	default:
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	}
+}
+
+func listStores(w http.ResponseWriter, r *http.Request, tenantID, userID string) {
+	rows, err := DB.Query(r.Context(), `
+		SELECT id, owner_user_id, tenant_id, name, business_type, COALESCE(business_name, ''),
+		       COALESCE(address, ''), COALESCE(phone, ''), COALESCE(logo_url, ''),
+		       is_active, created_at, updated_at
+		FROM stores
+		WHERE owner_user_id = $1 AND tenant_id = $2
+		ORDER BY created_at ASC
+	`, userID, tenantID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to list stores", err)
+		return
+	}
+	defer rows.Close()
+
+	stores := []Store{}
+	for rows.Next() {
+		var s Store
+		var createdAt, updatedAt time.Time
+		if err := rows.Scan(&s.ID, &s.OwnerUserID, &s.TenantID, &s.Name, &s.BusinessType, &s.BusinessName,
+			&s.Address, &s.Phone, &s.LogoURL, &s.IsActive, &createdAt, &updatedAt); err != nil {
+			continue
+		}
+		s.CreatedAt = createdAt.Format(time.RFC3339)
+		s.UpdatedAt = updatedAt.Format(time.RFC3339)
+		stores = append(stores, s)
+	}
+
+	maxStores := getMaxStoresForTenant(r.Context(), tenantID)
+	response.JSON(w, http.StatusOK, "Stores retrieved", map[string]interface{}{
+		"stores":     stores,
+		"count":      len(stores),
+		"max_stores": maxStores,
+		"can_add":    maxStores == -1 || len(stores) < maxStores,
+	})
+}
+
+func createStore(w http.ResponseWriter, r *http.Request, tenantID, userID string) {
+	var req StoreRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		return
+	}
+	if req.Name == "" || req.BusinessType == "" {
+		response.Error(w, http.StatusBadRequest, "name and businessType are required", nil)
+		return
+	}
+
+	var btExists bool
+	if err := DB.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM business_types WHERE id=$1)", req.BusinessType).Scan(&btExists); err != nil || !btExists {
+		response.Error(w, http.StatusBadRequest, "Invalid business type", nil)
+		return
+	}
+
+	maxStores := getMaxStoresForTenant(r.Context(), tenantID)
+	if maxStores != -1 {
+		var currentCount int
+		DB.QueryRow(r.Context(), "SELECT COUNT(*) FROM stores WHERE owner_user_id=$1 AND tenant_id=$2", userID, tenantID).Scan(&currentCount)
+		if currentCount >= maxStores {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": "Store quota exceeded for your plan. Upgrade to Business to add more stores.",
+				"data": map[string]interface{}{
+					"current_count": currentCount,
+					"max_stores":    maxStores,
+				},
+			})
+			return
+		}
+	}
+
+	var newID string
+	err := DB.QueryRow(r.Context(), `
+		INSERT INTO stores (owner_user_id, tenant_id, name, business_type, business_name, address, phone, logo_url, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+		RETURNING id
+	`, userID, tenantID, req.Name, req.BusinessType, req.BusinessName, req.Address, req.Phone, req.LogoURL).Scan(&newID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to create store", err)
+		return
+	}
+
+	response.JSON(w, http.StatusCreated, "Store created", map[string]interface{}{
+		"id":           newID,
+		"ownerUserId":  userID,
+		"tenantId":     tenantID,
+		"name":         req.Name,
+		"businessType": req.BusinessType,
+	})
+}
+
+func getStore(w http.ResponseWriter, r *http.Request, storeID, tenantID, userID string) {
+	var s Store
+	var createdAt, updatedAt time.Time
+	err := DB.QueryRow(r.Context(), `
+		SELECT id, owner_user_id, tenant_id, name, business_type, COALESCE(business_name, ''),
+		       COALESCE(address, ''), COALESCE(phone, ''), COALESCE(logo_url, ''),
+		       is_active, created_at, updated_at
+		FROM stores
+		WHERE id = $1 AND owner_user_id = $2 AND tenant_id = $3
+	`, storeID, userID, tenantID).Scan(&s.ID, &s.OwnerUserID, &s.TenantID, &s.Name, &s.BusinessType, &s.BusinessName,
+		&s.Address, &s.Phone, &s.LogoURL, &s.IsActive, &createdAt, &s.UpdatedAt)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "Store not found", nil)
+		return
+	}
+	s.CreatedAt = createdAt.Format(time.RFC3339)
+	s.UpdatedAt = updatedAt.Format(time.RFC3339)
+	response.JSON(w, http.StatusOK, "Store retrieved", s)
+}
+
+func updateStore(w http.ResponseWriter, r *http.Request, storeID, tenantID, userID string) {
+	var req StoreUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		return
+	}
+
+	updates := []string{}
+	args := []any{}
+	idx := 1
+	if req.Name != nil {
+		updates = append(updates, fmt.Sprintf("name = $%d", idx))
+		args = append(args, *req.Name)
+		idx++
+	}
+	if req.BusinessType != nil {
+		var btExists bool
+		DB.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM business_types WHERE id=$1)", *req.BusinessType).Scan(&btExists)
+		if !btExists {
+			response.Error(w, http.StatusBadRequest, "Invalid business type", nil)
+			return
+		}
+		updates = append(updates, fmt.Sprintf("business_type = $%d", idx))
+		args = append(args, *req.BusinessType)
+		idx++
+	}
+	if req.Address != nil {
+		updates = append(updates, fmt.Sprintf("address = $%d", idx))
+		args = append(args, *req.Address)
+		idx++
+	}
+	if req.Phone != nil {
+		updates = append(updates, fmt.Sprintf("phone = $%d", idx))
+		args = append(args, *req.Phone)
+		idx++
+	}
+	if req.LogoURL != nil {
+		updates = append(updates, fmt.Sprintf("logo_url = $%d", idx))
+		args = append(args, *req.LogoURL)
+		idx++
+	}
+	if req.IsActive != nil {
+		updates = append(updates, fmt.Sprintf("is_active = $%d", idx))
+		args = append(args, *req.IsActive)
+		idx++
+	}
+
+	if len(updates) == 0 {
+		response.Error(w, http.StatusBadRequest, "No fields to update", nil)
+		return
+	}
+
+	updates = append(updates, "updated_at = NOW()")
+	args = append(args, storeID, userID, tenantID)
+
+	query := fmt.Sprintf(`
+		UPDATE stores SET %s
+		WHERE id = $%d AND owner_user_id = $%d AND tenant_id = $%d
+	`, strings.Join(updates, ", "), idx, idx+1, idx+2)
+
+	res, err := DB.Exec(r.Context(), query, args...)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to update store", err)
+		return
+	}
+	if res.RowsAffected() == 0 {
+		response.Error(w, http.StatusNotFound, "Store not found", nil)
+		return
+	}
+	response.JSON(w, http.StatusOK, "Store updated", nil)
+}
+
+func deleteStore(w http.ResponseWriter, r *http.Request, storeID, tenantID, userID string) {
+	res, err := DB.Exec(r.Context(), `
+		DELETE FROM stores WHERE id = $1 AND owner_user_id = $2 AND tenant_id = $3
+	`, storeID, userID, tenantID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to delete store", err)
+		return
+	}
+	if res.RowsAffected() == 0 {
+		response.Error(w, http.StatusNotFound, "Store not found", nil)
+		return
+	}
+	response.JSON(w, http.StatusOK, "Store deleted", nil)
 }

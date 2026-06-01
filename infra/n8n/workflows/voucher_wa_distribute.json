@@ -1,0 +1,57 @@
+{
+  "name": "WCH - Voucher Bulk Distribute (CSV → WA Reseller)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voucher-bulk-distribute",
+        "responseMode": "onReceived"
+      },
+      "id": "vch-webhook-001",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [220, 280],
+      "webhookId": "voucher-bulk-distribute"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wch-api-gateway:8000/api/wa/send-bulk",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messages\": {{ $json.body.recipients | map(r => ({ target: r.phone, template: 'voucher_link', vars: { url: r.redeem_url, code: r.code, business: r.business } })) }}\n}",
+        "options": {}
+      },
+      "id": "vch-bulk-001",
+      "name": "Send WA Bulk",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 280]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "job_id", "value": "={{ $json.body.job_id }}" },
+            { "name": "status", "value": "queued" },
+            { "name": "count", "value": "={{ $json.body.recipients.length }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "vch-resp-001",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [660, 280]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[{ "node": "Send WA Bulk", "type": "main", "index": 0 }]] },
+    "Send WA Bulk":    { "main": [[{ "node": "Respond OK",   "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {},
+  "id": "wch-voucher-distribute-001"
+}

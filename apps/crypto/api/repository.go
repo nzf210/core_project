@@ -63,6 +63,27 @@ func (r *Repository) DeleteAPIKey(ctx context.Context, id, tenantID, userID stri
 	return nil
 }
 
+func (r *Repository) GetActiveAPIKey(ctx context.Context, tenantID, userID string) (*domain.ExchangeAPIKey, error) {
+	query := `
+		SELECT id, tenant_id, user_id, exchange, label, encrypted_api_key, encrypted_api_secret, is_active, created_at, updated_at
+		FROM exchange_api_keys
+		WHERE tenant_id = $1 AND user_id = $2 AND is_active = true
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+	var k domain.ExchangeAPIKey
+	err := db.Pool.QueryRow(ctx, query, tenantID, userID).Scan(
+		&k.ID, &k.TenantID, &k.UserID, &k.Exchange, &k.Label, &k.EncryptedAPIKey, &k.EncryptedAPISecret, &k.IsActive, &k.CreatedAt, &k.UpdatedAt,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, errors.New("no active API key found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &k, nil
+}
+
 func (r *Repository) CreateBot(ctx context.Context, b *domain.Bot) error {
 	query := `
 		INSERT INTO bots (tenant_id, user_id, api_key_id, name, bot_type, pair, status, is_paper_trading, dca_interval, dca_amount_per_order, grid_lower_price, grid_upper_price, grid_count, grid_investment, total_invested, total_profit, total_trades, has_open_position, created_at, updated_at)

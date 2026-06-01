@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"core_project/apps/campaign/api/repository"
+	"core_project/apps/crypto/domain"
+	"core_project/shared/sdk/config"
 )
 
 type Voter struct {
@@ -76,13 +78,27 @@ func HandleVoters(w http.ResponseWriter, r *http.Request) {
 			req.Status = "uncontacted"
 		}
 
-		// Mock encryption for now
-		nikEnc := "enc_" + req.Nik
-		nameEnc := "enc_" + req.Name
-		addrEnc := "enc_" + req.Address
+		cfg := config.LoadConfig("")
+		encryptionKey := cfg.EncryptionKey
+
+		nikEnc, err := domain.Encrypt(req.Nik, encryptionKey)
+		if err != nil {
+			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Encryption error"})
+			return
+		}
+		nameEnc, err := domain.Encrypt(req.Name, encryptionKey)
+		if err != nil {
+			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Encryption error"})
+			return
+		}
+		addrEnc, err := domain.Encrypt(req.Address, encryptionKey)
+		if err != nil {
+			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Encryption error"})
+			return
+		}
 
 		var id string
-		err := repository.DB.QueryRow(context.Background(),
+		err = repository.DB.QueryRow(context.Background(),
 			"INSERT INTO voters (tenant_id, nik_encrypted, name_encrypted, address_encrypted, phone, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
 			tenantID, nikEnc, nameEnc, addrEnc, req.Phone, req.Status).Scan(&id)
 		

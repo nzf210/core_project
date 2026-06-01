@@ -1,0 +1,94 @@
+name: development-refactor
+description: Refactoring — improve code quality, simplify, reduce duplication, tanpa mengubah behavior
+
+trigger:
+  - "refactor"
+  - "simplify"
+  - "clean up"
+  - "reduce duplication"
+
+input:
+  required:
+    - target
+    - domain
+  optional:
+    - reason
+
+steps:
+  - id: analyze-current
+    agent: Explore
+    prompt: |
+      Refactor target: {target}
+      Domain: {domain}
+      Reason: {reason}
+
+      1. Find all files related to "{target}"
+      2. Read the code and identify:
+        - Duplicate code that can be extracted
+        - Complex functions that can be simplified
+        - Long functions that need to be split
+        - Unnecessary abstractions
+        - Inconsistent naming
+      3. Map the before/after of the refactor
+
+      Report each finding with:
+      - File:line
+      - Current code (1-3 lines)
+      - Problem (why this is a problem)
+      - Suggested fix
+
+  - id: plan-changes
+    agent: Plan
+    prompt: |
+      Based on the analysis, create a refactoring plan:
+
+      1. List changes in order (respect dependencies)
+      2. For each change, describe what will be done
+      3. Confirm: does this change behavior? (must be NO for a pure refactor)
+      4. Identify any test that needs to be added/updated
+
+      CRITICAL: A refactor must NOT change behavior. If any change would
+      change behavior, mark it as "out of scope for this refactor".
+
+  - id: implement
+    agent: GeneralPurpose
+    prompt: |
+      Implement the refactoring plan step by step.
+
+      Rules:
+      1. After EACH file change, run: go build ./... && go vet ./...
+      2. If build fails, STOP and fix before continuing
+      3. Do NOT change behavior — only structure
+      4. Run tests after each major change
+
+      For each step:
+      - What file is changing
+      - What the change is
+      - Confirm build passes
+
+  - id: verify
+    agent: GeneralPurpose
+    prompt: |
+      Final verification:
+
+      1. Run full test suite: go test ./... -v -race
+      2. Verify no behavior changed (quick sanity check)
+      3. Confirm all Go conventions are followed
+
+      Report test results.
+
+output:
+  format: markdown
+  deliverable: |
+    ## Refactor Report: {target}
+
+    ### Changes Made
+    | File | Before | After | Reason |
+    |:-----|:-------|:------|:-------|
+    | ... | ... | ... | ... |
+
+    ### Verification
+    ✅ go build: PASS
+    ✅ go vet: PASS
+    ✅ go test: PASS
+    ✅ Behavior unchanged: CONFIRMED

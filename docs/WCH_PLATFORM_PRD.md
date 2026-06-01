@@ -1,7 +1,7 @@
 # Product Requirements Document (PRD) — WCH Platform
-**Versi:** 1.1.0
+**Versi:** 1.0.0
 **Tanggal Update Terakhir:** 2026-05-29
-**Ringkasan Perubahan:** Sinkronisasi Detail Spesifikasi dengan Feature List UMKM terbaru (penambahan tipe bisnis Hotel/Penginapan, fitur daftar pengeluaran & arus kas, penyesuaian channel chatbot, penambahan notifikasi WA & Telegram pada laporan AI, serta skema promo kupon tier Lite).
+**Ringkasan Perubahan:** Pembuatan PRD terpusat perdana yang menggabungkan seluruh ekosistem produk (UMKM, Crypto Trading Bot, Campaign Management) berdasarkan MVP yang ada dan roadmap mendatang.
 
 ---
 
@@ -48,32 +48,21 @@ Jika ada penambahan/pengurangan fitur di masa depan, PRD ini akan diperbarui den
 
 ### A. SaaS UMKM & Customer Service AI
 
-#### 1. Multi-Tenant Onboarding & Dynamic Dashboard Widget
-- **Sub-fitur**:
-  - Onboarding instan dengan seleksi tipe bisnis (Warung, Laundry, Restoran, Hotel atau Penginapan, dll).
-  - Dashboard widget dinamis yang menyesuaikan KPI metrik setiap tipe bisnis.
-- **Use Cases / User Stories**:
-  - *Sebagai pemilik Hotel/Penginapan, saya ingin dashboard saya menampilkan tingkat okupansi kamar dan pendapatan hari ini.*
-- **Acceptance Criteria**:
-  - Tampilan dashboard langsung berubah sesuai dengan tipe bisnis yang dipilih saat pendaftaran.
-- **Prioritas & Catatan**: Live (MVP).
-
-#### 2. Pembukuan & Laporan Keuangan (Double-Entry Accounting)
+#### 1. Pembukuan & Laporan Keuangan (Double-Entry Accounting)
 - **Sub-fitur**:
   - Generator Laporan Keuangan Otomatis (Laba Rugi, Neraca, Arus Kas).
   - Manajemen Chart of Accounts (COA) standar SAK-EMKM.
-  - Pencatatan daftar pengeluaran beserta rincian biayanya.
   - Penjurnalan manual dan otomatis.
 - **Use Cases / User Stories**:
-  - *Sebagai pemilik UMKM, saya ingin mencatat daftar pengeluaran operasional beserta rincian biaya yang terperinci agar mudah dilacak.*
+  - *Sebagai pemilik UMKM, saya ingin melihat laba bersih bulan ini agar tahu performa bisnis.*
   - *Sebagai kasir, saya ingin setiap transaksi penjualan langsung tercatat di jurnal tanpa perlu input ulang.*
 - **Acceptance Criteria**:
   - Jurnal tidak bisa disimpan jika Debit ≠ Kredit.
-  - Form pencatatan pengeluaran harus bisa merincikan item biaya.
-  - Laporan laba rugi dan arus kas dapat di-generate untuk rentang tanggal tertentu (PDF/Excel).
-- **Prioritas & Catatan**: Live (MVP) - Peningkatan fitur daftar pengeluaran dan Arus Kas aktif.
+  - Laporan laba rugi dapat di-generate untuk rentang tanggal tertentu (PDF/Excel).
+  - Akun tidak boleh bernilai negatif untuk kategori Kas/Bank.
+- **Prioritas & Catatan**: Live (MVP) - Sedang perbaikan fitur Arus Kas.
 
-#### 3. Order Management & Point of Sale (POS)
+#### 2. Order Management & Point of Sale (POS)
 - **Sub-fitur**:
   - Manajemen Katalog (Stok, Harga Dasar, Foto).
   - Import/Export Katalog via CSV.
@@ -88,32 +77,20 @@ Jika ada penambahan/pengurangan fitur di masa depan, PRD ini akan diperbarui den
   - Stok otomatis berkurang saat pesanan 'Paid'.
 - **Prioritas & Catatan**: Live (MVP).
 
-#### 4. AI Customer Service & Conversational Accounting
+#### 3. AI Customer Service & Conversational Accounting
 - **Sub-fitur**:
-  - Omni-Channel Chatbot (Web Widget).
+  - Omni-Channel Chatbot (WA Fonnte & Web Widget).
   - Dynamic RAG (Menjawab stok/harga berdasar katalog terbaru).
   - Conversational Accounting (Pencatatan keuangan via NLP).
   - Smart Escalation (Auto-forward ke admin).
 - **Use Cases / User Stories**:
-  - *Sebagai pembeli, saya ingin tanya ketersediaan stok via Web Chatbot dan dibalas instan.*
+  - *Sebagai pembeli, saya ingin tanya "Apakah sabun mandi ready?" dan dibalas instan via WA.*
   - *Sebagai owner, saya ingin chat "Saya bayar listrik 50rb" dan AI merespon "Tercatat: Beban Listrik (+), Kas (-)".*
   - *Sebagai pelanggan yang marah karena barang rusak, saya ingin chat saya langsung diteruskan ke manusia, bukan AI.*
 - **Acceptance Criteria**:
-  - AI merespon chat dalam < 5 detik menggunakan Redis async queue (100 workers).
+  - AI merespon chat dalam < 5 detik menggunakan Redis async queue.
   - Role-based prompting berfungsi: Pembeli tidak bisa tanya laba rugi toko.
   - Tag `[FORWARD_TO_ADMIN]` ter-trigger otomatis jika sentimen chat sangat negatif.
-- **Prioritas & Catatan**: Live (MVP).
-
-#### 5. Automation & Background Insights
-- **Sub-fitur**:
-  - Job Scheduler untuk analisis data keuangan berkala.
-  - Pengiriman Laporan Bulanan AI secara otomatis.
-  - Multi-channel notification (Email, WhatsApps, dan Telegram).
-- **Use Cases / User Stories**:
-  - *Sebagai pemilik bisnis, saya ingin menerima ringkasan performa penjualan dan laba bulan ini langsung ke WhatsApp atau Telegram saya.*
-- **Acceptance Criteria**:
-  - Cron job background berjalan lancar memicu AI MiniMax untuk menganalisis data.
-  - Laporan terkirim sukses melalui Email, WhatsApps, dan Telegram sesuai pengaturan.
 - **Prioritas & Catatan**: Live (MVP).
 
 ---

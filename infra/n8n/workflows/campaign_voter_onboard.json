@@ -1,0 +1,55 @@
+{
+  "name": "WCH - Campaign Voter Onboarding (Sentiment Sync)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "campaign-voter-onboard",
+        "responseMode": "onReceived"
+      },
+      "id": "vot-webhook-001",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [220, 280],
+      "webhookId": "campaign-voter-onboard"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wch-api-gateway:8000/api/ai/v1/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"Classify sentiment (positive/neutral/negative) of this campaign message: \" + $json.body.message,\n  \"tenant_id\": \"{{ $json.body.tenant_id }}\"\n}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "vot-ai-001",
+      "name": "Sentiment via AI Gateway",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://wch-api-gateway:8000/api/campaign/voters/sentiment",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"voter_id\": \"{{ $json.body.voter_id }}\",\n  \"tenant_id\": \"{{ $json.body.tenant_id }}\",\n  \"sentiment\": \"{{ $json.data.content }}\",\n  \"score\": {{ $json.data.score | default(0) }},\n  \"raw_message\": \"{{ $json.body.message }}\"\n}",
+        "options": {}
+      },
+      "id": "vot-store-001",
+      "name": "Store Sentiment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 280]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger":    { "main": [[{ "node": "Sentiment via AI Gateway", "type": "main", "index": 0 }]] },
+    "Sentiment via AI Gateway": { "main": [[{ "node": "Store Sentiment", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {},
+  "id": "wch-campaign-onboard-001"
+}
