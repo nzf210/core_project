@@ -25,7 +25,7 @@ function formatRupiah(sen: number) {
 <template>
   <div>
     <h1>Overview Dashboard</h1>
-    <p class="subtitle">Snapshot seluruh WCH Platform: UMKM, Crypto, Campaign, voucher & revenue</p>
+    <p class="subtitle">Snapshot seluruh WCH Platform: UMKM, Campaign, voucher & revenue</p>
 
     <div v-if="loading" class="loading">Loading...</div>
     <div v-else-if="error" class="error">{{ error }}</div>

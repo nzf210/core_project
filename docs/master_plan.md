@@ -2,7 +2,7 @@
 
 Selamat datang di **WCH Platform (Multi-Product Suite)**. Dokumen ini adalah Master Plan komprehensif yang dirancang untuk mengintegrasikan tiga produk besar Anda ke dalam arsitektur platform yang tangguh, terukur, dan aman:
 
-1. **SaaS Crypto Trading Bot**
+1. ~~**SaaS Crypto Trading Bot**~~ *(ARCHIVED)*
 2. **AI Agent UMKM & Pembukuan/Akuntansi**
 3. **Aplikasi Manajemen Pemenangan Pemilu**
 

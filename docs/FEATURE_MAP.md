@@ -94,13 +94,13 @@ WAJIB update semua file ini:
 | `8002` | AI Gateway | REST API | `services/ai-gateway` |
 | `8003` | Billing Service | REST API | `services/billing-service` |
 | `8005` | Notification Service | REST API | `services/notification-service` |
-| `8101` | Crypto API | REST API | `apps/crypto/api` |
+| `8101` | Crypto API | ~~REST API~~ (ARCHIVED) | `apps/crypto/api` |
 | `8201` | UMKM Accounting | REST API | `apps/umkm/accounting` |
 | `8202` | WA Gateway | WebSocket/REST | `services/wa-gateway` |
 | `8202` | UMKM Chatbot | REST API | `apps/umkm/chatbot` ⚠️ |
 | `9001` | UMKM Business | REST API | `apps/umkm/business` |
 | `9002` | Campaign API | REST API | `apps/campaign/api` |
-| `3101` | Frontend Crypto | Vite Dev | `frontend/crypto-web` |
+| `3101` | Frontend Crypto | ~~Vite Dev~~ (ARCHIVED) | `frontend/crypto-web` |
 | `3201` | Frontend UMKM | Vite Dev | `frontend/umkm-web` |
 | `3301` | Frontend Campaign | Vite Dev | `frontend/campaign-web` |
 | `5433` | PostgreSQL (Docker) | DB | docker-compose |
@@ -119,7 +119,7 @@ Requests ke API Gateway diarahkan berdasarkan prefix URL:
 | `/api/v1/billing/*` | Billing Service | `8003` |
 | `/api/v1/accounting/*` | UMKM Accounting | `8201` |
 | `/api/v1/campaign/*` | Campaign API | `9002` |
-| `/api/v1/crypto/*` | Crypto API | `8101` |
+| `/api/v1/crypto/*` | ~~Crypto API~~ (ARCHIVED) | `8101` |
 
 ---
 

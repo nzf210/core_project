@@ -7,7 +7,7 @@
 | Produk | Deskripsi | Port |
 |:-------|:----------|:-----|
 | **UMKM** | AI Agent: Double-Entry Accounting, Chatbot WA, POS | 8201, 8202, 9001 |
-| **Crypto** | Trading Bot: DCA, Grid, Signal (Binance API) | 8101 |
+| **Crypto** | ~~Trading Bot: DCA, Grid, Signal (Binance API)~~ (ARCHIVED) | 8101 |
 | **Campaign** | Manajemen Pemilu: Relawan, Real Count, AI Sentiment | 9002 |
 
 ## ⚡ Quick Start
@@ -66,10 +66,10 @@ cd frontend/umkm-web && npm install && npm run dev   # port 3201
 
 ```
 core_project/
-├── apps/          ← Produk bisnis (umkm, crypto, campaign)
+├── apps/          ← Produk bisnis (umkm, campaign)
 ├── services/      ← Shared services (auth, ai-gateway, billing, dll)
 ├── shared/        ← SDK bersama (config, db, cache, migrations)
-├── frontend/      ← Vue 3 apps (umkm-web, crypto-web, campaign-web)
+├── frontend/      ← Vue 3 apps (umkm-web, campaign-web)
 ├── infra/         ← Docker, n8n, deploy scripts
 └── docs/          ← Dokumentasi
 ```

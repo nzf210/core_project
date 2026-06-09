@@ -663,9 +663,9 @@ SELECT * FROM products WHERE status = 'active'
 | Endpoint UMKM Business | `apps/umkm/business/main.go` (flat pattern) |
 | Endpoint UMKM Chatbot | `apps/umkm/chatbot/main.go` (flat pattern) |
 | Endpoint Campaign | `apps/campaign/api/handlers/nama.go` + register di `main.go` |
-| Endpoint Crypto API | `apps/crypto/api/handlers.go` + `repository.go` |
+| Endpoint Crypto API | ~~`apps/crypto/api/handlers.go`~~ (ARCHIVED) |
 | Background Worker UMKM | `apps/umkm/automation/main.go` |
-| Background Worker Crypto | `apps/crypto/worker/` |
+| Background Worker Crypto | ~~`apps/crypto/worker/`~~ (ARCHIVED) |
 | Service baru lintas produk | `services/nama-service/main.go` |
 | Tabel database baru | `shared/migrations/NNNNNN_nama.up.sql` |
 | Config / env variable | `shared/sdk/config/config.go` + `.env.example` |
@@ -674,7 +674,7 @@ SELECT * FROM products WHERE status = 'active'
 | DB connection helper | `shared/sdk/db/postgres.go` |
 | Redis helper | `shared/sdk/cache/redis.go` |
 | Frontend UMKM | `frontend/umkm-web/src/components/` |
-| Frontend Crypto | `frontend/crypto-web/src/` |
+| Frontend Crypto | ~~`frontend/crypto-web/src/`~~ (ARCHIVED) |
 | Frontend Campaign | `frontend/campaign-web/src/` |
 | AI/LLM call | Via `services/ai-gateway` — `POST http://localhost:8002/v1/chat` |
 | Proxy routing | `services/api-gateway/main.go` |
@@ -698,7 +698,6 @@ make run-auth           # Auth Service (port 8001)
 make run-ai             # AI Gateway (port 8002)
 make run-accounting     # UMKM Accounting (port 8201)
 make run-chatbot        # UMKM Chatbot (port 8202)
-make run-crypto-api     # Crypto API (port 8101)
 make run-campaign       # Campaign API (port 9002)
 make run-frontend       # Semua frontend
 
@@ -759,4 +758,4 @@ docker compose logs -f auth-service  # Logs service tertentu
 > - App flat → `apps/umkm/accounting/main.go`
 > - Service sederhana → `services/notification-service/main.go`
 > - Worker background → `apps/umkm/automation/main.go`
-> - Enkripsi → `apps/crypto/domain/encryption.go`
+> - Enkripsi → `shared/sdk/encryption/encryption.go`

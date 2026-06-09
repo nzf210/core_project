@@ -37,7 +37,6 @@ fi
 if git diff --name-only HEAD~1 | grep -q "frontend/.*package\.json"; then
   echo "Frontend package.json changed — you may need to run:"
   echo "  cd frontend/umkm-web && npm install"
-  echo "  cd frontend/crypto-web && npm install"
   echo "  cd frontend/campaign-web && npm install"
 fi
 

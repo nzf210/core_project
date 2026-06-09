@@ -25,8 +25,7 @@ Untuk efisiensi biaya awal dan skalabilitas jangka menengah, kami merekomendasik
 │  frontend-gateway    │   │  services-gateway    │   │     apps-gateway     │
 │   (Port 80/443)      │   │   (Port 8000-8005)   │   │   (Port 9000-9003)   │
 ├──────────────────────┤   ├──────────────────────┤   ├──────────────────────┤
-│ - crypto-web (3000)  │   │ - auth-service (8000)│   │ - crypto-app (9000)  │
-│ - umkm-web (3001)    │   │ - tenant-serv (8001) │   │ - umkm-app (9001)    │
+│ - umkm-web (3001)    │   │ - auth-service (8000)│   │ - umkm-app (9001)    │
 │ - campaign-web (3002)│   │ - billing-serv (8002)│   │ - campaign-app (9002)│
 │ - admin-web (3003)   │   │ - ai-gateway (8003)  │   └──────────────────────┘
 └──────────────────────┘   │ - notify-serv (8004) │
@@ -93,7 +92,7 @@ Berikut adalah parameter konfigurasi wajib yang harus diatur dalam file `.env` s
 ```ini
 NODE_ENV=development
 JWT_SECRET=super_secret_key_minimum_32_characters_long
-ENCRYPTION_KEY=aes_256_key_for_encrypting_crypto_api_keys
+ENCRYPTION_KEY=aes_256_key_for_encrypting_sensitive_data
 PLATFORM_DOMAIN=wchplatform.com
 ```
 

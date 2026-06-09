@@ -11,12 +11,12 @@
 .PHONY: help start-all stop-all status \
         run-gateway run-auth run-ai run-billing run-notification run-wa-gateway \
         run-accounting run-chatbot run-business run-automation \
-        run-crypto-api run-crypto run-campaign run-subscription-worker \
+        run-campaign run-subscription-worker \
         run-frontend \
         build build-all \
         test test-verbose test-race \
         vet tidy check \
-        logs-auth logs-ai logs-accounting logs-chatbot logs-crypto \
+        logs-auth logs-ai logs-accounting logs-chatbot \
         logs-campaign logs-gateway logs-all \
         clean clean-logs clean-build
 
@@ -52,8 +52,6 @@ help:
 	@echo "    make run-chatbot      — UMKM Chatbot (port 8202)"
 	@echo "    make run-business     — UMKM Business (port 9001)"
 	@echo "    make run-automation   — UMKM Automation (worker)"
-	@echo "    make run-crypto-api   — Crypto API (port 8101)"
-	@echo "    make run-crypto       — Crypto Worker (background)"
 	@echo "    make run-campaign     — Campaign API (port 9002)"
 	@echo ""
 	@echo "  FRONTEND:"
@@ -74,7 +72,6 @@ help:
 	@echo "    make logs-accounting  — Tail log UMKM accounting"
 	@echo "    make logs-chatbot     — Tail log UMKM chatbot"
 	@echo "    make logs-campaign    — Tail log campaign API"
-	@echo "    make logs-crypto      — Tail log crypto worker"
 	@echo "    make logs-gateway     — Tail log API gateway"
 	@echo "    make logs-all         — Tail semua log sekaligus"
 	@echo ""
@@ -146,17 +143,6 @@ run-automation: _ensure_dirs
 	@go run ./apps/umkm/automation
 
 # =============================================================================
-# Crypto Apps
-# =============================================================================
-run-crypto-api: _ensure_dirs
-	@echo "▶ Starting Crypto API on port 8101..."
-	@go run ./apps/crypto/api
-
-run-crypto: _ensure_dirs
-	@echo "▶ Starting Crypto Trading Bot Worker..."
-	@go run ./apps/crypto/worker
-
-# =============================================================================
 # Campaign App
 # =============================================================================
 run-campaign: _ensure_dirs
@@ -174,8 +160,6 @@ run-subscription-worker: _ensure_dirs
 # Frontend
 # =============================================================================
 run-frontend: _ensure_dirs
-	@echo "▶ Starting Crypto Frontend on port 3101..."
-	@cd frontend/crypto-web && npm run dev -- --port 3101 &
 	@echo "▶ Starting UMKM Frontend on port 3201..."
 	@cd frontend/umkm-web && npm run dev -- --port 3201 &
 	@echo "▶ Starting Campaign Frontend on port 3301..."
@@ -202,9 +186,6 @@ start-all: _ensure_dirs
 	@nohup go run ./apps/umkm/business       > $(LOG_DIR)/business.log         2>&1 & echo $$! > $(RUN_DIR)/business.pid
 	@nohup go run ./apps/umkm/automation     > $(LOG_DIR)/automation.log       2>&1 & echo $$! > $(RUN_DIR)/automation.pid
 	@nohup go run ./apps/campaign/api        > $(LOG_DIR)/campaign-api.log     2>&1 & echo $$! > $(RUN_DIR)/campaign-api.pid
-	@nohup go run ./apps/crypto/api          > $(LOG_DIR)/crypto-api.log       2>&1 & echo $$! > $(RUN_DIR)/crypto-api.pid
-	@nohup go run ./apps/crypto/worker       > $(LOG_DIR)/crypto.log           2>&1 & echo $$! > $(RUN_DIR)/crypto.pid
-	@nohup sh -c 'cd frontend/crypto-web   && npm run dev -- --port 3101' > $(LOG_DIR)/frontend-crypto.log   2>&1 & echo $$! > $(RUN_DIR)/frontend-crypto.pid
 	@nohup sh -c 'cd frontend/umkm-web     && npm run dev -- --port 3201' > $(LOG_DIR)/frontend-umkm.log     2>&1 & echo $$! > $(RUN_DIR)/frontend-umkm.pid
 	@nohup sh -c 'cd frontend/campaign-web && npm run dev -- --port 3301' > $(LOG_DIR)/frontend-campaign.log 2>&1 & echo $$! > $(RUN_DIR)/frontend-campaign.pid
 	@nohup sh -c 'cd frontend/superadmin-web && npm run dev -- --port 3401' > $(LOG_DIR)/frontend-superadmin.log 2>&1 & echo $$! > $(RUN_DIR)/frontend-superadmin.pid
@@ -238,12 +219,10 @@ stop-all:
 	@lsof -ti :8002 | xargs kill -9 2>/dev/null || true
 	@lsof -ti :8003 | xargs kill -9 2>/dev/null || true
 	@lsof -ti :8005 | xargs kill -9 2>/dev/null || true
-	@lsof -ti :8101 | xargs kill -9 2>/dev/null || true
 	@lsof -ti :8201 | xargs kill -9 2>/dev/null || true
 	@lsof -ti :8202 | xargs kill -9 2>/dev/null || true
 	@lsof -ti :9001 | xargs kill -9 2>/dev/null || true
 	@lsof -ti :9002 | xargs kill -9 2>/dev/null || true
-	@lsof -ti :3101 | xargs kill -9 2>/dev/null || true
 	@lsof -ti :3201 | xargs kill -9 2>/dev/null || true
 	@lsof -ti :3301 | xargs kill -9 2>/dev/null || true
 	@lsof -ti :3401 | xargs kill -9 2>/dev/null || true
@@ -260,12 +239,10 @@ status:
 	@echo "  Port 8002 (AI Gateway):        $$(lsof -ti :8002 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
 	@echo "  Port 8003 (Billing Service):   $$(lsof -ti :8003 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
 	@echo "  Port 8005 (Notification):      $$(lsof -ti :8005 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
-	@echo "  Port 8101 (Crypto API):        $$(lsof -ti :8101 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
 	@echo "  Port 8201 (UMKM Accounting):   $$(lsof -ti :8201 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
 	@echo "  Port 8202 (WA/Chatbot):        $$(lsof -ti :8202 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
 	@echo "  Port 9001 (UMKM Business):     $$(lsof -ti :9001 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
 	@echo "  Port 9002 (Campaign API):      $$(lsof -ti :9002 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
-	@echo "  Port 3101 (Frontend Crypto):   $$(lsof -ti :3101 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
 	@echo "  Port 3201 (Frontend UMKM):     $$(lsof -ti :3201 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
 	@echo "  Port 3301 (Frontend Campaign): $$(lsof -ti :3301 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
 	@echo "  Port 3401 (Frontend Superadmin): $$(lsof -ti :3401 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
@@ -296,9 +273,6 @@ logs-accounting:
 
 logs-chatbot:
 	@tail -f $(LOG_DIR)/chatbot.log
-
-logs-crypto:
-	@tail -f $(LOG_DIR)/crypto.log
 
 logs-campaign:
 	@tail -f $(LOG_DIR)/campaign-api.log
@@ -331,8 +305,6 @@ build-all: _ensure_dirs
 	@go build -o $(BIN_DIR)/umkm-business      ./apps/umkm/business
 	@go build -o $(BIN_DIR)/umkm-chatbot       ./apps/umkm/chatbot
 	@go build -o $(BIN_DIR)/umkm-automation    ./apps/umkm/automation
-	@go build -o $(BIN_DIR)/crypto-api         ./apps/crypto/api
-	@go build -o $(BIN_DIR)/crypto-worker      ./apps/crypto/worker
 	@go build -o $(BIN_DIR)/campaign-api       ./apps/campaign/api
 	@echo "✓ Semua binary berhasil di-build ke $(BIN_DIR)/"
 	@ls -lh $(BIN_DIR)/ | grep -v gitkeep

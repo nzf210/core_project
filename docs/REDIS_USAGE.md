@@ -111,12 +111,7 @@ redis:
 
 ## 3. Pub/Sub Channels
 
-### 3.1 Crypto Price Updates (`crypto:prices:{symbol}`)
-
-**Publisher**: `apps/crypto/worker/price_monitor.go`
-
-```go
-channel := "crypto:prices:" + sym
+### 3.1 ~~Crypto Price Updates (`crypto:prices:{symbol}`)~~ (ARCHIVED)
 cache.Client.Publish(context.Background(), channel, event.BestBidPrice)
 ```
 

@@ -16,16 +16,16 @@ This roadmap outlines the phased development timeline for the WCH Multi-Product 
     *   Integrate WhatsApp API chatbot via n8n/webhooks.
     *   Launch `frontend/umkm-web` dashboard.
 
-### Phase 2: Monetization, AI Orchestration & Crypto Trading Bot (Month 3-4)
+### Phase 2: Monetization, AI Orchestration & Subscription Engine (Month 3-4)
 *   **Month 3**: AI Gateway & Billing/Monetization Engine
     *   Build `services/billing-service` integrated with Stripe/Xendit.
     *   Launch `services/ai-gateway` for LLM routing, semantic caching, and cost limiting.
     *   Add AI OCR receipt scanner and conversational accounting voice/text in `apps/umkm`.
-*   **Month 4**: SaaS Crypto Trading Bot
-    *   Integrate `CCXT` multi-exchange trading library inside `apps/crypto`.
-    *   Build the asynchronous high-frequency/scheduler bot execution worker (`apps/crypto/worker`).
-    *   Launch `frontend/crypto-web` dashboard with TradingView charts and real-time PnL.
-    *   Enforce billing plan restrictions on bot execution quotas.
+*   **Month 4**: ~~SaaS Crypto Trading Bot~~ *(ARCHIVED)*
+    *   ~~Integrate `CCXT` multi-exchange trading library inside `apps/crypto`.~~
+    *   ~~Build the asynchronous high-frequency/scheduler bot execution worker (`apps/crypto/worker`).~~
+    *   ~~Launch `frontend/crypto-web` dashboard with TradingView charts and real-time PnL.~~
+    *   ~~Enforce billing plan restrictions on bot execution quotas.~~
 
 ### Phase 3: Campaign & Election Winning Platform (Month 5-6)
 *   **Month 5**: Campaign Management MVP

@@ -4,24 +4,8 @@ Dokumen ini merinci strategi monetisasi, model penetapan harga (*pricing model*)
 
 ---
 
-## 🪙 1. SaaS Crypto Trading Bot (`apps/crypto`)
-Model bisnis ini sepenuhnya bertumpu pada **SaaS Subscription (B2C & B2B Retail)** dengan pembatasan berbasis konsumsi resource.
-
-### 📊 Skema Paket Langganan:
-
-| Fitur | **Free Tier** | **Lite (Basic)** | **Pro (Recommended)** | **VIP / Enterprise** |
-| :--- | :--- | :--- | :--- | :--- |
-| **Harga Bulanan** | Rp 0 (Free) | Rp 150.000 / bln | Rp 450.000 / bln | Rp 1.500.000 / bln |
-| **Active Trading Bots** | Maks. 1 Bot | Maks. 3 Bot | Maks. 10 Bot | Unlimited |
-| **Exchange Connection** | 1 Exchange (Indodax) | Maks. 2 Exchange | Unlimited Exchange | Unlimited Exchange |
-| **Jenis Strategi** | DCA saja | DCA, Grid | Grid, DCA, Signal (Webhooks) | Custom Algorithmic API |
-| **Backtesting Engine** | Tidak tersedia | 5x / bulan | Unlimited | Unlimited |
-| **Interval Ticker** | 1 Jam (Delay) | 15 Menit | Real-time (WebSockets) | Real-time + Co-location |
-| **Support** | Community | Email | Priority Discord | 24/7 Account Manager |
-
-### 💡 Alternatif Revenue Streams:
-1.  **Profit Sharing (Copy Trading)**: Biaya komisi 5% - 10% dari profit bersih yang dihasilkan oleh bot jika pengguna mengikuti taktik *Master Trader* terverifikasi di platform.
-2.  **Affiliate Kickbacks**: Menghubungkan tautan afiliasi platform dengan Exchange (Binance/Tokocrypto/Bybit) untuk mendapatkan pembagian biaya transaksi (*trading fee rebates*) dari setiap transaksi yang dieksekusi oleh bot.
+## 🪙 1. ~~SaaS Crypto Trading Bot (`apps/crypto`)~~ *(ARCHIVED)*
+*Produk ini telah di-archive dan tidak lagi dikembangkan.*
 
 ---
 

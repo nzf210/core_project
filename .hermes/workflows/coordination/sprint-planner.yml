@@ -55,7 +55,7 @@ steps:
       - TASK title
       - TIPE: feature/bugfix/refactor/research/infra
       - PRIORITAS: critical/high/medium/low
-      - DOMAIN: umkm/crypto/campaign/platform/infra
+      - DOMAIN: umkm/campaign/platform/infra
       - STEP 1: Analysis
       - STEP 2: Design (with 2-3 options, choose one)
       - STEP 3: Implementation (file list, order)

@@ -12,7 +12,7 @@
 | Produk | Deskripsi | Direktori Utama |
 |:-------|:----------|:----------------|
 | **UMKM** | AI Agent UMKM: Double-Entry Accounting, AI Chatbot WA, POS | `apps/umkm/` |
-| **Crypto** | Trading Bot: DCA, Grid, Signal Bot berbasis Binance API | `apps/crypto/` |
+| **Crypto** | ~~Trading Bot: DCA, Grid, Signal Bot berbasis Binance API~~ (ARCHIVED) | `apps/crypto/` |
 | **Campaign** | Manajemen Pemilu: Relawan, Real Count, AI Sentiment | `apps/campaign/` |
 
 Semua produk berbagi `services/` (auth, billing, ai-gateway, notification, wa-gateway, api-gateway).
@@ -35,20 +35,6 @@ core_project/                   ← Root monorepo (satu go.mod)
 │   │   │   └── main.go
 │   │   └── automation/         ← Background worker (tanpa HTTP server)
 │   │       └── main.go
-│   ├── crypto/
-│   │   ├── api/                ← REST API Crypto (Port 8101)
-│   │   │   ├── main.go
-│   │   │   ├── handlers.go
-│   │   │   └── repository.go
-│   │   ├── domain/             ← Business logic (models, encryption, exchange)
-│   │   │   ├── models.go
-│   │   │   ├── encryption.go
-│   │   │   └── exchange.go
-│   │   └── worker/             ← Trading bot worker (background)
-│   │       ├── main.go
-│   │       ├── dca_engine.go
-│   │       ├── grid_engine.go
-│   │       └── signal_engine.go
 │   └── campaign/
 │       └── api/                ← Campaign REST API (Port 9002)
 │           ├── main.go         ← Router saja
@@ -93,7 +79,6 @@ core_project/                   ← Root monorepo (satu go.mod)
 │
 ├── frontend/
 │   ├── umkm-web/               ← Vue 3 + Vite (Port 3201)
-│   ├── crypto-web/             ← Vue 3 + Vite (Port 3101)
 │   └── campaign-web/           ← Vue 3 + Vite (Port 3301)
 │
 ├── tools/
@@ -132,13 +117,11 @@ core_project/                   ← Root monorepo (satu go.mod)
 | `8003` | Billing Service | `services/billing-service` |
 | `8005` | Notification Service | `services/notification-service` |
 | `8006` | Subscription Worker | `services/subscription-worker` |
-| `8101` | Crypto API | `apps/crypto/api` |
 | `8201` | UMKM Accounting | `apps/umkm/accounting` |
 | `8202` | WA Gateway | `services/wa-gateway` |
 | `8202` | UMKM Chatbot | `apps/umkm/chatbot` ⚠️ Port sama dengan WA Gateway! |
 | `9001` | UMKM Business | `apps/umkm/business` |
 | `9002` | Campaign API | `apps/campaign/api` |
-| `3101` | Frontend Crypto | `frontend/crypto-web` |
 | `3201` | Frontend UMKM | `frontend/umkm-web` |
 | `3301` | Frontend Campaign | `frontend/campaign-web` |
 | `5433` | PostgreSQL (Docker) | docker-compose |
@@ -278,7 +261,6 @@ make migrate-status
 - `services/billing-service` ✅
 - `apps/umkm/accounting` ✅
 - `apps/umkm/chatbot` ✅
-- `apps/crypto/api` ✅
 - `apps/campaign/api` ✅
 
 ---
@@ -306,13 +288,13 @@ AI Gateway sudah menangani:
 
 | Data Sensitif | Metode | Lokasi DB |
 |:--------------|:-------|:----------|
-| API Key Exchange Crypto | AES-256-GCM | `encrypted_api_key` |
+| API Key Exchange Crypto | ~~AES-256-GCM~~ (ARCHIVED) | `encrypted_api_key` |
 | NIK Pemilih (Campaign) | AES-256-GCM | `encrypted_nik` |
 | Refresh Token | SHA-256 hash | Redis + `refresh_tokens` |
 | Password User | bcrypt (cost=12) | `password_hash` |
 
 - Kunci enkripsi: `cfg.EncryptionKey` — **wajib** 32 byte
-- Contoh enkripsi: `apps/crypto/domain/encryption.go`
+- Contoh enkripsi: `shared/sdk/encryption/encryption.go`
 
 ---
 
@@ -347,7 +329,6 @@ make run-auth          # Auth Service (port 8001)
 make run-ai            # AI Gateway (port 8002)
 make run-accounting    # UMKM Accounting (port 8201)
 make run-chatbot       # UMKM Chatbot (port 8202)
-make run-crypto-api    # Crypto API (port 8101)
 make run-campaign      # Campaign API (port 9002)
 make run-frontend      # Semua frontend
 

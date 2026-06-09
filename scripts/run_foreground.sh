@@ -53,13 +53,6 @@ nohup go run ./apps/umkm/business    > logs/business.log    2>&1 & echo $! > run
 nohup go run ./apps/umkm/automation  > logs/automation.log  2>&1 & echo $! > run/automation.pid
 
 # ============================================================
-# Crypto Apps
-# ============================================================
-echo "▶ Starting crypto apps..."
-nohup go run ./apps/crypto/api    > logs/crypto-api.log  2>&1 & echo $! > run/crypto-api.pid
-nohup go run ./apps/crypto/worker > logs/crypto.log      2>&1 & echo $! > run/crypto.pid
-
-# ============================================================
 # Campaign App
 # ============================================================
 echo "▶ Starting campaign app..."
@@ -69,7 +62,6 @@ nohup go run ./apps/campaign/api > logs/campaign-api.log 2>&1 & echo $! > run/ca
 # Frontend Apps
 # ============================================================
 echo "▶ Starting frontend apps..."
-nohup sh -c 'cd frontend/crypto-web   && npm run dev -- --port 3101' > logs/frontend-crypto.log   2>&1 & echo $! > run/frontend-crypto.pid
 nohup sh -c 'cd frontend/umkm-web     && npm run dev -- --port 3201' > logs/frontend-umkm.log     2>&1 & echo $! > run/frontend-umkm.pid
 nohup sh -c 'cd frontend/campaign-web && npm run dev -- --port 3301' > logs/frontend-campaign.log 2>&1 & echo $! > run/frontend-campaign.pid
 

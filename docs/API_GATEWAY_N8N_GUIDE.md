@@ -55,7 +55,7 @@ API Gateway (`services/api-gateway`, port 8000) adalah **single entry point** un
 | `/api/umkm/*` | umkm-accounting:8201 | tenantRateLimit + quota |
 | `/api/campaign/*` | campaign-api:9002 | tenantRateLimit + quota |
 | `/api/billing/*` | billing-service:8003 | tenantRateLimit |
-| `/api/crypto/*` | crypto-api:8101/api/v1 | tenantRateLimit + quota |
+| `/api/crypto/*` | ~~crypto-api:8101/api/v1~~ (ARCHIVED) | - |
 | `/api/wa/*` | wa-gateway:8202 | tenantRateLimit |
 | `/api/notifications/*` | notification-service:8005 | tenantRateLimit |
 

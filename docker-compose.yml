@@ -210,54 +210,6 @@ services:
       wa-gateway:
         condition: service_started
     restart: unless-stopped
-  crypto-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: wch-crypto-api
-    command:
-      - crypto-api
-    environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - DB_NAME=${DB_NAME:-wch_core}
-      - DB_SSLMODE=disable
-      - REDIS_HOST=redis
-      - JWT_SECRET=${JWT_SECRET:-supersecretkey}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-12345678901234567890123456789012}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-  crypto-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: wch-crypto-worker
-    command:
-      - crypto-worker
-    environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - DB_NAME=${DB_NAME:-wch_core}
-      - DB_SSLMODE=disable
-      - REDIS_HOST=redis
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-12345678901234567890123456789012}
-      - AI_GATEWAY_URL=http://ai-gateway:8002/v1/chat
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      ai-gateway:
-        condition: service_started
-    restart: unless-stopped
   campaign-api:
     build:
       context: .

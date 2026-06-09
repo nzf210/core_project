@@ -26,7 +26,7 @@ steps:
 
       Classify into ALL that apply:
       - TYPE: feature | bugfix | refactor | research | docs | infra | chore
-      - DOMAIN: umkm | crypto | campaign | platform (auth/billing/ai) | infra
+      - DOMAIN: umkm | campaign | platform (auth/billing/ai) | infra
       - COMPLEXITY: low (single file, obvious change) | medium (multiple files, new endpoint) | high (new service, architecture change)
       - CAN_PARALLEL: yes | no (does it depend on other tasks?)
 

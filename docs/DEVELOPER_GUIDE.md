@@ -29,10 +29,6 @@
 ```
 core_project/                         ← Root monorepo (satu go.mod)
 ├── apps/                             ← Produk/Aplikasi bisnis
-│   ├── crypto/                       ← Trading bot
-│   │   ├── api/                      ← REST API Crypto (Port 8101)
-│   │   ├── domain/                   ← Business logic (models, encryption, exchange)
-│   │   └── worker/main.go            ← Background worker
 │   ├── umkm/                         ← UMKM SaaS
 │   │   ├── accounting/main.go        ← Accounting engine (Port 8201)
 │   │   ├── chatbot/main.go           ← AI Chatbot via WhatsApp (Port 8202)
@@ -94,8 +90,7 @@ core_project/                         ← Root monorepo (satu go.mod)
 │
 ├── frontend/                         ← Frontend apps
 │   ├── umkm-web/                     ← Vue 3 + Vite (UMKM dashboard)
-│   ├── crypto-web/                   ← (belum dikembangkan)
-│   └── campaign-web/                 ← (belum dikembangkan)
+│   └── campaign-web/                 ← Vue 3 + Vite (Campaign dashboard)
 │
 ├── infra/                            ← Infrastructure & deployment
 │   ├── docker/
@@ -853,8 +848,6 @@ make run-ai            # Jalankan AI gateway (port 8002)
 make run-accounting    # Jalankan UMKM accounting (port 8201)
 make run-chatbot       # Jalankan UMKM chatbot (port 8202)
 make run-campaign      # Jalankan Campaign API (port 9002)
-make run-crypto-api    # Jalankan Crypto API (port 8101)
-make run-crypto        # Jalankan Crypto worker
 make start-all         # Jalankan semua di background
 make stop-all          # Matikan semua
 make status            # Cek status semua port

@@ -98,7 +98,7 @@ core_project/
 
 ## 🎯 Identitas Proyek
 Platform SaaS multi-produk berbasis Go dengan 3 produk utama:
-1. **Crypto Trading Bot** (apps/crypto) — high-frequency async worker
+1. ~~**Crypto Trading Bot** (apps/crypto)~~ — ~~high-frequency async worker~~ *(ARCHIVED)*
 2. **UMKM AI Agent & Accounting** (apps/umkm) — chatbot + bookkeeping
 3. **Campaign Management** (apps/campaign) — election winning platform
 
@@ -266,12 +266,7 @@ Kamu membantu mencatat keuangan, menjawab pertanyaan produk, dan
 menganalisis kondisi bisnis. Selalu jawab dalam bahasa Indonesia yang ramah.'"
 ```
 
-### 🗓️ SPRINT 6 (Minggu 11-12): Crypto Trading Bot Engine
-**Instruksi Claude Code**:
-```bash
-claude "Bangun apps/crypto/worker/ sebagai async trading bot engine di Go.
-Gunakan library: github.com/adshao/go-binance/v2 untuk Binance API.
-Komponen yang dibutuhkan:
+### 🗓️ ~~SPRINT 6 (Minggu 11-12): Crypto Trading Bot Engine)~~ *(ARCHIVED)*
 1. Bot config storage di DB (encrypted api_key, api_secret dengan AES-256)
 2. DCA Bot: interval cron-based buy berdasarkan nilai tetap (misal: Rp 100.000/hari)
 3. Grid Bot: set lower/upper price range → auto buy saat turun, sell saat naik

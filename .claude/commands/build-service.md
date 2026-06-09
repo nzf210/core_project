@@ -18,4 +18,4 @@ Ketika command ini dijalankan dengan argumen `$ARGUMENTS`:
 
 ## Contoh
 `/build-service auth-service` → build, vet, dan test `services/auth-service`
-`/build-service crypto` → build, vet, dan test `apps/crypto`
+`/build-service crypto` → ~~build, vet, dan test `apps/crypto`~~ (ARCHIVED)

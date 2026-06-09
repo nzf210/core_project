@@ -75,7 +75,6 @@ func main() {
 	mux.Handle("/api/umkm/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/umkm", newTenantProxy(getTarget("umkm-accounting", "8201")))))))
 	mux.Handle("/api/campaign/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/campaign", newTenantProxy(getTarget("campaign-api", "9002")))))))
 	mux.Handle("/api/billing/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/billing", newTenantProxy(getTarget("billing-service", "8003"))))))
-	mux.Handle("/api/crypto/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/crypto", newTenantProxy(getTarget("crypto-api", "8101")+"/api/v1"))))))
 	mux.Handle("/api/wa/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/wa", newTenantProxy(getTarget("wa-gateway", "8202"))))))
 	mux.Handle("/api/notifications/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/notifications", newTenantProxy(getTarget("notification-service", "8005"))))))
 
@@ -232,7 +231,6 @@ func handleAggregatedHealthz(getTarget func(string, string) string, cfg *config.
 		{"subscription-worker", "8006"},
 		{"umkm-accounting", "8201"},
 		{"wa-gateway", "8202"},
-		{"crypto-api", "8101"},
 		{"campaign-api", "9002"},
 		{"umkm-business", "9005"},
 	}
