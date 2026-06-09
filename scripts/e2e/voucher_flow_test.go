@@ -12,7 +12,7 @@ import (
 func TestVoucherFlowIntegration(t *testing.T) {
 	// Setup: Get auth token and tenant ID
 	t.Log("Setup: Authenticate and get tenant")
-	accessToken, tenantID := setupAuth(t)
+	accessToken, _ := setupAuth(t)
 
 	// 1. Create voucher program
 	t.Log("Step 1: Create voucher program")
@@ -42,9 +42,9 @@ func TestVoucherFlowIntegration(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	var createResp Response
+	var createResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&createResp)
-	if !createResp.Success {
+	if createResp.Status != http.StatusOK && createResp.Status != http.StatusCreated {
 		t.Logf("Create program response: %+v", createResp)
 		t.Fatalf("Create program failed: %s", createResp.Message)
 	}
@@ -76,9 +76,9 @@ func TestVoucherFlowIntegration(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	var generateResp Response
+	var generateResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&generateResp)
-	if !generateResp.Success {
+	if generateResp.Status != http.StatusOK && generateResp.Status != http.StatusCreated {
 		t.Fatalf("Generate links failed: %s", generateResp.Message)
 	}
 
@@ -103,9 +103,9 @@ func TestVoucherFlowIntegration(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	var listResp Response
+	var listResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&listResp)
-	if !listResp.Success {
+	if listResp.Status != http.StatusOK {
 		t.Fatalf("List links failed: %s", listResp.Message)
 	}
 	t.Log("✓ Voucher links listed")
@@ -124,9 +124,9 @@ func TestVoucherFlowIntegration(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	var analyticsResp Response
+	var analyticsResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&analyticsResp)
-	if !analyticsResp.Success {
+	if analyticsResp.Status != http.StatusOK {
 		t.Fatalf("Get analytics failed: %s", analyticsResp.Message)
 	}
 	t.Log("✓ Voucher analytics retrieved")
@@ -135,19 +135,40 @@ func TestVoucherFlowIntegration(t *testing.T) {
 }
 
 func setupAuth(t *testing.T) (string, string) {
+	nano := time.Now().UnixNano()
+	phone := fmt.Sprintf("628%d", nano%9000000000)
 	registerReq := RegisterReq{
-		Username:    fmt.Sprintf("testuser_%d", time.Now().Unix()),
+		Username:    fmt.Sprintf("testuser_%d", nano),
 		Password:    "TestPassword123!",
-		Email:       fmt.Sprintf("test_%d@example.com", time.Now().Unix()),
-		PhoneNumber: "6281234567890",
+		Email:       fmt.Sprintf("test_%d@example.com", nano),
+		PhoneNumber: phone,
 	}
 
 	registerBody, _ := json.Marshal(registerReq)
-	resp, _ := http.Post(
+	resp, err := http.Post(
 		authServiceURL+"/register",
 		"application/json",
 		bytes.NewBuffer(registerBody),
 	)
+	if err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Verify OTP
+	verifyReq := map[string]string{
+		"phoneNumber": phone,
+		"otp":         "000000",
+	}
+	verifyBody, _ := json.Marshal(verifyReq)
+	resp, err = http.Post(
+		authServiceURL+"/verify-otp",
+		"application/json",
+		bytes.NewBuffer(verifyBody),
+	)
+	if err != nil {
+		t.Fatalf("Verify OTP failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	loginReq := LoginReq{
@@ -156,16 +177,19 @@ func setupAuth(t *testing.T) (string, string) {
 	}
 
 	loginBody, _ := json.Marshal(loginReq)
-	resp, _ = http.Post(
+	resp, err = http.Post(
 		authServiceURL+"/login",
 		"application/json",
 		bytes.NewBuffer(loginBody),
 	)
+	if err != nil {
+		t.Fatalf("Login failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	var loginResp Response
 	json.NewDecoder(resp.Body).Decode(&loginResp)
 
 	loginData := loginResp.Data.(map[string]interface{})
-	return loginData["access_token"].(string), loginData["tenant_id"].(string)
+	return loginData["accessToken"].(string), loginData["tenantId"].(string)
 }

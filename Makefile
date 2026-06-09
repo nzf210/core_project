@@ -180,6 +180,8 @@ run-frontend: _ensure_dirs
 	@cd frontend/umkm-web && npm run dev -- --port 3201 &
 	@echo "▶ Starting Campaign Frontend on port 3301..."
 	@cd frontend/campaign-web && npm run dev -- --port 3301 &
+	@echo "▶ Starting Superadmin Frontend on port 3401..."
+	@cd frontend/superadmin-web && npm run dev -- --port 3401 &
 	@echo "✓ Frontend services started!"
 
 # =============================================================================
@@ -195,6 +197,7 @@ start-all: _ensure_dirs
 	@nohup go run ./services/billing-service > $(LOG_DIR)/billing-service.log  2>&1 & echo $$! > $(RUN_DIR)/billing-service.pid
 	@nohup go run ./services/notification-service > $(LOG_DIR)/notification-service.log 2>&1 & echo $$! > $(RUN_DIR)/notification-service.pid
 	@nohup go run ./services/wa-gateway      > $(LOG_DIR)/wa-gateway.log       2>&1 & echo $$! > $(RUN_DIR)/wa-gateway.pid
+	@nohup sh -c "PORT=8203 go run ./apps/umkm/chatbot" > $(LOG_DIR)/chatbot.log 2>&1 & echo $$! > $(RUN_DIR)/chatbot.pid
 	@nohup go run ./apps/umkm/accounting     > $(LOG_DIR)/accounting.log       2>&1 & echo $$! > $(RUN_DIR)/accounting.pid
 	@nohup go run ./apps/umkm/business       > $(LOG_DIR)/business.log         2>&1 & echo $$! > $(RUN_DIR)/business.pid
 	@nohup go run ./apps/umkm/automation     > $(LOG_DIR)/automation.log       2>&1 & echo $$! > $(RUN_DIR)/automation.pid
@@ -204,6 +207,8 @@ start-all: _ensure_dirs
 	@nohup sh -c 'cd frontend/crypto-web   && npm run dev -- --port 3101' > $(LOG_DIR)/frontend-crypto.log   2>&1 & echo $$! > $(RUN_DIR)/frontend-crypto.pid
 	@nohup sh -c 'cd frontend/umkm-web     && npm run dev -- --port 3201' > $(LOG_DIR)/frontend-umkm.log     2>&1 & echo $$! > $(RUN_DIR)/frontend-umkm.pid
 	@nohup sh -c 'cd frontend/campaign-web && npm run dev -- --port 3301' > $(LOG_DIR)/frontend-campaign.log 2>&1 & echo $$! > $(RUN_DIR)/frontend-campaign.pid
+	@nohup sh -c 'cd frontend/superadmin-web && npm run dev -- --port 3401' > $(LOG_DIR)/frontend-superadmin.log 2>&1 & echo $$! > $(RUN_DIR)/frontend-superadmin.pid
+
 	@echo ""
 	@echo "✓ Semua layanan berjalan di background!"
 	@echo "  Pantau log : tail -f $(LOG_DIR)/<service>.log"
@@ -241,6 +246,7 @@ stop-all:
 	@lsof -ti :3101 | xargs kill -9 2>/dev/null || true
 	@lsof -ti :3201 | xargs kill -9 2>/dev/null || true
 	@lsof -ti :3301 | xargs kill -9 2>/dev/null || true
+	@lsof -ti :3401 | xargs kill -9 2>/dev/null || true
 	@echo "✓ Semua layanan berhasil dihentikan."
 
 # =============================================================================
@@ -262,6 +268,7 @@ status:
 	@echo "  Port 3101 (Frontend Crypto):   $$(lsof -ti :3101 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
 	@echo "  Port 3201 (Frontend UMKM):     $$(lsof -ti :3201 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
 	@echo "  Port 3301 (Frontend Campaign): $$(lsof -ti :3301 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
+	@echo "  Port 3401 (Frontend Superadmin): $$(lsof -ti :3401 > /dev/null 2>&1 && echo '✓ RUNNING' || echo '✗ stopped')"
 	@echo ""
 	@echo "▶ PID Files di $(RUN_DIR)/:"
 	@ls $(RUN_DIR)/*.pid 2>/dev/null | while read f; do \

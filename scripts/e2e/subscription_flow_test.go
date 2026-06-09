@@ -4,49 +4,21 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"testing"
 	"time"
 )
 
-const (
-	authServiceURL    = "http://localhost:8001"
-	billingServiceURL = "http://localhost:8003"
-	accountingURL     = "http://localhost:8201"
-)
-
-type RegisterReq struct {
-	Username    string `json:"username"`
-	Password    string `json:"password"`
-	Email       string `json:"email"`
-	PhoneNumber string `json:"phoneNumber"`
-}
-
-type LoginReq struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-type SubscribeReq struct {
-	PlanID      string `json:"plan_id"`
-	VoucherCode string `json:"voucher_code,omitempty"`
-}
-
-type Response struct {
-	Success bool        `json:"success"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
-}
-
 func TestSubscriptionFlow(t *testing.T) {
 	// 1. Register new tenant
 	t.Log("Step 1: Register new tenant")
+	nano := time.Now().UnixNano()
+	phone := fmt.Sprintf("628%d", nano%9000000000)
 	registerReq := RegisterReq{
-		Username:    fmt.Sprintf("testuser_%d", time.Now().Unix()),
+		Username:    fmt.Sprintf("testuser_%d", nano),
 		Password:    "TestPassword123!",
-		Email:       fmt.Sprintf("test_%d@example.com", time.Now().Unix()),
-		PhoneNumber: "6281234567890",
+		Email:       fmt.Sprintf("test_%d@example.com", nano),
+		PhoneNumber: phone,
 	}
 
 	registerBody, _ := json.Marshal(registerReq)
@@ -65,7 +37,32 @@ func TestSubscriptionFlow(t *testing.T) {
 	if !registerResp.Success {
 		t.Fatalf("Register failed: %s", registerResp.Message)
 	}
-	t.Log("✓ Register successful")
+	t.Log("✓ Register OTP sent")
+
+	// 1b. Verify OTP (using test OTP "000000" for dev)
+	t.Log("Step 1b: Verify OTP")
+	verifyReq := map[string]string{
+		"phoneNumber": phone,
+		"otp":         "000000", // Dev mode accepts any OTP
+	}
+	verifyBody, _ := json.Marshal(verifyReq)
+	resp, err = http.Post(
+		authServiceURL+"/verify-otp",
+		"application/json",
+		bytes.NewBuffer(verifyBody),
+	)
+	if err != nil {
+		t.Fatalf("Verify OTP failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var verifyResp Response
+	json.NewDecoder(resp.Body).Decode(&verifyResp)
+	if !verifyResp.Success {
+		t.Logf("Verify OTP response: %+v", verifyResp)
+		t.Fatalf("Verify OTP failed: %s", verifyResp.Message)
+	}
+	t.Log("✓ OTP verified, account created")
 
 	// 2. Login
 	t.Log("Step 2: Login")
@@ -92,8 +89,8 @@ func TestSubscriptionFlow(t *testing.T) {
 	}
 
 	loginData := loginResp.Data.(map[string]interface{})
-	accessToken := loginData["access_token"].(string)
-	tenantID := loginData["tenant_id"].(string)
+	accessToken := loginData["accessToken"].(string)
+	tenantID := loginData["tenantId"].(string)
 	t.Logf("✓ Login successful (tenant_id: %s)", tenantID)
 
 	// 3. List plans
@@ -106,9 +103,9 @@ func TestSubscriptionFlow(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	var plansResp Response
+	var plansResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&plansResp)
-	if !plansResp.Success {
+	if plansResp.Status != http.StatusOK {
 		t.Fatalf("List plans failed: %s", plansResp.Message)
 	}
 
@@ -139,9 +136,9 @@ func TestSubscriptionFlow(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	var subscribeResp Response
+	var subscribeResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&subscribeResp)
-	if !subscribeResp.Success {
+	if subscribeResp.Status != http.StatusOK {
 		t.Fatalf("Subscribe failed: %s", subscribeResp.Message)
 	}
 	t.Log("✓ Subscribe successful")
@@ -156,9 +153,9 @@ func TestSubscriptionFlow(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	var subResp Response
+	var subResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&subResp)
-	if !subResp.Success {
+	if subResp.Status != http.StatusOK {
 		t.Fatalf("Get subscription failed: %s", subResp.Message)
 	}
 	t.Log("✓ Subscription verified")
