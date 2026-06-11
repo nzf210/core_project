@@ -237,7 +237,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: wch-umkm-chatbot
     command:
       - umkm-chatbot
     environment:
@@ -249,14 +248,27 @@ services:
       - DB_SSLMODE=disable
       - AI_GATEWAY_URL=http://ai-gateway:8002/v1/chat
       - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - N8N_WEBHOOK_URL=${N8N_INTERNAL_URL:-http://n8n-main:5678/}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       ai-gateway:
         condition: service_started
       wa-gateway:
         condition: service_started
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    restart: unless-stopped
     restart: unless-stopped
   campaign-api:
     build:
@@ -280,7 +292,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: wch-wa-gateway
     command:
       - wa-gateway
     environment:
@@ -291,12 +302,24 @@ services:
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
       - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - N8N_WEBHOOK_URL=${N8N_INTERNAL_URL:-http://n8n-main:5678/}
     ports:
       - "8212:8202"
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
     restart: unless-stopped
   billing-service:
     build:

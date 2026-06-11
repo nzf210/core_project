@@ -25,9 +25,53 @@ type APIResponse struct {
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
+	status := "ok"
+	dbStatus := "disconnected"
+	redisStatus := "disconnected"
+	aiStatus := "unknown"
+
+	// Check DB
+	if DB != nil {
+		if err := DB.Ping(r.Context()); err == nil {
+			dbStatus = "connected"
+		}
+	}
+
+	// Check Redis
+	if redisClient != nil {
+		if err := redisClient.Ping(r.Context()).Err(); err == nil {
+			redisStatus = "connected"
+		}
+	}
+
+	// Check AI Gateway
+	if len(AIGatewayURL) > 0 {
+		client := &http.Client{Timeout: 3 * time.Second}
+		if resp, err := client.Get(AIGatewayURL + "/health"); err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				aiStatus = "connected"
+			}
+		}
+	}
+
+	// Overall status
+	if dbStatus != "connected" || redisStatus != "connected" {
+		status = "degraded"
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":      status,
+		"database":     dbStatus,
+		"redis":        redisStatus,
+		"ai_gateway":   aiStatus,
+	})
+}
+
+func handleHealthz(w http.ResponseWriter, r *http.Request) {
+	handleHealth(w, r)
 }
 
 var AIGatewayURL = "http://localhost:8002/v1/chat"
@@ -73,6 +117,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handleHealth)
+	mux.HandleFunc("GET /healthz", handleHealthz)
 	mux.HandleFunc("/chat", handleChat)
 	mux.HandleFunc("/webhook/wa", handleWAWebhook)
 
@@ -212,26 +257,70 @@ func startWorkerPool(numWorkers int) {
 	for i := 0; i < numWorkers; i++ {
 		go func(workerID int) {
 			ctx := context.Background()
+			consecutiveErrors := 0
 			for {
-				// BRPOP blocks until an item is available or timeout (0 = wait forever)
-				res, err := redisClient.BRPop(ctx, 0, redisQueueKey).Result()
+				// BRPOP blocks until an item is available or timeout
+				res, err := redisClient.BRPop(ctx, 5*time.Second, redisQueueKey).Result()
 				if err != nil {
-					slog.Error("Redis BRPOP error", "worker", workerID, "error", err)
-					time.Sleep(2 * time.Second)
+					// Handle Redis being temporarily unavailable
+					if err == redis.Nil {
+						// Timeout, no messages - continue
+						continue
+					}
+					consecutiveErrors++
+					slog.Error("Redis BRPOP error", "worker", workerID, "error", err, "consecutive_errors", consecutiveErrors)
+
+					// Exponential backoff with max 30 seconds
+					backoff := time.Duration(min(consecutiveErrors*2, 30)) * time.Second
+					time.Sleep(backoff)
+
+					// Try to reconnect
+					if err := redisClient.Ping(ctx).Err(); err != nil {
+						slog.Warn("Redis reconnect failed, retrying...", "worker", workerID)
+					} else {
+						consecutiveErrors = 0
+					}
 					continue
 				}
+
+				consecutiveErrors = 0
 
 				// BRPOP returns [key, value]
 				if len(res) == 2 {
 					var job ChatJob
 					if err := json.Unmarshal([]byte(res[1]), &job); err == nil {
-						processChatJob(job)
+						// Process with timeout and error handling
+						processJobWithTimeout(ctx, workerID, job)
 					} else {
 						slog.Error("Failed to unmarshal chat job", "error", err, "data", res[1])
 					}
 				}
 			}
 		}(i)
+	}
+	slog.Info("Worker pool started", "workers", numWorkers)
+}
+
+// processJobWithTimeout processes a job with timeout and error recovery
+func processJobWithTimeout(ctx context.Context, workerID int, job ChatJob) {
+	jobCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		processChatJob(job)
+	}()
+
+	select {
+	case <-done:
+		slog.Debug("Job processed successfully", "worker", workerID, "tenant", job.TenantID)
+	case <-jobCtx.Done():
+		slog.Error("Job processing timed out", "worker", workerID, "tenant", job.TenantID)
+		// Re-queue the job for retry
+		if jobBytes, err := json.Marshal(job); err == nil {
+			redisClient.LPush(ctx, redisQueueKey+":retry", jobBytes)
+		}
 	}
 }
 
