@@ -84,6 +84,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat", handleChat)
 	mux.HandleFunc("/v1/chat/stream", handleChatStream)
+	mux.HandleFunc("/v1/embeddings", handleEmbeddings)
 	mux.HandleFunc("/health", handleHealth)
 
 	server := &http.Server{
@@ -309,6 +310,122 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 			"gemini_fallback":  "enabled",
 		},
 	})
+}
+
+// handleEmbeddings generates vector embeddings for RAG indexing.
+// POST /v1/embeddings  { "input": "...", "model": "text-embedding-ada-002" }
+func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: "Method not allowed"})
+		return
+	}
+
+	var req struct {
+		Input  string `json:"input"`
+		Model  string `json:"model"`
+		TenantID string `json:"tenant_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "Invalid request"})
+		return
+	}
+	if req.Input == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "input cannot be empty"})
+		return
+	}
+
+	// Use OpenAI embeddings by default (ada-002, 1536 dimensions)
+	// Falls back to MiniMax's embed endpoint if configured
+	var emb []float64
+	var err error
+
+	apiKey := cfg.AI.OpenAIApiKey
+	if apiKey != "" {
+		emb, err = callOpenAIEmbeddings(r.Context(), apiKey, req.Input, req.Model)
+	} else if cfg.AI.MiniMaxAPIKey != "" {
+		emb, err = callMiniMaxEmbeddings(r.Context(), cfg.AI.MiniMaxAPIKey, req.Input)
+	} else {
+		writeJSON(w, http.StatusServiceUnavailable, APIResponse{Success: false, Message: "No embedding provider configured"})
+		return
+	}
+
+	if err != nil {
+		slog.Error("Embedding generation failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Message: "Embedding generation failed"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"object": "list",
+		"data": []map[string]interface{}{
+			{"object": "embedding", "embedding": emb, "index": 0},
+		},
+		"model": req.Model,
+		"tenant_id": req.TenantID,
+	})
+}
+
+func callOpenAIEmbeddings(ctx context.Context, apiKey, input, model string) ([]float64, error) {
+	if model == "" {
+		model = "text-embedding-ada-002"
+	}
+	payload := map[string]string{"input": input, "model": model}
+	body, _ := json.Marshal(payload)
+	reqHTTP, _ := http.NewRequestWithContext(ctx, http.MethodPost,
+		"https://api.openai.com/v1/embeddings", bytes.NewBuffer(body))
+	reqHTTP.Header.Set("Authorization", "Bearer "+apiKey)
+	reqHTTP.Header.Set("Content-Type", "application/json")
+
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(reqHTTP)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []struct {
+			Embedding []float64 `json:"embedding"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	if len(result.Data) == 0 {
+		return nil, fmt.Errorf("no embedding returned")
+	}
+	return result.Data[0].Embedding, nil
+}
+
+func callMiniMaxEmbeddings(ctx context.Context, apiKey, input string) ([]float64, error) {
+	// MiniMax embo1 model returns 1536-dim vectors
+	payload := map[string]interface{}{
+		"model": "embo1",
+		"text":  input,
+	}
+	body, _ := json.Marshal(payload)
+	reqHTTP, _ := http.NewRequestWithContext(ctx, http.MethodPost,
+		"https://api.minimax.io/v1/embeddings", bytes.NewBuffer(body))
+	reqHTTP.Header.Set("Authorization", "Bearer "+apiKey)
+	reqHTTP.Header.Set("Content-Type", "application/json")
+
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(reqHTTP)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []struct {
+			Embedding []float64 `json:"embedding"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	if len(result.Data) == 0 {
+		return nil, fmt.Errorf("no embedding returned from MiniMax")
+	}
+	return result.Data[0].Embedding, nil
 }
 
 // callLLMWithFallback implements the required retry and fallback logic

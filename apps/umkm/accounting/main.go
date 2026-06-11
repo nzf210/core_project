@@ -78,6 +78,15 @@ mux := http.NewServeMux()
 	mux.HandleFunc("/internal/automations/due", handleInternalAutomationsDue)
 	mux.HandleFunc("/internal/automations/execute", handleInternalAutomationExecute)
 
+	// ── Chatbot / N8N Hybrid Endpoints ──────────────────────────────────
+	mux.HandleFunc("/internal/tenant/{tenant_id}/chatbot-config", handleInternalChatbotConfig)
+	mux.HandleFunc("/internal/tenant/{tenant_id}/rag/search", handleInternalRAGSearch)
+	mux.HandleFunc("/internal/conversation/log", handleInternalConversationLog)
+	mux.HandleFunc("/internal/escalation/log", handleInternalEscalationLog)
+	mux.HandleFunc("/internal/tenant/{tenant_id}/faqs", handleInternalFAQs)
+	mux.HandleFunc("/internal/tenant/{tenant_id}/products", handleInternalProducts)
+	mux.HandleFunc("/internal/tenant/{tenant_id}/rag/single", handleInternalRAGSingle)
+
 	server := &http.Server{
 		Addr:    ":8201", // UMKM port
 		Handler: corsMiddleware(loggingMiddleware(mux)),
@@ -2581,5 +2590,509 @@ func formatRupiah(amount int64) string {
 		result = append(result, byte(c))
 	}
 	return string(result)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chatbot / N8N Hybrid Internal Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func handleInternalChatbotConfig(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("tenant_id")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing tenant_id"})
+		return
+	}
+
+	rows, err := DB.Query(r.Context(),
+		`SELECT llm_provider, llm_model, temperature, max_tokens, system_prompt,
+		        tone, language, max_context_messages, welcome_message, fallback_message,
+			outside_hours_message, business_hours_start, business_hours_end, business_days,
+			escalation_enabled, escalation_keywords, escalation_confidence_threshold,
+			auto_escalate_after_minutes, rag_enabled, rag_top_k, rag_similarity_threshold,
+			channels_enabled, is_active
+		 FROM tenant_chatbot_configs WHERE tenant_id = $1`, tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		return
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		writeJSON(w, http.StatusNotFound, APIResponse{Message: "Chatbot config not found"})
+		return
+	}
+
+	var cfg ChatbotConfig
+	var sysPrompt, welcome, fallback, outsideHrs *string
+	var escalationKW []byte
+	if err := rows.Scan(
+		&cfg.LLMProvider, &cfg.LLMModel, &cfg.Temperature, &cfg.MaxTokens,
+		&sysPrompt, &cfg.Tone, &cfg.Language, &cfg.MaxContextMessages,
+		&welcome, &fallback, &outsideHrs,
+		&cfg.BusinessHoursStart, &cfg.BusinessHoursEnd, &cfg.BusinessDays,
+		&cfg.EscalationEnabled, &escalationKW, &cfg.EscalationConfidenceThreshold,
+		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
+		&cfg.ChannelsEnabled, &cfg.IsActive,
+	); err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Scan error"})
+		return
+	}
+
+	if sysPrompt != nil {
+		cfg.SystemPrompt = *sysPrompt
+	}
+	if welcome != nil {
+		cfg.WelcomeMessage = *welcome
+	}
+	if fallback != nil {
+		cfg.FallbackMessage = *fallback
+	}
+	if outsideHrs != nil {
+		cfg.OutsideHoursMessage = *outsideHrs
+	}
+	json.Unmarshal(escalationKW, &cfg.EscalationKeywords)
+
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: cfg})
+}
+
+type ChatbotConfig struct {
+	LLMProvider                  string   `json:"llm_provider"`
+	LLMModel                     string   `json:"llm_model"`
+	Temperature                  float64  `json:"temperature"`
+	MaxTokens                    int      `json:"max_tokens"`
+	SystemPrompt                 string   `json:"system_prompt"`
+	Tone                         string   `json:"tone"`
+	Language                     string   `json:"language"`
+	MaxContextMessages           int      `json:"max_context_messages"`
+	WelcomeMessage               string   `json:"welcome_message"`
+	FallbackMessage              string   `json:"fallback_message"`
+	OutsideHoursMessage          string   `json:"outside_hours_message"`
+	BusinessHoursStart           string   `json:"business_hours_start"`
+	BusinessHoursEnd             string   `json:"business_hours_end"`
+	BusinessDays                 []int    `json:"business_days"`
+	EscalationEnabled            bool     `json:"escalation_enabled"`
+	EscalationKeywords           []string `json:"escalation_keywords"`
+	EscalationConfidenceThreshold float64 `json:"escalation_confidence_threshold"`
+	AutoEscalateAfterMinutes     int      `json:"auto_escalate_after_minutes"`
+	RAGEnabled                   bool     `json:"rag_enabled"`
+	RAGTopK                      int      `json:"rag_top_k"`
+	RAGSimilarityThreshold       float64  `json:"rag_similarity_threshold"`
+	ChannelsEnabled              []string `json:"channels_enabled"`
+	IsActive                     bool     `json:"is_active"`
+}
+
+func handleInternalRAGSearch(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("tenant_id")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing tenant_id"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		return
+	}
+
+	var req struct {
+		Query     string  `json:"query"`
+		TenantID  string  `json:"tenant_id"`
+		TopK      int     `json:"top_k"`
+		Threshold float64 `json:"threshold"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+		return
+	}
+	if req.Query == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "query cannot be empty"})
+		return
+	}
+	if req.TenantID == "" {
+		req.TenantID = tenantID
+	}
+	if req.TopK == 0 {
+		req.TopK = 5
+	}
+	if req.Threshold == 0 {
+		req.Threshold = 0.7
+	}
+
+	// Generate query embedding via AI gateway
+	queryEmb, err := generateEmbedding(r.Context(), req.Query)
+	if err != nil {
+		slog.Warn("Failed to generate query embedding, returning empty RAG results", "error", err)
+		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: []interface{}{}})
+		return
+	}
+
+	rows, err := DB.Query(r.Context(), `
+		SELECT id, source_type, source_id, content, metadata,
+		       1 - (embedding <=> $1::vector) AS similarity
+		FROM vector_embeddings
+		WHERE tenant_id = $2
+		  AND (1 - (embedding <=> $1::vector)) >= $3
+		ORDER BY embedding <=> $1::vector
+		LIMIT $4
+	`, queryEmb, req.TenantID, req.Threshold, req.TopK)
+	if err != nil {
+		slog.Error("RAG search error", "error", err)
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Search error"})
+		return
+	}
+	defer rows.Close()
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		var id, sourceType string
+		var sourceID *string
+		var content string
+		var metaJSON []byte
+		var similarity float64
+		if err := rows.Scan(&id, &sourceType, &sourceID, &content, &metaJSON, &similarity); err == nil {
+			var meta map[string]interface{}
+			json.Unmarshal(metaJSON, &meta)
+			sID := ""
+			if sourceID != nil {
+				sID = *sourceID
+			}
+			results = append(results, map[string]interface{}{
+				"id": id, "source_type": sourceType, "source_id": sID,
+				"content": content, "similarity": similarity, "metadata": meta,
+			})
+		}
+	}
+	if results == nil {
+		results = []map[string]interface{}{}
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: results})
+}
+
+func generateEmbedding(ctx context.Context, text string) ([]float64, error) {
+	payload := map[string]interface{}{
+		"input": text,
+		"model": "text-embedding-ada-002",
+	}
+	body, _ := json.Marshal(payload)
+	reqHTTP, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		"https://api.openai.com/v1/embeddings", bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	// Use OpenAI API key from environment
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey != "" {
+		reqHTTP.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+	reqHTTP.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(reqHTTP)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []struct {
+			Embedding []float64 `json:"embedding"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	if len(result.Data) == 0 {
+		return nil, fmt.Errorf("no embedding returned")
+	}
+	return result.Data[0].Embedding, nil
+}
+
+func handleInternalConversationLog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		return
+	}
+
+	var req struct {
+		TenantID        string  `json:"tenant_id"`
+		CustomerID      string  `json:"customer_id"`
+		Channel         string  `json:"channel"`
+		UserMessage     string  `json:"user_message"`
+		AssistantMsg    string  `json:"assistant_message"`
+		LLMProvider     string  `json:"llm_provider"`
+		LLMModel        string  `json:"llm_model"`
+		TokensUsed      int     `json:"tokens_used"`
+		SessionID       string  `json:"session_id,omitempty"`
+		Confidence      float64 `json:"confidence,omitempty"`
+		RAGSources      []map[string]interface{} `json:"rag_sources,omitempty"`
+		LatencyMs       int     `json:"latency_ms,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+		return
+	}
+	if req.TenantID == "" || req.CustomerID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "tenant_id and customer_id required"})
+		return
+	}
+	if req.Channel == "" {
+		req.Channel = "whatsapp"
+	}
+
+	ctx := r.Context()
+
+	// Upsert conversation session
+	var sessionID string
+	if req.SessionID != "" {
+		sessionID = req.SessionID
+	} else {
+		// Find or create active session
+		err := DB.QueryRow(ctx,
+			`SELECT id FROM conversation_sessions
+			 WHERE tenant_id = $1 AND customer_id = $2 AND status = 'active'
+			 ORDER BY last_message_at DESC LIMIT 1`,
+			req.TenantID, req.CustomerID).Scan(&sessionID)
+		if err != nil {
+			// Create new session
+			err = DB.QueryRow(ctx,
+				`INSERT INTO conversation_sessions (tenant_id, customer_id, channel, status, last_message_at)
+				 VALUES ($1, $2, $3, 'active', NOW()) RETURNING id`,
+				req.TenantID, req.CustomerID, req.Channel).Scan(&sessionID)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create session"})
+				return
+			}
+		}
+	}
+
+	// Log user message
+	var userLogID string
+	ragSrcJSON, _ := json.Marshal(req.RAGSources)
+	DB.QueryRow(ctx,
+		`INSERT INTO conversation_logs (session_id, tenant_id, role, content, channel,
+		 llm_provider, llm_model, tokens_used, latency_ms, confidence, rag_sources)
+		 VALUES ($1, $2, 'user', $3, $4, NULL, NULL, 0, 0, NULL, '[]')
+		 RETURNING id`,
+		sessionID, req.TenantID, req.UserMessage, req.Channel).Scan(&userLogID)
+
+	// Log assistant message
+	var assistantLogID string
+	DB.QueryRow(ctx,
+		`INSERT INTO conversation_logs (session_id, tenant_id, role, content, channel,
+		 llm_provider, llm_model, tokens_used, latency_ms, confidence, rag_sources)
+		 VALUES ($1, $2, 'assistant', $3, $4, $5, $6, $7, $8, $9, $10)
+		 RETURNING id`,
+		sessionID, req.TenantID, req.AssistantMsg, req.Channel,
+		req.LLMProvider, req.LLMModel, req.TokensUsed, req.LatencyMs,
+		req.Confidence, string(ragSrcJSON)).Scan(&assistantLogID)
+
+	// Update session
+	DB.Exec(ctx,
+		`UPDATE conversation_sessions
+		 SET message_count = message_count + 2, last_message_at = NOW()
+		 WHERE id = $1`,
+		sessionID)
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data:    map[string]string{"session_id": sessionID},
+	})
+}
+
+func handleInternalEscalationLog(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		return
+	}
+
+	var req struct {
+		SessionID               string `json:"session_id"`
+		TenantID                string `json:"tenant_id"`
+		Reason                  string `json:"reason"`
+		TriggerMessage          string `json:"trigger_message"`
+		ChatwootConversationID  string `json:"chatwoot_conversation_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+		return
+	}
+	if req.TenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "tenant_id required"})
+		return
+	}
+
+	ctx := r.Context()
+
+	// Mark session as escalated
+	if req.SessionID != "" {
+		DB.Exec(ctx,
+			`UPDATE conversation_sessions
+			 SET status = 'escalated', escalated_to = $1, escalated_at = NOW()
+			 WHERE id = $2`,
+			req.ChatwootConversationID, req.SessionID)
+	}
+
+	var id string
+	err := DB.QueryRow(ctx,
+		`INSERT INTO escalation_history
+		 (session_id, tenant_id, reason, trigger_message, chatwoot_conversation_id)
+		 VALUES ($1, $2, $3, $4, NULLIF($5, ''))
+		 RETURNING id`,
+		req.SessionID, req.TenantID, req.Reason, req.TriggerMessage,
+		req.ChatwootConversationID).Scan(&id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to log escalation"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data:    map[string]string{"escalation_id": id},
+	})
+}
+
+func handleInternalFAQs(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("tenant_id")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing tenant_id"})
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		return
+	}
+
+	rows, err := DB.Query(r.Context(),
+		`SELECT id, question, answer FROM tenant_faqs WHERE tenant_id = $1 ORDER BY created_at ASC`,
+		tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		return
+	}
+	defer rows.Close()
+
+	var faqs []map[string]interface{}
+	for rows.Next() {
+		var id, question, answer string
+		if rows.Scan(&id, &question, &answer) == nil {
+			faqs = append(faqs, map[string]interface{}{
+				"id": id, "question": question, "answer": answer,
+			})
+		}
+	}
+	if faqs == nil {
+		faqs = []map[string]interface{}{}
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: faqs})
+}
+
+func handleInternalProducts(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("tenant_id")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing tenant_id"})
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		return
+	}
+
+	rows, err := DB.Query(r.Context(),
+		`SELECT id, name, price, description, COALESCE(category, 'Umum'), COALESCE(stock_quantity, 0)
+		 FROM products WHERE tenant_id = $1 ORDER BY created_at DESC`,
+		tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		return
+	}
+	defer rows.Close()
+
+	var products []map[string]interface{}
+	for rows.Next() {
+		var id, name, desc, category string
+		var price float64
+		var stock int
+		if rows.Scan(&id, &name, &price, &desc, &category, &stock) == nil {
+			products = append(products, map[string]interface{}{
+				"id": id, "name": name, "price": int64(price * 100),
+				"description": desc, "category": category, "stock": stock,
+			})
+		}
+	}
+	if products == nil {
+		products = []map[string]interface{}{}
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: products})
+}
+
+func handleInternalRAGSingle(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("tenant_id")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing tenant_id"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		return
+	}
+
+	var req struct {
+		TenantID  string `json:"tenant_id"`
+		SourceType string `json:"source_type"`
+		SourceID  string `json:"source_id"`
+		Content   string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+		return
+	}
+	if req.Content == "" || req.SourceType == "" || req.SourceID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "content, source_type, source_id required"})
+		return
+	}
+	if req.TenantID == "" {
+		req.TenantID = tenantID
+	}
+
+	// Generate embedding
+	emb, err := generateEmbedding(r.Context(), req.Content)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to generate embedding"})
+		return
+	}
+
+	// Upsert into vector_embeddings
+	var id string
+	err = DB.QueryRow(r.Context(),
+		`INSERT INTO vector_embeddings (tenant_id, source_type, source_id, content, embedding)
+		 VALUES ($1, $2, $3, $4, $5::vector)
+		 ON CONFLICT (tenant_id, source_type, source_id) DO UPDATE
+		   SET content = EXCLUDED.content, embedding = EXCLUDED.embedding, updated_at = NOW()
+		 RETURNING id`,
+		req.TenantID, req.SourceType, req.SourceID, req.Content, vectorFromSlice(emb)).Scan(&id)
+	if err != nil {
+		slog.Error("Failed to upsert vector embedding", "error", err)
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to store embedding"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data:    map[string]string{"id": id},
+	})
+}
+
+func vectorFromSlice(v []float64) string {
+	b := &strings.Builder{}
+	b.WriteString("[")
+	for i, f := range v {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(fmt.Sprintf("%.6f", f))
+	}
+	b.WriteString("]")
+	return b.String()
 }
 
