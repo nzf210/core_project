@@ -19,6 +19,38 @@ Semua produk berbagi `services/` (auth, billing, ai-gateway, notification, wa-ga
 
 ---
 
+## 🔒 Spec-First Workflow — WAJIB DIIKUTI
+
+**Sebelum coding APAPUN, selalu cek `docs/FEATURE_MAP.md`.**
+
+```
+USER menulis SPEC      →       AI review & clarify      →       USER approve
+     ↓                         ↓                                  ↓
+ FEATURE_MAP.md         AI tanya clarifications           USER comment/approve
+                              ↓                                  ↓
+                      AI wait for approval          AI implement dari SPEC
+                                                            ↓
+                                                    USER review diff
+```
+
+### Checklist Sebelum Coding:
+
+1. **Cek FEATURE_MAP.md** — Apakah fitur sudah ada di registry?
+2. **Cek SPEC status** — Sudah ✅ Approved?
+   - Jika ⏳ Draft: Tanya USER dulu, jangan implement
+   - Jika ❌ Rejected: Jangan implement
+3. **Ambiguitas?** — Tanya USER clarification dulu
+4. **Implementasi selesai?** — Update `Implementation` status di FEATURE_MAP.md
+
+### Cara Menambah Fitur Baru:
+
+1. User tambah entry di `docs/FEATURE_MAP.md` dengan format SPEC
+2. User ubah status ke "✅ Approved" saat sudah siap
+3. AI implement berdasarkan SPEC yang approved
+4. AI update `Implementation` → "✅ Done" setelah selesai
+
+---
+
 ## 🏗️ Peta Direktori (Aktual)
 
 ```
@@ -353,6 +385,7 @@ AI Gateway sudah menangani:
 6. ❌ **JANGAN** simpan data PII (NIK, password) tanpa enkripsi/hashing
 7. ❌ **JANGAN** gunakan string concatenation di SQL query
 8. ❌ **JANGAN** `panic()` di luar fungsi `main()`
+9. ❌ **JANGAN** implement fitur yang belum di-approve di FEATURE_MAP.md
 
 ---
 
@@ -408,9 +441,9 @@ cd frontend/umkm-web && npm run dev
 
 | Dokumen | Tujuan |
 |:--------|:-------|
+| **[docs/FEATURE_MAP.md](docs/FEATURE_MAP.md)** | **SPEC & feature registry — WAJIB baca sebelum coding** |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Panduan lengkap menambah & mengubah fitur |
 | [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Skenario-skenario pengembangan + contoh kode |
-| [docs/FEATURE_MAP.md](docs/FEATURE_MAP.md) | Quick cheat sheet: di mana menulis kode apa |
 | [docs/MIGRATION_REGISTRY.md](docs/MIGRATION_REGISTRY.md) | Daftar semua migrasi database |
 | [docs/master_plan.md](docs/master_plan.md) | Rencana bisnis & roadmap produk |
 | [docs/deployment.md](docs/deployment.md) | Panduan deploy ke production |

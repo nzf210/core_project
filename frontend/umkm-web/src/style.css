@@ -69,61 +69,11 @@ h1, h2, h3, h4, h5, h6 {
   flex: 1;
 }
 
-/* Header */
-.app-header {
-  background-color: var(--surface-0);
-  border-bottom: 1px solid var(--border-color);
-  padding: 1rem 0;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  box-shadow: var(--shadow-sm);
-}
-
-.logo {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0;
-}
-
-.nav-links {
-  display: flex;
-  gap: 1rem;
-}
-
-.nav-btn {
-  background: none;
-  border: none;
-  padding: 0.5rem 1rem;
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-md);
-  transition: all 0.2s;
-}
-
-.nav-btn:hover {
-  background-color: var(--surface-1);
-  color: var(--text-primary);
-}
-
-.nav-btn.active {
-  color: var(--accent-primary);
-  background-color: rgba(59, 130, 246, 0.1);
-}
-
-.avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: linear-gradient(to bottom right, var(--accent-primary), var(--accent-secondary));
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 0.875rem;
+/* Sidebar spacing - override for sidebar layout */
+@media (min-width: 769px) {
+  .app-main.with-sidebar {
+    margin-left: 260px;
+  }
 }
 
 /* Forms & Inputs */

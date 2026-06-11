@@ -35,6 +35,8 @@
 ## 🔄 Alur Kerja Standar
 
 ```
+0. SPEC FIRST → Cek FEATURE_MAP.md, tanya USER jika belum ada SPEC
+         ↓
 1. Tentukan scope → Fitur di app mana? Service baru? Worker?
          ↓
 2. Butuh tabel baru? → Buat migration SQL di shared/migrations/
@@ -55,8 +57,10 @@
          ↓
 10. Service baru? → Update Makefile + Dockerfile + docker-compose.yml
          ↓
-11. Commit & Push → CI/CD via .github/workflows/deploy.yml
+11. Commit& Push → CI/CD via .github/workflows/deploy.yml
 ```
+
+> ⚠️ **WAJIB**: Fitur baru/wubah harus ada SPEC di `docs/FEATURE_MAP.md` yang sudah di-approve USER sebelum implementasi.
 
 ---
 
