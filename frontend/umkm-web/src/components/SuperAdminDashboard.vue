@@ -405,7 +405,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { superadminApi } from '../superadminApi'
-import { api } from '../api'
+import { api, API_BASE } from '../api'
 
 const verifierStatus = ref<'connected' | 'disconnected'>('disconnected')
 const verifierJID = ref('')

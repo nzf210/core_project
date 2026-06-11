@@ -47,8 +47,9 @@ services:
       - APP_ENV=production
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
       - REDIS_HOST=redis
+      - N8N_HOST=n8n-main
     ports:
-      - 8000:8000
+      - "8010:8000"
     depends_on:
       auth-service:
         condition: service_started
@@ -165,11 +166,12 @@ services:
       - N8N_HOST=${N8N_HOST:-localhost}
       - N8N_PORT=5678
       - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
-      - N8N_PATH=/api/superadmin/n8n/
+      - N8N_EDITOR_BASE_URL=${N8N_PUBLIC_URL:-http://localhost:8010/api/superadmin/n8n/}
       - NODE_ENV=production
-      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://n8n-main:5678/}
+      - WEBHOOK_URL=${N8N_PUBLIC_URL:-http://localhost:8010/api/superadmin/n8n/}
       - GENERIC_TIMEZONE=Asia/Jakarta
-      # Auth
+      # Auth & Security
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-n8n_secure_encryption_key_12345}
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_ADMIN_USER:-admin}
       - N8N_BASIC_AUTH_PASSWORD=${N8N_ADMIN_PASSWORD:-change_me_in_env}
@@ -193,9 +195,9 @@ services:
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5678/healthz"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 180s
     depends_on:
       postgres:
         condition: service_healthy
@@ -219,10 +221,13 @@ services:
       - DB_POSTGRESDB_PORT=5432
       - DB_POSTGRESDB_USER=${DB_USER:-postgres}
       - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD:-postgres}
-      # Performance
+      # Performance & Security
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-n8n_secure_encryption_key_12345}
       - N8N_CONCURRENCY_PRODUCTION_LIMIT=${N8N_WORKER_CONCURRENCY:-10}
       - GENERIC_TIMEZONE=Asia/Jakarta
       - NODE_OPTIONS=--max-old-space-size=512
+    volumes:
+      - n8n_data:/home/node/.n8n
     depends_on:
       n8n-main:
         condition: service_healthy
@@ -244,7 +249,7 @@ services:
       - DB_SSLMODE=disable
       - AI_GATEWAY_URL=http://ai-gateway:8002/v1/chat
       - REDIS_HOST=redis
-      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://n8n-main:5678/}
+      - N8N_WEBHOOK_URL=${N8N_INTERNAL_URL:-http://n8n-main:5678/}
     depends_on:
       postgres:
         condition: service_healthy
@@ -286,9 +291,9 @@ services:
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
       - REDIS_HOST=redis
-      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://n8n-main:5678/}
+      - N8N_WEBHOOK_URL=${N8N_INTERNAL_URL:-http://n8n-main:5678/}
     ports:
-      - "8202:8202"
+      - "8212:8202"
     depends_on:
       postgres:
         condition: service_healthy
@@ -310,7 +315,7 @@ services:
       - XENDIT_API_KEY=${XENDIT_API_KEY}
       - XENDIT_WEBHOOK_TOKEN=${XENDIT_WEBHOOK_TOKEN}
     ports:
-      - "8003:8003"
+      - "8013:8003"
     depends_on:
       postgres:
         condition: service_healthy
@@ -326,7 +331,7 @@ services:
       - APP_ENV=production
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
     ports:
-      - "8005:8005"
+      - "8015:8005"
     depends_on:
       wa-gateway:
         condition: service_started
@@ -348,7 +353,7 @@ services:
       - FREEZE_CHECK_INTERVAL=${FREEZE_CHECK_INTERVAL:-1h}
       - GRACE_PERIOD_HOURS=${GRACE_PERIOD_HOURS:-0}
     ports:
-      - "8006:8006"
+      - "8016:8006"
     depends_on:
       postgres:
         condition: service_healthy
@@ -371,7 +376,7 @@ services:
       - REDIS_URL=redis://chatwoot-redis:6379
       - RAILS_LOG_TO_STDOUT=true
       - DEFAULT_LOCALE=id
-    command: bundle exec rails s -b 0.0.0.0 -p 3000
+    command: /bin/sh -c "bundle exec rake db:chatwoot_prepare && bundle exec rails s -b 0.0.0.0 -p 3000"
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
@@ -411,7 +416,7 @@ services:
       - WA_GATEWAY_URL=http://wa-gateway:8202/api/wa/send
       - AI_GATEWAY_URL=http://ai-gateway:8002/v1/chat
     ports:
-      - "8203:8203"
+      - "8213:8203"
     depends_on:
       postgres:
         condition: service_healthy

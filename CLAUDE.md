@@ -111,15 +111,16 @@ core_project/                   ← Root monorepo (satu go.mod)
 
 | Port | Service | Direktori |
 |:-----|:--------|:----------|
-| `8000` | API Gateway | `services/api-gateway` |
+| `8010` | API Gateway | `services/api-gateway` (Docker mapped port) |
 | `8001` | Auth Service | `services/auth-service` |
 | `8002` | AI Gateway | `services/ai-gateway` |
-| `8003` | Billing Service | `services/billing-service` |
-| `8005` | Notification Service | `services/notification-service` |
-| `8006` | Subscription Worker | `services/subscription-worker` |
+| `8013` | Billing Service | `services/billing-service` (Docker mapped port) |
+| `8015` | Notification Service | `services/notification-service` (Docker mapped port) |
+| `8016` | Subscription Worker | `services/subscription-worker` (Docker mapped port) |
 | `8201` | UMKM Accounting | `apps/umkm/accounting` |
-| `8202` | WA Gateway | `services/wa-gateway` |
-| `8202` | UMKM Chatbot | `apps/umkm/chatbot` ⚠️ Port sama dengan WA Gateway! |
+| `8212` | WA Gateway | `services/wa-gateway` (Docker mapped port) |
+| `8202` | UMKM Chatbot | `apps/umkm/chatbot` |
+| `8213` | UMKM Automation | `apps/umkm/automation` (Docker mapped port) |
 | `9001` | UMKM Business | `apps/umkm/business` |
 | `9002` | Campaign API | `apps/campaign/api` |
 | `3000` | Chatwoot (Self-hosted) | docker-compose (chatwoot) |
@@ -129,7 +130,7 @@ core_project/                   ← Root monorepo (satu go.mod)
 | `5678` | N8N Main (Queue Mode) | docker-compose (n8n-main) |
 | `6381` | Redis (Docker) | docker-compose |
 
-> ⚠️ WA Gateway dan UMKM Chatbot sama-sama port 8202. Jalankan hanya satu pada satu waktu saat dev lokal, atau pisahkan port.
+> ⚠️ Jika berjalan tanpa Docker (native), WA Gateway dan UMKM Chatbot secara default sama-sama menggunakan port 8202. Saat berjalan dengan Docker, WA Gateway di-expose ke port host 8212.
 
 ---
 

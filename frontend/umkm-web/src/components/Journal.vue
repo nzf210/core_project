@@ -175,7 +175,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick, computed } from 'vue'
-import { api, API_BASE } from '../api'
+import { api } from '../api'
 
 const showForm = ref(false)
 const ocrInput = ref<HTMLInputElement | null>(null)
