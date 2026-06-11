@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -70,6 +71,15 @@ type planWithFeatures struct {
 	Features []featureRow `json:"features"`
 }
 
+// N8N status types
+type N8NStatus struct {
+	Status       string `json:"status"`         // "connected", "disconnected", "unknown"
+	Version      string `json:"version"`        // N8N version
+	ActiveWorkflows int    `json:"active_workflows"`
+	QueueMode    bool   `json:"queue_mode"`
+	LastHealthCheck string `json:"last_health_check"`
+}
+
 // ─────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────
@@ -91,6 +101,95 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func handleN8NStatus(w http.ResponseWriter, r *http.Request) {
+	status := N8NStatus{
+		Status:         "unknown",
+		Version:        "unknown",
+		ActiveWorkflows: 0,
+		QueueMode:      false,
+		LastHealthCheck: time.Now().Format(time.RFC3339),
+	}
+
+	// Check N8N health via HTTP request
+	n8nURL := "http://localhost:5678/rest/healthz"
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	resp, err := client.Get(n8nURL)
+	if err != nil {
+		status.Status = "disconnected"
+		response.JSON(w, http.StatusOK, "ok", status)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		status.Status = "connected"
+
+		// Parse N8N response to get version
+		var n8nResp map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&n8nResp); err == nil {
+			if v, ok := n8nResp["version"].(string); ok {
+				status.Version = v
+			}
+			if qm, ok := n8nResp["queueMode"].(bool); ok {
+				status.QueueMode = qm
+			}
+		}
+	} else {
+		status.Status = "disconnected"
+	}
+
+	// Get active workflows count
+	workflowsURL := "http://localhost:5678/rest/workflows?active=true"
+	wfResp, err := client.Get(workflowsURL)
+	if err == nil {
+		defer wfResp.Body.Close()
+		if wfResp.StatusCode == http.StatusOK {
+			var workflows []map[string]interface{}
+			if err := json.NewDecoder(wfResp.Body).Decode(&workflows); err == nil {
+				status.ActiveWorkflows = len(workflows)
+			}
+		}
+	}
+
+	response.JSON(w, http.StatusOK, "ok", status)
+}
+
+func handleN8NExecutions(w http.ResponseWriter, r *http.Request) {
+	// Proxy to N8N API to get recent executions
+	n8nURL := "http://localhost:5678/rest/executions?limit=10&includeData=true"
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	req, _ := http.NewRequest("GET", n8nURL, nil)
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("admin:n8n_secure_admin_password_123")))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		response.JSON(w, http.StatusServiceUnavailable, "N8N unavailable", nil)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		response.JSON(w, http.StatusServiceUnavailable, "Failed to fetch executions", nil)
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		response.JSON(w, http.StatusInternalServerError, "Failed to parse response", nil)
+		return
+	}
+
+	// Extract data from N8N response
+	data := result["data"]
+	if data == nil {
+		data = []interface{}{}
+	}
+
+	response.JSON(w, http.StatusOK, "ok", data)
 }
 
 func main() {
@@ -149,6 +248,8 @@ func main() {
 
 	// Superadmin dashboard (single endpoint, aggregated)
 	mux.Handle("/admin/dashboard", auth.Middleware(http.HandlerFunc(handleAdminDashboard)))
+	mux.Handle("/admin/n8n-status", auth.Middleware(http.HandlerFunc(handleN8NStatus)))
+	mux.Handle("/admin/n8n-executions", auth.Middleware(http.HandlerFunc(handleN8NExecutions)))
 
 	server := &http.Server{
 		Addr:    ":8003",

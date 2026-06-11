@@ -72,6 +72,7 @@ Format per feature:
 | F010 | Campaign Volunteer Management | ✅ Approved | ✅ Done | 2026-06-12 |
 | F011 | Campaign Voter Onboarding | ✅ Approved | ✅ Done | 2026-06-12 |
 | F012 | Sidebar Navigation UI | ✅ Approved | ✅ Done | 2026-06-12 |
+| F013 | N8N Integration via Super Admin | ✅ Approved | ✅ Done | 2026-06-12 |
 
 ---
 
@@ -106,6 +107,34 @@ Format per feature:
 - `frontend/umkm-web/src/style.css` — global sidebar styles
 
 **Notes:** Icon menggunakan emoji untuk simplicity (bisa upgrade ke lucide-icons nanti).
+
+---
+
+## F013: N8N Integration via Super Admin
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Integrate N8N ke Super Admin dashboard sebagai monitoring hub, bukan custom UI.
+
+**Spec:**
+- Super Admin dashboard → link ke N8N UI (new tab)
+- N8N status indicator (connected/running/error)
+- Recent executions widget (fetch from N8N API)
+- Quick action: "Buka Workflow Editor"
+
+**Acceptance Criteria:**
+- [x] AC-1: N8N status visible di Super Admin
+- [x] AC-2: Direct link to N8N editor
+- [x] AC-3: Recent executions shown
+
+**Files:**
+- `services/billing-service/main.go` — N8N status & executions endpoints
+- `frontend/superadmin-web/src/components/N8NStatus.vue` — Status component
+- `frontend/superadmin-web/src/views/Dashboard.vue` — Integration
+- `frontend/superadmin-web/src/api/client.ts` — API client
+
+**Notes:** N8N UI tetap digunakan untuk workflow editing. Super Admin hanya sebagai hub + monitoring.
 
 ---
 

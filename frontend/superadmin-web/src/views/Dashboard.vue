@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { api } from '../api/client'
+import N8NStatus from '../components/N8NStatus.vue'
 
 const data = ref<any>(null)
 const loading = ref(true)
@@ -26,6 +27,12 @@ function formatRupiah(sen: number) {
   <div>
     <h1>Overview Dashboard</h1>
     <p class="subtitle">Snapshot seluruh WCH Platform: UMKM, Campaign, voucher & revenue</p>
+
+    <!-- AC-1 & AC-2: N8N Status Hub -->
+    <section class="block">
+      <h2>Automation Hub</h2>
+      <N8NStatus />
+    </section>
 
     <div v-if="loading" class="loading">Loading...</div>
     <div v-else-if="error" class="error">{{ error }}</div>

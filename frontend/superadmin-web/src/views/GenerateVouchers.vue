@@ -86,7 +86,7 @@ function copyToClipboard(text: string) {
           </thead>
           <tbody>
             <tr v-for="(l, idx) in result.links.slice(0, 50)" :key="idx">
-              <td>{{ idx + 1 }}</td>
+              <td>{{ (idx as number) + 1 }}</td>
               <td class="url-cell">{{ l.url }}</td>
               <td><code>{{ l.token.substring(0, 12) }}…</code></td>
               <td><button class="copy-btn" @click="copyToClipboard(l.url)">Copy</button></td>

@@ -376,7 +376,7 @@ services:
       - REDIS_URL=redis://chatwoot-redis:6379
       - RAILS_LOG_TO_STDOUT=true
       - DEFAULT_LOCALE=id
-    command: /bin/sh -c "bundle exec rake db:chatwoot_prepare && bundle exec rails s -b 0.0.0.0 -p 3000"
+    command: /bin/sh -c "rm -f /app/tmp/pids/server.pid && bundle exec rake db:chatwoot_prepare && bundle exec rails s -b 0.0.0.0 -p 3000"
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
@@ -413,12 +413,15 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
+      - REDIS_HOST=redis
       - WA_GATEWAY_URL=http://wa-gateway:8202/api/wa/send
       - AI_GATEWAY_URL=http://ai-gateway:8002/v1/chat
     ports:
       - "8213:8203"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       wa-gateway:
         condition: service_started
@@ -429,6 +432,8 @@ services:
       dockerfile: Dockerfile
     container_name: wch-umkm-frontend
     restart: unless-stopped
+    ports:
+      - "3201:80"
     depends_on:
       - api-gateway
 volumes:

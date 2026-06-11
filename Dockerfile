@@ -43,4 +43,5 @@ COPY --from=builder /bin/campaign-api /usr/local/bin/
 COPY --from=builder /bin/wa-gateway /usr/local/bin/
 
 # Default entrypoint (can be overridden by docker-compose)
+COPY --from=builder /app/shared/migrations /app/shared/migrations
 CMD ["sh"]
