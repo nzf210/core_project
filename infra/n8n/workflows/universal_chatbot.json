@@ -1,0 +1,341 @@
+{
+  "name": "UMKM - Universal Chatbot (Multi-Tenant)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatbot/incoming",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-001",
+      "name": "Universal Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [220, 300],
+      "webhookId": "chatbot-incoming"
+    },
+    {
+      "parameters": {
+        "url": "http://wch-umkm-accounting:8201/internal/tenant/{{ $json.body.tenant_id }}/chatbot-config",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "cfg-001",
+      "name": "Fetch Tenant Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.data.is_active }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "chk-001",
+      "name": "Is Tenant Active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-redis:6379",
+        "method": "GET",
+        "options": {},
+        "jsCode": "// Load session from Redis\nconst tenantId = $input.first().json.body.tenant_id;\nconst customerId = $input.first().json.body.customer_id;\nconst sessionKey = `session:${tenantId}:${customerId}`;\n\n// Fallback: create new session context if not found\nreturn [{\n  json: {\n    session_key: sessionKey,\n    tenant_id: tenantId,\n    customer_id: customerId,\n    context: $input.first().json.body.context || {},\n    history: $input.first().json.body.history || [],\n    config: $input.first().json.data\n  }\n}];"
+      },
+      "id": "sess-001",
+      "name": "Load Session",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 280]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-umkm-accounting:8201/internal/tenant/{{ $json.tenant_id }}/rag/search",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"{{ $('Universal Webhook').item.json.body.message }}\",\n  \"tenant_id\": \"{{ $json.tenant_id }}\",\n  \"top_k\": {{ $json.config.rag_top_k || 5 }},\n  \"threshold\": {{ $json.config.rag_similarity_threshold || 0.7 }}\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "rag-001",
+      "name": "RAG Retrieval",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1100, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build dynamic prompt based on tenant config + RAG results\nconst webhook = $('Universal Webhook').first().json;\nconst session = $('Load Session').first().json;\nconst ragResults = $input.first().json;\nconst config = session.config;\n\n// Build context from RAG\nlet ragContext = '';\nif (ragResults.data && ragResults.data.length > 0) {\n  ragContext = '\\n\\n=== INFORMASI BISNIS ===\\n';\n  for (const doc of ragResults.data) {\n    ragContext += `- [${doc.source_type}] ${doc.content}\\n`;\n  }\n}\n\n// Build conversation history\nlet historyText = '';\nif (session.history && session.history.length > 0) {\n  const maxMessages = config.max_context_messages || 10;\n  const recentHistory = session.history.slice(-maxMessages);\n  historyText = '\\n\\n=== RIWAYAT PERCAKAPAN ===\\n';\n  for (const msg of recentHistory) {\n    historyText += `${msg.role}: ${msg.content}\\n`;\n  }\n}\n\n// System prompt\nconst systemPrompt = config.system_prompt || \n  `Kamu adalah asisten AI untuk bisnis UMKM. Jawab dengan ${config.tone || 'friendly'} dalam bahasa ${config.language === 'id' ? 'Indonesia' : 'English'}.`;\n\nconst fullPrompt = systemPrompt + ragContext + historyText;\n\nreturn [{\n  json: {\n    system_prompt: fullPrompt,\n    user_message: webhook.body.message,\n    tenant_id: session.tenant_id,\n    customer_id: session.customer_id,\n    channel: webhook.body.channel || 'whatsapp',\n    llm_provider: config.llm_provider || 'minimax',\n    llm_model: config.llm_model || 'MiniMax-M2.7',\n    temperature: config.temperature || 0.7,\n    max_tokens: config.max_tokens || 1024,\n    config: config\n  }\n}];"
+      },
+      "id": "prompt-001",
+      "name": "Prompt Builder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 280]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-ai-gateway:8002/v1/chat",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $json.llm_model }}\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": {{ JSON.stringify($json.system_prompt) }} },\n    {\"role\": \"user\", \"content\": {{ JSON.stringify($json.user_message) }} }\n  ],\n  \"temperature\": {{ $json.temperature }},\n  \"max_tokens\": {{ $json.max_tokens }},\n  \"tenant_id\": \"{{ $json.tenant_id }}\"\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "llm-001",
+      "name": "LLM Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1540, 280]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-umkm-accounting:8201/internal/conversation/log",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tenant_id\": \"{{ $('Prompt Builder').item.json.tenant_id }}\",\n  \"customer_id\": \"{{ $('Prompt Builder').item.json.customer_id }}\",\n  \"channel\": \"{{ $('Prompt Builder').item.json.channel }}\",\n  \"user_message\": \"{{ $('Prompt Builder').item.json.user_message }}\",\n  \"assistant_message\": \"{{ $json.choices[0].message.content }}\",\n  \"llm_provider\": \"{{ $('Prompt Builder').item.json.llm_provider }}\",\n  \"llm_model\": \"{{ $('Prompt Builder').item.json.llm_model }}\",\n  \"tokens_used\": {{ $json.usage?.total_tokens || 0 }}\n}",
+        "options": {}
+      },
+      "id": "save-001",
+      "name": "Save History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1760, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if escalation is needed\nconst config = $('Prompt Builder').first().json.config;\nconst userMessage = $('Prompt Builder').first().json.user_message.toLowerCase();\nconst aiResponse = $('LLM Call').first().json;\n\nlet shouldEscalate = false;\nlet reason = '';\n\n// 1. Keyword-based escalation\nconst keywords = config.escalation_keywords || ['bicara cs', 'hubungi admin', 'operator', 'manusia', 'human'];\nfor (const kw of keywords) {\n  if (userMessage.includes(kw.toLowerCase())) {\n    shouldEscalate = true;\n    reason = 'keyword';\n    break;\n  }\n}\n\n// 2. Low confidence check (jika AI gateway return confidence)\nif (!shouldEscalate && aiResponse.confidence !== undefined) {\n  const threshold = config.escalation_confidence_threshold || 0.3;\n  if (aiResponse.confidence < threshold) {\n    shouldEscalate = true;\n    reason = 'low_confidence';\n  }\n}\n\nreturn [{\n  json: {\n    should_escalate: shouldEscalate,\n    reason: reason,\n    response: aiResponse.choices?.[0]?.message?.content || config.fallback_message,\n    tenant_id: $('Prompt Builder').first().json.tenant_id,\n    customer_id: $('Prompt Builder').first().json.customer_id,\n    channel: $('Prompt Builder').first().json.channel\n  }\n}];"
+      },
+      "id": "esc-001",
+      "name": "Escalation Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.should_escalate }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "esc-if-001",
+      "name": "Need Escalation?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2200, 280]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-chatwoot:3000/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID || 1 }}/conversations",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"source_id\": \"{{ $json.customer_id }}\",\n  \"inbox_id\": 1,\n  \"contact_id\": null,\n  \"message\": {\n    \"content\": \"Escalation dari AI Chatbot.\\nTenant: {{ $json.tenant_id }}\\nChannel: {{ $json.channel }}\\nAlasan: {{ $json.reason }}\\nPesan terakhir customer: {{ $('Prompt Builder').item.json.user_message }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "cw-001",
+      "name": "Create Chatwoot Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2420, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"response\": \"{{ $('Escalation Check').item.json.response }}\",\n  \"escalated\": {{ $('Escalation Check').item.json.should_escalate }},\n  \"tenant_id\": \"{{ $('Escalation Check').item.json.tenant_id }}\"\n}",
+        "options": {}
+      },
+      "id": "resp-001",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2640, 280]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"response\": \"Tenant tidak aktif atau tidak ditemukan.\",\n  \"tenant_id\": \"{{ $('Universal Webhook').item.json.body.tenant_id }}\"\n}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "resp-inactive",
+      "name": "Tenant Inactive Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [880, 460]
+    }
+  ],
+  "connections": {
+    "Universal Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch Tenant Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Tenant Config": {
+      "main": [
+        [
+          {
+            "node": "Is Tenant Active?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Tenant Active?": {
+      "main": [
+        [
+          {
+            "node": "Load Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tenant Inactive Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Session": {
+      "main": [
+        [
+          {
+            "node": "RAG Retrieval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG Retrieval": {
+      "main": [
+        [
+          {
+            "node": "Prompt Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prompt Builder": {
+      "main": [
+        [
+          {
+            "node": "LLM Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Call": {
+      "main": [
+        [
+          {
+            "node": "Save History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save History": {
+      "main": [
+        [
+          {
+            "node": "Escalation Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalation Check": {
+      "main": [
+        [
+          {
+            "node": "Need Escalation?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need Escalation?": {
+      "main": [
+        [
+          {
+            "node": "Create Chatwoot Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Chatwoot Ticket": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "universal-chatbot-v1",
+  "id": "universal-chatbot-001"
+}

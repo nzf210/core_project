@@ -14,10 +14,10 @@
           <p class="text-muted">Masukkan token reset yang Anda peroleh beserta kata sandi baru Anda.</p>
         </div>
 
-        <form @submit.prevent="handleReset">
+        <form v-if="!success" @submit.prevent="handleReset">
           <div class="form-group">
             <label>Token Reset</label>
-            <input v-model="token" type="text" class="form-control" placeholder="Masukkan 32-karakter token" required />
+            <input v-model="token" type="text" class="form-control" placeholder="Masukkan token reset dari email" required />
           </div>
 
           <div class="form-group" style="margin-bottom: 2rem;">
@@ -35,6 +35,15 @@
             {{ errorMsg }}
           </div>
         </form>
+
+        <div v-else class="text-center">
+          <div style="color: #10b981; font-size: 3rem; margin-bottom: 1rem;">✓</div>
+          <h3>Berhasil!</h3>
+          <p class="text-muted" style="margin-bottom: 2rem;">Kata sandi berhasil diubah. Silakan login dengan kata sandi baru Anda.</p>
+          <button class="btn btn-primary" style="width: 100%; padding: 0.75rem;" @click="router.push('/login')">
+            Masuk Sekarang
+          </button>
+        </div>
 
         <p class="text-center" style="margin-top: 2rem; color: var(--text-secondary);">
           Batal mengubah? <router-link to="/login" style="color: var(--accent-primary);">Masuk di sini</router-link>
@@ -59,6 +68,7 @@ const token = ref('')
 const newPassword = ref('')
 const loading = ref(false)
 const errorMsg = ref('')
+const success = ref(false)
 
 const handleReset = async () => {
   loading.value = true
@@ -67,8 +77,7 @@ const handleReset = async () => {
   try {
     const data = await api.resetPassword(token.value, newPassword.value)
     if (data.success) {
-      alert("Kata sandi berhasil diubah! Silakan login dengan kata sandi baru Anda.")
-      router.push('/login')
+      success.value = true
     } else {
       errorMsg.value = data.message || 'Gagal mengubah kata sandi.'
     }
@@ -84,7 +93,8 @@ const handleReset = async () => {
 <style scoped>
 .auth-split-container {
   display: flex;
-  min-height: 80vh;
+  min-height: calc(100vh - 4rem);
+  min-height: calc(100dvh - 4rem);
   border-radius: var(--radius-xl);
   overflow: hidden;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);

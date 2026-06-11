@@ -6,7 +6,7 @@
 .env
 .env.*
 !.env.example
-
+*.bin
 # =============================================================================
 # Go Artifacts — Compiled Binaries
 # =============================================================================
@@ -87,3 +87,6 @@ temp/
 *.swo
 *~
 Thumbs.db
+chatbot
+subscription-worker
+temp.md

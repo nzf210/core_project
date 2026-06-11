@@ -22,8 +22,7 @@ onMounted(() => {
 
 // Compute the full URL for the n8n proxy endpoint in api-gateway
 const n8nUrl = computed(() => {
-  const token = localStorage.getItem('access_token') || ''
-  return `${API_BASE}/api/superadmin/n8n/?token=${token}`
+  return `${API_BASE}/api/superadmin/n8n/`
 })
 </script>
 

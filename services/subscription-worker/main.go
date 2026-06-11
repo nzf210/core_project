@@ -85,7 +85,7 @@ func runFreezePass(graceHours int) {
 
 	cutoff := time.Now().Add(-time.Duration(graceHours) * time.Hour)
 
-	// Find subscriptions that should be frozen
+	// Find subscriptions that should be frozen (paid subscriptions only)
 	rows, err := DB.Query(ctx, `
 		SELECT ts.tenant_id, t.name, t.plan, ts.current_period_end
 		FROM tenant_subscriptions ts
@@ -102,8 +102,8 @@ func runFreezePass(graceHours int) {
 
 	type frozenItem struct {
 		tenantID string
-		name string
-		plan string
+		name     string
+		plan     string
 		expiredAt time.Time
 	}
 	items := []frozenItem{}
@@ -162,10 +162,4 @@ func runFreezePass(graceHours int) {
 	}
 
 	slog.Info("Freeze pass: tenants frozen", "count", len(items))
-	for _, it := range items {
-		slog.Info("Tenant frozen", "tenant_id", it.tenantID, "name", it.name, "plan", it.plan, "expired_at", it.expiredAt.Format(time.RFC3339))
-	}
-
-	// TODO: kirim notifikasi reminder "Akun Anda freeze, redeem voucher"
-	// via notification-service (async, non-blocking, best effort)
 }

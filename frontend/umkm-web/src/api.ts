@@ -81,6 +81,7 @@ export const api = {
         password: body.password,
         username: body.username,
         email: body.email || '',
+        businessName: body.businessName || '',
       }),
     })
     return res.json()
@@ -128,11 +129,13 @@ export const api = {
     return res.json()
   },
 
-  async post(url: string, body?: any) {
+  async post(url: string, body?: any, isMultipart = false) {
+    const h = headers()
+    if (isMultipart) delete h['Content-Type']
     const res = await fetch(`${API_BASE}${url}`, {
       method: 'POST',
-      headers: headers(),
-      body: body ? JSON.stringify(body) : undefined,
+      headers: h,
+      body: isMultipart ? body : (body ? JSON.stringify(body) : undefined),
     })
     return res.json()
   },

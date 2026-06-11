@@ -38,7 +38,7 @@
         <div v-else class="text-center">
           <div style="color: #10b981; font-size: 3rem; margin-bottom: 1rem;">✓</div>
           <h3>Berhasil!</h3>
-          <p class="text-muted" style="margin-bottom: 2rem;">Jika email tersebut terdaftar, kami telah membuat token reset (cek log backend).</p>
+          <p class="text-muted" style="margin-bottom: 2rem;">Jika email tersebut terdaftar, kami telah mengirim link reset ke email Anda.</p>
           <button class="btn btn-outline" style="width: 100%; padding: 0.75rem;" @click="router.push({ path: '/reset-password', query: { email } })">
             Lanjutkan ke Reset Sandi
           </button>
@@ -87,7 +87,8 @@ const handleForgot = async () => {
 <style scoped>
 .auth-split-container {
   display: flex;
-  min-height: 80vh;
+  min-height: calc(100vh - 4rem);
+  min-height: calc(100dvh - 4rem);
   border-radius: var(--radius-xl);
   overflow: hidden;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);

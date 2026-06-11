@@ -150,4 +150,5 @@ export const superadminApi = {
     })
     return res.json()
   },
+
 }

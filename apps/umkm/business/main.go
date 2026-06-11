@@ -46,9 +46,10 @@ type BusinessType struct {
 }
 
 type OnboardingRequest struct {
-	BusinessType string `json:"businessType"`
-	BusinessName string `json:"businessName"`
+	BusinessType   string `json:"businessType"`
+	BusinessName   string `json:"businessName"`
 	BusinessAddress string `json:"businessAddress"`
+	Plan           string `json:"plan"`
 }
 
 type DashboardWidget struct {
@@ -235,10 +236,12 @@ func handleOnboarding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	plan := req.Plan
+	if plan == "" { plan = "free" }
 	_, err := DB.Exec(r.Context(),
-		`UPDATE tenants SET business_type=$1, business_name=$2, business_address=$3, onboarding_completed=true 
-		 WHERE id=$4`,
-		req.BusinessType, req.BusinessName, req.BusinessAddress, tenantID)
+		`UPDATE tenants SET business_type=$1, business_name=$2, business_address=$3, plan=$4, onboarding_completed=true
+		 WHERE id=$5`,
+		req.BusinessType, req.BusinessName, req.BusinessAddress, plan, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to update tenant", err)
 		return

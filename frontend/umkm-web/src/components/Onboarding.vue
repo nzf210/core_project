@@ -180,7 +180,8 @@ const completeOnboarding = async () => {
     const data = await api.post('/api/umkm/business/onboarding', {
       businessType: selectedType.value,
       businessName: businessName.value,
-      businessAddress: businessAddress.value
+      businessAddress: businessAddress.value,
+      plan: selectedPlan.value,
     })
     if (data.status >= 400) {
       alert('Gagal menyimpan: ' + data.message)

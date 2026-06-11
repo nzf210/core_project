@@ -1,0 +1,171 @@
+{
+  "name": "UMKM - Escalation Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatbot/escalate",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "wh-esc-001",
+      "name": "Escalation Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [220, 300],
+      "webhookId": "chatbot-escalate"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare escalation data\nconst body = $input.first().json.body;\n\nreturn [{\n  json: {\n    tenant_id: body.tenant_id,\n    customer_id: body.customer_id,\n    customer_name: body.customer_name || body.customer_id,\n    channel: body.channel || 'whatsapp',\n    reason: body.reason || 'manual',\n    trigger_message: body.trigger_message || '',\n    conversation_history: body.history || [],\n    session_id: body.session_id\n  }\n}];"
+      },
+      "id": "prep-esc",
+      "name": "Prepare Escalation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-chatwoot:3000/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID || 1 }}/conversations",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"source_id\": \"{{ $json.customer_id }}\",\n  \"inbox_id\": 1,\n  \"status\": \"open\",\n  \"additional_attributes\": {\n    \"tenant_id\": \"{{ $json.tenant_id }}\",\n    \"channel\": \"{{ $json.channel }}\",\n    \"escalation_reason\": \"{{ $json.reason }}\",\n    \"session_id\": \"{{ $json.session_id }}\"\n  }\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "cw-create",
+      "name": "Create Chatwoot Conversation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-chatwoot:3000/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID || 1 }}/conversations/{{ $json.id }}/messages",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"🔔 Escalation dari AI Chatbot\\n\\n📋 Detail:\\n- Tenant: {{ $('Prepare Escalation').item.json.tenant_id }}\\n- Customer: {{ $('Prepare Escalation').item.json.customer_name }}\\n- Channel: {{ $('Prepare Escalation').item.json.channel }}\\n- Alasan: {{ $('Prepare Escalation').item.json.reason }}\\n\\n💬 Pesan terakhir:\\n{{ $('Prepare Escalation').item.json.trigger_message }}\",\n  \"message_type\": \"incoming\",\n  \"private\": false\n}",
+        "options": {}
+      },
+      "id": "cw-msg",
+      "name": "Send Context Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-umkm-accounting:8201/internal/escalation/log",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"session_id\": \"{{ $('Prepare Escalation').item.json.session_id }}\",\n  \"tenant_id\": \"{{ $('Prepare Escalation').item.json.tenant_id }}\",\n  \"reason\": \"{{ $('Prepare Escalation').item.json.reason }}\",\n  \"trigger_message\": \"{{ $('Prepare Escalation').item.json.trigger_message }}\",\n  \"chatwoot_conversation_id\": \"{{ $('Create Chatwoot Conversation').item.json.id }}\"\n}",
+        "options": {}
+      },
+      "id": "log-esc",
+      "name": "Log Escalation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return success response\nreturn [{\n  json: {\n    success: true,\n    escalated: true,\n    chatwoot_conversation_id: $('Create Chatwoot Conversation').first().json.id,\n    message: 'Percakapan telah dialihkan ke tim Customer Service. Agent kami akan segera membantu Anda.'\n  }\n}];"
+      },
+      "id": "resp-esc",
+      "name": "Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 300]
+    }
+  ],
+  "connections": {
+    "Escalation Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Escalation": {
+      "main": [
+        [
+          {
+            "node": "Create Chatwoot Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Chatwoot Conversation": {
+      "main": [
+        [
+          {
+            "node": "Send Context Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Context Message": {
+      "main": [
+        [
+          {
+            "node": "Log Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Escalation": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "escalation-handler-v1",
+  "id": "escalation-handler-001"
+}

@@ -1,6 +1,15 @@
 -- 000025_add_saas_plans.up.sql
 -- SaaS Plans: Lite, Pro, Business | Voucher Programs | Auto Subscription Tickets
 
+CREATE TABLE IF NOT EXISTS tenant_subscriptions (
+    tenant_id UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+    plan_id VARCHAR(20) NOT NULL,
+    status VARCHAR(20) DEFAULT 'active',
+    current_period_end TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─────────────────────────────────────────────
 -- 1. SaaS Plan Definitions
 -- ─────────────────────────────────────────────
@@ -46,6 +55,7 @@ CREATE TABLE voucher_programs (
     duration_months INT NOT NULL DEFAULT 1,
     max_uses        INT NOT NULL DEFAULT 0, -- 0 = unlimited
     max_uses_per_tenant INT NOT NULL DEFAULT 1,
+    uses_count      INT NOT NULL DEFAULT 0,
     starts_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at      TIMESTAMPTZ,
     is_active       BOOLEAN NOT NULL DEFAULT true,
@@ -79,7 +89,7 @@ CREATE INDEX idx_voucher_codes_tenant ON voucher_codes(used_by);
 CREATE TABLE subscription_tickets (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    subscription_id UUID REFERENCES tenant_subscriptions(id) ON DELETE SET NULL,
+    subscription_id UUID REFERENCES tenant_subscriptions(tenant_id) ON DELETE SET NULL,
     ticket_number   VARCHAR(30) NOT NULL UNIQUE,  -- e.g., TKT-2026-0601-0001
     plan_id         VARCHAR(20) NOT NULL,
     plan_name       VARCHAR(50) NOT NULL,

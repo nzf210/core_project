@@ -24,25 +24,17 @@
       "Bash: ls -la",
       "Bash: mkdir -p",
       "Bash: chmod +x",
-      "Bash: tail -n 100 logs/*.log",
       "Bash: curl -s",
       "Bash: ps aux | grep",
-      "Bash: kill",
-      "Bash: npm --prefix frontend/*-web run dev",
-      "Bash: npm --prefix frontend/*-web install"
+      "Bash: kill"
     ],
     "deny": [
       "Bash: rm -rf /",
       "Bash: dd if=.*of=.*bs=.*count=.*",
       "Bash: mkfs",
-      "Bash: :(){ :|: & };:",
       "Bash: git push --force",
       "Bash: git reset --hard"
     ]
-  },
-  "hooks": {
-    "on-start": [],
-    "on-stop": []
   },
   "model": "sonnet",
   "max-contextualization-length": 1000

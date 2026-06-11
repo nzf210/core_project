@@ -38,15 +38,14 @@ CREATE INDEX idx_stores_active ON stores(is_active) WHERE is_active = true;
 -- ─────────────────────────────────────────────
 INSERT INTO stores (owner_user_id, tenant_id, name, business_type, is_active)
 SELECT
-    t.owner_id,
+    (SELECT id FROM users WHERE tenant_id = t.id ORDER BY created_at ASC LIMIT 1),
     t.id,
     COALESCE(t.business_name, t.name, 'Toko Utama'),
     COALESCE(t.business_type, 'umum'),
     true
 FROM tenants t
-WHERE NOT EXISTS (
-    SELECT 1 FROM stores s WHERE s.tenant_id = t.id
-);
+WHERE EXISTS (SELECT 1 FROM users WHERE tenant_id = t.id)
+  AND NOT EXISTS (SELECT 1 FROM stores s WHERE s.tenant_id = t.id);
 
 -- ─────────────────────────────────────────────
 -- 3. Add max_stores feature ke plan_features
@@ -57,5 +56,4 @@ INSERT INTO plan_features (plan_id, feature_key, feature_name, feature_value, is
     ('pro',      'max_stores', 'Jumlah toko maksimum',         '1',     true),
     ('business', 'max_stores', 'Jumlah toko maksimum',         '5',     true)
 ON CONFLICT (plan_id, feature_key) DO UPDATE SET
-    feature_value = EXCLUDED.feature_value,
-    updated_at = NOW();
+    feature_value = EXCLUDED.feature_value;

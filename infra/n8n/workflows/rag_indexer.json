@@ -1,0 +1,203 @@
+{
+  "name": "UMKM - RAG Indexer (FAQ & Products)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rag/index",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "wh-rag-001",
+      "name": "Index Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [220, 300],
+      "webhookId": "rag-indexer"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.action }}",
+              "value2": "index_all",
+              "operation": "equals"
+            }
+          ]
+        }
+      },
+      "id": "chk-rag-001",
+      "name": "Check Action",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-umkm-accounting:8201/internal/tenant/{{ $json.body.tenant_id }}/faqs",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "fetch-faq",
+      "name": "Fetch FAQs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 220]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-umkm-accounting:8201/internal/tenant/{{ $('Index Webhook').item.json.body.tenant_id }}/products",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "fetch-products",
+      "name": "Fetch Products",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare FAQ documents for embedding\nconst faqs = $input.first().json.data || [];\nconst tenantId = $('Index Webhook').first().json.body.tenant_id;\n\nconst documents = faqs.map(faq => ({\n  tenant_id: tenantId,\n  source_type: 'faq',\n  source_id: faq.id,\n  content: `Pertanyaan: ${faq.question}\\nJawaban: ${faq.answer}`\n}));\n\nreturn [{ json: { documents, tenant_id: tenantId, type: 'faq' } }];"
+      },
+      "id": "prep-faq",
+      "name": "Prepare FAQ Docs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Product documents for embedding\nconst products = $input.first().json.data || [];\nconst tenantId = $('Index Webhook').first().json.body.tenant_id;\n\nconst documents = products.map(p => ({\n  tenant_id: tenantId,\n  source_type: 'product',\n  source_id: p.id,\n  content: `Produk: ${p.name}\\nHarga: Rp ${(p.price / 100).toLocaleString('id-ID')}\\nDeskripsi: ${p.description || '-'}\\nKategori: ${p.category || '-'}\\nStok: ${p.stock !== undefined ? p.stock : 'unlimited'}`\n}));\n\nreturn [{ json: { documents, tenant_id: tenantId, type: 'product' } }];"
+      },
+      "id": "prep-products",
+      "name": "Prepare Product Docs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-ai-gateway:8002/v1/embeddings",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tenant_id\": \"{{ $json.tenant_id }}\",\n  \"type\": \"{{ $json.type }}\",\n  \"documents\": {{ JSON.stringify($json.documents) }}\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "embed-001",
+      "name": "Generate Embeddings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-umkm-accounting:8201/internal/tenant/{{ $('Index Webhook').item.json.body.tenant_id }}/rag/single",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tenant_id\": \"{{ $json.body.tenant_id }}\",\n  \"source_type\": \"{{ $json.body.source_type }}\",\n  \"source_id\": \"{{ $json.body.source_id }}\",\n  \"content\": {{ JSON.stringify($json.body.content) }}\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "single-index",
+      "name": "Index Single Doc",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 520]
+    }
+  ],
+  "connections": {
+    "Index Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Action": {
+      "main": [
+        [
+          {
+            "node": "Fetch FAQs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Products",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Index Single Doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch FAQs": {
+      "main": [
+        [
+          {
+            "node": "Prepare FAQ Docs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Products": {
+      "main": [
+        [
+          {
+            "node": "Prepare Product Docs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare FAQ Docs": {
+      "main": [
+        [
+          {
+            "node": "Generate Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Product Docs": {
+      "main": [
+        [
+          {
+            "node": "Generate Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "rag-indexer-v1",
+  "id": "rag-indexer-001"
+}

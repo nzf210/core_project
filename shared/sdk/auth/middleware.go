@@ -105,6 +105,9 @@ func Middleware(next http.Handler) http.Handler {
 		}
 
 		role, _ := claims["role"].(string)
+		if role != "" {
+			r.Header.Set("X-User-Role", role)
+		}
 
 		if tenantID == "" {
 			response.Error(w, http.StatusForbidden, "Token does not contain tenant context", nil)

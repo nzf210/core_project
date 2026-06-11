@@ -135,61 +135,27 @@ func TestVoucherFlowIntegration(t *testing.T) {
 }
 
 func setupAuth(t *testing.T) (string, string) {
-	nano := time.Now().UnixNano()
-	phone := fmt.Sprintf("628%d", nano%9000000000)
-	registerReq := RegisterReq{
-		Username:    fmt.Sprintf("testuser_%d", nano),
-		Password:    "TestPassword123!",
-		Email:       fmt.Sprintf("test_%d@example.com", nano),
-		PhoneNumber: phone,
+	superLogin := map[string]string{
+		"username": "superadmin",
+		"password": "superadmin123",
 	}
-
-	registerBody, _ := json.Marshal(registerReq)
+	superBody, _ := json.Marshal(superLogin)
 	resp, err := http.Post(
-		authServiceURL+"/register",
+		authServiceURL+"/superadmin/login",
 		"application/json",
-		bytes.NewBuffer(registerBody),
+		bytes.NewBuffer(superBody),
 	)
 	if err != nil {
-		t.Fatalf("Register failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Verify OTP
-	verifyReq := map[string]string{
-		"phoneNumber": phone,
-		"otp":         "000000",
-	}
-	verifyBody, _ := json.Marshal(verifyReq)
-	resp, err = http.Post(
-		authServiceURL+"/verify-otp",
-		"application/json",
-		bytes.NewBuffer(verifyBody),
-	)
-	if err != nil {
-		t.Fatalf("Verify OTP failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	loginReq := LoginReq{
-		Username: registerReq.Username,
-		Password: registerReq.Password,
-	}
-
-	loginBody, _ := json.Marshal(loginReq)
-	resp, err = http.Post(
-		authServiceURL+"/login",
-		"application/json",
-		bytes.NewBuffer(loginBody),
-	)
-	if err != nil {
-		t.Fatalf("Login failed: %v", err)
+		t.Fatalf("Superadmin login failed: %v", err)
 	}
 	defer resp.Body.Close()
 
 	var loginResp Response
 	json.NewDecoder(resp.Body).Decode(&loginResp)
+	if !loginResp.Success {
+		t.Fatalf("Superadmin login failed: %s", loginResp.Message)
+	}
 
 	loginData := loginResp.Data.(map[string]interface{})
-	return loginData["accessToken"].(string), loginData["tenantId"].(string)
+	return loginData["accessToken"].(string), ""
 }

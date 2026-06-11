@@ -307,9 +307,6 @@ const saveStore = async () => {
         localStorage.setItem('business_name', payload.business_name)
       }
       showToast('Profil toko berhasil disimpan')
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000)
     } else {
       showToast(data.message || 'Gagal menyimpan profil toko', 'error')
     }
@@ -399,15 +396,33 @@ const requestQRCode = async () => {
 
 const handleAddStaff = async () => {
   if (!staffForm.value.username || !staffForm.value.phoneNumber) {
-    showToast("Isi data dengan lengkap!", "error")
+    showToast("Isi username dan nomor HP!", "error")
+    return
+  }
+  if (!staffForm.value.password) {
+    showToast("Password wajib diisi!", "error")
     return
   }
   loadingStaff.value = true
-  setTimeout(() => {
+  try {
+    const data = await api.post('/auth/add-staff', {
+      username: staffForm.value.username,
+      email: staffForm.value.email || '',
+      password: staffForm.value.password,
+      role: staffForm.value.role || 'kasir',
+      phoneNumber: staffForm.value.phoneNumber,
+    })
+    if (data.success) {
+      showToast('Pegawai berhasil ditambahkan!')
+      staffForm.value = { username: '', email: '', password: '', phoneNumber: '', role: 'kasir' }
+    } else {
+      showToast(data.message || 'Gagal menambahkan pegawai', 'error')
+    }
+  } catch (err) {
+    showToast('Kesalahan jaringan', 'error')
+  } finally {
     loadingStaff.value = false
-    showToast('Pegawai berhasil ditambahkan!')
-    staffForm.value = { username: '', email: '', password: '', phoneNumber: '', role: 'kasir' }
-  }, 1000)
+  }
 }
 
 const loadSettings = async () => {

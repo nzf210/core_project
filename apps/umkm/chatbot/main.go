@@ -61,12 +61,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	redisHost := os.Getenv("REDIS_HOST")
-	if redisHost == "" {
-		redisHost = "localhost"
-	}
 	redisClient = redis.NewClient(&redis.Options{
-		Addr: redisHost + ":6379",
+		Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
+		Password: cfg.Redis.Password,
 	})
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
 		slog.Error("Failed to connect to Redis", "error", err)

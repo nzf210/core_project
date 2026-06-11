@@ -122,12 +122,48 @@ core_project/                   ← Root monorepo (satu go.mod)
 | `8202` | UMKM Chatbot | `apps/umkm/chatbot` ⚠️ Port sama dengan WA Gateway! |
 | `9001` | UMKM Business | `apps/umkm/business` |
 | `9002` | Campaign API | `apps/campaign/api` |
+| `3000` | Chatwoot (Self-hosted) | docker-compose (chatwoot) |
 | `3201` | Frontend UMKM | `frontend/umkm-web` |
 | `3301` | Frontend Campaign | `frontend/campaign-web` |
-| `5433` | PostgreSQL (Docker) | docker-compose |
+| `5433` | PostgreSQL + pgvector (Docker) | docker-compose |
+| `5678` | N8N Main (Queue Mode) | docker-compose (n8n-main) |
 | `6381` | Redis (Docker) | docker-compose |
 
 > ⚠️ WA Gateway dan UMKM Chatbot sama-sama port 8202. Jalankan hanya satu pada satu waktu saat dev lokal, atau pisahkan port.
+
+---
+
+## 🔄 N8N Queue Mode Architecture
+
+**N8N berjalan dalam Queue Mode** dengan horizontal scaling via Redis:
+
+| Komponen | Container | Fungsi |
+|:---------|:----------|:-------|
+| `n8n-main` | `wch-n8n-main` | UI + Webhook Receiver + Workflow Editor |
+| `n8n-worker` | `wch-n8n-worker` | Execution Worker (scalable) |
+| Redis DB 2 | `wch-redis` | Bull Queue untuk job distribution |
+
+**Workflows (8 total):**
+
+| Workflow | Trigger | Deskripsi |
+|:---------|:--------|:----------|
+| `universal_chatbot.json` | Webhook POST | Multi-tenant chatbot: Config → Session → RAG → LLM → Save → Escalation |
+| `rag_indexer.json` | Webhook POST | Index FAQ & Products ke pgvector |
+| `escalation_handler.json` | Webhook POST | Escalation ke Chatwoot |
+| `master_automations.json` | Cron (setiap menit) | Execute due automations |
+| `daily_revenue_digest.json` | Cron (harian) | Revenue digest ke Telegram |
+| `freeze_reminder.json` | Cron | Reminder untuk expired subscriptions |
+| `campaign_voter_onboard.json` | Webhook | Campaign voter onboarding |
+| `voucher_wa_distribute.json` | Webhook | Distribusi voucher via WA |
+
+**Multi-Tenant WA Session Pool:**
+
+Setiap tenant memiliki WA session sendiri di tabel `wa_sessions`:
+```
+tenant_a → wa-001 (connected)
+tenant_b → wa-002 (connected)
+tenant_c → wa-003 (qr_pending)
+```
 
 ---
 
@@ -262,6 +298,14 @@ make migrate-status
 - `apps/umkm/accounting` ✅
 - `apps/umkm/chatbot` ✅
 - `apps/campaign/api` ✅
+
+**Tabel terkait N8N Queue Mode / Chatbot Upgrade (migration 000029):**
+- `wa_sessions` — Multi-tenant WA session pool
+- `tenant_chatbot_configs` — Per-tenant chatbot config (LLM, prompt, escalation, RAG)
+- `conversation_sessions` — Multi-channel conversation sessions
+- `conversation_logs` — Structured conversation logs + analytics
+- `vector_embeddings` — pgvector embeddings untuk RAG (FAQ & Products)
+- `escalation_history` — History escalation ke Chatwoot
 
 ---
 

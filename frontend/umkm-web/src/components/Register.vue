@@ -136,6 +136,7 @@ const handleRegister = async () => {
       password: formData.value.password,
       username: formData.value.username,
       email: formData.value.email || formData.value.phone_number + '@wa.user',
+      businessName: formData.value.name,
     })
     if (data.success) {
       step.value = 'verify'

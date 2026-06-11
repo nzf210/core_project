@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: wch-postgres
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
@@ -21,6 +21,7 @@ services:
     restart: unless-stopped
   redis:
     image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
     container_name: wch-redis
     ports:
       - 127.0.0.1:6381:6379
@@ -143,31 +144,42 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-  n8n:
+  n8n-main:
     image: n8nio/n8n:latest
-    container_name: wch-n8n
+    container_name: wch-n8n-main
     restart: always
     environment:
-      - N8N_HOST=localhost
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - N8N_PATH=/api/superadmin/n8n/
-      - NODE_ENV=production
-      - WEBHOOK_URL=http://localhost:5678/
-      - GENERIC_TIMEZONE=Asia/Jakarta
+      # Queue Mode
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_BULL_REDIS_DB=2
+      # Database
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_DATABASE=${DB_NAME:-wch_core}
       - DB_POSTGRESDB_HOST=postgres
       - DB_POSTGRESDB_PORT=5432
       - DB_POSTGRESDB_USER=${DB_USER:-postgres}
       - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD:-postgres}
+      # Webhook & UI
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - N8N_PATH=/api/superadmin/n8n/
+      - NODE_ENV=production
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://n8n-main:5678/}
+      - GENERIC_TIMEZONE=Asia/Jakarta
+      # Auth
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_ADMIN_USER:-admin}
       - N8N_BASIC_AUTH_PASSWORD=${N8N_ADMIN_PASSWORD:-change_me_in_env}
+      # Performance
       - N8N_DIAGNOSTICS_ENABLED=false
-      - N8N_METRICS=false
+      - N8N_METRICS=true
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
+      - N8N_CONCURRENCY_PRODUCTION_LIMIT=${N8N_CONCURRENCY_PRODUCTION_LIMIT:-20}
+      # Telegram
       - OWNER_TELEGRAM_CHAT_ID=${OWNER_TELEGRAM_CHAT_ID:-}
     entrypoint:
       - /bin/sh
@@ -187,6 +199,35 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+  n8n-worker:
+    image: n8nio/n8n:latest
+    container_name: wch-n8n-worker
+    restart: always
+    command: worker
+    environment:
+      # Queue Mode
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_BULL_REDIS_DB=2
+      # Database
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_DATABASE=${DB_NAME:-wch_core}
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_USER=${DB_USER:-postgres}
+      - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD:-postgres}
+      # Performance
+      - N8N_CONCURRENCY_PRODUCTION_LIMIT=${N8N_WORKER_CONCURRENCY:-10}
+      - GENERIC_TIMEZONE=Asia/Jakarta
+      - NODE_OPTIONS=--max-old-space-size=512
+    depends_on:
+      n8n-main:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
   umkm-chatbot:
     build:
       context: .
@@ -202,6 +243,8 @@ services:
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
       - AI_GATEWAY_URL=http://ai-gateway:8002/v1/chat
+      - REDIS_HOST=redis
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://n8n-main:5678/}
     depends_on:
       postgres:
         condition: service_healthy
@@ -242,6 +285,8 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
+      - REDIS_HOST=redis
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://n8n-main:5678/}
     ports:
       - "8202:8202"
     depends_on:
@@ -308,6 +353,47 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+  chatwoot-redis:
+    image: redis:7-alpine
+    container_name: wch-chatwoot-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - chatwoot_redis_data:/data
+    restart: unless-stopped
+  chatwoot:
+    image: chatwoot/chatwoot:latest
+    container_name: wch-chatwoot
+    environment:
+      - RAILS_ENV=production
+      - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY:-replace_with_lengthy_secure_hex}
+      - FRONTEND_URL=${CHATWOOT_FRONTEND_URL:-http://localhost:3000}
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/chatwoot_production
+      - REDIS_URL=redis://chatwoot-redis:6379
+      - RAILS_LOG_TO_STDOUT=true
+      - DEFAULT_LOCALE=id
+    command: bundle exec rails s -b 0.0.0.0 -p 3000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chatwoot-redis:
+        condition: service_started
+    restart: unless-stopped
+  chatwoot-sidekiq:
+    image: chatwoot/chatwoot:latest
+    container_name: wch-chatwoot-sidekiq
+    environment:
+      - RAILS_ENV=production
+      - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY:-replace_with_lengthy_secure_hex}
+      - FRONTEND_URL=${CHATWOOT_FRONTEND_URL:-http://localhost:3000}
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/chatwoot_production
+      - REDIS_URL=redis://chatwoot-redis:6379
+    command: bundle exec sidekiq -C config/sidekiq.yml
+    depends_on:
+      chatwoot:
+        condition: service_started
+    restart: unless-stopped
   umkm-automation:
     build:
       context: .
@@ -344,3 +430,4 @@ volumes:
   pgdata: null
   redisdata: null
   n8n_data: null
+  chatwoot_redis_data: null

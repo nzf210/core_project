@@ -1,12 +1,12 @@
 <template>
   <div class="app-container">
-    <!-- Read-only banner: tampil saat akun freeze. User bisa login & lihat data, tapi tidak bisa input baru. -->
+    <!-- Read-only banner: tampil saat akun freeze. User bisa login& lihat data, tapi tidak bisa input baru. -->
     <div v-if="isLoggedIn && isFrozen" class="frozen-banner">
       <span class="frozen-icon">❄️</span>
       <div class="frozen-text">
         <strong>Akun Anda dalam masa freeze.</strong>
         Anda masih bisa melihat data historis, tetapi tidak bisa input transaksi baru.
-        <a href="/redeem" class="redeem-link">Redeem voucher →</a>
+        <a href="/superadmin-login" class="redeem-link">Redeem voucher →</a>
       </div>
     </div>
 
@@ -30,10 +30,11 @@
           
           <div class="user-profile-mobile">
             <div class="flex items-center gap-2">
-              <div class="avatar">U</div>
+              <div class="avatar">{{ (businessName || 'U')[0].toUpperCase() }}</div>
               <div>
               <span class="business-name-display">{{ businessName || 'My UMKM' }}</span>
-              <span v-if="plan !== 'free'" :class="['plan-chip', `plan-${plan}`]">{{ plan.toUpperCase() }}</span>
+              <span v-if="plan !== 'free' && plan !== 'inactive'" :class="['plan-chip', `plan-${plan}`]">{{ plan.toUpperCase() }}</span>
+              <span v-else-if="plan === 'inactive'" class="plan-chip plan-inactive">INACTIVE</span>
               <span v-else class="plan-chip plan-free">FREE</span>
             </div>
             </div>
@@ -43,7 +44,7 @@
 
         <div class="user-profile flex items-center gap-4 desktop-only">
           <div class="flex items-center gap-2">
-            <div class="avatar">U</div>
+            <div class="avatar">{{ (businessName || 'U')[0].toUpperCase() }}</div>
             <span>{{ businessName || 'My UMKM' }}</span>
           </div>
           <button @click="logout" class="nav-btn text-danger" style="color: #ef4444; border: 1px solid #ef4444; padding: 0.25rem 0.75rem; border-radius: 4px;">Keluar</button>
@@ -75,9 +76,14 @@ const plan = ref('free')
 const isFrozen = ref(false)
 
 const checkAuth = async () => {
-  if (localStorage.getItem('access_token') && localStorage.getItem('tenant_id')) {
+  const role = localStorage.getItem('role')
+  const isSuperadmin = role === 'superadmin'
+  const hasToken = !!localStorage.getItem('access_token')
+  const hasTenantId = !!localStorage.getItem('tenant_id')
+
+  if (hasToken && (hasTenantId || isSuperadmin)) {
     isLoggedIn.value = true
-    userRole.value = localStorage.getItem('role') || 'user'
+    userRole.value = role || 'user'
     businessName.value = localStorage.getItem('business_name') || ''
     plan.value = localStorage.getItem('plan') || 'free'
 
@@ -87,18 +93,20 @@ const checkAuth = async () => {
     const cachedStatus = sessionStorage.getItem('subscription_status')
     isFrozen.value = cachedStatus === 'frozen'
 
-    try {
-      const data = await api.get('/api/profile')
-      if (data.success && data.data && data.data.business_name) {
-        businessName.value = data.data.business_name
-        localStorage.setItem('business_name', data.data.business_name)
+    if (hasTenantId) {
+      try {
+        const data = await api.get('/api/profile')
+        if (data.success && data.data && data.data.business_name) {
+          businessName.value = data.data.business_name
+          localStorage.setItem('business_name', data.data.business_name)
+        }
+        if (data.data && typeof data.data.is_frozen === 'boolean') {
+          isFrozen.value = data.data.is_frozen
+          sessionStorage.setItem('subscription_status', isFrozen.value ? 'frozen' : 'active')
+        }
+      } catch (e) {
+        console.error('Failed to sync profile', e)
       }
-      if (data.data && typeof data.data.is_frozen === 'boolean') {
-        isFrozen.value = data.data.is_frozen
-        sessionStorage.setItem('subscription_status', isFrozen.value ? 'frozen' : 'active')
-      }
-    } catch (e) {
-      console.error('Failed to sync profile', e)
     }
   } else {
     isLoggedIn.value = false
@@ -207,6 +215,7 @@ onMounted(() => {
 .plan-lite { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
 .plan-pro { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
 .plan-enterprise { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+.plan-inactive { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
 
 .avatar {
   width: 36px;

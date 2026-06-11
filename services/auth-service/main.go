@@ -20,12 +20,13 @@ import (
 )
 
 type RegisterRequest struct {
-	Username    string `json:"username"`
-	Password    string `json:"password"`
-	Email       string `json:"email"`
-	PhoneNumber string `json:"phoneNumber"`
-	Role        string `json:"role"`
-	TenantID    string `json:"tenantId"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	Email        string `json:"email"`
+	PhoneNumber  string `json:"phoneNumber"`
+	Role         string `json:"role"`
+	TenantID     string `json:"tenantId"`
+	BusinessName string `json:"businessName"`
 }
 
 type VerifyOTPRequest struct {
@@ -356,7 +357,12 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 
 	tenantID := regReq.TenantID
 	if tenantID == "" {
-		tx.QueryRow(ctx, "INSERT INTO tenants (name, plan) VALUES ($1, 'free') RETURNING id", regReq.Username+"'s Tenant").Scan(&tenantID)
+		// New registrations start as inactive - must redeem voucher or make payment to activate
+		tenantName := regReq.BusinessName
+		if tenantName == "" {
+			tenantName = regReq.Username + "'s Tenant"
+		}
+		tx.QueryRow(ctx, "INSERT INTO tenants (name, plan, is_frozen) VALUES ($1, 'inactive', true) RETURNING id", tenantName).Scan(&tenantID)
 	}
 
 	role := regReq.Role
@@ -662,13 +668,17 @@ func handleAddStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In real life, we should extract TenantID from JWT here.
-	// For simplicity in this demo, we accept TenantID from header if available, or just mock it.
-	tenantID := r.Header.Get("X-Tenant-ID")
-	if tenantID == "" {
-		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Tenant ID required"})
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Authorization required"})
 		return
 	}
+	claims, err := validateToken(strings.TrimPrefix(authHeader, "Bearer "))
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Invalid or expired token"})
+		return
+	}
+	tenantID := claims.TenantID
 
 	var req AddStaffRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -688,11 +698,11 @@ func handleAddStaff(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	_, err = DB.Exec(ctx, 
+	_, err = DB.Exec(ctx,
 		"INSERT INTO users (tenant_id, username, email, password_hash, role, phone_number) VALUES ($1, $2, $3, $4, $5, $6)",
 		tenantID, req.Username, req.Email, string(hashedPassword), req.Role, req.PhoneNumber,
 	)
-	
+
 	if err != nil {
 		slog.Error("Failed to insert staff", "error", err)
 		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Username, email, or phone may already exist"})

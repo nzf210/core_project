@@ -139,6 +139,8 @@ func main() {
 	mux.Handle("/admin/plans/", auth.Middleware(http.HandlerFunc(handleAdminUpdatePlan)))
 	mux.Handle("/admin/plan-features", auth.Middleware(http.HandlerFunc(handleAdminPlanFeaturesCollection)))
 	mux.Handle("/admin/plan-features/", auth.Middleware(http.HandlerFunc(handleAdminPlanFeaturesItem)))
+	mux.Handle("/admin/voucher-programs", auth.Middleware(http.HandlerFunc(handleAdminVoucherProgramsCollection)))
+	mux.Handle("/admin/voucher-analytics", auth.Middleware(http.HandlerFunc(handleAdminVoucherAnalytics)))
 
 	// Voucher link routes (public redeem + superadmin generate)
 	mux.HandleFunc("/voucher/redeem-link", handleRedeemVoucherLink) // public, via signed token
@@ -364,6 +366,28 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		CreateInvoiceRequest(*createReq).Execute()
 	if err != nil {
 		slog.Error("Failed to create xendit invoice", "error", err)
+
+		// In development mode, mock the invoice creation instead of failing
+		if os.Getenv("ENV") == "development" || os.Getenv("APP_ENV") == "development" || os.Getenv("ENV") == "" {
+			slog.Warn("⚠️ Development mode: Mocking Xendit invoice creation")
+			mockInvoiceUrl := fmt.Sprintf("https://checkout.xendit.co/web/%s", externalID)
+			_, err = DB.Exec(ctx, `
+				INSERT INTO invoices (id, tenant_id, plan_id, amount, status, payment_url, voucher_code)
+				VALUES ($1, $2, $3, $4, 'pending', $5, $6)
+				ON CONFLICT (id) DO UPDATE SET
+					status = EXCLUDED.status, payment_url = EXCLUDED.payment_url
+			`, externalID, tenantID, req.PlanID, finalPrice, mockInvoiceUrl, req.VoucherCode)
+			if err != nil {
+				slog.Warn("Failed to save mock invoice", "error", err)
+			}
+			response.JSON(w, http.StatusOK, "Subscription invoice created (MOCK)", map[string]interface{}{
+				"invoice_id":   externalID,
+				"payment_url":  mockInvoiceUrl,
+				"amount":       finalPrice,
+			})
+			return
+		}
+
 		// Fallback: activate free tier or voucher subscription
 		if finalPrice == 0 || req.VoucherCode != "" {
 			activateSubscription(ctx, tenantID, req.PlanID, planName, 30, "voucher", voucherCodeID)
@@ -718,9 +742,26 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ticketID := activateSubscription(ctx, tenantID, planID, planName, periodDays, activatedBy, nil)
+	// Auto-generate voucher code for this payment (for tenant's records and future reference)
+	autoVoucherCode := generateVoucherCode(planID, tenantID)
+	var voucherCodeID *string
+	if autoVoucherCode != "" {
+		var vid string
+		DB.QueryRow(ctx, `
+			INSERT INTO voucher_codes (program_id, code, is_redeemed, used_by, used_at, created_at)
+			SELECT id, $1, true, $2, NOW(), NOW()
+			FROM voucher_programs WHERE target_plan_id = $3 AND is_active = true
+			LIMIT 1
+			RETURNING id
+		`, autoVoucherCode, tenantID, planID).Scan(&vid)
+		if vid != "" {
+			voucherCodeID = &vid
+		}
+	}
 
-	slog.Info("Payment processed", "tenant_id", tenantID, "plan", planID, "ticket_id", ticketID)
+	ticketID := activateSubscription(ctx, tenantID, planID, planName, periodDays, activatedBy, voucherCodeID)
+
+	slog.Info("Payment processed", "tenant_id", tenantID, "plan", planID, "ticket_id", ticketID, "voucher_code", autoVoucherCode)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -756,6 +797,10 @@ func activateSubscription(ctx context.Context, tenantID, planID, planName string
 
 	// 2. Update tenant plan
 	_, _ = DB.Exec(ctx, "UPDATE tenants SET plan = $1 WHERE id = $2", planID, tenantID)
+
+	// Sync Redis cache so quota gates read the correct plan tier.
+	// Without this, auth.GetTenantPlan always falls back to "free" even for active subscriptions.
+	auth.SetTenantPlan(ctx, tenantID, planID)
 
 	// 3. Create subscription ticket
 	var ticketID string
@@ -1628,6 +1673,9 @@ func handleRedeemVoucherLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sync Redis cache so quota gates read the correct plan tier.
+	auth.SetTenantPlan(ctx, req.TenantID, planID)
+
 	// Async notification
 	go sendTicketNotifications(req.TenantID, TicketPayload{
 		TicketNumber:  ticketNumber,
@@ -1945,3 +1993,229 @@ func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 
 // nilStr returns "" for any string (helper for null target_plan_id)
 func nilStr() string { return "" }
+
+// generateVoucherCode creates an auto-generated voucher code for a payment
+// Format: {PLAN_PREFIX}-{TIMESTAMP}-{RANDOM}
+func generateVoucherCode(planID, tenantID string) string {
+	planPrefix := map[string]string{
+		"lite": "LITE",
+		"pro":  "PRO",
+		"enterprise": "ENT",
+	}
+	prefix := planPrefix[planID]
+	if prefix == "" {
+		prefix = "WCH"
+	}
+
+	// Use timestamp + tenant hash for uniqueness
+	timestamp := time.Now().Unix() % 100000
+	shortTenant := tenantID
+	if len(shortTenant) > 4 {
+		shortTenant = shortTenant[len(shortTenant)-4:]
+	}
+
+	return fmt.Sprintf("%s-%d-%s", prefix, timestamp, strings.ToUpper(shortTenant))
+}
+
+// ─────────────────────────────────────────────
+// Superadmin: Voucher Program Handlers
+// ─────────────────────────────────────────────
+
+type CreateVoucherProgramReq struct {
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	VoucherType     string `json:"voucher_type"`
+	DiscountValue   int    `json:"discount_value"`
+	TargetPlanID    string `json:"target_plan_id"`
+	DurationMonths  int    `json:"duration_months"`
+	MaxUses         int    `json:"max_uses"`
+	StartsAt        string `json:"starts_at"`
+	ExpiresAt       string `json:"expires_at"`
+}
+
+func handleAdminVoucherProgramsCollection(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		listVoucherPrograms(w, r)
+	case http.MethodPost:
+		createVoucherProgram(w, r)
+	default:
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	}
+}
+
+func listVoucherPrograms(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	rows, err := DB.Query(ctx, `
+		SELECT id, name, description, voucher_type, discount_value, COALESCE(target_plan_id, ''), duration_months, max_uses, uses_count, starts_at, expires_at, is_active
+		FROM voucher_programs ORDER BY created_at DESC
+	`)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to list voucher programs", err)
+		return
+	}
+	defer rows.Close()
+
+	type programRow struct {
+		ID             string     `json:"id"`
+		Name           string     `json:"name"`
+		Description    string     `json:"description"`
+		VoucherType    string     `json:"voucher_type"`
+		DiscountValue  int        `json:"discount_value"`
+		TargetPlanID   string     `json:"target_plan_id"`
+		DurationMonths int        `json:"duration_months"`
+		MaxUses        int        `json:"max_uses"`
+		UsesCount      int        `json:"uses_count"`
+		StartsAt       time.Time  `json:"starts_at"`
+		ExpiresAt      *time.Time `json:"expires_at"`
+		IsActive       bool       `json:"is_active"`
+	}
+
+	var programs []programRow
+	for rows.Next() {
+		var p programRow
+		err := rows.Scan(
+			&p.ID, &p.Name, &p.Description, &p.VoucherType, &p.DiscountValue,
+			&p.TargetPlanID, &p.DurationMonths, &p.MaxUses, &p.UsesCount,
+			&p.StartsAt, &p.ExpiresAt, &p.IsActive,
+		)
+		if err == nil {
+			programs = append(programs, p)
+		}
+	}
+
+	response.JSON(w, http.StatusOK, "Voucher programs retrieved", programs)
+}
+
+func createVoucherProgram(w http.ResponseWriter, r *http.Request) {
+	var req CreateVoucherProgramReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	if req.Name == "" || req.VoucherType == "" {
+		response.Error(w, http.StatusBadRequest, "name and voucher_type are required", nil)
+		return
+	}
+
+	startsAt := time.Now()
+	if req.StartsAt != "" {
+		if t, err := time.Parse(time.RFC3339, req.StartsAt); err == nil {
+			startsAt = t
+		}
+	}
+
+	var expiresAt *time.Time
+	if req.ExpiresAt != "" {
+		if t, err := time.Parse(time.RFC3339, req.ExpiresAt); err == nil {
+			expiresAt = &t
+		}
+	}
+
+	ctx := r.Context()
+	var id string
+	err := DB.QueryRow(ctx, `
+		INSERT INTO voucher_programs (name, description, voucher_type, discount_value, target_plan_id, duration_months, max_uses, starts_at, expires_at, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+		RETURNING id
+	`, req.Name, req.Description, req.VoucherType, req.DiscountValue, req.TargetPlanID, req.DurationMonths, req.MaxUses, startsAt, expiresAt).Scan(&id)
+
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to create voucher program", err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "Voucher program created", map[string]interface{}{
+		"id": id,
+	})
+}
+
+func handleAdminVoucherAnalytics(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+
+	ctx := r.Context()
+	programID := r.URL.Query().Get("program_id")
+
+	var (
+		totalGenerated int
+		totalRedeemed  int
+	)
+
+	if programID != "" {
+		// Specific program analytics
+		err := DB.QueryRow(ctx, `
+			SELECT 
+				COUNT(*), 
+				COUNT(CASE WHEN redeemed_by IS NOT NULL THEN 1 END)
+			FROM voucher_links
+			WHERE program_id = $1
+		`, programID).Scan(&totalGenerated, &totalRedeemed)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to fetch program analytics", err)
+			return
+		}
+
+		response.JSON(w, http.StatusOK, "Program analytics retrieved", map[string]interface{}{
+			"program_id":             programID,
+			"total_links_generated":  totalGenerated,
+			"total_links_redeemed":   totalRedeemed,
+			"redemption_rate_percent": calculateRate(totalGenerated, totalRedeemed),
+		})
+	} else {
+		// Global analytics
+		var totalPrograms, activePrograms int
+		err := DB.QueryRow(ctx, `
+			SELECT 
+				COUNT(*), 
+				COUNT(CASE WHEN is_active = true THEN 1 END)
+			FROM voucher_programs
+		`).Scan(&totalPrograms, &activePrograms)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to fetch global program stats", err)
+			return
+		}
+
+		err = DB.QueryRow(ctx, `
+			SELECT 
+				COUNT(*), 
+				COUNT(CASE WHEN redeemed_by IS NOT NULL THEN 1 END)
+			FROM voucher_links
+		`).Scan(&totalGenerated, &totalRedeemed)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to fetch global links stats", err)
+			return
+		}
+
+		response.JSON(w, http.StatusOK, "Global voucher analytics retrieved", map[string]interface{}{
+			"total_programs":          totalPrograms,
+			"active_programs":         activePrograms,
+			"total_links_generated":  totalGenerated,
+			"total_links_redeemed":   totalRedeemed,
+			"redemption_rate_percent": calculateRate(totalGenerated, totalRedeemed),
+		})
+	}
+}
+
+func calculateRate(total, redeemed int) float64 {
+	if total == 0 {
+		return 0.0
+	}
+	return float64(redeemed) / float64(total) * 100.0
+}
+

@@ -30,6 +30,11 @@
           </tr>
         </thead>
         <tbody>
+          <tr v-if="transactions.length === 0">
+            <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+              Belum ada transaksi. Klik "Catat Transaksi" untuk mencatat jurnal pertama.
+            </td>
+          </tr>
           <tr v-for="(trx, idx) in transactions" :key="idx">
             <td>{{ trx.date }}</td>
             <td><span class="badge badge-warning">{{ trx.reference }}</span></td>
@@ -102,18 +107,66 @@
     </div>
 
     <!-- Simple modal placeholder -->
-    <div v-if="showForm" class="modal-overlay">
-      <div class="glass-card modal-content animate-fade-in">
-        <h3 style="margin-bottom: 1.5rem">Transaksi Baru</h3>
-        
-        <div class="input-group">
-          <label class="input-label">Keterangan</label>
-          <input type="text" class="input-field" placeholder="Contoh: Penjualan Produk A" />
+    <div v-if="showForm" class="modal-overlay" @click.self="showForm = false">
+      <div class="glass-card modal-content animate-fade-in" style="max-width: 700px;">
+        <div class="flex items-center justify-between" style="margin-bottom: 1.5rem;">
+          <h3>Catat Jurnal Baru</h3>
+          <button @click="showForm = false" style="background:none;border:none;cursor:pointer;font-size:1.2rem;padding:0.25rem;">✕</button>
         </div>
 
-        <div class="flex justify-between" style="margin-top: 2rem;">
-          <button class="btn btn-secondary" @click="showForm = false">Batal</button>
-          <button class="btn btn-primary" @click="saveTransaction">Simpan Jurnal</button>
+        <div class="form-row-2">
+          <div class="input-group">
+            <label class="input-label">Tanggal</label>
+            <input type="date" class="input-field" v-model="form.date" />
+          </div>
+          <div class="input-group">
+            <label class="input-label">Referensi</label>
+            <input type="text" class="input-field" v-model="form.reference" placeholder="cth: INV-001" />
+          </div>
+        </div>
+
+        <div class="input-group" style="margin-bottom: 1rem;">
+          <label class="input-label">Keterangan</label>
+          <input type="text" class="input-field" v-model="form.description" placeholder="cth: Penjualan Produk A" />
+        </div>
+
+        <div style="margin-bottom: 0.75rem; font-weight: 600; font-size: 0.9rem; color: var(--text-secondary);">
+          Ayat Jurnal (Double-Entry)
+        </div>
+
+        <div class="journal-lines">
+          <div v-for="(line, idx) in form.lines" :key="idx" class="journal-line-row">
+            <select class="input-field" v-model="line.account_id" style="flex: 2;">
+              <option value="">Pilih Akun</option>
+              <option v-for="acc in accounts" :key="acc.id" :value="acc.id">
+                {{ acc.code }} — {{ acc.name }}
+              </option>
+            </select>
+            <input type="number" class="input-field" v-model.number="line.debit" placeholder="Debit (Rp)" min="0" style="flex: 1;" @input="line.credit = 0" />
+            <input type="number" class="input-field" v-model.number="line.credit" placeholder="Kredit (Rp)" min="0" style="flex: 1;" @input="line.debit = 0" />
+            <button class="btn btn-secondary btn-sm" @click="removeLine(idx)" style="padding: 0.3rem 0.5rem; color: #ef4444;">✕</button>
+          </div>
+        </div>
+
+        <button class="btn btn-secondary" @click="addLine" style="margin-top: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem;">
+          + Tambah Baris
+        </button>
+
+        <div v-if="lineError" class="error-msg" style="margin-bottom: 1rem; font-size: 0.85rem;">{{ lineError }}</div>
+
+        <div class="flex justify-between" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+          <div class="totals">
+            <span>Total Debit: <strong>{{ formatNumber(totalDebit) }}</strong></span>
+            &nbsp;&nbsp;
+            <span>Total Kredit: <strong>{{ formatNumber(totalCredit) }}</strong></span>
+            <span v-if="totalDebit !== totalCredit" style="color: #ef4444; margin-left: 0.5rem;">⚠️ Belum平衡</span>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-secondary" @click="showForm = false">Batal</button>
+            <button class="btn btn-primary" @click="saveTransaction" :disabled="saving">
+              {{ saving ? 'Menyimpan...' : 'Simpan Jurnal' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -121,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, computed } from 'vue'
 import { api, API_BASE } from '../api'
 
 const showForm = ref(false)
@@ -129,17 +182,39 @@ const ocrInput = ref<HTMLInputElement | null>(null)
 const businessName = ref(localStorage.getItem('business_name') || 'Toko Kami')
 
 const transactions = ref<any[]>([])
+const accounts = ref<any[]>([])
+const saving = ref(false)
+const lineError = ref('')
+
+const today = new Date().toISOString().split('T')[0]
+const form = ref({
+  date: today,
+  reference: '',
+  description: '',
+  lines: [
+    { account_id: '', debit: 0, credit: 0 },
+    { account_id: '', debit: 0, credit: 0 },
+  ],
+})
+
+const totalDebit = computed(() => form.value.lines.reduce((s, l) => s + (l.debit || 0), 0))
+const totalCredit = computed(() => form.value.lines.reduce((s, l) => s + (l.credit || 0), 0))
+
+const formatNumber = (val: number) => new Intl.NumberFormat('id-ID').format(val)
+
+const fetchAccounts = async () => {
+  try {
+    const data = await api.get('/api/umkm/accounts')
+    if (data.success && data.data) accounts.value = data.data
+  } catch (e) { console.error(e) }
+}
 
 const fetchTransactions = async () => {
   try {
     const tenantID = localStorage.getItem('tenant_id')
     if (!tenantID) return
-
-    // Fetch Transactions
     const txData = await api.get('/api/umkm/transactions')
-    if (txData.success && txData.data) {
-      transactions.value = txData.data
-    }
+    if (txData.success && txData.data) transactions.value = txData.data
   } catch (e) {
     console.error("Failed to fetch transactions:", e)
   }
@@ -147,15 +222,53 @@ const fetchTransactions = async () => {
 
 onMounted(() => {
   fetchTransactions()
+  fetchAccounts()
 })
 
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(val)
 }
 
-const saveTransaction = () => {
-  alert('Disimpan ke API /transactions')
-  showForm.value = false
+const addLine = () => {
+  form.value.lines.push({ account_id: '', debit: 0, credit: 0 })
+  lineError.value = ''
+}
+
+const removeLine = (idx: number) => {
+  if (form.value.lines.length > 2) form.value.lines.splice(idx, 1)
+}
+
+const saveTransaction = async () => {
+  lineError.value = ''
+  const lines = form.value.lines.filter(l => l.account_id && (l.debit > 0 || l.credit > 0))
+  if (lines.length < 2) {
+    lineError.value = 'Minimal perlu 2 baris dengan akun terisi.'
+    return
+  }
+  if (totalDebit.value !== totalCredit.value) {
+    lineError.value = `Total Debit (${formatNumber(totalDebit.value)}) harus sama dengan Kredit (${formatNumber(totalCredit.value)}).`
+    return
+  }
+  saving.value = true
+  try {
+    const data = await api.post('/api/umkm/transactions', {
+      date: form.value.date,
+      description: form.value.description,
+      reference: form.value.reference,
+      lines: lines.map(l => ({ account_id: l.account_id, debit: l.debit || 0, credit: l.credit || 0 })),
+    })
+    if (data.success) {
+      showForm.value = false
+      form.value = { date: today, reference: '', description: '', lines: [{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }] }
+      fetchTransactions()
+    } else {
+      lineError.value = data.message || 'Gagal menyimpan jurnal.'
+    }
+  } catch (e) {
+    lineError.value = 'Kesalahan jaringan.'
+  } finally {
+    saving.value = false
+  }
 }
 
 const triggerOCR = () => {
@@ -166,30 +279,19 @@ const handleOCR = async (e: Event) => {
   const target = e.target as HTMLInputElement
   if (!target.files || target.files.length === 0) return
   const file = target.files[0]
-  
-  alert("Sedang dianalisis AI (OCR)...")
+
   const formData = new FormData()
   formData.append('image', file)
-  
-  try {
-    const tenantID = localStorage.getItem('tenant_id') || ''
-    const token = localStorage.getItem('access_token') || ''
-    const res = await fetch(`${API_BASE}/api/umkm/ocr`, {
-      method: 'POST',
-      headers: {
-        'X-Tenant-ID': tenantID,
-        'Authorization': `Bearer ${token}`
-      },
-      body: formData
-    })
-    const data = await res.json()
-    if (data.success) {
-      alert("Nota berhasil di-scan!\n" + JSON.stringify(data.data, null, 2))
 
-      await api.post('/api/umkm/transactions', data.data)
-      fetchTransactions()
+  try {
+    const data = await api.post('/api/umkm/ocr', formData, true)
+    if (data.success && data.data) {
+      if (data.data.description) form.value.description = data.data.description
+      if (data.data.date) form.value.date = data.data.date
+      showForm.value = true
+      fetchAccounts()
     } else {
-      alert("Gagal scan nota: " + data.message)
+      alert(data.message || 'Gagal scan nota.')
     }
   } catch (err) {
     alert("Error memanggil layanan OCR")
@@ -208,9 +310,7 @@ const getTrxTotal = (trx: any) => {
 const printReceipt = async (trx: any) => {
   selectedTrx.value = trx
   await nextTick()
-  setTimeout(() => {
-    window.print()
-  }, 500)
+  setTimeout(() => { window.print() }, 500)
 }
 </script>
 
@@ -250,8 +350,42 @@ const printReceipt = async (trx: any) => {
   background-color: rgba(255, 255, 255, 0.02);
 }
 
+.data-table tbody tr:first-child td[colspan] {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 2rem;
+}
+
 .text-right {
   text-align: right;
+}
+
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.journal-line-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.totals {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.error-msg {
+  color: var(--accent-error, #ef4444);
+  padding: 0.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 4px;
 }
 
 .modal-overlay {

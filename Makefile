@@ -175,17 +175,17 @@ start-all: _ensure_dirs
 	@echo "▶ Memulai seluruh ekosistem WCH Platform..."
 	@echo "  Log files  → $(LOG_DIR)/"
 	@echo "  PID files  → $(RUN_DIR)/"
-	@nohup go run ./services/api-gateway     > $(LOG_DIR)/api-gateway.log     2>&1 & echo $$! > $(RUN_DIR)/api-gateway.pid
-	@nohup go run ./services/auth-service    > $(LOG_DIR)/auth.log             2>&1 & echo $$! > $(RUN_DIR)/auth.pid
-	@nohup go run ./services/ai-gateway      > $(LOG_DIR)/ai.log               2>&1 & echo $$! > $(RUN_DIR)/ai.pid
-	@nohup go run ./services/billing-service > $(LOG_DIR)/billing-service.log  2>&1 & echo $$! > $(RUN_DIR)/billing-service.pid
-	@nohup go run ./services/notification-service > $(LOG_DIR)/notification-service.log 2>&1 & echo $$! > $(RUN_DIR)/notification-service.pid
-	@nohup go run ./services/wa-gateway      > $(LOG_DIR)/wa-gateway.log       2>&1 & echo $$! > $(RUN_DIR)/wa-gateway.pid
-	@nohup sh -c "PORT=8203 go run ./apps/umkm/chatbot" > $(LOG_DIR)/chatbot.log 2>&1 & echo $$! > $(RUN_DIR)/chatbot.pid
-	@nohup go run ./apps/umkm/accounting     > $(LOG_DIR)/accounting.log       2>&1 & echo $$! > $(RUN_DIR)/accounting.pid
-	@nohup go run ./apps/umkm/business       > $(LOG_DIR)/business.log         2>&1 & echo $$! > $(RUN_DIR)/business.pid
-	@nohup go run ./apps/umkm/automation     > $(LOG_DIR)/automation.log       2>&1 & echo $$! > $(RUN_DIR)/automation.pid
-	@nohup go run ./apps/campaign/api        > $(LOG_DIR)/campaign-api.log     2>&1 & echo $$! > $(RUN_DIR)/campaign-api.pid
+	@nohup ./bin/api-gateway     > $(LOG_DIR)/api-gateway.log     2>&1 & echo $$! > $(RUN_DIR)/api-gateway.pid
+	@nohup ./bin/auth-service    > $(LOG_DIR)/auth.log             2>&1 & echo $$! > $(RUN_DIR)/auth.pid
+	@nohup ./bin/ai-gateway      > $(LOG_DIR)/ai.log               2>&1 & echo $$! > $(RUN_DIR)/ai.pid
+	@nohup ./bin/billing-service > $(LOG_DIR)/billing-service.log  2>&1 & echo $$! > $(RUN_DIR)/billing-service.pid
+	@nohup ./bin/notification-service > $(LOG_DIR)/notification-service.log 2>&1 & echo $$! > $(RUN_DIR)/notification-service.pid
+	@nohup ./bin/wa-gateway      > $(LOG_DIR)/wa-gateway.log       2>&1 & echo $$! > $(RUN_DIR)/wa-gateway.pid
+	@nohup sh -c "PORT=8203 ./bin/umkm-chatbot" > $(LOG_DIR)/chatbot.log 2>&1 & echo $$! > $(RUN_DIR)/chatbot.pid
+	@nohup ./bin/umkm-accounting     > $(LOG_DIR)/accounting.log       2>&1 & echo $$! > $(RUN_DIR)/accounting.pid
+	@nohup ./bin/umkm-business       > $(LOG_DIR)/business.log         2>&1 & echo $$! > $(RUN_DIR)/business.pid
+	@nohup ./bin/umkm-automation     > $(LOG_DIR)/automation.log       2>&1 & echo $$! > $(RUN_DIR)/automation.pid
+	@nohup ./bin/campaign-api        > $(LOG_DIR)/campaign-api.log     2>&1 & echo $$! > $(RUN_DIR)/campaign-api.pid
 	@nohup sh -c 'cd frontend/umkm-web     && npm run dev -- --port 3201' > $(LOG_DIR)/frontend-umkm.log     2>&1 & echo $$! > $(RUN_DIR)/frontend-umkm.pid
 	@nohup sh -c 'cd frontend/campaign-web && npm run dev -- --port 3301' > $(LOG_DIR)/frontend-campaign.log 2>&1 & echo $$! > $(RUN_DIR)/frontend-campaign.pid
 	@nohup sh -c 'cd frontend/superadmin-web && npm run dev -- --port 3401' > $(LOG_DIR)/frontend-superadmin.log 2>&1 & echo $$! > $(RUN_DIR)/frontend-superadmin.pid

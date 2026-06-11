@@ -43,19 +43,21 @@ const router = createRouter({
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('access_token')
   const tenantId = localStorage.getItem('tenant_id')
+  const role = localStorage.getItem('role')
+  const isSuperadmin = role === 'superadmin'
   const isLoggedIn = !!(token && tenantId)
 
   if (to.meta.requiresGuest) {
-    if (isLoggedIn) {
+    if (isLoggedIn || isSuperadmin) {
       next({ path: '/' })
     } else {
       next()
     }
   } else {
-    if (isLoggedIn) {
+    if (isLoggedIn || isSuperadmin) {
       if (to.path !== '/onboarding' && to.path !== '/login' && to.path !== '/register') {
         const onboardingDone = localStorage.getItem('onboarding_completed')
-        if (!onboardingDone) {
+        if (!onboardingDone && !isSuperadmin) {
           next({ path: '/onboarding' })
           return
         }

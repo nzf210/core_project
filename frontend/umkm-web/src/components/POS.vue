@@ -123,7 +123,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { api } from '../api'
 
 
@@ -158,35 +158,44 @@ onMounted(() => {
   fetchProducts()
 })
 
+onUnmounted(() => {
+  if (pollInterval) clearInterval(pollInterval)
+})
+
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(val)
 }
 
 const addToCart = (product: any) => {
   if (product.stock_quantity <= 0) {
-    if (!confirm('Stok barang ini 0 atau kurang. Tetap tambahkan ke keranjang?')) {
-      return;
-    }
+    return
   }
 
   const existing = cart.value.find(item => item.id === product.id)
   if (existing) {
-    existing.quantity++
+    const totalQty = existing.quantity + 1
+    if (totalQty > product.stock_quantity) return
+    existing.quantity = totalQty
   } else {
     cart.value.push({
       id: product.id,
       name: product.name,
       price: product.price,
-      quantity: 1
+      quantity: 1,
     })
   }
 }
 
 const updateQty = (index: number, delta: number) => {
-  cart.value[index].quantity += delta
-  if (cart.value[index].quantity <= 0) {
+  const item = cart.value[index]
+  const newQty = item.quantity + delta
+  if (newQty <= 0) {
     cart.value.splice(index, 1)
+    return
   }
+  const product = products.value.find(p => p.id === item.id)
+  if (product && newQty > product.stock_quantity) return
+  item.quantity = newQty
 }
 
 const cartTotal = computed(() => {
