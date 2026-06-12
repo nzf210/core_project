@@ -138,7 +138,7 @@ GET /v1/models
 - [x] AC-5: `/v1/models` endpoint return semua available models
 
 **Files:**
-- `shared/sdk/config/config.go` — LLMProviderConfig struct + loadLLMProviders()
+- `shared/sdk/config/config.go` — LLMModel / LLMConfig structs + loadLLMModels()
 - `services/ai-gateway/main.go` — capability-based routing + metrics
 - `.env.example` — updated dengan flexible model config
 

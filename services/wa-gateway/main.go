@@ -561,11 +561,16 @@ func setupRoutes(ctx context.Context, container *sqlstore.Container) {
 			ownerKey := sessionOwnerPrefix + tenantID
 			owner, err := redisClient.Get(r.Context(), ownerKey).Result()
 			if err == nil && owner != instanceID {
+				var jid string
+				if db != nil {
+					db.QueryRow("SELECT jid FROM wa_tenant_sessions WHERE tenant_id = $1", tenantID).Scan(&jid)
+				}
 				w.WriteHeader(http.StatusOK)
 				json.NewEncoder(w).Encode(map[string]interface{}{
-					"status":     "delegated",
-					"owner":      owner,
-					"message":    "Session handled by another instance",
+					"status":  "connected",
+					"jid":     jid,
+					"owner":   owner,
+					"message": "Session handled by another instance",
 				})
 				return
 			}

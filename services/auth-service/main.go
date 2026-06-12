@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"bytes"
 	"io"
 	"log/slog"
 	"net/http"
@@ -310,21 +311,38 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		formData := url.Values{}
 		formData.Set("tenant_id", senderTenant)
 		formData.Set("target", target)
-		formData.Set("message", "Kode OTP Campaign Manager Anda: " + otp)
-		
-		payload := strings.NewReader(formData.Encode())
+		formData.Set("message", "Kode OTP registrasi WCH Anda: " + otp)
 		
 		waURL := os.Getenv("WA_GATEWAY_URL")
 		if waURL == "" {
 			waURL = "http://wa-gateway:8202"
 		}
-		
-		resp, err := http.Post(waURL+"/api/wa/send", "application/x-www-form-urlencoded", payload)
+
+		var resp *http.Response
+		var err error
+		for i := 0; i < 3; i++ {
+			payload := strings.NewReader(formData.Encode())
+			resp, err = http.Post(waURL+"/api/wa/send", "application/x-www-form-urlencoded", payload)
+			if err != nil {
+				slog.Error("Failed to send OTP via WA Gateway", "error", err)
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			if resp.StatusCode == 409 {
+				resp.Body.Close()
+				slog.Warn("WA Gateway returned 409 (delegated), retrying...", "attempt", i+1)
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			break
+		}
+
 		if err != nil {
-			slog.Error("Failed to send OTP via WA Gateway", "error", err)
+			slog.Error("Failed to send OTP after retries", "error", err)
 			return
 		}
 		defer resp.Body.Close()
+		
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			slog.Error("WA Gateway rejected OTP", "status", resp.StatusCode, "body", string(body))
@@ -1164,7 +1182,7 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 		formData := url.Values{}
 		verifierTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
 		if verifierTenant == "" {
-			verifierTenant = "verifier"
+			verifierTenant = "system"
 		}
 		formData.Set("tenant_id", verifierTenant)
 		formData.Set("target", target)
@@ -1175,15 +1193,32 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 			waURL = "http://wa-gateway:8202"
 		}
 		
-		resp, err := http.Post(waURL+"/api/wa/send",
-			"application/x-www-form-urlencoded",
-			strings.NewReader(formData.Encode()))
+		var resp *http.Response
+		var err error
+		for i := 0; i < 3; i++ {
+			payload := strings.NewReader(formData.Encode())
+			resp, err = http.Post(waURL+"/api/wa/send", "application/x-www-form-urlencoded", payload)
+			if err != nil {
+				slog.Error("Failed to send login OTP via WA Gateway", "error", err)
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			if resp.StatusCode == 409 {
+				resp.Body.Close()
+				slog.Warn("WA Gateway returned 409 (delegated), retrying...", "attempt", i+1)
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			break
+		}
+
 		if err != nil {
-			slog.Error("Failed to send login OTP via WA", "error", err)
+			slog.Error("Failed to send login OTP after retries", "error", err)
 			return
 		}
 		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
+		
+		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			slog.Error("WA Gateway rejected login OTP", "status", resp.StatusCode, "body", string(body))
 		}
@@ -1341,25 +1376,59 @@ func handleVerifierStatus(w http.ResponseWriter, r *http.Request) {
 	if waURL == "" { waURL = "http://wa-gateway:8202" }
 	verifierTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
 	if verifierTenant == "" { verifierTenant = "verifier" }
-	resp, err := client.Get(waURL + "/api/wa/status?tenant_id=" + verifierTenant)
-	if err != nil {
-		slog.Warn("WA Gateway not reachable", "error", err)
-		writeJSON(w, http.StatusOK, Response{Success: true, Data: map[string]interface{}{
-			"status": "unavailable",
-			"message": "WA Gateway tidak berjalan. Verifier WhatsApp tidak tersedia.",
-		}})
-		return
-	}
-	defer resp.Body.Close()
+		var resp *http.Response
+		var err error
+		for i := 0; i < 3; i++ {
+			resp, err = client.Get(waURL + "/api/wa/status?tenant_id=" + verifierTenant)
+			if err != nil {
+				slog.Warn("WA Gateway not reachable", "error", err)
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			
+			// If it's a 200, we need to read body to check if it's delegated
+			if resp.StatusCode == http.StatusOK {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				
+				var tempStatus map[string]interface{}
+				json.Unmarshal(bodyBytes, &tempStatus)
+				if tempStatus["status"] == "delegated" {
+					if i == 2 {
+						tempStatus["status"] = "connected"
+						newBody, _ := json.Marshal(tempStatus)
+						resp.Body = io.NopCloser(bytes.NewBuffer(newBody))
+						break
+					}
+					slog.Warn("WA Gateway status delegated, retrying...", "attempt", i+1)
+					time.Sleep(500 * time.Millisecond)
+					continue
+				}
+				
+				// Reconstruct body for next steps
+				resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+				break
+			}
+			break
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		slog.Warn("WA Gateway returned non-200", "status", resp.StatusCode)
-		writeJSON(w, http.StatusOK, Response{Success: true, Data: map[string]interface{}{
-			"status": "unavailable",
-			"message": "WA Gateway tidak merespon dengan benar.",
-		}})
-		return
-	}
+		if err != nil {
+			writeJSON(w, http.StatusOK, Response{Success: true, Data: map[string]interface{}{
+				"status": "unavailable",
+				"message": "WA Gateway tidak berjalan. Verifier WhatsApp tidak tersedia.",
+			}})
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			slog.Warn("WA Gateway returned non-200", "status", resp.StatusCode)
+			writeJSON(w, http.StatusOK, Response{Success: true, Data: map[string]interface{}{
+				"status": "unavailable",
+				"message": "WA Gateway tidak merespon dengan benar.",
+			}})
+			return
+		}
 
 	var status map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
