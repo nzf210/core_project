@@ -59,9 +59,11 @@ func main() {
 	// Path convention: /webhooks/<service>/<event>
 	// - Xendit: POST /webhooks/xendit/{invoice.paid,subscription.activated,subscription.expired}
 	// - wa-gateway: POST /webhooks/wa/{message.status,device.status} (whatsmeow internal)
+	// - wa-cloud-api: POST /webhooks/wa-cloud (Meta Cloud API callbacks)
 	// - n8n:    POST /webhooks/n8n/{workflow_name}  (custom workflow trigger)
 	mux.Handle("/webhooks/xendit/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks", newProxy(getTarget("billing-service", "8003")))))
 	mux.Handle("/webhooks/wa/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks", newProxy(getTarget("wa-gateway", "8202")))))
+	mux.Handle("/webhooks/wa-cloud/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks/wa-cloud", newProxy(getTarget("wa-cloud-api", "8210")+"/webhook"))))
 	mux.Handle("/webhooks/n8n/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks", newProxy(getTarget("n8n", "5678")))))
 
 	// Superadmin routes — protected with auth + role check
@@ -237,6 +239,7 @@ func handleAggregatedHealthz(getTarget func(string, string) string, cfg *config.
 		{"subscription-worker", "8006"},
 		{"umkm-accounting", "8201"},
 		{"wa-gateway", "8202"},
+		{"wa-cloud-api", "8210"},
 		{"campaign-api", "9002"},
 		{"umkm-business", "9005"},
 	}

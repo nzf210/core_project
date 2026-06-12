@@ -75,6 +75,48 @@ Format per feature:
 | F013 | N8N Integration via Super Admin | ❌ Removed | — | — |
 | F014 | Flexible LLM Model System | ✅ Approved | ✅ Done | 2026-06-12 |
 | F015 | Onboarding Activation Flow | ✅ Approved | ✅ Done | 2026-06-13 |
+| F016 | Hybrid WhatsApp (Cloud API + whatsmeow) | ✅ Approved | ✅ Done | 2026-06-13 |
+| F017 | OTP 1-Hour Reuse Window | ✅ Approved | ✅ Done | 2026-06-13 |
+| F018 | Telegram Auth (Register & Login) | ✅ Approved | ✅ Done | 2026-06-13 |
+
+---
+
+## F018: Telegram Auth (Register & Login via Telegram Bot)
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** User bisa daftar dan login via Telegram Bot. OTP dikirim melalui Telegram (bukan hanya WhatsApp), memanfaatkan bot Telegram yang sama dengan notification-service. Reuse Redis OTP key yang sudah ada — verify OTP endpoint yang sama tetap berfungsi untuk WA maupun Telegram.
+
+**Spec:**
+- User memulai chat dengan bot Telegram WCH → bot reply dengan Chat ID
+- Frontend UMKM mengirimkan `telegramChatId` bersama data pendaftaran ke `POST /auth/telegram/register`
+- Auth-service generate OTP dan kirim via `sendMessage` Telegram Bot API
+- OTP disimpan di Redis dengan key yang sama (`otp:{phone}`) — verifikasi via `POST /auth/verify-otp` tetap berfungsi
+- Untuk login: `POST /auth/telegram/login` — verifikasi nomor WA terdaftar, kirim OTP via Telegram, update `telegram_chat_id` di DB
+- Webhook bot: `POST /auth/telegram/webhook` — handle command `/start` untuk mengembalikan Chat ID
+- Reuse 1-hour OTP reuse window dari F017 — baik WA maupun Telegram
+
+**Acceptance Criteria (AC):**
+- [x] AC-1: POST `/auth/telegram/register` dengan `telegramChatId` + data → OTP terkirim ke Telegram
+- [x] AC-2: POST `/auth/telegram/login` dengan `telegramChatId` + `phoneNumber` → OTP login terkirim ke Telegram
+- [x] AC-3: POST `/auth/verify-otp` tetap berfungsi untuk verifikasi OTP (dari WA maupun Telegram)
+- [x] AC-4: POST `/auth/verify-phone-login` tetap berfungsi untuk verifikasi login (dari WA maupun Telegram)
+- [x] AC-5: Webhook `/auth/telegram/webhook` handle /start command dan return Chat ID
+- [x] AC-6: `telegram_chat_id` tersimpan di tabel users saat registrasi & login via Telegram
+- [x] AC-7: OTP 1-hour reuse window (F017) berfungsi untuk Telegram juga
+
+**Files Changed:**
+- `services/auth-service/main.go` — Telegram request types, `handleTelegramRegister()`, `handleTelegramLogin()`, `handleTelegramWebhook()`, `sendTelegramOTP()`, updated `handleVerifyOTP()` to parse map-based reg data
+- `shared/sdk/config/config.go` — Telegram Bot config struct + loading
+- `shared/migrations/000031_telegram_auth.up.sql` — `telegram_chat_id` column + index
+- `.env.example` — `TELEGRAM_BOT_TOKEN` documentation
+
+**Notes:**
+- Bot token dibaca dari `TELEGRAM_BOT_TOKEN` env — shared dengan notification-service (bisa pakai bot yang sama)
+- Webhook URL: `POST https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<domain>/auth/telegram/webhook`
+- Chat ID Telegram user berbeda dengan WA number — mapping disimpan di `users.telegram_chat_id`
+- Tidak perlu perubahan di API Gateway — `/auth/telegram/*` otomatis di-proxy oleh existing `/auth/` prefix
 
 ---
 
@@ -174,6 +216,96 @@ User sampai modal activation
 - Auth-service baca dari Redis cache, di-sync saat `activateSubscription()` dipanggil
 - Pending timeout default: 24 jam (bisa di-config via env `SUBSCRIPTION_PENDING_TIMEOUT_HOURS`)
 - Superadmin generate voucher: kode di-generate client-side (frontend) atau server-side? Disarankan server-side via billing-service admin endpoint
+
+---
+
+## F016: Hybrid WhatsApp (Cloud API + whatsmeow)
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Pisahkan jalur pengiriman WhatsApp: Meta Cloud API (official) untuk pesan transaksional kritis, whatsmeow (unofficial) untuk chatbot dengan rate limiter ketat. Mengurangi risiko banned nomor WA pengguna.
+
+**Spec:**
+- WhatsApp Cloud API service baru (`services/wa-cloud-api`, port 8210) wrap Meta Graph API v22.0
+- Per-tenant credentials di tabel `wa_cloud_api_credentials` (phone_number_id, access_token, verify_token)
+- Message routing via header `X-Message-Type` di wa-gateway:
+  - `otp` → Cloud API (auth-service OTP login/register)
+  - `invoice` → Cloud API (billing-service payment notifications)
+  - `subscription` → Cloud API (accounting revenue digest)
+  - `system` → Cloud API (notification-service system alerts)
+  - _(tanpa header)_ → whatsmeow (chatbot conversational)
+- Fallback: Cloud API gagal → otomatis whatsmeow (logged as WARN)
+- Rate limiter whatsmeow: token bucket 5 msg/menit/tenant (mencegah spam ban)
+- Reconnect backoff whatsmeow: exponential (30s → 60s → 240s → 10m), max 1 reconnect/5 menit
+- Webhook Meta di `/webhooks/wa-cloud/` untuk status callback & incoming messages
+- Superadmin CRUD credentials via `/admin/credentials`
+
+**Acceptance Criteria (AC):**
+- [x] AC-1: OTP terkirim via Cloud API saat auth-service kirim dengan `X-Message-Type: otp`
+- [x] AC-2: Invoice/payment notification terkirim via Cloud API
+- [x] AC-3: Chatbot tetap bisa kirim/terima via whatsmeow (tanpa header khusus)
+- [x] AC-4: Rate limiter memblokir pesan whatsmeow ke-6+ dalam 1 menit (HTTP 429)
+- [x] AC-5: Cloud API gagal → otomatis fallback ke whatsmeow (logged warning)
+- [x] AC-6: Webhook Meta diterima di `/webhooks/wa-cloud/`
+- [x] AC-7: Superadmin bisa CRUD credential via `POST/GET /admin/credentials`
+
+**Files yang diubah:**
+- `services/wa-cloud-api/main.go` — Service baru wrap Meta Graph API
+- `services/wa-cloud-api/migrations.go` — Auto-migration runner
+- `services/wa-gateway/main.go` — Message router + rate limiter + reconnect backoff
+- `shared/sdk/config/config.go` — WhatsApp Cloud API config fields
+- `shared/migrations/000030_wa_cloud_api_credentials.up.sql` — New credential table
+- `services/api-gateway/main.go` — Webhook route `/webhooks/wa-cloud/` + health check
+- `services/auth-service/main.go` — `X-Message-Type: otp` + `X-Source: auth-service`
+- `services/billing-service/main.go` — `X-Message-Type: invoice` + `X-Source: billing-service`
+- `services/notification-service/main.go` — `X-Message-Type: system` + `X-Source: notification-service`
+- `apps/umkm/accounting/main.go` — `X-Message-Type: subscription` + `X-Source: umkm-accounting`
+- `Dockerfile` + `docker-compose.yml` + `Makefile` + `.env.example` — Infrastructure
+
+**Notes:**
+- WhatsApp Cloud API pricing ~$0.005-0.08/message tergantung tipe. Lebih mahal dari whatsmeow (gratis) tapi zero ban risk.
+- Perlu Meta Business App + phone_number_id + permanent access token per tenant
+- whatsmeow tetap dipakai untuk chatbot karena conversational messages via Cloud API akan mahal
+- Nomor whatsmeow sebaiknya nomor "tumbal" khusus, bukan nomor bisnis utama
+- Lihat `CLAUDE.md` section "📱 Hybrid WhatsApp Architecture" untuk detail arsitektur
+
+---
+
+## F017: OTP 1-Hour Reuse Window
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** OTP (registrasi & login via WhatsApp) berlaku selama 1 jam penuh. Selama masa aktif, sistem tidak mengirim ulang OTP — mengurangi volume pesan WA keluar dan menurunkan risiko banned oleh WhatsApp.
+
+**Spec:**
+- OTP disimpan di Redis dengan TTL 1 jam (sebelumnya 5 menit)
+- Saat user minta OTP baru: cek dulu apakah OTP yang masih aktif ada di Redis
+  - Jika ada → return success dengan pesan "OTP sudah dikirim. Masih berlaku 1 jam." (TIDAK kirim ulang)
+  - Jika tidak ada → generate OTP baru, simpan ke Redis, kirim via WA Gateway
+- OTP TIDAK dihapus setelah verifikasi berhasil — tetap berlaku selama 1 jam penuh
+- Redis TTL menangani auto-expiry otomatis setelah 1 jam
+- Mencakup 3 endpoint OTP:
+  - `POST /register` → OTP registrasi (`otp:{phone}`)
+  - `POST /phone-login` → OTP login (`phone-login-otp:{phone}`)
+  - `POST /forgot-password` → tidak terpengaruh (email-based, bukan WA)
+
+**Acceptance Criteria (AC):**
+- [x] AC-1: Request OTP pertama → OTP baru dikirim via WA, TTL Redis 1 jam
+- [x] AC-2: Request OTP kedua dalam 1 jam → tidak kirim ulang, return "OTP sudah dikirim"
+- [x] AC-3: Verifikasi OTP sukses → OTP tetap bisa dipakai ulang selama 1 jam
+- [x] AC-4: Setelah 1 jam → OTP expired otomatis, request baru generate OTP baru
+- [x] AC-5: Login OTP dan Register OTP punya key Redis terpisah (tidak konflik)
+
+**Files Changed:**
+- `services/auth-service/main.go` — `handleRegister()`, `handleVerifyOTP()`, `handlePhoneLogin()`, `handleVerifyPhoneLogin()`
+
+**Notes:**
+- Mengurangi jumlah pesan WA keluar drastis saat user berkali-kali minta OTP
+- Kombinasi dengan F016 (Hybrid WA) + rate limiter memperkuat mitigasi ban
+- Risiko keamanan rendah: OTP tetap 6-digit, brute-force dalam 1 jam tidak feasible
+- Test OTP `000000` tetap berfungsi di development
 
 ---
 

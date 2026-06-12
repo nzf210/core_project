@@ -53,6 +53,23 @@ type VerifyPhoneLoginRequest struct {
 	ExpectedTenantID string `json:"expectedTenantId"`
 }
 
+// Telegram auth request types
+type TelegramRegisterRequest struct {
+	TelegramChatID string `json:"telegramChatId"`
+	Username       string `json:"username"`
+	Password       string `json:"password"`
+	Email          string `json:"email"`
+	PhoneNumber    string `json:"phoneNumber"`
+	Role           string `json:"role"`
+	TenantID       string `json:"tenantId"`
+	BusinessName   string `json:"businessName"`
+}
+
+type TelegramLoginRequest struct {
+	TelegramChatID string `json:"telegramChatId"`
+	PhoneNumber    string `json:"phoneNumber"`
+}
+
 type SuperAdminLoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -165,6 +182,9 @@ func main() {
 	mux.HandleFunc("/forgot-password", handleForgotPassword)
 	mux.HandleFunc("/reset-password", handleResetPassword)
 	mux.HandleFunc("/public/tenant/resolve", handleTenantResolve)
+	mux.HandleFunc("/telegram/register", handleTelegramRegister)
+	mux.HandleFunc("/telegram/login", handleTelegramLogin)
+	mux.HandleFunc("/telegram/webhook", handleTelegramWebhook)
 
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(uploadDir))))
 
@@ -284,12 +304,28 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate OTP
+	// OTP 1-hour reuse: check if valid OTP already exists for this phone
+	ctx := context.Background()
+	otpKey := "otp:" + req.PhoneNumber
+	if existingVal, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingVal != "" {
+		// OTP still active — reuse it, don't send a new one
+		parts := strings.Split(existingVal, ":")
+		existingOTP := parts[len(parts)-1]
+		ttl, _ := Redis.TTL(ctx, otpKey).Result()
+		slog.Info("OTP still active, reusing existing", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
+		writeJSON(w, http.StatusOK, Response{
+			Success: true,
+			Message: "OTP already sent. Valid for 1 hour. Please check your WhatsApp.",
+		})
+		return
+	}
+
+	// Generate new OTP
 	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
-	
-	// Store in Redis (Valid for 5 mins)
+
+	// Store in Redis (Valid for 1 hour — OTP reuse window)
 	reqJSON, _ := json.Marshal(req)
-	err := Redis.Set(context.Background(), "otp:"+req.PhoneNumber, string(reqJSON)+":"+otp, 5*time.Minute).Err()
+	err := Redis.Set(ctx, otpKey, string(reqJSON)+":"+otp, 1*time.Hour).Err()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process registration"})
 		return
@@ -322,7 +358,11 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		var err error
 		for i := 0; i < 3; i++ {
 			payload := strings.NewReader(formData.Encode())
-			resp, err = http.Post(waURL+"/api/wa/send", "application/x-www-form-urlencoded", payload)
+			req, _ := http.NewRequest("POST", waURL+"/api/wa/send", payload)
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req.Header.Set("X-Message-Type", "otp")
+				req.Header.Set("X-Source", "auth-service")
+				resp, err = http.DefaultClient.Do(req)
 			if err != nil {
 				slog.Error("Failed to send OTP via WA Gateway", "error", err)
 				time.Sleep(500 * time.Millisecond)
@@ -390,8 +430,26 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse registration data — works for both WA (RegisterRequest) and Telegram (map with telegramChatId)
 	var regReq RegisterRequest
-	json.Unmarshal([]byte(reqJSON), &regReq)
+	var regMap map[string]interface{}
+	telegramChatID := ""
+
+	// Try struct first (WA registration), fallback to map (Telegram registration)
+	if err := json.Unmarshal([]byte(reqJSON), &regReq); err != nil || regReq.Username == "" {
+		// Telegram registration stores different JSON structure
+		json.Unmarshal([]byte(reqJSON), &regMap)
+		if regMap != nil {
+			regReq.Username, _ = regMap["username"].(string)
+			regReq.Password, _ = regMap["password"].(string)
+			regReq.Email, _ = regMap["email"].(string)
+			regReq.PhoneNumber, _ = regMap["phoneNumber"].(string)
+			regReq.Role, _ = regMap["role"].(string)
+			regReq.TenantID, _ = regMap["tenantId"].(string)
+			regReq.BusinessName, _ = regMap["businessName"].(string)
+			telegramChatID, _ = regMap["telegramChatId"].(string)
+		}
+	}
 
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(regReq.Password), 12)
 	tx, _ := DB.Begin(ctx)
@@ -417,10 +475,18 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var userID string
-	err = tx.QueryRow(ctx, 
-		"INSERT INTO users (tenant_id, username, email, password_hash, role, phone_number, is_phone_verified) VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING id",
-		tenantID, regReq.Username, email, string(hashedPassword), role, regReq.PhoneNumber,
-	).Scan(&userID)
+	// Include telegram_chat_id if registration came from Telegram
+	if telegramChatID != "" {
+		err = tx.QueryRow(ctx,
+			"INSERT INTO users (tenant_id, username, email, password_hash, role, phone_number, telegram_chat_id, is_phone_verified) VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING id",
+			tenantID, regReq.Username, email, string(hashedPassword), role, regReq.PhoneNumber, telegramChatID,
+		).Scan(&userID)
+	} else {
+		err = tx.QueryRow(ctx,
+			"INSERT INTO users (tenant_id, username, email, password_hash, role, phone_number, is_phone_verified) VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING id",
+			tenantID, regReq.Username, email, string(hashedPassword), role, regReq.PhoneNumber,
+		).Scan(&userID)
+	}
 	
 	if err != nil {
 		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Phone number or username already exists"})
@@ -428,7 +494,8 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx.Commit(ctx)
-	Redis.Del(ctx, "otp:"+req.PhoneNumber)
+	// OTP persists for full 1-hour window (reusable during active period)
+	// Redis TTL handles auto-expiry
 
 	writeJSON(w, http.StatusCreated, Response{Success: true, Message: "Account verified and created"})
 }
@@ -805,15 +872,16 @@ func handleProfile(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		var username, role string
 		var phoneNumber, email, businessName, waNumber, logoURL, businessAddress, businessType, plan, tenantName *string
+		var isFrozen bool
 		err := DB.QueryRow(ctx, `
 			SELECT u.username, u.email, u.phone_number, u.role,
-			       COALESCE(t.business_name, t.name), t.wa_number, t.logo_url, t.business_address, t.business_type, t.plan, t.name
+			       COALESCE(t.business_name, t.name), t.wa_number, t.logo_url, t.business_address, t.business_type, t.plan, t.name, COALESCE(t.is_frozen, false)
 			FROM users u
 			JOIN tenants t ON t.id = u.tenant_id
 			WHERE u.id = $1 AND u.tenant_id = $2
 		`, claims.UserID, claims.TenantID).Scan(
 			&username, &email, &phoneNumber, &role,
-			&businessName, &waNumber, &logoURL, &businessAddress, &businessType, &plan, &tenantName,
+			&businessName, &waNumber, &logoURL, &businessAddress, &businessType, &plan, &tenantName, &isFrozen,
 		)
 
 		if err != nil {
@@ -839,6 +907,7 @@ func handleProfile(w http.ResponseWriter, r *http.Request) {
 				"business_type":    derefStr(businessType),
 				"plan":             derefStr(plan),
 				"tenant_id":        claims.TenantID,
+				"is_frozen":        isFrozen,
 			},
 		})
 
@@ -1169,8 +1238,20 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// OTP 1-hour reuse: check if valid OTP already exists for this phone
+	otpKey := "phone-login-otp:" + req.PhoneNumber
+	if existingOTP, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingOTP != "" {
+		ttl, _ := Redis.TTL(ctx, otpKey).Result()
+		slog.Info("Login OTP still active, reusing existing", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
+		writeJSON(w, http.StatusOK, Response{
+			Success: true,
+			Message: "OTP sudah dikirim sebelumnya. Masih berlaku selama 1 jam. Silakan cek WhatsApp Anda.",
+		})
+		return
+	}
+
 	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
-	err = Redis.Set(ctx, "phone-login-otp:"+req.PhoneNumber, otp, 5*time.Minute).Err()
+	err = Redis.Set(ctx, otpKey, otp, 1*time.Hour).Err()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process login"})
 		return
@@ -1197,7 +1278,11 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 		var err error
 		for i := 0; i < 3; i++ {
 			payload := strings.NewReader(formData.Encode())
-			resp, err = http.Post(waURL+"/api/wa/send", "application/x-www-form-urlencoded", payload)
+			req, _ := http.NewRequest("POST", waURL+"/api/wa/send", payload)
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req.Header.Set("X-Message-Type", "otp")
+				req.Header.Set("X-Source", "auth-service")
+				resp, err = http.DefaultClient.Do(req)
 			if err != nil {
 				slog.Error("Failed to send login OTP via WA Gateway", "error", err)
 				time.Sleep(500 * time.Millisecond)
@@ -1282,7 +1367,8 @@ func handleVerifyPhoneLogin(w http.ResponseWriter, r *http.Request) {
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	DB.Exec(ctx, "INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)", userID, tokenHash, expiresAt)
 	Redis.Set(ctx, "refresh_token:"+tokenHash, userID, 7*24*time.Hour)
-	Redis.Del(ctx, "phone-login-otp:"+req.PhoneNumber)
+	// OTP persists for full 1-hour window (reusable during active period)
+	// Redis TTL handles auto-expiry
 
 	slog.Info("Phone login successful", "phone", req.PhoneNumber, "userId", userID)
 	writeJSON(w, http.StatusOK, Response{
@@ -1790,6 +1876,239 @@ func derefStr(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// ─────────────────────────────────────────────
+// Telegram Auth Handlers
+// ─────────────────────────────────────────────
+
+// sendTelegramOTP sends an OTP message to a Telegram chat ID using the Telegram Bot API.
+func sendTelegramOTP(chatID, message string) error {
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if botToken == "" {
+		return fmt.Errorf("TELEGRAM_BOT_TOKEN not configured")
+	}
+
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
+	payload := map[string]interface{}{
+		"chat_id": chatID,
+		"text":    message,
+	}
+	body, _ := json.Marshal(payload)
+
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram API returned %d: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+
+// handleTelegramRegister starts registration via Telegram Bot.
+// Reuses the same Redis OTP key ("otp:{phone}") so /verify-otp works for both WA and Telegram.
+func handleTelegramRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		return
+	}
+
+	var req TelegramRegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
+		return
+	}
+
+	if req.PhoneNumber == "" || req.Password == "" || req.TelegramChatID == "" {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "telegramChatId, phoneNumber, and password are required"})
+		return
+	}
+
+	ctx := context.Background()
+	otpKey := "otp:" + req.PhoneNumber
+
+	// OTP 1-hour reuse: check if valid OTP already exists
+	if existingVal, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingVal != "" {
+		parts := strings.Split(existingVal, ":")
+		existingOTP := parts[len(parts)-1]
+		ttl, _ := Redis.TTL(ctx, otpKey).Result()
+		slog.Info("OTP still active, reusing existing (Telegram)", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
+		writeJSON(w, http.StatusOK, Response{
+			Success: true,
+			Message: "OTP already sent. Valid for 1 hour. Please check your Telegram.",
+		})
+		return
+	}
+
+	// Generate new OTP
+	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+
+	// Store registration data + OTP in Redis (1-hour TTL)
+	// Also store telegram_chat_id so verify-otp can link the user
+	regData := map[string]interface{}{
+		"username":        req.Username,
+		"password":        req.Password,
+		"email":           req.Email,
+		"phoneNumber":     req.PhoneNumber,
+		"role":            req.Role,
+		"tenantId":        req.TenantID,
+		"businessName":    req.BusinessName,
+		"telegramChatId":  req.TelegramChatID,
+	}
+	regJSON, _ := json.Marshal(regData)
+	err := Redis.Set(ctx, otpKey, string(regJSON)+":"+otp, 1*time.Hour).Err()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process registration"})
+		return
+	}
+
+	// Send OTP via Telegram
+	go func() {
+		msg := fmt.Sprintf("🔐 *Kode OTP Registrasi WCH*\n\nKode OTP Anda: *%s*\n\nBerlaku selama 1 jam. Jangan berikan kode ini kepada siapapun.", otp)
+		if err := sendTelegramOTP(req.TelegramChatID, msg); err != nil {
+			slog.Error("Failed to send register OTP via Telegram", "chatID", req.TelegramChatID, "error", err)
+		}
+	}()
+
+	slog.Info("Telegram register OTP generated", "phone", req.PhoneNumber, "chatID", req.TelegramChatID, "otp", otp)
+	writeJSON(w, http.StatusOK, Response{
+		Success: true,
+		Message: "OTP has been sent to your Telegram. Please verify.",
+	})
+}
+
+// handleTelegramLogin starts login via Telegram Bot.
+// Reuses the same Redis OTP key ("phone-login-otp:{phone}") so /verify-phone-login works for both WA and Telegram.
+func handleTelegramLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		return
+	}
+
+	var req TelegramLoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
+		return
+	}
+
+	if req.PhoneNumber == "" || req.TelegramChatID == "" {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "telegramChatId and phoneNumber are required"})
+		return
+	}
+
+	ctx := context.Background()
+
+	// Verify user exists
+	var userID string
+	err := DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", req.PhoneNumber).Scan(&userID)
+	if err == pgx.ErrNoRows {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Phone number not registered"})
+		return
+	} else if err != nil {
+		slog.Error("DB query failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		return
+	}
+
+	// OTP 1-hour reuse: check if valid OTP already exists
+	otpKey := "phone-login-otp:" + req.PhoneNumber
+	if existingOTP, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingOTP != "" {
+		ttl, _ := Redis.TTL(ctx, otpKey).Result()
+		slog.Info("Login OTP still active, reusing existing (Telegram)", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
+		writeJSON(w, http.StatusOK, Response{
+			Success: true,
+			Message: "OTP sudah dikirim sebelumnya. Masih berlaku selama 1 jam. Silakan cek Telegram Anda.",
+		})
+		return
+	}
+
+	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	err = Redis.Set(ctx, otpKey, otp, 1*time.Hour).Err()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process login"})
+		return
+	}
+
+	// Update telegram_chat_id for this user (link Telegram account)
+	_, err = DB.Exec(ctx, "UPDATE users SET telegram_chat_id = $1 WHERE phone_number = $2", req.TelegramChatID, req.PhoneNumber)
+	if err != nil {
+		slog.Warn("Failed to update telegram_chat_id", "phone", req.PhoneNumber, "error", err)
+	}
+
+	// Send OTP via Telegram
+	go func() {
+		msg := fmt.Sprintf("🔐 *Kode OTP Login WCH*\n\nKode OTP Anda: *%s*\n\nBerlaku selama 1 jam. Jangan berikan kode ini kepada siapapun.", otp)
+		if err := sendTelegramOTP(req.TelegramChatID, msg); err != nil {
+			slog.Error("Failed to send login OTP via Telegram", "chatID", req.TelegramChatID, "error", err)
+		}
+	}()
+
+	slog.Info("Telegram login OTP sent", "phone", req.PhoneNumber, "chatID", req.TelegramChatID, "otp", otp)
+	writeJSON(w, http.StatusOK, Response{
+		Success: true,
+		Message: "OTP telah dikirim ke Telegram Anda. Silakan verifikasi.",
+	})
+}
+
+// handleTelegramWebhook handles incoming Telegram Bot webhooks.
+// When a user sends /start to the bot, we reply with instructions.
+// POST /telegram/webhook
+func handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		return
+	}
+
+	var update map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid update payload"})
+		return
+	}
+
+	// Extract chat_id from the update
+	message, ok := update["message"].(map[string]interface{})
+	if !ok {
+		// Could be callback_query or other update types — silently ack
+		writeJSON(w, http.StatusOK, Response{Success: true, Message: "OK"})
+		return
+	}
+
+	chat, ok := message["chat"].(map[string]interface{})
+	if !ok {
+		writeJSON(w, http.StatusOK, Response{Success: true, Message: "OK"})
+		return
+	}
+
+	chatIDFloat, ok := chat["id"].(float64)
+	if !ok {
+		writeJSON(w, http.StatusOK, Response{Success: true, Message: "OK"})
+		return
+	}
+	chatID := fmt.Sprintf("%.0f", chatIDFloat)
+
+	// Check for /start command
+	text, _ := message["text"].(string)
+	if text == "/start" {
+		welcomeMsg := fmt.Sprintf(
+			"👋 *Selamat datang di WCH Platform!*\n\n"+
+				"Chat ID Telegram Anda: `%s`\n\n"+
+				"Untuk mendaftar:\n"+
+				"1. Kirim POST ke `/telegram/register` dengan `telegramChatId: %s` dan data pendaftaran\n"+
+				"2. Untuk login: POST ke `/telegram/login` dengan `telegramChatId: %s` dan nomor WA\n\n"+
+				"Simpan Chat ID ini untuk pendaftaran & login.",
+			chatID, chatID, chatID,
+		)
+		sendTelegramOTP(chatID, welcomeMsg)
+	} else {
+		// Respond to any other message
+		sendTelegramOTP(chatID, fmt.Sprintf("Chat ID Anda: `%s`\n\nGunakan `/start` untuk melihat petunjuk.", chatID))
+	}
+
+	writeJSON(w, http.StatusOK, Response{Success: true, Message: "OK"})
 }
 
 func formatPhoneToWAJID(phone string) string {

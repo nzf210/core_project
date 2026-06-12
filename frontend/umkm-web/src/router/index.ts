@@ -59,6 +59,14 @@ router.beforeEach((to, _from, next) => {
           next({ path: '/onboarding' })
           return
         }
+
+        const subscriptionStatus = sessionStorage.getItem('subscription_status')
+        if (subscriptionStatus === 'frozen' && !isSuperadmin) {
+          if (to.path !== '/onboarding' && to.path !== '/settings') {
+            next({ path: '/onboarding' })
+            return
+          }
+        }
       }
       next()
     } else {

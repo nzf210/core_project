@@ -122,6 +122,10 @@ run-wa-gateway: _ensure_dirs
 	@echo "▶ Starting WA Gateway on port 8202..."
 	@go run ./services/wa-gateway
 
+run-wa-cloud:
+	@echo "▶ Starting WA Cloud API on port 8210..."
+	@go run ./services/wa-cloud-api
+
 # =============================================================================
 # UMKM Apps
 # =============================================================================
@@ -301,6 +305,7 @@ build-all: _ensure_dirs
 	@go build -o $(BIN_DIR)/billing-service    ./services/billing-service
 	@go build -o $(BIN_DIR)/notification-service ./services/notification-service
 	@go build -o $(BIN_DIR)/wa-gateway         ./services/wa-gateway
+	@go build -o $(BIN_DIR)/wa-cloud-api       ./services/wa-cloud-api
 	@go build -o $(BIN_DIR)/umkm-accounting    ./apps/umkm/accounting
 	@go build -o $(BIN_DIR)/umkm-business      ./apps/umkm/business
 	@go build -o $(BIN_DIR)/umkm-chatbot       ./apps/umkm/chatbot

@@ -292,6 +292,29 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+  wa-cloud-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wch-wa-cloud-api
+    command:
+      - wa-cloud-api
+    environment:
+      - WA_CLOUD_API_URL=${WA_CLOUD_API_URL:-https://graph.facebook.com}
+      - WA_CLOUD_API_VERSION=${WA_CLOUD_API_VERSION:-v22.0}
+      - WA_CLOUD_API_PORT=8210
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-wch_core}
+      - DB_SSLMODE=disable
+    ports:
+      - "8210:8210"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
   wa-gateway:
     build:
       context: .

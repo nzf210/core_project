@@ -87,6 +87,31 @@ export const api = {
     return res.json()
   },
 
+  async telegramRegister(body: { telegramChatId: string; phoneNumber: string; password: string; username: string; email?: string; businessName?: string }) {
+    const res = await fetch(`${API_BASE}/auth/telegram/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        telegramChatId: body.telegramChatId,
+        phoneNumber: body.phoneNumber,
+        password: body.password,
+        username: body.username,
+        email: body.email || '',
+        businessName: body.businessName || '',
+      }),
+    })
+    return res.json()
+  },
+
+  async telegramLogin(telegramChatId: string, phoneNumber: string) {
+    const res = await fetch(`${API_BASE}/auth/telegram/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telegramChatId, phoneNumber }),
+    })
+    return res.json()
+  },
+
   async verifyOTP(phoneNumber: string, otp: string) {
     const res = await fetch(`${API_BASE}/auth/verify-otp`, {
       method: 'POST',

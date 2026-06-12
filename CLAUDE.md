@@ -93,6 +93,9 @@ core_project/                   ← Root monorepo (satu go.mod)
 │   │   └── db.go
 │   ├── wa-gateway/             ← WhatsApp via whatsmeow (Port 8202)
 │   │   └── main.go
+│   ├── wa-cloud-api/           ← WhatsApp Cloud API — Meta Official (Port 8210)
+│   │   ├── main.go
+│   │   └── migrations.go
 │   ├── subscription-worker/    ← Freeze expired tenants (Port 8006)
 │   │   └── main.go
 │   └── notification-service/   ← Telegram/Email notif (Port 8005)
@@ -107,7 +110,7 @@ core_project/                   ← Root monorepo (satu go.mod)
 │   │   ├── response/           ← Standard JSON response helper
 │   │   ├── migrate/            ← Auto-migration runner (shared/sdk/migrate)
 │   │   └── webhook/            ← Webhook utilities
-│   └── migrations/             ← Database SQL migrations (000001 — 000027)
+│   └── migrations/             ← Database SQL migrations (000001 — 000031)
 │
 ├── frontend/
 │   ├── umkm-web/               ← Vue 3 + Vite (Port 3201)
@@ -151,6 +154,7 @@ core_project/                   ← Root monorepo (satu go.mod)
 | `8016` | Subscription Worker | `services/subscription-worker` (Docker mapped port) |
 | `8201` | UMKM Accounting | `apps/umkm/accounting` |
 | `8212` | WA Gateway | `services/wa-gateway` (Docker mapped port) |
+| `8210` | WA Cloud API | `services/wa-cloud-api` (Meta Official WhatsApp API) |
 | `8202` | UMKM Chatbot | `apps/umkm/chatbot` |
 | `8213` | UMKM Automation | `apps/umkm/automation` (Docker mapped port) |
 | `9001` | UMKM Business | `apps/umkm/business` |
@@ -163,6 +167,68 @@ core_project/                   ← Root monorepo (satu go.mod)
 | `6381` | Redis (Docker) | docker-compose |
 
 > ⚠️ Jika berjalan tanpa Docker (native), WA Gateway dan UMKM Chatbot secara default sama-sama menggunakan port 8202. Saat berjalan dengan Docker, WA Gateway di-expose ke port host 8212.
+
+---
+
+## 📱 Hybrid WhatsApp Architecture
+
+WCH Platform menggunakan **arsitektur hybrid** untuk WhatsApp:
+
+| Jalur | Library | Use Case | Risiko Ban |
+|:------|:--------|:---------|:-----------|
+| **Cloud API (Meta Official)** | `services/wa-cloud-api` (port 8210) | OTP, invoice, subscription notices | ✅ Nyaris 0% |
+| **whatsmeow (Unofficial)** | `services/wa-gateway` (port 8202) | AI chatbot, broadcast, voucher | ⚠️ Rate-limited |
+
+**Message routing** terjadi di `services/wa-gateway` via header `X-Message-Type`:
+- `X-Message-Type: otp` → Cloud API (auth-service OTP)
+- `X-Message-Type: invoice` → Cloud API (billing-service notifications)
+- `X-Message-Type: subscription` → Cloud API (accounting revenue digest)
+- `X-Message-Type: system` → Cloud API (notification-service system alerts)
+- _(tanpa header)_ → whatsmeow (chatbot conversational)
+
+**Fallback:** Jika Cloud API gagal, wa-gateway otomatis fallback ke whatsmeow.
+
+**Rate Limiter (whatsmeow):** Token bucket 5 msg/menit/tenant — mencegah ban dari spam.
+
+**Reconnect Backoff:** Exponential backoff (30s → 10m) + max 1 reconnect/5 menit.
+
+**Credential per-tenant:** Tabel `wa_cloud_api_credentials` — setiap tenant bisa punya nomor WA bisnis sendiri di Meta.
+
+**OTP 1-Hour Reuse Window:** OTP (registrasi & login via WA) berlaku 1 jam penuh.
+- Sebelum kirim OTP baru → cek Redis apakah OTP aktif masih ada (`otp:{phone}` / `phone-login-otp:{phone}`)
+- Jika masih aktif → return "OTP sudah dikirim" (TIDAK kirim ulang), mengurangi volume pesan WA
+- OTP tidak dihapus setelah verifikasi sukses — tetap berlaku selama 1 jam
+- Redis TTL (1 jam) menangani auto-expiry
+- Detail: `docs/FEATURE_MAP.md` → F017
+
+---
+
+## 🤖 Telegram Auth Bot
+
+**User bisa daftar dan login via Telegram Bot** sebagai alternatif WhatsApp:
+
+| Endpoint | Method | Deskripsi |
+|:---------|:-------|:----------|
+| `/auth/telegram/register` | POST | Daftar via Telegram — kirim `telegramChatId` + data registrasi |
+| `/auth/telegram/login` | POST | Login via Telegram — kirim `telegramChatId` + `phoneNumber` |
+| `/auth/telegram/webhook` | POST | Webhook bot Telegram — handle `/start` command |
+
+**Flow:**
+1. User chat bot Telegram WCH → bot reply dengan Chat ID
+2. User kirim `telegramChatId` + data ke `/auth/telegram/register` atau `/auth/telegram/login`
+3. Auth-service generate OTP dan kirim via Telegram Bot API (`sendMessage`)
+4. OTP disimpan di Redis dengan key yang sama dengan WA (`otp:{phone}` / `phone-login-otp:{phone}`)
+5. Verifikasi OTP via `/auth/verify-otp` atau `/auth/verify-phone-login` — endpoint sama untuk WA & Telegram
+6. Setelah login, `telegram_chat_id` di-update di tabel `users`
+
+**Setup Webhook:**
+```bash
+curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<domain>/auth/telegram/webhook"
+```
+
+**Bot token:** `TELEGRAM_BOT_TOKEN` di `.env` — shared dengan notification-service (bisa pakai bot yang sama)
+
+**Detail:** `docs/FEATURE_MAP.md` → F018
 
 ---
 
@@ -399,6 +465,19 @@ AI Gateway sudah menangani:
 
 ---
 
+## 👥 Hirarki User & Akses (WCH Platform)
+Sistem memiliki 3 level/jenis user, yaitu:
+1. **Superadmin** (Akses penuh ke dashboard superadmin untuk manajemen tenant & voucher).
+2. **Tenant Owner / Admin** (Pemilik UMKM/Campaign, memiliki kontrol penuh atas resource aplikasinya, menagih/membayar langganan, dan manajemen onboarding).
+3. **Staff / Kasir / Relawan** (Anggota dari tenant yang hanya memiliki akses operasional sesuai role RBAC, tidak bisa mengakses menu billing/langganan).
+
+*Saran perbaikan:* 
+- Pastikan saat user login, status `onboarding_completed` dan `plan` terbaca dari profil backend lalu disimpan ke `localStorage`. Redirect loop ke halaman payment/onboarding terjadi karena saat login di device baru, flag `onboarding_completed` di `localStorage` kosong, sehingga Router memaksa user aktif masuk ke halaman Onboarding (yang juga merupakan form pemilihan paket).
+- Sembunyikan menu/akses yang tidak relevan bagi Staff (seperti billing atau upgrade paket).
+- Sediakan endpoint khusus untuk `GET /me` guna mensinkronisasi `status` dan `role` saat reload.
+
+---
+
 ## 🚫 Larangan Keras
 
 1. ❌ **JANGAN** commit file `.env` ke git
@@ -466,6 +545,7 @@ cd frontend/umkm-web && npm run dev
 | Dokumen | Tujuan |
 |:--------|:-------|
 | **[docs/FEATURE_MAP.md](docs/FEATURE_MAP.md)** | **SPEC & feature registry — WAJIB baca sebelum coding** |
+| **[docs/WA_PROVIDER_GUIDE.md](docs/WA_PROVIDER_GUIDE.md)** | **WA provider operations — QR scan, send, reconnect, anti-ban** |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Panduan lengkap menambah & mengubah fitur |
 | [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Skenario-skenario pengembangan + contoh kode |
 | [docs/MIGRATION_REGISTRY.md](docs/MIGRATION_REGISTRY.md) | Daftar semua migrasi database |

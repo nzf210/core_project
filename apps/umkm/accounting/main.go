@@ -1901,6 +1901,8 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 
 			req, _ := http.NewRequest("POST", "http://wa-gateway:8202/api/wa/send", strings.NewReader(data.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("X-Message-Type", "subscription")
+			req.Header.Set("X-Source", "umkm-accounting")
 			client := &http.Client{Timeout: 10 * time.Second}
 			client.Do(req)
 		}(tenantID, *waNumber, req.Reference, totalAmount)
@@ -2018,6 +2020,8 @@ func handleStorePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 
 			req, _ := http.NewRequest("POST", "http://wa-gateway:8202/api/wa/send", strings.NewReader(data.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("X-Message-Type", "subscription")
+			req.Header.Set("X-Source", "umkm-accounting")
 			client := &http.Client{Timeout: 10 * time.Second}
 			client.Do(req)
 		}(tenantID, *waNumber, reference, totalAmount)

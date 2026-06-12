@@ -1226,7 +1226,16 @@ func sendWANotification(tenantID, target, message string) {
 	data.Set("target", targetJID)
 	data.Set("message", message)
 
-	resp, err := http.PostForm(waURL, data)
+	req, err := http.NewRequest("POST", waURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		slog.Error("WA notification: failed to create request", "error", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Message-Type", "invoice")
+	req.Header.Set("X-Source", "billing-service")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		slog.Error("WA notification failed", "error", err)
 		return

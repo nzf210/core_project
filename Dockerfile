@@ -23,6 +23,7 @@ RUN go build -o /bin/umkm-chatbot ./apps/umkm/chatbot
 RUN go build -o /bin/umkm-automation ./apps/umkm/automation
 RUN go build -o /bin/campaign-api ./apps/campaign/api
 RUN go build -o /bin/wa-gateway ./services/wa-gateway
+RUN go build -o /bin/wa-cloud-api ./services/wa-cloud-api
 # Final Stage
 FROM alpine:latest
 
@@ -41,6 +42,7 @@ COPY --from=builder /bin/umkm-chatbot /usr/local/bin/
 COPY --from=builder /bin/umkm-automation /usr/local/bin/
 COPY --from=builder /bin/campaign-api /usr/local/bin/
 COPY --from=builder /bin/wa-gateway /usr/local/bin/
+COPY --from=builder /bin/wa-cloud-api /usr/local/bin/
 
 # Default entrypoint (can be overridden by docker-compose)
 COPY --from=builder /app/shared/migrations /app/shared/migrations

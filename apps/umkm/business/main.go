@@ -168,13 +168,13 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handleHealth)
-	mux.HandleFunc("/api/umkm/business-types", handleGetBusinessTypes)
-	mux.HandleFunc("/api/umkm/onboarding", handleOnboarding)
-	mux.HandleFunc("/api/umkm/dashboard", handleGetDashboard)
-	mux.HandleFunc("/api/umkm/plan", handleGetPlan)
-	mux.HandleFunc("/api/umkm/upgrade", handleUpgradePlan)
-	mux.HandleFunc("/api/umkm/stores", handleStoresCollection)
-	mux.HandleFunc("/api/umkm/stores/", handleStoresItem)
+	mux.HandleFunc("/business-types", handleGetBusinessTypes)
+	mux.HandleFunc("/onboarding", handleOnboarding)
+	mux.HandleFunc("/dashboard", handleGetDashboard)
+	mux.HandleFunc("/plan", handleGetPlan)
+	mux.HandleFunc("/upgrade", handleUpgradePlan)
+	mux.HandleFunc("/stores", handleStoresCollection)
+	mux.HandleFunc("/stores/", handleStoresItem)
 
 	handler := auth.QuotaMiddleware(auth.Middleware(mux))
 	port := "9001"

@@ -151,4 +151,13 @@ export const superadminApi = {
     return res.json()
   },
 
+  async generateVouchers(data: { plan_id: string; validity_days: number; quantity: number; program_name: string; max_uses: number }) {
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/vouchers/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  },
+
 }

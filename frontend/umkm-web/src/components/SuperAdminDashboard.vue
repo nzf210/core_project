@@ -110,6 +110,21 @@
           </div>
         </div>
       </div>
+      <!-- Voucher Billing Card -->
+      <div class="card glass-card">
+        <div class="card-header">
+          <h3>Voucher Billing</h3>
+        </div>
+        <div class="card-body">
+          <p class="text-muted" style="margin-bottom: 1rem; font-size: 0.85rem;">
+            Generate link aktivasi instan untuk B2B.
+          </p>
+          <button class="btn btn-primary" style="width: 100%; padding: 0.5rem;" @click="showToast('Fitur Generate Voucher segera hadir')">
+            Generate Voucher
+          </button>
+        </div>
+      </div>
+
     </div>
 
     <!-- Tenant Table -->

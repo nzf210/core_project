@@ -1,6 +1,6 @@
 # Database Migration Registry
 
-This document provides a comprehensive overview of all database migrations in the WCH Platform project, covering migrations 000001 through 000028.
+This document provides a comprehensive overview of all database migrations in the WCH Platform project, covering migrations 000001 through 000032.
 
 ---
 
@@ -36,6 +36,10 @@ This document provides a comprehensive overview of all database migrations in th
 | 000026 | multi_store | Multi-store per owner (UMKM) + max_stores quota per tier | stores, plan_features (max_stores seed) |
 | 000027 | voucher_links_and_freeze | Link-based voucher redemption (1 link = 1 klaim), subscription status enum, freeze worker support | voucher_links, voucher_generation_logs, tenant_subscriptions (status/frozen_at/frozen_reason), tenants (is_frozen/frozen_at/current_plan_expires_at) |
 | 000028 | campaign_features_2 | Task management, notification center, RBAC system for Campaign | tasks, task_assignments, notifications (campaign), roles, role_permissions, audit_logs |
+| 000029 | chatbot_upgrade | Multi-tenant WA session pool, chatbot RAG config, conversation tracking, pgvector embeddings | wa_sessions, tenant_chatbot_configs, conversation_sessions, conversation_logs, vector_embeddings, escalation_history |
+| 000030 | wa_cloud_api_credentials | Per-tenant Meta Cloud API credentials for official WhatsApp Business API | wa_cloud_api_credentials |
+| 000031 | telegram_auth | Telegram Bot auth — register/login via Telegram instead of WhatsApp | users (telegram_chat_id), auth_tokens (telegram_id) |
+| 000032 | wa_tenant_sessions | Proper tracked migration for wa_tenant_sessions table (previously created in-code) | wa_tenant_sessions |
 
 ---
 
@@ -1240,8 +1244,147 @@ tenants (1) ──┬── (*) users
 | pos_transactions | idx_pos_trx_status | status |
 | pos_transactions | idx_pos_trx_reference | reference |
 | tenant_contacts | idx_tenant_contacts_tenant_id | tenant_id |
+| wa_tenant_sessions | idx_wa_tenant_sessions_jid | jid |
 
 ---
 
-*Generated: May 2026*
+---
+
+### Migration 000029: chatbot_upgrade
+
+**Purpose:** Major chatbot upgrade — multi-tenant WA session pool, per-tenant chatbot config, structured conversation tracking, pgvector RAG embeddings, and escalation to Chatwoot.
+
+**Tables Created:**
+
+#### wa_sessions
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | Session identifier |
+| tenant_id | UUID | FK -> tenants(id) | Tenant ownership |
+| phone_number | VARCHAR(50) | | WhatsApp number |
+| status | VARCHAR(20) | DEFAULT 'pending' | connected, disconnected, qr_pending |
+| device_name | VARCHAR(255) | | Device model name |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| updated_at | TIMESTAMPTZ | DEFAULT NOW() | |
+
+#### tenant_chatbot_configs
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | |
+| tenant_id | UUID | FK -> tenants(id), UNIQUE | Per-tenant config |
+| llm_model | VARCHAR(50) | DEFAULT 'auto' | LLM model selection |
+| system_prompt | TEXT | | Custom system prompt |
+| escalation_enabled | BOOLEAN | DEFAULT false | |
+| escalation_phone | VARCHAR(50) | | Admin phone for escalation |
+| rag_enabled | BOOLEAN | DEFAULT true | RAG from FAQ/products |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| updated_at | TIMESTAMPTZ | DEFAULT NOW() | |
+
+#### conversation_sessions
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | |
+| tenant_id | UUID | FK -> tenants(id) | |
+| channel | VARCHAR(20) | DEFAULT 'whatsapp' | whatsapp, telegram, web |
+| wa_session_id | UUID | FK -> wa_sessions(id) | WA device used |
+| sender_phone | VARCHAR(50) | | Customer phone |
+| last_message_at | TIMESTAMPTZ | | |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+
+#### conversation_logs
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | |
+| session_id | UUID | FK -> conversation_sessions(id) | |
+| tenant_id | UUID | FK -> tenants(id) | |
+| direction | VARCHAR(10) | inbound, outbound | |
+| sender_phone | VARCHAR(50) | | |
+| message | TEXT | | Message content |
+| ai_response | TEXT | | AI reply (if generated) |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+
+#### vector_embeddings
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | |
+| tenant_id | UUID | FK -> tenants(id) | |
+| content_type | VARCHAR(20) | faq, product, coa | Source type |
+| content_id | UUID | | Reference to source record |
+| content | TEXT | | Raw text content |
+| embedding | vector(1536) | | pgvector embedding |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+
+#### escalation_history
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | |
+| tenant_id | UUID | FK -> tenants(id) | |
+| session_id | UUID | FK -> conversation_sessions(id) | |
+| customer_phone | VARCHAR(50) | | |
+| reason | TEXT | | Why escalated |
+| status | VARCHAR(20) | pending, resolved | |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| resolved_at | TIMESTAMPTZ | | |
+
+---
+
+### Migration 000030: wa_cloud_api_credentials
+
+**Purpose:** Per-tenant credential storage for Meta WhatsApp Cloud API (Official Business API). Enables transactional messages (OTP, invoice, payment) via official API with zero ban risk.
+
+**Tables Created:**
+
+#### wa_cloud_api_credentials
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY | |
+| tenant_id | UUID | FK -> tenants(id) | Tenant ownership |
+| phone_number_id | VARCHAR(100) | UNIQUE | Meta Phone Number ID |
+| waba_id | VARCHAR(100) | | WhatsApp Business Account ID |
+| access_token | TEXT | | Meta Permanent Access Token |
+| verify_token | VARCHAR(255) | | Webhook verification token |
+| is_active | BOOLEAN | DEFAULT true | |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| updated_at | TIMESTAMPTZ | DEFAULT NOW() | |
+
+---
+
+### Migration 000031: telegram_auth
+
+**Purpose:** Allow users to register and login via Telegram Bot as an alternative to WhatsApp OTP. Users chat with the bot, get their Chat ID, then use it with register/login endpoints.
+
+**Tables Modified:**
+
+#### users
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| telegram_chat_id | VARCHAR(50) | UNIQUE | Telegram Chat ID |
+
+#### auth_tokens
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| telegram_id | VARCHAR(50) | | Telegram user ID for auth tokens |
+
+---
+
+### Migration 000032: wa_tenant_sessions
+
+**Purpose:** Convert `wa_tenant_sessions` from in-code creation (wa-gateway/main.go) to a proper tracked migration. Adds `created_at`/`updated_at` timestamps and an index on `jid`.
+
+**Tables Created:**
+
+#### wa_tenant_sessions
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| tenant_id | TEXT | PRIMARY KEY | Tenant UUID (stored as TEXT) |
+| jid | VARCHAR | NOT NULL | WhatsApp JID |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| updated_at | TIMESTAMPTZ | DEFAULT NOW() | |
+
+**Indexes:**
+- `idx_wa_tenant_sessions_jid` on `jid`
+
+**Note:** `tenant_id` is TEXT (not UUID) to match the existing in-code schema created by wa-gateway. The table was previously created with `CREATE TABLE IF NOT EXISTS` in `services/wa-gateway/main.go` — this migration formalizes it.
+
+*Generated: June 2026*
 *Project: WCH Platform*

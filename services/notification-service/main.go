@@ -157,6 +157,8 @@ func sendWA(tenantID, target, message string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Message-Type", "system")
+	req.Header.Set("X-Source", "notification-service")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

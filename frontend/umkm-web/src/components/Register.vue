@@ -15,6 +15,18 @@
         </div>
 
         <form @submit.prevent="step === 'form' ? handleRegister() : handleVerifyOTP()">
+          <!-- Channel Toggle -->
+          <div v-if="step === 'form'" class="login-tabs" style="margin-bottom: 1.5rem;">
+            <button type="button" :class="['tab-btn', { active: registerChannel === 'wa' }]" @click="registerChannel = 'wa'">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21"/><path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1Zm0 0a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1"/></svg>
+              WhatsApp
+            </button>
+            <button type="button" :class="['tab-btn', { active: registerChannel === 'telegram' }]" @click="registerChannel = 'telegram'">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2.5 2.5 10.5 10 14l3-10 8.5-1.5Z"/><path d="M10 14v6.5l4-3"/><path d="m2.5 10.5 19-8"/></svg>
+              Telegram
+            </button>
+          </div>
+
           <!-- Step 1: Form Input -->
           <template v-if="step === 'form'">
             <div class="form-group">
@@ -30,7 +42,17 @@
             <div class="form-group">
               <label>Nomor WhatsApp <span style="color: var(--accent-primary);">*</span></label>
               <input v-model="formData.phone_number" type="text" class="form-control" placeholder="cth: 081234567890" required />
-              <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Kode OTP akan dikirim ke WhatsApp Anda</p>
+              <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                {{ registerChannel === 'telegram' ? 'Kode OTP akan dikirim ke Telegram Anda' : 'Kode OTP akan dikirim ke WhatsApp Anda' }}
+              </p>
+            </div>
+
+            <div v-if="registerChannel === 'telegram'" class="form-group">
+              <label>Chat ID Telegram <span style="color: var(--accent-primary);">*</span></label>
+              <input v-model="formData.telegramChatId" type="text" class="form-control" placeholder="cth: 123456789" required />
+              <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                Chat bot kami di <a href="https://t.me/WCHBot" target="_blank" style="color: var(--accent-primary);">@WCHBot</a> — kirim /start untuk dapat Chat ID
+              </p>
             </div>
 
             <div class="form-group">
@@ -69,7 +91,9 @@
           <template v-if="step === 'verify'">
             <div style="text-align: center; margin-bottom: 1.5rem;">
               <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-              <p style="color: var(--text-secondary); margin-top: 0.75rem;">Kode OTP telah dikirim ke <strong>{{ formData.phone_number }}</strong></p>
+              <p style="color: var(--text-secondary); margin-top: 0.75rem;">
+                Kode OTP telah dikirim ke <strong>{{ registerChannel === 'telegram' ? 'Telegram Anda' : formData.phone_number }}</strong>
+              </p>
             </div>
 
             <div class="form-group">
@@ -110,6 +134,7 @@ import { api } from '../api'
 const router = useRouter()
 
 const step = ref<'form' | 'verify'>('form')
+const registerChannel = ref<'wa' | 'telegram'>('wa')
 const loading = ref(false)
 const showPassword = ref(false)
 const errorMsg = ref('')
@@ -121,6 +146,7 @@ const formData = ref({
   username: '',
   email: '',
   phone_number: '',
+  telegramChatId: '',
   password: '',
   plan: 'free'
 })
@@ -131,13 +157,25 @@ const handleRegister = async () => {
   successMsg.value = ''
 
   try {
-    const data = await api.registerWA({
-      phoneNumber: formData.value.phone_number,
-      password: formData.value.password,
-      username: formData.value.username,
-      email: formData.value.email || formData.value.phone_number + '@wa.user',
-      businessName: formData.value.name,
-    })
+    let data
+    if (registerChannel.value === 'telegram') {
+      data = await api.telegramRegister({
+        telegramChatId: formData.value.telegramChatId,
+        phoneNumber: formData.value.phone_number,
+        password: formData.value.password,
+        username: formData.value.username,
+        email: formData.value.email || formData.value.phone_number + '@wa.user',
+        businessName: formData.value.name,
+      })
+    } else {
+      data = await api.registerWA({
+        phoneNumber: formData.value.phone_number,
+        password: formData.value.password,
+        username: formData.value.username,
+        email: formData.value.email || formData.value.phone_number + '@wa.user',
+        businessName: formData.value.name,
+      })
+    }
     if (data.success) {
       step.value = 'verify'
       successMsg.value = data.message || 'OTP telah dikirim.'

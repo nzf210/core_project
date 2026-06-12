@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -59,12 +60,182 @@ var (
 	// Postgres connection
 	db     *sql.DB
 	dbURI  string
+
+	// Rate limiter for whatsmeow messages (per-tenant token bucket)
+	rateLimiter = NewTenantRateLimiter(5) // 5 messages per minute per tenant
+
+	// Reconnect backoff state
+	reconnectMu       sync.Mutex
+	reconnectAttempts = make(map[string]int)     // tenant_id → attempt count
+	reconnectBackoff  = make(map[string]time.Time) // tenant_id → last reconnect time
 )
 
 func init() {
 	// Generate unique instance ID
 	hostname, _ := os.Hostname()
 	instanceID = fmt.Sprintf("%s-%d", hostname, os.Getpid())
+}
+
+// ─────────────────────────────────────────────
+// Rate Limiter (Token Bucket per Tenant)
+// ─────────────────────────────────────────────
+
+type TenantRateLimiter struct {
+	mu      sync.Mutex
+	buckets map[string]*tokenBucket
+	rate    int // messages per minute
+}
+
+type tokenBucket struct {
+	tokens   float64
+	lastTime time.Time
+}
+
+func NewTenantRateLimiter(msgPerMinute int) *TenantRateLimiter {
+	return &TenantRateLimiter{
+		buckets: make(map[string]*tokenBucket),
+		rate:    msgPerMinute,
+	}
+}
+
+func (rl *TenantRateLimiter) Allow(tenantID string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	b, exists := rl.buckets[tenantID]
+	now := time.Now()
+
+	if !exists {
+		b = &tokenBucket{tokens: float64(rl.rate), lastTime: now}
+		rl.buckets[tenantID] = b
+	}
+
+	// Refill tokens based on elapsed time
+	elapsed := now.Sub(b.lastTime).Minutes()
+	b.tokens = math.Min(float64(rl.rate), b.tokens+elapsed*float64(rl.rate))
+	b.lastTime = now
+
+	if b.tokens >= 1 {
+		b.tokens--
+		return true
+	}
+	return false
+}
+
+// ─────────────────────────────────────────────
+// Reconnect Backoff (Exponential)
+// ─────────────────────────────────────────────
+
+func shouldReconnect(tenantID string) bool {
+	reconnectMu.Lock()
+	defer reconnectMu.Unlock()
+
+	// Max 1 reconnect attempt per 5 minutes per tenant
+	if lastAttempt, ok := reconnectBackoff[tenantID]; ok {
+		if time.Since(lastAttempt) < 5*time.Minute {
+			// Check if this is a new attempt window
+			attempts := reconnectAttempts[tenantID]
+			if attempts > 0 {
+				return false
+			}
+		}
+	}
+
+	attempts := reconnectAttempts[tenantID]
+	if attempts > 5 {
+		attempts = 5
+	}
+
+	backoff := time.Duration(30*(1<<attempts)) * time.Second
+	if lastAttempt, ok := reconnectBackoff[tenantID]; ok {
+		if time.Since(lastAttempt) < backoff {
+			return false
+		}
+	}
+
+	reconnectAttempts[tenantID] = attempts + 1
+	reconnectBackoff[tenantID] = time.Now()
+	return true
+}
+
+func resetReconnectBackoff(tenantID string) {
+	reconnectMu.Lock()
+	defer reconnectMu.Unlock()
+	delete(reconnectAttempts, tenantID)
+	delete(reconnectBackoff, tenantID)
+}
+
+// ─────────────────────────────────────────────
+// Cloud API Routing
+// ─────────────────────────────────────────────
+
+// isTransactional determines if a message should go via Meta Cloud API
+func isTransactional(r *http.Request) bool {
+	msgType := r.Header.Get("X-Message-Type")
+	switch msgType {
+	case "otp", "invoice", "payment", "subscription", "system":
+		return true
+	}
+	source := r.Header.Get("X-Source")
+	switch source {
+	case "auth-service", "billing-service", "notification-service":
+		return true
+	}
+	return false
+}
+
+// routeToCloudAPI sends a message via the wa-cloud-api service (Meta Cloud API)
+func routeToCloudAPI(tenantID, target, message, msgType string) (string, error) {
+	cloudAPIURL := os.Getenv("WA_CLOUD_API_URL_PORT")
+	cloudAPIHost := "http://localhost:8210"
+	if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+		cloudAPIHost = "http://wa-cloud-api:8210"
+	}
+	_ = cloudAPIURL
+
+	payload := map[string]interface{}{
+		"to":   target,
+		"type": "text",
+		"text": message,
+	}
+	if msgType != "" {
+		payload["type"] = msgType
+	}
+
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequest(http.MethodPost, cloudAPIHost+"/send", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", tenantID)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("Cloud API: failed to parse response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		errMsg := "unknown error"
+		if m, ok := result["message"].(string); ok {
+			errMsg = m
+		}
+		return "", fmt.Errorf("Cloud API: %s", errMsg)
+	}
+
+	waMsgID := ""
+	if id, ok := result["wa_message_id"].(string); ok {
+		waMsgID = id
+	}
+
+	log.Printf("Routed message via Cloud API for tenant %s, wa_msg_id=%s", tenantID, waMsgID)
+	return waMsgID, nil
 }
 
 func getDBURI() string {
@@ -581,6 +752,20 @@ func setupRoutes(ctx context.Context, container *sqlstore.Container) {
 		clientMu.RUnlock()
 
 		if !exists || client.Store.ID == nil {
+			// Fallback: check if we have a valid session in DB that hasn't been initialized in this map yet
+			if db != nil {
+				var jid string
+				err := db.QueryRow("SELECT jid FROM wa_tenant_sessions WHERE tenant_id = $1", tenantID).Scan(&jid)
+				if err == nil && jid != "" {
+					w.WriteHeader(http.StatusOK)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"status": "connected",
+						"jid":    jid,
+					})
+					return
+				}
+			}
+			
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "disconnected",
@@ -613,6 +798,37 @@ func setupRoutes(ctx context.Context, container *sqlstore.Container) {
 
 		if tenantID == "" || target == "" || message == "" {
 			http.Error(w, `{"error":"Missing tenant_id, target, or message"}`, http.StatusBadRequest)
+			return
+		}
+
+		// ── Hybrid routing: transactional messages via Cloud API ──
+		if isTransactional(r) {
+			msgType := r.Header.Get("X-Message-Type")
+			if msgType == "" {
+				msgType = "text"
+			}
+			waMsgID, err := routeToCloudAPI(tenantID, target, message, msgType)
+			if err == nil {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success":       true,
+					"routed":        "cloud_api",
+					"wa_message_id": waMsgID,
+				})
+				return
+			}
+			log.Printf("Cloud API failed, falling back to whatsmeow for tenant %s: %v", tenantID, err)
+			// Fall through to whatsmeow
+		}
+
+		// ── Rate limiting for whatsmeow ──
+		if !rateLimiter.Allow(tenantID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":   "Rate limit exceeded",
+				"message": "Too many WhatsApp messages. Please slow down to avoid blocking.",
+			})
 			return
 		}
 

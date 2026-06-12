@@ -87,11 +87,20 @@ type Config struct {
 
 	// WhatsApp Gateway
 	//
-	// SEMUA pesan WA di WCH Platform lewat wa-gateway internal (port 8202,
-	// library whatsmeow). Tidak ada lagi integrasi Fonnte third-party.
+	// Hybrid architecture:
+	// - Cloud API (Meta official) untuk pesan transaksional: OTP, invoice, subscription
+	// - whatsmeow (unofficial) untuk chatbot AI, broadcast, voucher
 	// Lihat docs/WHATSAPP_GATEWAY_PLAN.md untuk arsitektur lengkap.
 	WhatsApp struct {
-		GatewayURL string // Override base URL wa-gateway (default: http://wa-gateway:8202)
+		GatewayURL   string // Override base URL wa-gateway (default: http://wa-gateway:8202)
+		CloudAPIURL  string // Meta Graph API base URL (default: https://graph.facebook.com)
+		CloudAPIToken string // Default server access token (optional fallback)
+		CloudAPIPort string // Cloud API service port (default: 8210)
+	}
+
+	// Telegram Bot untuk auth (register & login via Telegram)
+	Telegram struct {
+		BotToken string // Telegram Bot Token dari @BotFather
 	}
 }
 
@@ -145,8 +154,14 @@ func LoadConfig(envPath string) *Config {
 	// Initialize flexible LLM model registry with 3-tier fallback from environment
 	cfg.AI.LLM = loadLLMModels(cfg)
 
-	// WA Gateway (internal — replaces legacy Fonnte integration)
+	// WA Gateway (internal — hybrid: Cloud API + whatsmeow)
 	cfg.WhatsApp.GatewayURL = getEnv("WA_GATEWAY_URL", "http://wa-gateway:8202")
+	cfg.WhatsApp.CloudAPIURL = getEnv("WA_CLOUD_API_URL", "https://graph.facebook.com")
+	cfg.WhatsApp.CloudAPIToken = getEnv("WA_CLOUD_API_TOKEN", "")
+	cfg.WhatsApp.CloudAPIPort = getEnv("WA_CLOUD_API_PORT", "8210")
+
+	// Telegram Bot for auth
+	cfg.Telegram.BotToken = getEnv("TELEGRAM_BOT_TOKEN", "")
 
 	GlobalConfig = cfg
 	return cfg
