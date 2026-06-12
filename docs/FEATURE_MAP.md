@@ -72,7 +72,80 @@ Format per feature:
 | F010 | Campaign Volunteer Management | ✅ Approved | ✅ Done | 2026-06-12 |
 | F011 | Campaign Voter Onboarding | ✅ Approved | ✅ Done | 2026-06-12 |
 | F012 | Sidebar Navigation UI | ✅ Approved | ✅ Done | 2026-06-12 |
-| F013 | N8N Integration via Super Admin | ✅ Approved | ✅ Done | 2026-06-12 |
+| F013 | N8N Integration via Super Admin | ❌ Removed | — | — |
+| F014 | Flexible LLM Model System | ✅ Approved | ✅ Done | 2026-06-12 |
+
+---
+
+## F014: Flexible LLM Model System
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Sistem LLM yang flexible dan dynamic dengan capability-based routing, mendukung multiple providers dan per-use-case model selection.
+
+**Spec:**
+- **Model Registry**: Konfigurasi model dari environment variables dengan capability tags
+- **Capability Routing**: Otomatis pilih model berdasarkan `use_case`:
+  - `product` — untuk mengambil data product (murah, fast model)
+  - `faq` — untuk menjawab FAQ (murah, fast model)
+  - `general` — untuk tugas umum (default, full model)
+- **Multi-Provider Support**: MiniMax (primary), Gemini (fallback), OpenAI (optional)
+- **Fallback Chain**: Automatic fallback ke provider lain jika primary gagal
+- **Per-Model Metrics**: Track usage per model (requests, tokens, cost)
+- **Prometheus Endpoint**: `/metrics` untuk monitoring
+- **API Endpoint**: `/v1/models` untuk list available models
+
+**Environment Variables:**
+```bash
+# Single model (default)
+MINIMAX_MODELS=MiniMax-M2.7
+MINIMAX_CAPABILITIES=general,product,faq
+
+# Multiple models (semicolon-separated)
+MINIMAX_MODELS=MiniMax-M2.7;MiniMax-M2.7-Fast
+MINIMAX_CAPABILITIES=general,product,faq;general
+MINIMAX_COST_PER_1M_IN=0.30;0.10
+MINIMAX_FALLBACKS=gemini:gemini-1.5-flash
+```
+
+**API Usage:**
+```json
+// Chat request dengan use_case routing
+POST /v1/chat
+{
+  "message": "Apa harga produk X?",
+  "use_case": "product"  // → auto-route ke model dengan capability "product"
+}
+
+// Override specific model
+POST /v1/chat
+{
+  "message": "Explain code...",
+  "provider": "openai",
+  "model": "gpt-4o"
+}
+
+// List available models
+GET /v1/models
+```
+
+**Acceptance Criteria:**
+- [x] AC-1: Model registry loaded dari environment variables
+- [x] AC-2: `use_case` field mengarahkan ke model yang sesuai capability
+- [x] AC-3: Fallback chain berfungsi (MiniMax → Gemini → mock)
+- [x] AC-4: Per-model metrics trackable via `/metrics`
+- [x] AC-5: `/v1/models` endpoint return semua available models
+
+**Files:**
+- `shared/sdk/config/config.go` — LLMProviderConfig struct + loadLLMProviders()
+- `services/ai-gateway/main.go` — capability-based routing + metrics
+- `.env.example` — updated dengan flexible model config
+
+**Notes:**
+- Fokus saat ini: MiniMax sebagai primary model
+- OpenAI/Gemini sebagai fallback/optional
+- Per-tenant model override bisa ditambahkan di future (via DB config)
 
 ---
 
@@ -112,8 +185,8 @@ Format per feature:
 
 ## F013: N8N Integration via Super Admin
 
-**Spec Status:** ✅ Approved
-**Implementation:** ✅ Done
+**Spec Status:** ❌ Removed
+**Implementation:** —
 
 **Deskripsi:** Integrate N8N ke Super Admin dashboard sebagai monitoring hub, bukan custom UI.
 
@@ -130,11 +203,16 @@ Format per feature:
 
 **Files:**
 - `services/billing-service/main.go` — N8N status & executions endpoints
-- `frontend/superadmin-web/src/components/N8NStatus.vue` — Status component
-- `frontend/superadmin-web/src/views/Dashboard.vue` — Integration
-- `frontend/superadmin-web/src/api/client.ts` — API client
+- `frontend/superadmin-web/src/views/Dashboard.vue` — Direct link ke N8N editor
+- `frontend/umkm-web/src/components/SuperAdminDashboard.vue` — Direct link ke N8N editor
 
 **Notes:** N8N UI tetap digunakan untuk workflow editing. Super Admin hanya sebagai hub + monitoring.
+
+---
+
+**REMOVED (2026-06-12):** F013 dihapus karena:
+- Tidak perlu dedicated `/n8n` page — N8N editor langsung diakses via `http://localhost:5678`
+- Fitur sudah terpenuhi cukup dengan link di Dashboard.vue (direct ke N8N editor)
 
 ---
 
@@ -402,8 +480,10 @@ Format per feature:
 **Files:**
 - `docker-compose.yml` — n8n-main, n8n-worker, redis config
 - `n8n/workflows/*.json` — workflow definitions
+- `infra/postgres/init.sql` — auto-create `wch_n8n` database
+- `.env` / `.env.example` — `N8N_DB_*`, `N8N_ENCRYPTION_KEY` vars
 
-**Notes:** Worker bisa di-scale horizontal dengan `docker-compose up --scale n8n-worker=N`.
+**Notes:** Worker auto-configure dari shared database — scaling tinggal `docker-compose up -d --scale n8n-worker=N`. Persistence via dedicated `wch_n8n` database, backup: `pg_dump wch_n8n > n8n_backup.sql`.
 
 ---
 

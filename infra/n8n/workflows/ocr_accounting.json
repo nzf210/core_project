@@ -1,0 +1,144 @@
+{
+  "id": "ocrAccount000000",
+  "name": "UMKM - OCR & Conversational Accounting",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "umkm/ocr-accounting",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "21c58938-a207-4f10-a6d6-be4afaaca2d5",
+      "name": "OCR Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-ai-gateway:8002/v1/chat",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"MiniMax-M2.7\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Anda adalah asisten akuntansi. Ekstrak data dari struk ini ke dalam format JSON dengan key: total_amount, date, vendor, category (income/expense), items (array of {name, price, qty}).\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $json.body.image_url }}\"\n    }\n  ],\n  \"tenant_id\": \"{{ $json.body.tenant_id }}\"\n}",
+        "options": {}
+      },
+      "id": "23ded54f-bf81-4668-8b6e-1c4ab141b20f",
+      "name": "AI Gateway OCR Extraction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format output AI ke standar Journal Entry umkm-accounting\nconst aiResponse = JSON.parse($input.first().json.choices[0].message.content);\nconst webhookData = $('OCR Webhook').first().json.body;\n\nreturn [{\n  json: {\n    tenant_id: webhookData.tenant_id,\n    date: aiResponse.date,\n    description: `Transaksi dari ${aiResponse.vendor}`,\n    entries: [\n      {\n        account_id: aiResponse.category === 'expense' ? 'expense_acct' : 'income_acct',\n        debit: aiResponse.category === 'expense' ? aiResponse.total_amount : 0,\n        credit: aiResponse.category === 'income' ? aiResponse.total_amount : 0\n      },\n      {\n        account_id: 'cash_acct',\n        debit: aiResponse.category === 'income' ? aiResponse.total_amount : 0,\n        credit: aiResponse.category === 'expense' ? aiResponse.total_amount : 0\n      }\n    ]\n  }\n}];"
+      },
+      "id": "369fb73b-b02b-43bc-8a0f-8c03ffc3be34",
+      "name": "Format Journal Entry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-umkm-accounting:8201/api/umkm/journal",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "headers": {
+            "X-Tenant-ID": "={{ $json.tenant_id }}"
+          }
+        }
+      },
+      "id": "d3a8a5f6-d99e-4d60-865f-aa2aa4526303",
+      "name": "Post to Accounting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-wa-gateway:8202/api/wa/send",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $('OCR Webhook').first().json.body.user_phone }}\",\n  \"message\": \"\u2705 Transaksi sebesar Rp{{ $('Format Journal Entry').first().json.entries[0].debit || $('Format Journal Entry').first().json.entries[0].credit }} berhasil dicatat ke pembukuan!\"\n}",
+        "options": {}
+      },
+      "id": "eab833a7-81d8-489a-ae7c-bf4ab58ba71b",
+      "name": "Notify via WA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1160,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "OCR Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Gateway OCR Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Gateway OCR Extraction": {
+      "main": [
+        [
+          {
+            "node": "Format Journal Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Journal Entry": {
+      "main": [
+        [
+          {
+            "node": "Post to Accounting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Accounting": {
+      "main": [
+        [
+          {
+            "node": "Notify via WA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "725b9035-1987-4655-8244-87645b9f4038"
+}

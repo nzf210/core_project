@@ -88,9 +88,8 @@ export const api = {
   // Frozen accounts
   getFrozenAccounts: () => request('/admin/dashboard').then((d: any) => d.data?.recent_frozen || []),
 
-  // N8N status
-  getN8NStatus: () => request('/admin/n8n-status'),
-  getN8NExecutions: () => request('/admin/n8n-executions'),
+  // Monitoring / HA status
+  getHealthStatus: () => request('/admin/health-status'),
 }
 
 export { isAuthed, getRole, logout, getToken }

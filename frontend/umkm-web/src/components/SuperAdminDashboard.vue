@@ -4,11 +4,15 @@
       <div>
         <h2>Super Admin Dashboard</h2>
         <p class="text-muted">Kelola WhatsApp Verifier & pantau semua tenant</p>
-      </div>
-      <div>
-        <button class="btn btn-primary" style="padding: 0.5rem 1rem;" @click="$router.push('/superadmin/n8n')">
-          Buka N8n Workflow
-        </button>
+        <a
+          href="http://localhost:5678"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="btn btn-primary"
+          style="padding: 0.5rem 1rem; margin-top: 0.5rem; display: inline-block;"
+        >
+          ⚡ Buka N8n Workflow
+        </a>
       </div>
     </div>
 

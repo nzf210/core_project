@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -296,15 +297,38 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	// Determine Tenant for sending WA (if joining existing)
 	senderTenant := req.TenantID
 	if senderTenant == "" {
-		senderTenant = "system" // Or a default tenant ID if creating new
+		senderTenant = os.Getenv("WA_SYSTEM_TENANT_ID")
+		if senderTenant == "" {
+			senderTenant = "system"
+		}
 	}
 
 	// Send via WA Gateway
 	go func() {
 		target := formatPhoneToWAJID(req.PhoneNumber)
 		
-		payload := strings.NewReader("tenant_id=" + senderTenant + "&target=" + target + "&message=Kode OTP Campaign Manager Anda: " + otp)
-		http.Post("http://wa-gateway:8202/api/wa/send", "application/x-www-form-urlencoded", payload)
+		formData := url.Values{}
+		formData.Set("tenant_id", senderTenant)
+		formData.Set("target", target)
+		formData.Set("message", "Kode OTP Campaign Manager Anda: " + otp)
+		
+		payload := strings.NewReader(formData.Encode())
+		
+		waURL := os.Getenv("WA_GATEWAY_URL")
+		if waURL == "" {
+			waURL = "http://wa-gateway:8202"
+		}
+		
+		resp, err := http.Post(waURL+"/api/wa/send", "application/x-www-form-urlencoded", payload)
+		if err != nil {
+			slog.Error("Failed to send OTP via WA Gateway", "error", err)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			slog.Error("WA Gateway rejected OTP", "status", resp.StatusCode, "body", string(body))
+		}
 	}()
 
 	slog.Info("OTP generated and sent", "phone", req.PhoneNumber, "otp", otp) // Log OTP for dev
@@ -1136,9 +1160,24 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		target := formatPhoneToWAJID(req.PhoneNumber)
-		resp, err := http.Post("http://wa-gateway:8202/api/wa/send",
+		
+		formData := url.Values{}
+		verifierTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
+		if verifierTenant == "" {
+			verifierTenant = "verifier"
+		}
+		formData.Set("tenant_id", verifierTenant)
+		formData.Set("target", target)
+		formData.Set("message", "Kode OTP login WCH Anda: "+otp)
+		
+		waURL := os.Getenv("WA_GATEWAY_URL")
+		if waURL == "" {
+			waURL = "http://wa-gateway:8202"
+		}
+		
+		resp, err := http.Post(waURL+"/api/wa/send",
 			"application/x-www-form-urlencoded",
-			strings.NewReader("tenant_id=verifier&target="+target+"&message=Kode OTP login WCH Anda: "+otp))
+			strings.NewReader(formData.Encode()))
 		if err != nil {
 			slog.Error("Failed to send login OTP via WA", "error", err)
 			return
@@ -1298,7 +1337,11 @@ func handleVerifierStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get("http://localhost:8202/api/wa/status?tenant_id=verifier")
+	waURL := os.Getenv("WA_GATEWAY_URL")
+	if waURL == "" { waURL = "http://wa-gateway:8202" }
+	verifierTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
+	if verifierTenant == "" { verifierTenant = "verifier" }
+	resp, err := client.Get(waURL + "/api/wa/status?tenant_id=" + verifierTenant)
 	if err != nil {
 		slog.Warn("WA Gateway not reachable", "error", err)
 		writeJSON(w, http.StatusOK, Response{Success: true, Data: map[string]interface{}{
@@ -1338,7 +1381,11 @@ func handleVerifierQR(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get("http://localhost:8202/api/wa/qr?tenant_id=verifier")
+	waURL := os.Getenv("WA_GATEWAY_URL")
+	if waURL == "" { waURL = "http://wa-gateway:8202" }
+	verifierTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
+	if verifierTenant == "" { verifierTenant = "verifier" }
+	resp, err := client.Get(waURL + "/api/wa/qr?tenant_id=" + verifierTenant)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to get QR code"})
 		return
@@ -1361,7 +1408,11 @@ func handleVerifierDisconnect(w http.ResponseWriter, r *http.Request) {
 
 	// Use WA Gateway's logout endpoint
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, _ := http.NewRequest(http.MethodPost, "http://localhost:8202/api/wa/logout?tenant_id=verifier", nil)
+	waURL := os.Getenv("WA_GATEWAY_URL")
+	if waURL == "" { waURL = "http://wa-gateway:8202" }
+	verifierTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
+	if verifierTenant == "" { verifierTenant = "verifier" }
+	req, _ := http.NewRequest(http.MethodPost, waURL + "/api/wa/logout?tenant_id=" + verifierTenant, nil)
 	resp, err := client.Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to disconnect verifier"})

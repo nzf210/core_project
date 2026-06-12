@@ -21,8 +21,10 @@ func init() {
 			CacheEnabled   bool
 			CacheTTL       int
 			CostAlertUSD   float64
+			LLMProviders   []config.LLMProviderConfig
 		}{
 			MiniMaxModel: "MiniMax-M2.7",
+			LLMProviders: nil,
 		},
 	}
 	cfg = config.GlobalConfig

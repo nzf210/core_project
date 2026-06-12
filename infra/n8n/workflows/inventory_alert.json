@@ -1,0 +1,162 @@
+{
+  "id": "inventoryAlert00",
+  "name": "UMKM - Inventory Alert & Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "206a3ef7-f152-430e-80d3-359fa58ba79f",
+      "name": "Daily at 8 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT tenant_id, name, stock_qty, threshold_qty FROM products WHERE stock_qty <= threshold_qty AND is_active = true;",
+        "options": {}
+      },
+      "id": "b1b46425-994f-4464-893e-6f915f1a7763",
+      "name": "Find Low Stock Products",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "UMKM Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.length > 0 }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "aae42201-7dd6-4aeb-a502-5ab74a06b097",
+      "name": "Any low stock?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "aggregateItems",
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "name",
+              "renameField": "product_name"
+            },
+            {
+              "fieldToAggregate": "stock_qty",
+              "renameField": "current_stock"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "63f20356-9783-49e1-85e1-38f5fec444fa",
+      "name": "Format List",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 2.1,
+      "position": [
+        920,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-wa-gateway:8202/api/wa/send",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $json.tenant_phone }}\",\n  \"message\": \"\u26a0\ufe0f *Peringatan Stok Menipis* \\n\\nProduk berikut sudah mendekati atau di bawah batas minimum:\\n{{ $json.product_list }}\\n\\nSegera lakukan restock!\"\n}",
+        "options": {}
+      },
+      "id": "4aedc6f6-6954-4e48-b95a-8386f91887cb",
+      "name": "Send Alert WA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1160,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Daily at 8 AM": {
+      "main": [
+        [
+          {
+            "node": "Find Low Stock Products",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Low Stock Products": {
+      "main": [
+        [
+          {
+            "node": "Any low stock?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any low stock?": {
+      "main": [
+        [
+          {
+            "node": "Format List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format List": {
+      "main": [
+        [
+          {
+            "node": "Send Alert WA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "ceeae08c-4b4e-463d-b015-c97b0400797e"
+}

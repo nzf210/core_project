@@ -410,6 +410,11 @@ func restoreSessions(ctx context.Context, container *sqlstore.Container) {
 		return
 	}
 
+	// Add jitter delay to avoid race condition between replicas
+	// First instance gets a short delay, second gets longer
+	delayMs := 1000 + (time.Now().UnixNano()%3000)
+	time.Sleep(time.Duration(delayMs) * time.Millisecond)
+
 	rows, err := db.Query(`SELECT tenant_id, jid FROM wa_tenant_sessions`)
 	if err != nil {
 		log.Printf("Failed to query sessions: %v", err)

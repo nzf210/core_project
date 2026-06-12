@@ -1,0 +1,151 @@
+{
+  "id": "courierTrack0000",
+  "name": "UMKM - Courier Tracking & Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "umkm/order/shipped",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "93945e0e-cdaa-4091-ba3b-d25dbe6fe9a6",
+      "name": "Shipping Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.biteship.com/v1/trackings/{{ $json.body.tracking_id }}",
+        "method": "GET",
+        "options": {
+          "headers": {
+            "Authorization": "={{ $json.body.biteship_api_key }}"
+          }
+        }
+      },
+      "id": "81dace86-7796-430c-8b0c-e81644ae5800",
+      "name": "Check Biteship API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "value2": "delivered"
+            }
+          ]
+        }
+      },
+      "id": "f7a3dab9-c734-4116-8eca-f199d03b794c",
+      "name": "Is Delivered?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://wch-wa-gateway:8202/api/wa/send",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $('Shipping Webhook').first().json.body.customer_phone }}\",\n  \"message\": \"\ud83c\udf89 Hore! Pesanan kamu #{{ $('Shipping Webhook').first().json.body.order_id }} sudah berhasil diantarkan oleh kurir. Terima kasih sudah berbelanja di toko kami!\"\n}",
+        "options": {}
+      },
+      "id": "fad57ea9-e9a1-42e1-b060-461bf501b7f3",
+      "name": "Notify Delivered",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        920,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 24,
+        "unit": "hours"
+      },
+      "id": "c0973a72-b9de-4c7c-83aa-857923142420",
+      "name": "Wait 24h",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        920,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Shipping Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Biteship API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Biteship API": {
+      "main": [
+        [
+          {
+            "node": "Is Delivered?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Delivered?": {
+      "main": [
+        [
+          {
+            "node": "Notify Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 24h": {
+      "main": [
+        [
+          {
+            "node": "Check Biteship API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "de296ead-d91f-4d81-a459-7f4b06886b11"
+}

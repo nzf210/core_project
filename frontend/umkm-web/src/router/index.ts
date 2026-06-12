@@ -7,7 +7,6 @@ import Journal from '../components/Journal.vue'
 import ProductCatalog from '../components/ProductCatalog.vue'
 import POS from '../components/POS.vue'
 import SuperAdminDashboard from '../components/SuperAdminDashboard.vue'
-import SuperAdminN8n from '../components/SuperAdminN8n.vue'
 import Settings from '../components/Settings.vue'
 import Login from '../components/Login.vue'
 import Register from '../components/Register.vue'
@@ -25,7 +24,6 @@ const routes = [
   { path: '/catalog', component: ProductCatalog, name: 'ProductCatalog' },
   { path: '/pos', component: POS, name: 'POS' },
   { path: '/superadmin', component: SuperAdminDashboard, name: 'SuperAdminDashboard' },
-  { path: '/superadmin/n8n', component: SuperAdminN8n, name: 'SuperAdminN8n' },
   { path: '/settings', component: Settings, name: 'Settings' },
   { path: '/automations', component: Automations, name: 'Automations' },
   { path: '/login', component: Login, name: 'Login', meta: { requiresGuest: true } },

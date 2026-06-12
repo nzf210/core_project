@@ -189,6 +189,30 @@ core_project/                   ← Root monorepo (satu go.mod)
 | `campaign_voter_onboard.json` | Webhook | Campaign voter onboarding |
 | `voucher_wa_distribute.json` | Webhook | Distribusi voucher via WA |
 
+**Persistence — Dedicated Database:**
+
+N8N menggunakan database PostgreSQL terpisah (`wch_n8n`) dari database utama platform. Auto-created via `infra/postgres/init.sql` saat postgres pertama kali start.
+
+| Var | Nilai Default | Deskripsi |
+|:----|:--------------|:----------|
+| `N8N_DB_NAME` | `wch_n8n` | Database name |
+| `N8N_DB_HOST` | `127.0.0.1` | PostgreSQL host |
+| `N8N_DB_PORT` | `5433` | PostgreSQL port (Docker) |
+| `N8N_DB_USER` | `wch_admin` | Database user |
+| `N8N_ENCRYPTION_KEY` | *(wajib di-set)* | 32-byte key untuk enkripsi credential di DB |
+
+Scaling worker tinggal: `docker-compose up -d --scale n8n-worker=3` — worker auto-sync workflow & credential dari database yang sama.
+
+**Migrasi ke Production Server Baru:**
+```bash
+# 1. Backup
+pg_dump -h oldserver -U wch_admin -d wch_n8n > n8n_backup.sql
+# 2. Restore
+psql -h newserver -U wch_admin -d wch_n8n < n8n_backup.sql
+# 3. Set N8N_ENCRYPTION_KEY yang sama di server baru
+```
+⚠️ `N8N_ENCRYPTION_KEY` harus SAMA antara backup dan restore — jika berbeda, semua credential (API keys, tokens) tidak bisa didekripsi.
+
 **Multi-Tenant WA Session Pool:**
 
 Setiap tenant memiliki WA session sendiri di tabel `wa_sessions`:

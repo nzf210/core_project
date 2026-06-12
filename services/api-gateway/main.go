@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -80,6 +83,9 @@ func main() {
 
 	// Aggregated health check — panggil semua service & return ringkas
 	mux.HandleFunc("/healthz", handleAggregatedHealthz(getTarget, cfg))
+
+	// Prometheus metrics endpoint — aggregate dari semua service
+	mux.HandleFunc("/metrics", handleAggregatedMetrics(getTarget, cfg))
 
 	server := &http.Server{
 		Addr:         ":8000",
@@ -270,6 +276,66 @@ func handleAggregatedHealthz(getTarget func(string, string) string, cfg *config.
 			"services": results,
 			"checked_at": time.Now().UTC().Format(time.RFC3339),
 		})
+	}
+}
+
+// handleAggregatedMetrics aggregates metrics from all downstream services
+func handleAggregatedMetrics(getTarget func(string, string) string, cfg *config.Config) http.HandlerFunc {
+	type serviceMetrics struct {
+		name    string
+		port    string
+		endpoint string
+	}
+
+	svcPorts := []serviceMetrics{
+		{"wa-gateway", "8202", "/metrics"},
+		{"umkm-chatbot", "8203", "/metrics"},
+		{"auth-service", "8001", "/health"},
+		{"ai-gateway", "8002", "/health"},
+		{"billing-service", "8003", "/health"},
+		{"umkm-accounting", "8201", "/health"},
+		{"campaign-api", "9002", "/health"},
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		var sb strings.Builder
+		hostname, _ := os.Hostname()
+
+		sb.WriteString("# HELP wch_platform_info WCH Platform info\n")
+		sb.WriteString("# TYPE wch_platform_info gauge\n")
+		sb.WriteString(fmt.Sprintf("wch_platform_info{env=%q,host=%q} 1\n", cfg.Env, hostname))
+
+		upCount := 0
+		for _, svc := range svcPorts {
+			url := getTarget(svc.name, svc.port) + svc.endpoint
+			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil || resp.StatusCode >= 500 {
+				sb.WriteString(fmt.Sprintf("wch_service_up{service=%q} 0\n", svc.name))
+				continue
+			}
+			if resp.Body != nil {
+				defer resp.Body.Close()
+				if body, readErr := io.ReadAll(resp.Body); readErr == nil {
+					// Append raw metrics from downstream service
+					sb.Write(body)
+					sb.WriteString("\n")
+				}
+			}
+			sb.WriteString(fmt.Sprintf("wch_service_up{service=%q} 1\n", svc.name))
+			upCount++
+		}
+
+		sb.WriteString("# HELP wch_services_up_total Number of services up\n")
+		sb.WriteString("# TYPE wch_services_up_total gauge\n")
+		sb.WriteString(fmt.Sprintf("wch_services_up_total %d\n", upCount))
+
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(sb.String()))
 	}
 }
 

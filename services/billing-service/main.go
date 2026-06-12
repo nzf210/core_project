@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -192,6 +193,81 @@ func handleN8NExecutions(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, "ok", data)
 }
 
+// handleHealthStatus returns aggregated health status of all platform services
+func handleHealthStatus(w http.ResponseWriter, r *http.Request) {
+	type svcHealth struct {
+		Name    string `json:"name"`
+		Port    string `json:"port"`
+		Status  string `json:"status"`
+		Metrics string `json:"metrics,omitempty"`
+	}
+
+	services := []struct {
+		name string
+		port string
+	}{
+		{"wa-gateway", "8202"},
+		{"umkm-chatbot", "8203"},
+		{"auth-service", "8001"},
+		{"ai-gateway", "8002"},
+		{"umkm-accounting", "8201"},
+		{"campaign-api", "9002"},
+		{"billing-service", "8003"},
+		{"notification-service", "8005"},
+	}
+
+	_, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	results := make([]svcHealth, 0, len(services))
+	allUp := true
+
+	for _, svc := range services {
+		sh := svcHealth{Name: svc.name, Port: svc.port}
+
+		// Try metrics endpoint first (WA Gateway & Chatbot have it)
+		metricsURL := fmt.Sprintf("http://localhost:%s/metrics", svc.port)
+		client := &http.Client{Timeout: 3 * time.Second}
+
+		if resp, err := client.Get(metricsURL); err == nil && resp.StatusCode < 500 {
+			defer resp.Body.Close()
+			if body, err := io.ReadAll(resp.Body); err == nil {
+				sh.Status = "up"
+				sh.Metrics = string(body)
+			}
+		} else {
+			// Fallback to health endpoint
+			healthURL := fmt.Sprintf("http://localhost:%s/healthz", svc.port)
+			if resp, err := client.Get(healthURL); err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					sh.Status = "up"
+				} else {
+					sh.Status = "degraded"
+					allUp = false
+				}
+			} else {
+				sh.Status = "down"
+				allUp = false
+			}
+		}
+
+		results = append(results, sh)
+	}
+
+	overall := "healthy"
+	if !allUp {
+		overall = "degraded"
+	}
+
+	response.JSON(w, http.StatusOK, "ok", map[string]interface{}{
+		"status":  overall,
+		"env":     config.LoadConfig(".env").Env,
+		"services": results,
+		"checked_at": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
@@ -250,6 +326,7 @@ func main() {
 	mux.Handle("/admin/dashboard", auth.Middleware(http.HandlerFunc(handleAdminDashboard)))
 	mux.Handle("/admin/n8n-status", auth.Middleware(http.HandlerFunc(handleN8NStatus)))
 	mux.Handle("/admin/n8n-executions", auth.Middleware(http.HandlerFunc(handleN8NExecutions)))
+	mux.Handle("/admin/health-status", auth.Middleware(http.HandlerFunc(handleHealthStatus)))
 
 	server := &http.Server{
 		Addr:    ":8003",

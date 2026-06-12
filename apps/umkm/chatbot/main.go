@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"core_project/shared/sdk/config"
@@ -74,9 +75,59 @@ func handleHealthz(w http.ResponseWriter, r *http.Request) {
 	handleHealth(w, r)
 }
 
+// handleMetrics returns Prometheus-compatible metrics for monitoring
+func handleMetrics(w http.ResponseWriter, r *http.Request) {
+	// Get queue depth
+	var queueDepth int64
+	if redisClient != nil {
+		n, err := redisClient.LLen(r.Context(), "chatbot:queue").Result()
+		if err == nil {
+			queueDepth = n
+		}
+	}
+
+	hostname, _ := os.Hostname()
+	metrics := fmt.Sprintf(`# HELP chatbot_info Chatbot instance info
+# TYPE chatbot_info gauge
+chatbot_info{instance="%s"} 1
+
+# HELP chatbot_messages_processed_total Total messages processed
+# TYPE chatbot_messages_processed_total counter
+chatbot_messages_processed_total{instance="%s"} %d
+
+# HELP chatbot_llm_calls_total Total LLM API calls
+# TYPE chatbot_llm_calls_total counter
+chatbot_llm_calls_total{instance="%s"} %d
+
+# HELP chatbot_errors_total Total errors
+# TYPE chatbot_errors_total counter
+chatbot_errors_total{instance="%s"} %d
+
+# HELP chatbot_queue_depth Current job queue depth
+# TYPE chatbot_queue_depth gauge
+chatbot_queue_depth{instance="%s"} %d
+`, hostname, hostname, chatbotMessagesProcessed, hostname, chatbotLLMCalls, hostname, chatbotErrors, hostname, queueDepth)
+
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(metrics))
+}
+
+func atomicAddInt64(addr *int64, val int64) {
+	atomic.AddInt64(addr, val)
+}
+
 var AIGatewayURL = "http://localhost:8002/v1/chat"
 var AccountingURL = "http://localhost:8201"
 var redisClient *redis.Client
+
+// Metrics counters
+var (
+	chatbotMessagesProcessed int64
+	chatbotLLMCalls          int64
+	chatbotErrors            int64
+	chatbotQueueDepth        int64
+)
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -118,6 +169,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handleHealth)
 	mux.HandleFunc("GET /healthz", handleHealthz)
+	mux.HandleFunc("/metrics", handleMetrics)
 	mux.HandleFunc("/chat", handleChat)
 	mux.HandleFunc("/webhook/wa", handleWAWebhook)
 
@@ -224,10 +276,12 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(aiRespHTTP.Body).Decode(&aiGatewayResp)
 
 	if !aiGatewayResp.Success {
+		atomicAddInt64(&chatbotErrors, 1)
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "AI Gateway returned error"})
 		return
 	}
 
+	atomicAddInt64(&chatbotLLMCalls, 1)
 	aiAnswer := processAIAnswer(ctx, tenantID, aiGatewayResp.Text, "Web UI", "owner")
 
 	// Save Assistant Message
@@ -289,10 +343,13 @@ func startWorkerPool(numWorkers int) {
 				if len(res) == 2 {
 					var job ChatJob
 					if err := json.Unmarshal([]byte(res[1]), &job); err == nil {
+						// Increment metrics
+						atomicAddInt64(&chatbotMessagesProcessed, 1)
 						// Process with timeout and error handling
 						processJobWithTimeout(ctx, workerID, job)
 					} else {
 						slog.Error("Failed to unmarshal chat job", "error", err, "data", res[1])
+						atomicAddInt64(&chatbotErrors, 1)
 					}
 				}
 			}

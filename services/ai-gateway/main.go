@@ -11,6 +11,9 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"core_project/shared/sdk/config"
@@ -23,23 +26,29 @@ import (
 // =====================================================
 
 type ChatRequest struct {
-	Provider  string  `json:"provider"`
-	Model     string  `json:"model,omitempty"`
-	BaseURL   string  `json:"base_url,omitempty"`
-	Message   string  `json:"message"`
-	SystemMsg string  `json:"system_msg"`
-	CacheTTL  int     `json:"cache_ttl"`
-	TenantID  string  `json:"tenant_id"`
+	Provider  string `json:"provider"`            // Override provider (optional)
+	Model     string `json:"model,omitempty"`    // Override specific model (optional)
+	BaseURL   string `json:"base_url,omitempty"` // Override base URL (optional)
+	Message   string `json:"message"`
+	SystemMsg string `json:"system_msg"`
+	CacheTTL  int    `json:"cache_ttl"`
+	TenantID  string `json:"tenant_id"`
+	// UseCase enables automatic model routing based on task type
+	// Valid values: "product" (product data retrieval), "faq" (FAQ answering),
+	// "general" (default, any other task)
+	UseCase string `json:"use_case,omitempty"`
 }
 
 type ChatResponse struct {
 	Success      bool    `json:"success"`
 	Provider     string  `json:"provider"`
+	Model        string  `json:"model"`
 	Text         string  `json:"text"`
 	CacheHit     bool    `json:"cache_hit"`
 	TokensInput  int     `json:"tokens_input,omitempty"`
 	TokensOutput int     `json:"tokens_output,omitempty"`
 	CostUSD      float64 `json:"cost_usd,omitempty"`
+	FallbackTier int     `json:"fallback_tier,omitempty"` // 1=primary, 2=secondary, 3=tertiary
 }
 
 type APIResponse struct {
@@ -51,7 +60,23 @@ type APIResponse struct {
 var (
 	cfg      *config.Config
 	aiClient *openai.Client
+
+	// Metrics (Prometheus-style, using atomic for thread safety)
+	aiRequestsTotal  atomic.Int64
+	aiCacheHits      atomic.Int64
+	aiTokensInTotal  atomic.Int64
+	aiTokensOutTotal atomic.Int64
+	aiCostUSDTotal   float64 // Protected by costMu
+	aiCostMu         sync.Mutex
+
+	// Per-model metrics (protected by mutex for map access)
+	modelRequests   map[string]int64
+	modelRequestsMu sync.RWMutex
 )
+
+func init() {
+	modelRequests = make(map[string]int64)
+}
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -75,17 +100,20 @@ func main() {
 	aiCfg.BaseURL = cfg.AI.MiniMaxBaseURL
 	aiClient = openai.NewClientWithConfig(aiCfg)
 
-	slog.Info("🤖 AI Gateway starting",
+	slog.Info("AI Gateway starting",
 		"env", cfg.Env,
 		"primary_model", cfg.AI.MiniMaxModel,
 		"cache_enabled", cfg.AI.CacheEnabled,
+		"models_loaded", len(cfg.AI.LLM.Models),
 	)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat", handleChat)
 	mux.HandleFunc("/v1/chat/stream", handleChatStream)
 	mux.HandleFunc("/v1/embeddings", handleEmbeddings)
+	mux.HandleFunc("/v1/models", handleListModels)
 	mux.HandleFunc("/health", handleHealth)
+	mux.HandleFunc("/metrics", handleMetrics)
 
 	server := &http.Server{
 		Addr:         ":8002",
@@ -94,7 +122,7 @@ func main() {
 		WriteTimeout: 60 * time.Second,
 	}
 
-	slog.Info("AI Gateway listening", "port", 8003)
+	slog.Info("AI Gateway listening", "port", 8002)
 	if err := server.ListenAndServe(); err != nil {
 		slog.Error("Failed to start AI Gateway", "error", err)
 	}
@@ -126,13 +154,13 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 		windowStart := now - 60000 // 1 minute ago
 
 		ctx := r.Context()
-		
+
 		pipe := Redis.TxPipeline()
 		pipe.ZRemRangeByScore(ctx, key, "-inf", strconv.FormatInt(windowStart, 10))
 		pipe.ZAdd(ctx, key, redis.Z{Score: float64(now), Member: now})
 		countCmd := pipe.ZCard(ctx, key)
 		pipe.Expire(ctx, key, 2*time.Minute)
-		
+
 		_, err := pipe.Exec(ctx)
 		if err != nil {
 			slog.Error("Rate limiter redis error", "error", err)
@@ -171,22 +199,22 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	if req.TenantID == "" {
 		req.TenantID = r.Header.Get("X-Tenant-ID")
 		if req.TenantID == "" {
-			req.TenantID = "00000000-0000-0000-0000-000000000000" // Default empty UUID for unknown
+			req.TenantID = "00000000-0000-0000-0000-000000000000"
 		}
 	}
 
-	if req.Provider == "" {
-		req.Provider = "minimax"
-	}
-
-	cacheKey := buildCacheKey(req.Provider, req.SystemMsg, req.Message)
+	// Determine cache key (use provider:model if specified)
+	cacheKey := buildCacheKey(req.Provider, req.Model, req.SystemMsg, req.Message)
 
 	if cfg.AI.CacheEnabled {
 		if cached, hit := checkCache(r.Context(), cacheKey); hit {
 			slog.Info("cache hit", "key", cacheKey[:16])
+			aiCacheHits.Add(1)
+			aiRequestsTotal.Add(1)
 			writeJSON(w, http.StatusOK, ChatResponse{
 				Success:  true,
-				Provider: req.Provider + " (cached)",
+				Provider: req.Provider,
+				Model:    req.Model,
 				Text:     cached,
 				CacheHit: true,
 			})
@@ -194,16 +222,19 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Route to LLM with Fallback logic
-	text, tokensIn, tokensOut, actualProvider, err := callLLMWithFallback(r.Context(), req)
+	// Call LLM with 3-tier fallback
+	text, tokensIn, tokensOut, modelID, tier, err := callLLMWith3TierFallback(r.Context(), req)
 	if err != nil {
-		slog.Error("LLM call failed", "provider", req.Provider, "error", err)
+		slog.Error("LLM call failed after all fallbacks", "error", err)
 		writeJSON(w, http.StatusInternalServerError, APIResponse{
 			Success: false,
-			Message: fmt.Sprintf("LLM provider error: %v", err),
+			Message: fmt.Sprintf("All LLM providers failed: %v", err),
 		})
 		return
 	}
+
+	// Parse provider:model from modelID
+	provider, model := parseModelID(modelID)
 
 	if cfg.AI.CacheEnabled {
 		ttl := cfg.AI.CacheTTL
@@ -213,13 +244,23 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 		storeCache(r.Context(), cacheKey, text, ttl)
 	}
 
-	costUSD := estimateCost(actualProvider, tokensIn, tokensOut)
+	costUSD := estimateCost(modelID, tokensIn, tokensOut)
 
-	// Log to DB
+	// Update metrics
+	aiRequestsTotal.Add(1)
+	aiTokensInTotal.Add(int64(tokensIn))
+	aiTokensOutTotal.Add(int64(tokensOut))
+	aiCostMu.Lock()
+	aiCostUSDTotal += costUSD
+	aiCostMu.Unlock()
+	modelRequestsMu.Lock()
+	modelRequests[modelID]++
+	modelRequestsMu.Unlock()
+
 	if DB != nil {
-		_, dbErr := DB.Exec(r.Context(), 
+		_, dbErr := DB.Exec(r.Context(),
 			"INSERT INTO ai_usage_logs (tenant_id, model, tokens_in, tokens_out, cost_usd) VALUES ($1, $2, $3, $4, $5)",
-			req.TenantID, actualProvider, tokensIn, tokensOut, costUSD,
+			req.TenantID, modelID, tokensIn, tokensOut, costUSD,
 		)
 		if dbErr != nil {
 			slog.Error("Failed to log AI usage to DB", "error", dbErr)
@@ -228,17 +269,18 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, ChatResponse{
 		Success:      true,
-		Provider:     actualProvider,
+		Provider:     provider,
+		Model:        model,
 		Text:         text,
 		CacheHit:     false,
 		TokensInput:  tokensIn,
 		TokensOutput: tokensOut,
 		CostUSD:      costUSD,
+		FallbackTier: tier,
 	})
 }
 
 func handleChatStream(w http.ResponseWriter, r *http.Request) {
-	// Simple stream implementation (fallback logic is harder in streams, omitting fallback for brevity in stream)
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: "Method not allowed"})
 		return
@@ -264,7 +306,7 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 		systemPrompt = "Kamu adalah asisten cerdas untuk platform WCH. Jawab dalam bahasa Indonesia yang jelas dan profesional."
 	}
 
-	// Try MiniMax stream
+	// Try Anthropic stream
 	stream, err := aiClient.CreateChatCompletionStream(r.Context(), openai.ChatCompletionRequest{
 		Model: cfg.AI.MiniMaxModel,
 		Messages: []openai.ChatCompletionMessage{
@@ -305,11 +347,84 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Message: "AI Gateway is healthy",
-		Data: map[string]string{
+		Data: map[string]any{
 			"primary_model":    cfg.AI.MiniMaxModel,
 			"gemini_fallback":  "enabled",
+			"models_available": len(cfg.AI.LLM.Models),
 		},
 	})
+}
+
+// handleListModels returns available LLM models with their capabilities
+// GET /v1/models
+func handleListModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: "Method not allowed"})
+		return
+	}
+
+	models := make([]map[string]any, 0, len(cfg.AI.LLM.Models))
+	for _, m := range cfg.AI.LLM.Models {
+		models = append(models, map[string]any{
+			"id":             m.ID,
+			"provider":       m.Provider,
+			"model":          m.Model,
+			"base_url":       m.BaseURL,
+			"capability":     m.Capability,
+			"context_window": m.ContextWindow,
+			"cost_per_1m_in":  m.CostPer1MIn,
+			"cost_per_1m_out": m.CostPer1MOut,
+			"priority":       m.Priority,
+			"tier":           m.Tier,
+			"fallback_1":     m.FallbackTier1,
+			"fallback_2":     m.FallbackTier2,
+			"fallback_3":     m.FallbackTier3,
+			"is_enabled":    m.IsEnabled,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"object": "list",
+		"data":   models,
+	})
+}
+
+// handleMetrics returns Prometheus-compatible metrics
+// GET /metrics
+func handleMetrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+
+	aiCostMu.Lock()
+	costTotal := aiCostUSDTotal
+	aiCostMu.Unlock()
+
+	var b strings.Builder
+	b.WriteString("# HELP ai_gateway_requests_total Total number of chat requests\n")
+	b.WriteString("# TYPE ai_gateway_requests_total counter\n")
+	b.WriteString(fmt.Sprintf("ai_gateway_requests_total %d\n", aiRequestsTotal.Load()))
+
+	b.WriteString("# HELP ai_gateway_cache_hits_total Total semantic cache hits\n")
+	b.WriteString("# TYPE ai_gateway_cache_hits_total counter\n")
+	b.WriteString(fmt.Sprintf("ai_gateway_cache_hits_total %d\n", aiCacheHits.Load()))
+
+	b.WriteString("# HELP ai_gateway_tokens_total Total tokens processed\n")
+	b.WriteString("# TYPE ai_gateway_tokens_total counter\n")
+	b.WriteString(fmt.Sprintf("ai_gateway_tokens_in_total %d\n", aiTokensInTotal.Load()))
+	b.WriteString(fmt.Sprintf("ai_gateway_tokens_out_total %d\n", aiTokensOutTotal.Load()))
+
+	b.WriteString("# HELP ai_gateway_cost_usd_total Total estimated cost in USD\n")
+	b.WriteString("# TYPE ai_gateway_cost_usd_total counter\n")
+	b.WriteString(fmt.Sprintf("ai_gateway_cost_usd_total %.6f\n", costTotal))
+
+	b.WriteString("# HELP ai_gateway_model_requests_total Requests per model\n")
+	b.WriteString("# TYPE ai_gateway_model_requests_total counter\n")
+	modelRequestsMu.RLock()
+	for model, count := range modelRequests {
+		b.WriteString(fmt.Sprintf("ai_gateway_model_requests_total{model=\"%s\"} %d\n", model, count))
+	}
+	modelRequestsMu.RUnlock()
+
+	_, _ = w.Write([]byte(b.String()))
 }
 
 // handleEmbeddings generates vector embeddings for RAG indexing.
@@ -321,8 +436,8 @@ func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Input  string `json:"input"`
-		Model  string `json:"model"`
+		Input    string `json:"input"`
+		Model    string `json:"model"`
 		TenantID string `json:"tenant_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -335,7 +450,7 @@ func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Use OpenAI embeddings by default (ada-002, 1536 dimensions)
-	// Falls back to MiniMax's embed endpoint if configured
+	// Falls back to Anthropic's embed endpoint if configured
 	var emb []float64
 	var err error
 
@@ -360,7 +475,7 @@ func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		"data": []map[string]interface{}{
 			{"object": "embedding", "embedding": emb, "index": 0},
 		},
-		"model": req.Model,
+		"model":     req.Model,
 		"tenant_id": req.TenantID,
 	})
 }
@@ -397,14 +512,14 @@ func callOpenAIEmbeddings(ctx context.Context, apiKey, input, model string) ([]f
 }
 
 func callMiniMaxEmbeddings(ctx context.Context, apiKey, input string) ([]float64, error) {
-	// MiniMax embo1 model returns 1536-dim vectors
+	// Anthropic embo1 model returns 1536-dim vectors
 	payload := map[string]interface{}{
 		"model": "embo1",
 		"text":  input,
 	}
 	body, _ := json.Marshal(payload)
 	reqHTTP, _ := http.NewRequestWithContext(ctx, http.MethodPost,
-		"https://api.minimax.io/v1/embeddings", bytes.NewBuffer(body))
+		"https://api.Anthropic.io/v1/embeddings", bytes.NewBuffer(body))
 	reqHTTP.Header.Set("Authorization", "Bearer "+apiKey)
 	reqHTTP.Header.Set("Content-Type", "application/json")
 
@@ -423,154 +538,198 @@ func callMiniMaxEmbeddings(ctx context.Context, apiKey, input string) ([]float64
 		return nil, err
 	}
 	if len(result.Data) == 0 {
-		return nil, fmt.Errorf("no embedding returned from MiniMax")
+		return nil, fmt.Errorf("no embedding returned from Anthropic")
 	}
 	return result.Data[0].Embedding, nil
 }
 
-// callLLMWithFallback implements the required retry and fallback logic
-func callLLMWithFallback(ctx context.Context, req ChatRequest) (string, int, int, string, error) {
+// callLLMWith3TierFallback implements 3-tier fallback chain for LLM calls
+// Returns: text, tokensIn, tokensOut, modelID, tier (1-3), error
+func callLLMWith3TierFallback(ctx context.Context, req ChatRequest) (string, int, int, string, int, error) {
 	systemPrompt := req.SystemMsg
 	if systemPrompt == "" {
 		systemPrompt = "Kamu adalah asisten cerdas untuk platform WCH Indonesia. Jawab dalam bahasa Indonesia yang jelas dan profesional."
 	}
 
+	useCase := req.UseCase
+	if useCase == "" {
+		useCase = "general"
+	}
+
+	// Select primary model based on use_case
+	primaryModel := selectModelByCapability(useCase, req.Provider, req.Model)
+
+	// If custom base_url provided, use it
+	baseURL := primaryModel.BaseURL
+	if req.BaseURL != "" {
+		baseURL = req.BaseURL
+	}
+
+	// Tier 1: Try primary model
+	slog.Info("LLM call tier 1", "model", primaryModel.ID, "use_case", useCase)
+	text, tin, tout, err := callLLM(ctx, primaryModel.Provider, primaryModel.Model, baseURL, primaryModel.APIKey, systemPrompt, req.Message)
+	if err == nil {
+		return text, tin, tout, primaryModel.ID, 1, nil
+	}
+	slog.Warn("Tier 1 failed, trying fallback 1", "model", primaryModel.ID, "error", err)
+
+	// Tier 2: Try first fallback
+	if primaryModel.FallbackTier1 != "" {
+		fb1 := resolveModel(primaryModel.FallbackTier1)
+		if fb1 != nil {
+			slog.Info("LLM call tier 2", "model", fb1.ID)
+			text, tin, tout, err := callLLM(ctx, fb1.Provider, fb1.Model, fb1.BaseURL, fb1.APIKey, systemPrompt, req.Message)
+			if err == nil {
+				return text, tin, tout, fb1.ID, 2, nil
+			}
+			slog.Warn("Tier 2 failed, trying fallback 2", "model", fb1.ID, "error", err)
+		}
+	}
+
+	// Tier 3: Try second fallback
+	if primaryModel.FallbackTier2 != "" {
+		fb2 := resolveModel(primaryModel.FallbackTier2)
+		if fb2 != nil {
+			slog.Info("LLM call tier 3", "model", fb2.ID)
+			text, tin, tout, err := callLLM(ctx, fb2.Provider, fb2.Model, fb2.BaseURL, fb2.APIKey, systemPrompt, req.Message)
+			if err == nil {
+				return text, tin, tout, fb2.ID, 3, nil
+			}
+			slog.Warn("Tier 3 failed, trying fallback 3", "model", fb2.ID, "error", err)
+		}
+	}
+
+	// Tier 4: Last resort - try third fallback or mock response
+	if primaryModel.FallbackTier3 != "" {
+		fb3 := resolveModel(primaryModel.FallbackTier3)
+		if fb3 != nil {
+			slog.Info("LLM call tier 4 (last resort)", "model", fb3.ID)
+			text, tin, tout, err := callLLM(ctx, fb3.Provider, fb3.Model, fb3.BaseURL, fb3.APIKey, systemPrompt, req.Message)
+			if err == nil {
+				return text, tin, tout, fb3.ID, 4, nil
+			}
+		}
+	}
+
+	return "", 0, 0, "", 0, fmt.Errorf("all LLM providers failed")
+}
+
+// resolveModel finds a model by its "provider:model" ID
+func resolveModel(modelID string) *config.LLMModel {
+	for i := range cfg.AI.LLM.Models {
+		if cfg.AI.LLM.Models[i].ID == modelID {
+			return &cfg.AI.LLM.Models[i]
+		}
+	}
+	return nil
+}
+
+// callLLM makes an actual LLM API call with retries
+func callLLM(ctx context.Context, provider, model, baseURL, apiKey, systemPrompt, message string) (string, int, int, error) {
+	if apiKey == "" {
+		return "", 0, 0, fmt.Errorf("no API key for provider: %s", provider)
+	}
+
 	messages := []openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
-		{Role: openai.ChatMessageRoleUser, Content: req.Message},
+		{Role: openai.ChatMessageRoleUser, Content: message},
 	}
 
-	useGeminiFallback := func() (string, int, int, string, error) {
-		slog.Info("Falling back to Gemini")
-		apiKey := cfg.AI.GeminiApiKey
-		if apiKey == "" {
-			return fmt.Sprintf("[gemini mock] Anda mengirim: \"%s\". API key belum dikonfigurasi.", req.Message), 100, 50, "gemini-mock", nil
-		}
-		model := req.Model
-		if model == "" {
-			model = "gemini-1.5-flash"
-		}
-		fullMessage := systemPrompt + "\n\n" + req.Message
-		text, tin, tout, err := callGeminiREST(ctx, apiKey, model, req.BaseURL, fullMessage)
-		return text, tin, tout, model, err
-	}
-
-	provider := req.Provider
-	if provider == "" {
-		provider = "minimax"
-	}
-
-	if provider == "gemini" {
-		return useGeminiFallback()
-	}
-
-	var apiKey, baseURL, model string
-	if provider == "openai" {
-		apiKey = cfg.AI.OpenAIApiKey
-		baseURL = req.BaseURL
-		if baseURL == "" {
-			baseURL = "https://api.openai.com/v1"
-		}
-		model = req.Model
-		if model == "" {
-			model = "gpt-4o"
-		}
-	} else { // minimax or default
-		apiKey = cfg.AI.MiniMaxAPIKey
-		baseURL = req.BaseURL
-		if baseURL == "" {
-			baseURL = cfg.AI.MiniMaxBaseURL
-		}
-		model = req.Model
-		if model == "" {
-			model = cfg.AI.MiniMaxModel
-		}
-	}
-
-	if apiKey == "" {
-		slog.Warn("API key empty for provider, falling back to Gemini", "provider", provider)
-		return useGeminiFallback()
-	}
-
+	// Create client with custom base URL
 	clientCfg := openai.DefaultConfig(apiKey)
-	clientCfg.BaseURL = baseURL
+	if baseURL != "" {
+		clientCfg.BaseURL = baseURL
+	}
 	client := openai.NewClientWithConfig(clientCfg)
 
+	// Retry logic
 	var lastErr error
-	for i := 0; i < 3; i++ { // Initial try + 2 retries
+	for i := 0; i < 3; i++ {
 		resp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 			Model:    model,
 			Messages: messages,
 		})
-		
+
 		if err == nil {
-			return resp.Choices[0].Message.Content, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, provider, nil
+			return resp.Choices[0].Message.Content, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, nil
 		}
 
-		slog.Warn("LLM request failed", "provider", provider, "attempt", i+1, "error", err)
+		slog.Warn("LLM request failed", "provider", provider, "model", model, "attempt", i+1, "error", err)
 		lastErr = err
-		time.Sleep(500 * time.Millisecond) // Backoff
+		time.Sleep(time.Duration(500*(i+1)) * time.Millisecond) // Exponential backoff
 	}
 
-	slog.Error("Provider exhausted all retries, executing fallback", "provider", provider, "last_error", lastErr)
-	return useGeminiFallback()
+	return "", 0, 0, lastErr
 }
 
-func callGeminiREST(ctx context.Context, apiKey, model, baseURL, message string) (string, int, int, error) {
-	if baseURL == "" {
-		baseURL = "https://generativelanguage.googleapis.com/v1beta"
-	}
-	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", baseURL, model, apiKey)
-	payload := map[string]interface{}{
-		"contents": []map[string]interface{}{
-			{"parts": []map[string]string{{"text": message}}},
-		},
-	}
-	jsonPayload, _ := json.Marshal(payload)
-
-	reqHTTP, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return "", 0, 0, err
-	}
-	reqHTTP.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(reqHTTP)
-	if err != nil {
-		return "", 0, 0, err
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return "", 0, 0, fmt.Errorf("gemini returned %d: %s", resp.StatusCode, string(bodyBytes))
+// selectModelByCapability selects the best model based on use_case and provider override
+func selectModelByCapability(useCase, providerOverride, modelOverride string) config.LLMModel {
+	// If model explicitly specified, find and return it
+	if modelOverride != "" {
+		prov := providerOverride
+		if prov == "" {
+			prov = "Anthropic"
+		}
+		targetID := prov + ":" + modelOverride
+		for _, m := range cfg.AI.LLM.Models {
+			if m.ID == targetID {
+				return m
+			}
+		}
 	}
 
-	var geminiResp struct {
-		Candidates []struct {
-			Content struct {
-				Parts []struct {
-					Text string `json:"text"`
-				} `json:"parts"`
-			} `json:"content"`
-		} `json:"candidates"`
-		UsageMetadata struct {
-			PromptTokenCount     int `json:"promptTokenCount"`
-			CandidatesTokenCount int `json:"candidatesTokenCount"`
-		} `json:"usageMetadata"`
+	// Try to find model matching the use_case capability
+	for _, m := range cfg.AI.LLM.Models {
+		if !m.IsEnabled {
+			continue
+		}
+		if containsCapability(m.Capability, useCase) {
+			return m
+		}
 	}
 
-	if err := json.Unmarshal(bodyBytes, &geminiResp); err == nil && len(geminiResp.Candidates) > 0 {
-		return geminiResp.Candidates[0].Content.Parts[0].Text, 
-			geminiResp.UsageMetadata.PromptTokenCount, 
-			geminiResp.UsageMetadata.CandidatesTokenCount, 
-			nil
+	// Fallback to first available model
+	if len(cfg.AI.LLM.Models) > 0 {
+		for _, m := range cfg.AI.LLM.Models {
+			if m.IsEnabled {
+				return m
+			}
+		}
 	}
-	return "", 0, 0, fmt.Errorf("failed to parse gemini response")
+
+	// Last resort: return default Anthropic
+	return config.LLMModel{
+		ID:       "Anthropic:" + cfg.AI.MiniMaxModel,
+		Provider: "Anthropic",
+		Model:    cfg.AI.MiniMaxModel,
+		BaseURL:  cfg.AI.MiniMaxBaseURL,
+		APIKey:   cfg.AI.MiniMaxAPIKey,
+		Tier:     1,
+	}
 }
 
-func buildCacheKey(provider, system, message string) string {
-	raw := provider + "|" + system + "|" + message
+// containsCapability checks if capabilities string contains the target use_case
+func containsCapability(capabilities, target string) bool {
+	for _, cap := range strings.Split(capabilities, ",") {
+		cap = strings.TrimSpace(cap)
+		if cap == target {
+			return true
+		}
+	}
+	return false
+}
+
+// parseModelID splits "provider:model" into separate parts
+func parseModelID(modelID string) (string, string) {
+	parts := strings.SplitN(modelID, ":", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return "unknown", modelID
+}
+
+func buildCacheKey(provider, model, system, message string) string {
+	raw := provider + "|" + model + "|" + system + "|" + message
 	hash := sha256.Sum256([]byte(raw))
 	return fmt.Sprintf("ai:cache:%x", hash[:16])
 }
@@ -591,13 +750,22 @@ func storeCache(ctx context.Context, key, value string, ttlSeconds int) {
 	}
 }
 
-func estimateCost(provider string, tokensIn, tokensOut int) float64 {
-	switch provider {
-	case "minimax", "":
+func estimateCost(modelID string, tokensIn, tokensOut int) float64 {
+	// Find model in registry for accurate cost
+	for _, m := range cfg.AI.LLM.Models {
+		if m.ID == modelID {
+			return float64(tokensIn)*m.CostPer1MIn/1_000_000 + float64(tokensOut)*m.CostPer1MOut/1_000_000
+		}
+	}
+
+	// Default estimates
+	switch {
+	case strings.Contains(modelID, "Anthropic"):
 		return float64(tokensIn)*0.30/1_000_000 + float64(tokensOut)*1.20/1_000_000
-	case "gemini-1.5-flash":
-		// Gemini 1.5 Flash (assuming <= 128k context tier): $0.075/1M in, $0.30/1M out
+	case strings.Contains(modelID, "gemini"):
 		return float64(tokensIn)*0.075/1_000_000 + float64(tokensOut)*0.30/1_000_000
+	case strings.Contains(modelID, "openai"):
+		return float64(tokensIn)*5.00/1_000_000 + float64(tokensOut)*15.00/1_000_000
 	default:
 		return 0
 	}
@@ -608,6 +776,3 @@ func writeJSON(w http.ResponseWriter, status int, body interface{}) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
 }
-
-// Suppress unused import warning for strconv
-var _ = strconv.Itoa

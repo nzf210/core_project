@@ -7,10 +7,12 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-wch_core}
-    ports:
-      - 127.0.0.1:5433:5432
+    # /docker-entrypoint-initdb.d/ auto-run on first start (idempotent)
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/10-create-n8n-db.sql:ro
+    ports:
+      - 127.0.0.1:5433:5432
     healthcheck:
       test:
         - CMD-SHELL
@@ -69,6 +71,7 @@ services:
       - auth-service
     environment:
       - APP_ENV=production
+      - WA_SYSTEM_TENANT_ID=${WA_SYSTEM_TENANT_ID:-system}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=${DB_USER:-postgres}
@@ -150,38 +153,39 @@ services:
     container_name: wch-n8n-main
     restart: always
     environment:
-      # Queue Mode
+      # ── Database Persistence (dedicated N8N database) ────────────────────
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_DATABASE=${N8N_DB_NAME:-wch_n8n}
+      - DB_POSTGRESDB_HOST=${N8N_DB_HOST:-postgres}
+      - DB_POSTGRESDB_PORT=${N8N_DB_PORT:-5432}
+      - DB_POSTGRESDB_USER=${N8N_DB_USER:-${DB_USER:-postgres}}
+      - DB_POSTGRESDB_PASSWORD=${N8N_DB_PASSWORD:-${DB_PASSWORD:-postgres}}
+      # ── Queue Mode (Redis Bull queue, DB 2) ──────────────────────────────
       - EXECUTIONS_MODE=queue
       - QUEUE_BULL_REDIS_HOST=redis
       - QUEUE_BULL_REDIS_PORT=6379
       - QUEUE_BULL_REDIS_DB=2
-      # Database
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_DATABASE=${DB_NAME:-wch_core}
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_USER=${DB_USER:-postgres}
-      - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD:-postgres}
-      # Webhook & UI
+      # ── Encryption Key (WAJIB di-set untuk production) ────────────────
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      # ── Webhook & UI ───────────────────────────────────────────────────
       - N8N_HOST=${N8N_HOST:-localhost}
       - N8N_PORT=5678
       - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
-      - N8N_EDITOR_BASE_URL=${N8N_PUBLIC_URL:-http://localhost:8010/api/superadmin/n8n/}
+      - N8N_EDITOR_BASE_URL=${N8N_PUBLIC_URL:-http://localhost:5678}
       - NODE_ENV=production
-      - WEBHOOK_URL=${N8N_PUBLIC_URL:-http://localhost:8010/api/superadmin/n8n/}
+      - WEBHOOK_URL=${N8N_PUBLIC_URL:-http://localhost:5678}
       - GENERIC_TIMEZONE=Asia/Jakarta
-      # Auth & Security
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-n8n_secure_encryption_key_12345}
+      # ── Auth & Security ────────────────────────────────────────────────
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_ADMIN_USER:-admin}
       - N8N_BASIC_AUTH_PASSWORD=${N8N_ADMIN_PASSWORD:-change_me_in_env}
-      # Performance
+      # ── Performance ───────────────────────────────────────────────────
       - N8N_DIAGNOSTICS_ENABLED=false
       - N8N_METRICS=true
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
       - N8N_CONCURRENCY_PRODUCTION_LIMIT=${N8N_CONCURRENCY_PRODUCTION_LIMIT:-20}
-      # Telegram
+      # ── Telegram ──────────────────────────────────────────────────────
       - OWNER_TELEGRAM_CHAT_ID=${OWNER_TELEGRAM_CHAT_ID:-}
     entrypoint:
       - /bin/sh
@@ -209,20 +213,21 @@ services:
     restart: always
     command: worker
     environment:
-      # Queue Mode
+      # ── Database Persistence ──────────────────────────────────────────
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_DATABASE=${N8N_DB_NAME:-wch_n8n}
+      - DB_POSTGRESDB_HOST=${N8N_DB_HOST:-postgres}
+      - DB_POSTGRESDB_PORT=${N8N_DB_PORT:-5432}
+      - DB_POSTGRESDB_USER=${N8N_DB_USER:-${DB_USER:-postgres}}
+      - DB_POSTGRESDB_PASSWORD=${N8N_DB_PASSWORD:-${DB_PASSWORD:-postgres}}
+      # ── Queue Mode ──────────────────────────────────────────────────────
       - EXECUTIONS_MODE=queue
       - QUEUE_BULL_REDIS_HOST=redis
       - QUEUE_BULL_REDIS_PORT=6379
       - QUEUE_BULL_REDIS_DB=2
-      # Database
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_DATABASE=${DB_NAME:-wch_core}
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_USER=${DB_USER:-postgres}
-      - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD:-postgres}
-      # Performance & Security
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-n8n_secure_encryption_key_12345}
+      # ── Encryption Key ────────────────────────────────────────────────
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      # ── Performance ───────────────────────────────────────────────────
       - N8N_CONCURRENCY_PRODUCTION_LIMIT=${N8N_WORKER_CONCURRENCY:-10}
       - GENERIC_TIMEZONE=Asia/Jakarta
       - NODE_OPTIONS=--max-old-space-size=512
@@ -269,7 +274,6 @@ services:
         condition: on-failure
         max_attempts: 3
     restart: unless-stopped
-    restart: unless-stopped
   campaign-api:
     build:
       context: .
@@ -295,6 +299,7 @@ services:
     command:
       - wa-gateway
     environment:
+      - WA_SYSTEM_TENANT_ID=${WA_SYSTEM_TENANT_ID:-system}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=${DB_USER:-postgres}
@@ -304,8 +309,6 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - N8N_WEBHOOK_URL=${N8N_INTERNAL_URL:-http://n8n-main:5678/}
-    ports:
-      - "8212:8202"
     depends_on:
       postgres:
         condition: service_healthy
@@ -459,6 +462,28 @@ services:
       - "3201:80"
     depends_on:
       - api-gateway
+  superadmin-frontend:
+    build:
+      context: ./frontend/superadmin-web
+      dockerfile: Dockerfile
+    container_name: wch-superadmin-frontend
+    restart: unless-stopped
+    ports:
+      - "3202:80"
+    depends_on:
+      - api-gateway
+
+  campaign-frontend:
+    build:
+      context: ./frontend/campaign-web
+      dockerfile: Dockerfile
+    container_name: wch-campaign-frontend
+    restart: unless-stopped
+    ports:
+      - "3203:80"
+    depends_on:
+      - api-gateway
+
 volumes:
   pgdata: null
   redisdata: null
