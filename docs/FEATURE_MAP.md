@@ -74,6 +74,106 @@ Format per feature:
 | F012 | Sidebar Navigation UI | ✅ Approved | ✅ Done | 2026-06-12 |
 | F013 | N8N Integration via Super Admin | ❌ Removed | — | — |
 | F014 | Flexible LLM Model System | ✅ Approved | ✅ Done | 2026-06-12 |
+| F015 | Onboarding Activation Flow | ✅ Approved | ✅ Done | 2026-06-13 |
+
+---
+
+## F015: Onboarding Activation Flow
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** User baru yang baru daftar bisa lanjut ke step 1 & 2 onboarding tanpa gate. Aktivasi (beli paket / masukkan voucher) baru diminta via modal dialog setelah step 2 selesai. Sistem auto-generate kode voucher sebagai bukti langganan. Superadmin bisa generate voucher dalam jumlah dengan masa aktif day-duration.
+
+**Spec:**
+
+### Onboarding Page (/onboarding)
+
+- Step 1 (Pilih Jenis Usaha) — **tanpa gate**, user boleh pilih atau skip
+- Step 2 (Detail Usaha: nama, alamat, nomor WA) — **tanpa gate**, boleh lanjut tanpa harus aktifkan
+- Setelah step 2 selesai (klik "Lanjut"), muncul **Modal Activation**:
+  - **Opsi A: Beli Paket** — pilih paket (Lite/Pro/Business) → generate Xendit invoice → status subscription = `pending`
+  - **Opsi B: Masukkan Kode Voucher** — input kode → validasi → langsung aktivasi jika valid
+
+### Subscription Status Lifecycle
+
+```
+Tenant dibuat (register OTP)     → plan=inactive, is_frozen=true
+User sampai modal activation
+    ├─ Beli Paket                → status=pending, expires_at=now+pending_timeout
+    │                              Xendit callback CONFIRMED → activateSubscription()
+    │                              Pending > 24 jam tiddk dibayar → hapus tenant + user
+    └─ Masukkan Voucher          → validate → activateSubscription() + generate system voucher
+```
+
+### Auto-Generate System Voucher (setelah aktivasi via Xendit)
+
+- Saat payment confirmed via Xendit webhook → sistem generate `voucher_codes` entry untuk tenant tersebut
+- Format kode: `WCH-{short_tenant_id}-{timestamp}` (contoh: `WCH-a1b2-1750000000`)
+- Jenis: `system_generated`, `is_used=true`, `plan_id` sesuai paket yang dibeli
+- Kode ini dikirim via WhatsApp notification ke user sebagai "bukti langganan"
+
+### Day-Duration Voucher System (bukan tanggal fixed)
+
+- Kolom `validity_days` (INT) — jumlah hari aktif (bukan `valid_until` date)
+- Kolom `remaining_days` — hari tersisa, dihitung saat dibaca
+- Saat aktivasi voucher baru:
+  - Jika tenant sudah punya voucher aktif dengan **plan yang sama** → akumulasi: `remaining_days += new_validity_days`
+  - Jika plan **berbeda** → buat voucher baru secara terpisah (bukan overwrite)
+- Priority plan: **Pro > Business > Lite** — sistem baca voucher dengan plan tertinggi sebagai plan aktif
+
+### Auto-Delete Pending Tenant
+
+- Worker `subscription-worker` atau cron di `billing-service` cek tenant dengan `status=pending` dan `created_at < now - 24 jam`
+- Hapus row `tenants` + `users` terkait dari DB (CASCADE)
+- Log penghapusan ke `subscription_tickets` dengan status `expired`
+
+### Superadmin Voucher Management
+
+- `POST /admin/vouchers/generate` — generate N voucher codes sekaligus
+  - Body: `{ plan_id, validity_days, quantity, program_name }`
+  - Generate N kode acak, simpan ke `voucher_codes`
+- `GET /admin/vouchers` — list semua voucher (filter: used/unused, plan_id, program)
+- `GET /admin/tenants/{id}/vouchers` — list voucher aktif per tenant (untuk melihat masa aktif)
+
+### WhatsApp Notification (Activation)
+
+- Pesan template saat aktivasi:
+  ```
+  🎉 Langganan WCH Platform berhasil diaktifkan!
+
+  📋 Paket: {plan_name}
+  ⏱️  Masa Aktif: {validity_days} hari
+  🔑 Kode Voucher: {system_generated_voucher_code}
+
+  Simpan kode ini sebagai bukti langganan Anda.
+  ```
+
+**Acceptance Criteria:**
+- [ ] AC-1: User baru daftar → sampai step 2 onboarding → tidak diblokir, modal activation muncul
+- [ ] AC-2: Pilih "Beli Paket" → invoice Xendit dibuat, status subscription = `pending`
+- [ ] AC-3: Bayar Xendit → webhook confirmed → tenant aktif, kode voucher sistem di-generate, dikirim via WA
+- [ ] AC-4: Pending > 24 jam tidak dibayar → tenant + user dihapus otomatis
+- [ ] AC-5: Pilih "Masukkan Voucher" → valid → langsung aktivasi + kode voucher sistem dikirim via WA
+- [ ] AC-6: Redeem voucher plan sama → hari aktif diakumulasi
+- [ ] AC-7: Redeem voucher plan berbeda → buat voucher baru, priority tetap plan tertinggi
+- [ ] AC-8: Superadmin bisa generate N voucher codes sekaligus via API
+- [ ] AC-9: Superadmin bisa lihat voucher aktif per tenant
+
+**Files yang perlu diubah:**
+- `frontend/umkm-web/src/components/Onboarding.vue` — hapus gate di step 1 & 2, tambah modal activation
+- `services/billing-service/main.go` — `pending` subscription status, auto-delete expired, generate system voucher, day-duration logic
+- `services/auth-service/main.go` — sync `is_frozen` dan plan cache saat activate
+- `shared/migrations/` — add `validity_days` / `remaining_days` columns, `pending_timeout` di `tenant_subscriptions`
+- `services/subscription-worker/main.go` — cron job auto-delete expired pending tenants
+- `services/wa-gateway/` — WhatsApp notification template untuk activation
+- `apps/umkm/accounting/main.go` — quota middleware baca priority plan (Pro > Lite)
+
+**Notes:**
+- Billing-service adalah source of truth untuk subscription state
+- Auth-service baca dari Redis cache, di-sync saat `activateSubscription()` dipanggil
+- Pending timeout default: 24 jam (bisa di-config via env `SUBSCRIPTION_PENDING_TIMEOUT_HOURS`)
+- Superadmin generate voucher: kode di-generate client-side (frontend) atau server-side? Disarankan server-side via billing-service admin endpoint
 
 ---
 

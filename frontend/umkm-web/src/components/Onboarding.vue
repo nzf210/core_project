@@ -17,10 +17,11 @@
         <div class="step-line" :class="{ active: currentStep >= 3 }"></div>
         <div :class="['step', currentStep >= 3 ? 'active' : '']">
           <div class="step-number">3</div>
-          <span>Selesai</span>
+          <span>Aktivasi</span>
         </div>
       </div>
 
+      <!-- Step 1: Pilih Jenis Usaha (tanpa gate) -->
       <div v-if="currentStep === 1" class="step-content">
         <div class="business-types-grid">
           <div
@@ -34,11 +35,13 @@
             <div class="bt-desc">{{ bt.description }}</div>
           </div>
         </div>
-        <button class="btn btn-primary btn-large" :disabled="!selectedType" @click="nextStep">
+        <p class="skip-hint">* opsional — boleh skip</p>
+        <button class="btn btn-primary btn-large" @click="currentStep = 2">
           Lanjutkan
         </button>
       </div>
 
+      <!-- Step 2: Detail Usaha (tanpa gate, tanpa plan selector) -->
       <div v-if="currentStep === 2" class="step-content">
         <div class="form-group">
           <label>Nama Usaha</label>
@@ -49,74 +52,127 @@
           <textarea v-model="businessAddress" placeholder="Alamat lengkap usaha" class="input-field" rows="2"></textarea>
         </div>
         <div class="form-group">
-          <label>Paket yang Dipilih</label>
-          <div class="plan-selector">
-            <div :class="['plan-card', selectedPlan === 'free' ? 'selected' : '']" @click="selectedPlan = 'free'">
-              <div class="plan-name">Free</div>
-              <div class="plan-price">Rp 0<span>/bulan</span></div>
-              <ul class="plan-features">
-                <li>1 User</li>
-                <li>100 Transaksi/bulan</li>
-                <li>5 AI Request/bulan</li>
-                <li>Laporan Dasar</li>
-              </ul>
-            </div>
-            <div :class="['plan-card', selectedPlan === 'lite' ? 'selected' : '']" @click="selectedPlan = 'lite'">
-              <div class="plan-badge">Populer</div>
-              <div class="plan-name">Lite</div>
-              <div class="plan-price">Rp 49K<span>/bulan</span></div>
-              <ul class="plan-features">
-                <li>3 User</li>
-                <li>1.000 Transaksi/bulan</li>
-                <li>250 AI Request/bulan</li>
-                <li>Export Laporan</li>
-              </ul>
-            </div>
-            <div :class="['plan-card', selectedPlan === 'pro' ? 'selected' : '']" @click="selectedPlan = 'pro'">
-              <div class="plan-name">Pro</div>
-              <div class="plan-price">Rp 149K<span>/bulan</span></div>
-              <ul class="plan-features">
-                <li>Unlimited User</li>
-                <li>10.000 Transaksi/bulan</li>
-                <li>5.000 AI Request/bulan</li>
-                <li>Full Inventory & Reports</li>
-              </ul>
-            </div>
-          </div>
+          <label>Nomor WhatsApp (untuk notifikasi)</label>
+          <input v-model="waNumber" type="text" placeholder="08xxxxxxxxxx" class="input-field" />
         </div>
         <div class="step-actions">
           <button class="btn btn-secondary" @click="currentStep = 1">Kembali</button>
-          <button class="btn btn-primary btn-large" :disabled="!businessName" @click="completeOnboarding">
-            Mulai Gunakan
+          <button class="btn btn-primary btn-large" @click="submitBusinessDetails">
+            Lanjut ke Aktivasi
           </button>
         </div>
       </div>
 
+      <!-- Step 3: Completion + prompt if not yet activated -->
       <div v-if="currentStep === 3" class="step-content">
         <div class="completion-card">
           <div class="completion-icon">✓</div>
           <h3>Semua Siap!</h3>
-          <p>Dashboard Anda sudah disiapkan untuk {{ getTypeName(selectedType) }}</p>
-          <button class="btn btn-primary btn-large" @click="goToDashboard">Buka Dashboard</button>
+          <p>Detail usaha Anda sudah disimpan untuk {{ getTypeName(selectedType) }}</p>
         </div>
+
+        <!-- Aktivasi banner — muncul jika belum aktif -->
+        <div v-if="!isActivated" class="activation-banner">
+          <h3>Aktifkan Langganan Anda</h3>
+          <p>Pilih metode aktivasi di bawah untuk mulai menggunakan WCH Platform</p>
+
+          <!-- Tab: Beli Paket / Masukkan Voucher -->
+          <div class="activation-tabs">
+            <button :class="['tab-btn', activationTab === 'buy' ? 'active' : '']" @click="activationTab = 'buy'">
+              Beli Paket
+            </button>
+            <button :class="['tab-btn', activationTab === 'voucher' ? 'active' : '']" @click="activationTab = 'voucher'">
+              Masukkan Voucher
+            </button>
+          </div>
+
+          <!-- Beli Paket -->
+          <div v-if="activationTab === 'buy'" class="activation-panel">
+            <div class="plan-selector">
+              <div
+                v-for="plan in plans"
+                :key="plan.id"
+                :class="['plan-card', selectedPlan === plan.id ? 'selected' : '']"
+                @click="selectedPlan = plan.id"
+              >
+                <div class="plan-badge" v-if="plan.sort_order === 2">Populer</div>
+                <div class="plan-name">{{ plan.name }}</div>
+                <div class="plan-price">Rp {{ formatPrice(plan.price_monthly) }}<span>/bulan</span></div>
+                <ul class="plan-features">
+                  <li v-for="f in plan.features" :key="f.feature_key">{{ f.feature_name }}</li>
+                </ul>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-large" :disabled="isActivating" @click="buyPackage">
+              <span v-if="isActivating">Memproses...</span>
+              <span v-else>Beli Paket — Bayar Sekarang</span>
+            </button>
+            <p v-if="paymentInfo" class="payment-info">
+              Invoice dibuat! Klik <a :href="paymentInfo" target="_blank">di sini</a> untuk bayar.
+              Setelah bayar, akun Anda akan aktif otomatis.
+            </p>
+          </div>
+
+          <!-- Masukkan Voucher -->
+          <div v-if="activationTab === 'voucher'" class="activation-panel">
+            <div class="voucher-input-group">
+              <input
+                v-model="voucherCode"
+                type="text"
+                placeholder="Masukkan kode voucher"
+                class="input-field"
+                @keyup.enter="redeemVoucher"
+              />
+              <button class="btn btn-primary" :disabled="!voucherCode || isActivating" @click="redeemVoucher">
+                <span v-if="isActivating">...</span>
+                <span v-else>Aktivasi</span>
+              </button>
+            </div>
+            <p class="voucher-hint">Kode voucher dari admin atau yang dibeli</p>
+          </div>
+
+          <p v-if="activationError" class="error-text">{{ activationError }}</p>
+          <p v-if="activationSuccess" class="success-text">{{ activationSuccess }}</p>
+        </div>
+
+        <!-- Sudah aktif -->
+        <div v-else class="activated-notice">
+          <span class="check-icon">✓</span>
+          <p>Langganan Anda sudah aktif! <button class="link-btn" @click="goToDashboard">Buka Dashboard →</button></p>
+        </div>
+
+        <button v-if="!isActivated" class="btn btn-secondary btn-large skip-btn" @click="goToDashboard">
+          Buka Dashboard (tanpa aktivasi)
+        </button>
+        <button v-else class="btn btn-primary btn-large" @click="goToDashboard">
+          Buka Dashboard
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { api } from '../api';
+import { ref, onMounted } from 'vue'
+import { api } from '../api'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-
 
 const currentStep = ref(1)
 const selectedType = ref('')
 const businessName = ref('')
 const businessAddress = ref('')
-const selectedPlan = ref('free')
+const waNumber = ref('')
+const selectedPlan = ref('')
+const activationTab = ref<'buy' | 'voucher'>('buy')
+const isActivating = ref(false)
+const isActivated = ref(false)
+const activationError = ref('')
+const activationSuccess = ref('')
+const voucherCode = ref('')
+const paymentInfo = ref('')
+const plans = ref<any[]>([])
 
 const iconMap: Record<string, string> = {
   umum: '🏪',
@@ -160,14 +216,29 @@ const loadBusinessTypes = async () => {
   }
 }
 
-const selectType = (id: string) => {
-  selectedType.value = id
+const loadPlans = async () => {
+  try {
+    const data = await api.get('/plans')
+    if (data.data) {
+      plans.value = data.data
+      if (plans.value.length > 0) selectedPlan.value = plans.value[0].id
+    }
+  } catch (e) {
+    console.warn('Failed to load plans', e)
+  }
 }
 
-const nextStep = () => {
-  if (selectedType.value) {
-    currentStep.value = 2
+const checkActivation = async () => {
+  try {
+    const data = await api.get('/subscription')
+    isActivated.value = data.data?.has_subscription === true
+  } catch {
+    isActivated.value = false
   }
+}
+
+const selectType = (id: string) => {
+  selectedType.value = id
 }
 
 const getTypeName = (id: string) => {
@@ -175,31 +246,75 @@ const getTypeName = (id: string) => {
   return bt ? bt.name : id
 }
 
-const completeOnboarding = async () => {
+const formatPrice = (sen: number) => {
+  const rp = sen / 100
+  if (rp >= 1_000_000) return (rp / 1_000_000).toFixed(1) + 'jt'
+  if (rp >= 1000) return Math.round(rp / 1000) + 'rb'
+  return rp
+}
+
+const submitBusinessDetails = async () => {
   try {
-    const data = await api.post('/api/umkm/business/onboarding', {
+    await api.post('/api/umkm/business/onboarding', {
       businessType: selectedType.value,
       businessName: businessName.value,
       businessAddress: businessAddress.value,
-      plan: selectedPlan.value,
+      waNumber: waNumber.value,
     })
+  } catch {
+    // non-fatal: continue anyway
+  }
+  localStorage.setItem('onboarding_completed', 'true')
+  localStorage.setItem('business_type', selectedType.value)
+  localStorage.setItem('business_name', businessName.value)
+  currentStep.value = 3
+  await checkActivation()
+}
+
+const buyPackage = async () => {
+  if (!selectedPlan.value) return
+  isActivating.value = true
+  activationError.value = ''
+  paymentInfo.value = ''
+  try {
+    const data = await api.post('/subscribe', { plan_id: selectedPlan.value })
     if (data.status >= 400) {
-      alert('Gagal menyimpan: ' + data.message)
+      activationError.value = data.message || 'Gagal membuat invoice'
       return
     }
+    if (data.data?.payment_url) {
+      paymentInfo.value = data.data.payment_url
+      activationError.value = ''
+    } else {
+      // Dev mode atau free plan: langsung aktif
+      activationSuccess.value = 'Langganan berhasil diaktifkan!'
+      isActivated.value = true
+    }
+  } catch (e: any) {
+    activationError.value = e?.message || 'Terjadi kesalahan'
+  } finally {
+    isActivating.value = false
+  }
+}
 
-    localStorage.setItem('onboarding_completed', 'true')
-    localStorage.setItem('business_type', selectedType.value)
-    localStorage.setItem('business_name', businessName.value)
-    localStorage.setItem('plan', selectedPlan.value)
-
-    currentStep.value = 3
-  } catch {
-    localStorage.setItem('onboarding_completed', 'true')
-    localStorage.setItem('business_type', selectedType.value)
-    localStorage.setItem('business_name', businessName.value)
-    localStorage.setItem('plan', selectedPlan.value)
-    currentStep.value = 3
+const redeemVoucher = async () => {
+  if (!voucherCode.value.trim()) return
+  isActivating.value = true
+  activationError.value = ''
+  activationSuccess.value = ''
+  try {
+    const data = await api.post('/voucher/redeem', { code: voucherCode.value.trim() })
+    if (data.status >= 400) {
+      activationError.value = data.message || 'Kode voucher tidak valid'
+      return
+    }
+    activationSuccess.value = 'Voucher berhasil diaktifkan! Selamat menikmati WCH Platform.'
+    isActivated.value = true
+    voucherCode.value = ''
+  } catch (e: any) {
+    activationError.value = e?.message || 'Kode voucher tidak valid atau sudah digunakan'
+  } finally {
+    isActivating.value = false
   }
 }
 
@@ -207,8 +322,8 @@ const goToDashboard = () => {
   router.push('/')
 }
 
-onMounted(() => {
-  loadBusinessTypes()
+onMounted(async () => {
+  await Promise.all([loadBusinessTypes(), loadPlans()])
 })
 </script>
 
@@ -523,5 +638,139 @@ onMounted(() => {
   .plan-selector {
     grid-template-columns: 1fr;
   }
+}
+
+.skip-hint {
+  color: #475569;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.activation-banner {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 2rem;
+  margin: 1.5rem 0;
+  text-align: left;
+}
+
+.activation-banner h3 {
+  color: #f1f5f9;
+  margin-bottom: 0.5rem;
+}
+
+.activation-banner > p {
+  color: #94a3b8;
+  margin-bottom: 1.5rem;
+}
+
+.activation-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #334155;
+}
+
+.tab-btn {
+  padding: 0.5rem 1.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #94a3b8;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  font-size: 0.95rem;
+  margin-bottom: -2px;
+}
+
+.tab-btn.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+.activation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.voucher-input-group {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.voucher-input-group .input-field {
+  flex: 1;
+}
+
+.voucher-hint {
+  color: #475569;
+  font-size: 0.875rem;
+}
+
+.error-text {
+  color: #f87171;
+  font-size: 0.875rem;
+  padding: 0.5rem;
+  background: rgba(248, 113, 113, 0.1);
+  border-radius: 6px;
+}
+
+.success-text {
+  color: #4ade80;
+  font-size: 0.875rem;
+  padding: 0.5rem;
+  background: rgba(74, 222, 128, 0.1);
+  border-radius: 6px;
+}
+
+.activated-notice {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid #22c55e;
+  border-radius: 10px;
+  padding: 1rem 1.5rem;
+  margin: 1.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #4ade80;
+}
+
+.check-icon {
+  font-size: 1.5rem;
+}
+
+.activated-notice p {
+  color: #4ade80;
+  margin: 0;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: inherit;
+  font-weight: 600;
+  padding: 0;
+  font-family: inherit;
+  text-decoration: underline;
+}
+
+.skip-btn {
+  margin-top: 0.75rem;
+  opacity: 0.7;
+}
+
+.payment-info {
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+.payment-info a {
+  color: #3b82f6;
 }
 </style>

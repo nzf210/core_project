@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strconv"
 	"net/http"
 	"net/url"
 	"os"
@@ -285,6 +286,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Start pending-cleanup background worker (F015)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	startPendingCleanupWorker(ctx)
+
 	xKey := os.Getenv("XENDIT_API_KEY")
 	if xKey == "" {
 		xKey = "xnd_development_mock_key_1234567890"
@@ -321,6 +327,14 @@ func main() {
 	mux.HandleFunc("/voucher/redeem-link", handleRedeemVoucherLink) // public, via signed token
 	mux.Handle("/admin/voucher-links/generate", auth.Middleware(http.HandlerFunc(handleAdminGenerateVoucherLinks)))
 	mux.Handle("/admin/voucher-links", auth.Middleware(http.HandlerFunc(handleAdminListVoucherLinks)))
+
+	// Superadmin batch voucher codes (F015)
+	mux.Handle("/admin/vouchers/generate", auth.Middleware(http.HandlerFunc(handleAdminGenerateVouchers)))
+	mux.Handle("/admin/vouchers", auth.Middleware(http.HandlerFunc(handleAdminListVouchers)))
+	mux.Handle("/admin/tenants/", auth.Middleware(http.HandlerFunc(handleAdminTenantItem)))
+
+	// Cleanup expired pending subscriptions (F015)
+	mux.Handle("/admin/cleanup/pending", auth.Middleware(http.HandlerFunc(handleAdminCleanupPending)))
 
 	// Superadmin dashboard (single endpoint, aggregated)
 	mux.Handle("/admin/dashboard", auth.Middleware(http.HandlerFunc(handleAdminDashboard)))
@@ -504,9 +518,8 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 	// Check if voucher is provided — apply discount
 	var voucherApplied bool
-	var voucherCodeID *string
 	if req.VoucherCode != "" {
-		voucherApplied, voucherCodeID = applyVoucher(ctx, req.VoucherCode, req.PlanID, tenantID, priceMonthly)
+		voucherApplied, _ = applyVoucher(ctx, req.VoucherCode, req.PlanID, tenantID, priceMonthly)
 		if voucherApplied {
 			slog.Info("Voucher applied", "tenant_id", tenantID, "code", req.VoucherCode)
 		}
@@ -542,12 +555,13 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 	resp, _, err := xenditClient.InvoiceApi.CreateInvoice(r.Context()).
 		CreateInvoiceRequest(*createReq).Execute()
+	paymentURL := ""
 	if err != nil {
 		slog.Error("Failed to create xendit invoice", "error", err)
 
-		// In development mode, mock the invoice creation instead of failing
+		// In development mode, mock the invoice creation
 		if os.Getenv("ENV") == "development" || os.Getenv("APP_ENV") == "development" || os.Getenv("ENV") == "" {
-			slog.Warn("⚠️ Development mode: Mocking Xendit invoice creation")
+			slog.Warn("DEV mode: Mocking Xendit invoice creation")
 			mockInvoiceUrl := fmt.Sprintf("https://checkout.xendit.co/web/%s", externalID)
 			_, err = DB.Exec(ctx, `
 				INSERT INTO invoices (id, tenant_id, plan_id, amount, status, payment_url, voucher_code)
@@ -558,26 +572,13 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				slog.Warn("Failed to save mock invoice", "error", err)
 			}
-			response.JSON(w, http.StatusOK, "Subscription invoice created (MOCK)", map[string]interface{}{
-				"invoice_id":   externalID,
-				"payment_url":  mockInvoiceUrl,
-				"amount":       finalPrice,
-			})
+			paymentURL = mockInvoiceUrl
+		} else {
+			response.Error(w, http.StatusInternalServerError, "Failed to create invoice", nil)
 			return
 		}
-
-		// Fallback: activate free tier or voucher subscription
-		if finalPrice == 0 || req.VoucherCode != "" {
-			activateSubscription(ctx, tenantID, req.PlanID, planName, 30, "voucher", voucherCodeID)
-			response.JSON(w, http.StatusOK, "Subscription activated (free)", map[string]interface{}{
-				"plan_id":       req.PlanID,
-				"plan_name":     planName,
-				"voucher_applied": voucherApplied,
-			})
-			return
-		}
-		response.Error(w, http.StatusInternalServerError, "Failed to create invoice", nil)
-		return
+	} else {
+		paymentURL = resp.InvoiceUrl
 	}
 
 	// Persist invoice
@@ -586,19 +587,42 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		VALUES ($1, $2, $3, $4, 'pending', $5, $6)
 		ON CONFLICT (id) DO UPDATE SET
 			status = EXCLUDED.status, payment_url = EXCLUDED.payment_url
-	`, externalID, tenantID, req.PlanID, finalPrice, resp.InvoiceUrl, req.VoucherCode)
+	`, externalID, tenantID, req.PlanID, finalPrice, paymentURL, req.VoucherCode)
 	if err != nil {
 		slog.Warn("Failed to save invoice", "error", err)
 	}
 
+	// Create pending subscription — activates only after Xendit webhook confirms payment
+	pendingHours := int64(24)
+	if v := os.Getenv("SUBSCRIPTION_PENDING_TIMEOUT_HOURS"); v != "" {
+		if h, err := strconv.Atoi(v); err == nil && h > 0 {
+			pendingHours = int64(h)
+		}
+	}
+	_, _ = DB.Exec(ctx, `
+		INSERT INTO tenant_subscriptions (tenant_id, plan_id, plan_tier, status, period_days, remaining_days, activated_by, pending_expires_at, updated_at)
+		VALUES ($1, $2, $2, 'pending', 0, 0, 'pending', NOW() + ($3 || ' hours')::interval, NOW())
+		ON CONFLICT (tenant_id) DO UPDATE SET
+			plan_id = EXCLUDED.plan_id,
+			plan_tier = EXCLUDED.plan_tier,
+			status = 'pending',
+			period_days = 0,
+			remaining_days = 0,
+			pending_expires_at = EXCLUDED.pending_expires_at,
+			updated_at = NOW()
+	`, tenantID, req.PlanID, pendingHours)
+
+	slog.Info("Subscription pending created", "tenant_id", tenantID, "plan", req.PlanID, "invoice", externalID)
+
 	response.JSON(w, http.StatusOK, "Invoice created", map[string]interface{}{
-		"invoice_id":       *resp.Id,
-		"payment_url":     resp.InvoiceUrl,
+		"invoice_id":       externalID,
+		"payment_url":     paymentURL,
 		"plan_id":         req.PlanID,
 		"plan_name":       planName,
 		"original_price":  priceMonthly,
 		"final_price":     finalPrice,
 		"voucher_applied": voucherApplied,
+		"status":          "pending",
 	})
 }
 
@@ -770,8 +794,8 @@ func handleRedeemVoucher(w http.ResponseWriter, r *http.Request) {
 	// Increment usage count
 	_, _ = DB.Exec(ctx, `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`, programID)
 
-	// Activate subscription
-	ticketID := activateSubscription(ctx, tenantID, planID, planName, effectiveMonths, "voucher", nil)
+	// Activate subscription (effectiveMonths is months → convert to days)
+	ticketID := activateSubscription(ctx, tenantID, planID, planName, effectiveMonths*30, "voucher", nil, "")
 
 	response.JSON(w, http.StatusOK, "Voucher redeemed successfully", map[string]interface{}{
 		"program_name":    programName,
@@ -937,7 +961,7 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ticketID := activateSubscription(ctx, tenantID, planID, planName, periodDays, activatedBy, voucherCodeID)
+	ticketID := activateSubscription(ctx, tenantID, planID, planName, periodDays, activatedBy, voucherCodeID, autoVoucherCode)
 
 	slog.Info("Payment processed", "tenant_id", tenantID, "plan", planID, "ticket_id", ticketID, "voucher_code", autoVoucherCode)
 
@@ -948,43 +972,89 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 // Core: Activate Subscription + Generate Ticket
 // ─────────────────────────────────────────────
 
-func activateSubscription(ctx context.Context, tenantID, planID, planName string, periodDays int, activatedBy string, voucherCodeID *string) string {
+func activateSubscription(ctx context.Context, tenantID, planID, planName string, validityDays int, activatedBy string, voucherCodeID *string, systemVoucherCode string) string {
 	now := time.Now()
-	periodEnd := now.AddDate(0, 0, periodDays)
-
 	ticketNumber := generateTicketNumber()
 
-	// 1. Upsert subscription
-	_, err := DB.Exec(ctx, `
-		INSERT INTO tenant_subscriptions (tenant_id, plan_id, plan_tier, status, current_period_end, period_days, activated_by, voucher_code_id, updated_at)
-		VALUES ($1, $2, $3, 'active', $4, $5, $6, $7, NOW())
+	// 1. Day-duration accumulator logic via voucher_subscriptions
+	// If same plan already exists → accumulate remaining_days
+	// If different plan → create new row (both co-exist; priority decides which is active)
+	var newOrUpdatedVoucherSubID string
+	err := DB.QueryRow(ctx, `
+		INSERT INTO voucher_subscriptions (tenant_id, plan_id, validity_days, remaining_days, is_system_generated, source_voucher_code)
+		VALUES ($1, $2, $3, $3, $4, $5)
+		ON CONFLICT (tenant_id, plan_id) DO UPDATE SET
+			validity_days = voucher_subscriptions.validity_days + EXCLUDED.validity_days,
+			remaining_days = voucher_subscriptions.remaining_days + EXCLUDED.remaining_days,
+			updated_at = NOW(),
+			is_system_generated = COALESCE($4, voucher_subscriptions.is_system_generated),
+			source_voucher_code = COALESCE($5, voucher_subscriptions.source_voucher_code)
+		RETURNING id
+	`, tenantID, planID, validityDays, systemVoucherCode != "", systemVoucherCode).Scan(&newOrUpdatedVoucherSubID)
+	if err != nil {
+		slog.Error("Failed to upsert voucher_subscription", "error", err)
+	}
+
+	// 2. Recalculate effective plan_priority and update tenants
+	// Priority: business=4, pro=3, lite=2, free=1 (highest wins)
+	var effectivePlanID string
+	var maxPriority int
+	err = DB.QueryRow(ctx, `
+		SELECT vs.plan_id,
+			   CASE vs.plan_id
+				   WHEN 'business' THEN 4 WHEN 'pro' THEN 3 WHEN 'lite' THEN 2
+				   ELSE 1
+			   END AS priority,
+			   vs.remaining_days
+		FROM voucher_subscriptions vs
+		WHERE vs.tenant_id = $1 AND vs.remaining_days > 0
+		ORDER BY priority DESC, remaining_days DESC
+		LIMIT 1
+	`, tenantID).Scan(&effectivePlanID, &maxPriority, new(int))
+	if err != nil || effectivePlanID == "" {
+		effectivePlanID = "free"
+		maxPriority = 0
+	}
+
+	// 3. Upsert subscription record
+	_, err = DB.Exec(ctx, `
+		INSERT INTO tenant_subscriptions (tenant_id, plan_id, plan_tier, status, period_days, remaining_days, activated_by, voucher_code_id, system_voucher_code, updated_at)
+		VALUES ($1, $2, $2, 'active', $3, $3, $4, $5, $6, NOW())
 		ON CONFLICT (tenant_id)
 		DO UPDATE SET
-			plan_id = EXCLUDED.plan_id,
-			plan_tier = EXCLUDED.plan_tier,
+			plan_id = $2,
+			plan_tier = $2,
 			status = 'active',
-			current_period_end = EXCLUDED.current_period_end,
-			period_days = EXCLUDED.period_days,
-			activated_by = EXCLUDED.activated_by,
-			voucher_code_id = COALESCE(EXCLUDED.voucher_code_id, tenant_subscriptions.voucher_code_id),
+			period_days = $3,
+			remaining_days = $3,
+			activated_by = $4,
+			voucher_code_id = COALESCE($5, tenant_subscriptions.voucher_code_id),
+			system_voucher_code = COALESCE($6, tenant_subscriptions.system_voucher_code),
 			updated_at = NOW()
-	`, tenantID, planID, planID, periodEnd, periodDays, activatedBy, voucherCodeID)
+	`, tenantID, effectivePlanID, validityDays, activatedBy, voucherCodeID, systemVoucherCode)
 	if err != nil {
 		slog.Error("Failed to upsert subscription", "error", err)
 	}
 
-	// 2. Update tenant plan
-	_, _ = DB.Exec(ctx, "UPDATE tenants SET plan = $1 WHERE id = $2", planID, tenantID)
+	// 4. Update tenant (un-freeze, set plan + priority)
+	_, _ = DB.Exec(ctx, `
+		UPDATE tenants SET
+			plan = $1,
+			plan_priority = $2,
+			is_frozen = false,
+			frozen_at = NULL,
+			current_plan_expires_at = NOW() + (SELECT COALESCE(SUM(remaining_days), 0) || ' days'::interval FROM voucher_subscriptions WHERE tenant_id = $3)
+		WHERE id = $3
+	`, effectivePlanID, maxPriority, tenantID)
 
-	// Sync Redis cache so quota gates read the correct plan tier.
-	// Without this, auth.GetTenantPlan always falls back to "free" even for active subscriptions.
-	auth.SetTenantPlan(ctx, tenantID, planID)
+	// Sync Redis cache for quota gates
+	auth.SetTenantPlan(ctx, tenantID, effectivePlanID)
 
-	// 3. Create subscription ticket
+	// 5. Create subscription ticket
 	var ticketID string
 	err = DB.QueryRow(ctx, `
 		INSERT INTO subscription_tickets (tenant_id, plan_id, plan_name, ticket_number, expires_at, activated_by, notify_wa, notify_telegram, notify_email)
-		VALUES ($1, $2, $3, $4, $5, $6, true, true, true)
+		VALUES ($1, $2, $3, $4, NOW() + ($5 || ' days')::interval, $6, true, true, true)
 		ON CONFLICT (tenant_id) DO UPDATE SET
 			plan_id = EXCLUDED.plan_id,
 			plan_name = EXCLUDED.plan_name,
@@ -994,27 +1064,29 @@ func activateSubscription(ctx context.Context, tenantID, planID, planName string
 			activated_at = NOW(),
 			updated_at = NOW()
 		RETURNING id
-	`, tenantID, planID, planName, ticketNumber, periodEnd, activatedBy).Scan(&ticketID)
+	`, tenantID, effectivePlanID, planName, ticketNumber, fmt.Sprintf("%d", validityDays), activatedBy).Scan(&ticketID)
 	if err != nil {
 		slog.Error("Failed to create ticket", "error", err)
 		return ""
 	}
 
-	// 4. Update subscription with ticket ID
+	// 6. Update subscription with ticket ID
 	_, _ = DB.Exec(ctx, "UPDATE tenant_subscriptions SET ticket_id = $1 WHERE tenant_id = $2", ticketID, tenantID)
 
-	// 5. Send ticket notifications (async)
+	// 7. Async notification
 	go sendTicketNotifications(tenantID, TicketPayload{
-		TicketNumber: ticketNumber,
-		PlanName:     planName,
-		PlanID:       planID,
-		ActivatedAt:  now.Format("02 Jan 2006, 15:04 WIB"),
-		ExpiresAt:    periodEnd.Format("02 Jan 2006, 15:04 WIB"),
-		AmountPaid:   0,
+		TicketNumber:  ticketNumber,
+		TenantName:    "",
+		PlanName:      planName,
+		PlanID:        planID,
+		ActivatedAt:   now.Format("02 Jan 2006, 15:04 WIB"),
+		ExpiresAt:     fmt.Sprintf("%d hari dari sekarang", validityDays),
+		AmountPaid:    0,
 		PaymentMethod: activatedBy,
+		VoucherCode:   systemVoucherCode,
 	})
 
-	slog.Info("Subscription activated + ticket created", "tenant_id", tenantID, "plan", planID, "ticket", ticketNumber)
+	slog.Info("Subscription activated (day-duration)", "tenant_id", tenantID, "plan", effectivePlanID, "validity_days", validityDays, "ticket", ticketNumber, "system_voucher", systemVoucherCode)
 	return ticketID
 }
 
@@ -2395,5 +2467,442 @@ func calculateRate(total, redeemed int) float64 {
 		return 0.0
 	}
 	return float64(redeemed) / float64(total) * 100.0
+}
+
+// ─────────────────────────────────────────────
+// Superadmin: Batch Generate Voucher Codes (F015)
+// POST /admin/vouchers/generate
+// ─────────────────────────────────────────────
+
+type GenerateVouchersReq struct {
+	PlanID       string `json:"plan_id"`
+	ValidityDays int    `json:"validity_days"`
+	Quantity     int    `json:"quantity"`
+	ProgramName  string `json:"program_name"`
+	MaxUses      int    `json:"max_uses"`
+}
+
+func handleAdminGenerateVouchers(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+	if r.Method != http.MethodPost {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+
+	var req GenerateVouchersReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+	if req.PlanID == "" || req.ValidityDays <= 0 || req.Quantity <= 0 || req.Quantity > 1000 {
+		response.Error(w, http.StatusBadRequest, "plan_id, validity_days (>0), and quantity (1-1000) required", nil)
+		return
+	}
+
+	ctx := r.Context()
+	creatorID, _ := r.Context().Value(auth.UserIDKey).(string)
+
+	// Find or create program
+	var programID string
+	if req.ProgramName != "" {
+		err := DB.QueryRow(ctx, `
+			INSERT INTO voucher_programs (name, voucher_type, target_plan_id, duration_months, max_uses, is_active)
+			VALUES ($1, 'free_months', $2, 0, $3, true)
+			ON CONFLICT DO NOTHING
+			RETURNING id
+		`, req.ProgramName, req.PlanID, req.MaxUses).Scan(&programID)
+		if err != nil {
+			// Try to get existing
+			DB.QueryRow(ctx, `SELECT id FROM voucher_programs WHERE name = $1`, req.ProgramName).Scan(&programID)
+		}
+	}
+
+	type codeOut struct {
+		Code  string `json:"code"`
+		Days  int    `json:"validity_days"`
+	}
+	codes := make([]codeOut, 0, req.Quantity)
+
+	for i := 0; i < req.Quantity; i++ {
+		code := generateVoucherCode(req.PlanID, uuid.NewString()[:8])
+		_, err := DB.Exec(ctx, `
+			INSERT INTO voucher_codes (program_id, code, is_redeemed, created_at)
+			VALUES ($1, $2, false, NOW())
+		`, programID, code)
+		if err != nil {
+			slog.Warn("Failed to create voucher code", "error", err)
+			continue
+		}
+		codes = append(codes, codeOut{Code: code, Days: req.ValidityDays})
+	}
+
+	// Log generation
+	if programID != "" {
+		_, _ = DB.Exec(ctx, `
+			INSERT INTO voucher_generation_logs (program_id, generated_by, count, prefix)
+			VALUES ($1, $2, $3, $4)
+		`, programID, creatorID, len(codes), "")
+	}
+
+	slog.Info("Batch voucher codes generated", "plan", req.PlanID, "count", len(codes), "by", creatorID)
+
+	response.JSON(w, http.StatusOK, "Voucher codes generated", map[string]interface{}{
+		"plan_id":       req.PlanID,
+		"validity_days": req.ValidityDays,
+		"count":         len(codes),
+		"codes":         codes,
+	})
+}
+
+// ─────────────────────────────────────────────
+// Superadmin: List All Voucher Codes (F015)
+// GET /admin/vouchers?plan_id=&used=&limit=
+// ─────────────────────────────────────────────
+
+func handleAdminListVouchers(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+
+	ctx := r.Context()
+	planID := r.URL.Query().Get("plan_id")
+	usedStr := r.URL.Query().Get("used")
+	limitStr := r.URL.Query().Get("limit")
+
+	limit := 100
+	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
+		limit = l
+	}
+
+	query := `
+		SELECT vc.id, vc.code, vc.program_id, COALESCE(vp.name, ''),
+		       vc.is_redeemed, COALESCE(vc.used_by, ''), vc.used_at, vc.created_at,
+		       COALESCE(vp.target_plan_id, ''), COALESCE(vp.is_active, false)
+		FROM voucher_codes vc
+		LEFT JOIN voucher_programs vp ON vp.id = vc.program_id
+		WHERE ($1 = '' OR vp.target_plan_id = $1)
+		  AND ($2 = '' OR ($3 = 'true' AND vc.is_redeemed = true) OR ($3 = 'false' AND vc.is_redeemed = false))
+		ORDER BY vc.created_at DESC
+		LIMIT $4
+	`
+	usedFilter := ""
+	if usedStr == "true" {
+		usedFilter = "true"
+	} else if usedStr == "false" {
+		usedFilter = "false"
+	}
+
+	rows, err := DB.Query(ctx, query, planID, usedStr, usedFilter, limit)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to list vouchers", err)
+		return
+	}
+	defer rows.Close()
+
+	out := []map[string]interface{}{}
+	for rows.Next() {
+		var id, code, progID, progName, usedBy string
+		var isRedeemed bool
+		var usedAt *time.Time
+		var createdAt time.Time
+		var targetPlan string
+		var progActive bool
+		if rows.Scan(&id, &code, &progID, &progName, &isRedeemed, &usedBy, &usedAt, &createdAt, &targetPlan, &progActive) == nil {
+			entry := map[string]interface{}{
+				"id":           id,
+				"code":         code,
+				"program_id":   progID,
+				"program_name": progName,
+				"is_redeemed":  isRedeemed,
+				"used_by":      usedBy,
+				"used_at":      formatTime(usedAt),
+				"created_at":   createdAt.Format(time.RFC3339),
+				"target_plan":  targetPlan,
+				"program_active": progActive,
+			}
+			out = append(out, entry)
+		}
+	}
+
+	// Count totals
+	var total, used, unused int
+	DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_codes`).Scan(&total)
+	DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_codes WHERE is_redeemed = true`).Scan(&used)
+	DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_codes WHERE is_redeemed = false`).Scan(&unused)
+
+	response.JSON(w, http.StatusOK, "Vouchers retrieved", map[string]interface{}{
+		"total":  total,
+		"used":   used,
+		"unused": unused,
+		"codes":  out,
+	})
+}
+
+// ─────────────────────────────────────────────
+// Superadmin: Tenant Item (GET /admin/tenants/{id}, PATCH) (F015)
+// GET: returns tenant info + active vouchers
+// PATCH: activate/freeze/delete tenant
+// ─────────────────────────────────────────────
+
+func handleAdminTenantItem(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/admin/tenants/")
+	parts := strings.Split(path, "/")
+	tenantID := parts[0]
+	if tenantID == "" {
+		response.Error(w, http.StatusBadRequest, "Missing tenant ID", nil)
+		return
+	}
+
+	ctx := r.Context()
+
+	switch r.Method {
+	case http.MethodGet:
+		// Tenant info
+		var tenant map[string]interface{}
+		var tID, name, plan string
+		var isFrozen bool
+		var createdAt time.Time
+		var frozenAt, expiresAt *time.Time
+		var planPriority int
+		err := DB.QueryRow(ctx, `
+			SELECT id, name, plan, is_frozen, created_at, frozen_at, current_plan_expires_at, plan_priority
+			FROM tenants WHERE id = $1
+		`, tenantID).Scan(&tID, &name, &plan, &isFrozen, &createdAt, &frozenAt, &expiresAt, &planPriority)
+		if err != nil {
+			response.Error(w, http.StatusNotFound, "Tenant not found", nil)
+			return
+		}
+
+		tenant = map[string]interface{}{
+			"id":            tID,
+			"name":          name,
+			"plan":          plan,
+			"is_frozen":     isFrozen,
+			"created_at":    createdAt.Format(time.RFC3339),
+			"frozen_at":     formatTime(frozenAt),
+			"expires_at":    formatTime(expiresAt),
+			"plan_priority": planPriority,
+		}
+
+		// Active vouchers for this tenant
+		vrows, _ := DB.Query(ctx, `
+			SELECT id, plan_id, validity_days, remaining_days, redeemed_at, is_system_generated, source_voucher_code
+			FROM voucher_subscriptions WHERE tenant_id = $1 AND remaining_days > 0
+			ORDER BY remaining_days DESC
+		`, tenantID)
+		vouchers := []map[string]interface{}{}
+		if vrows != nil {
+			for vrows.Next() {
+				var vid, pid, srcCode string
+				var vd, rd int
+				var redeemedAt time.Time
+				var isSysGen bool
+				if vrows.Scan(&vid, &pid, &vd, &rd, &redeemedAt, &isSysGen, &srcCode) == nil {
+					vouchers = append(vouchers, map[string]interface{}{
+						"id":                   vid,
+						"plan_id":              pid,
+						"validity_days":        vd,
+						"remaining_days":       rd,
+						"redeemed_at":          redeemedAt.Format(time.RFC3339),
+						"is_system_generated":  isSysGen,
+						"source_voucher_code":  srcCode,
+					})
+				}
+			}
+			vrows.Close()
+		}
+
+		// Subscription info
+		var subStatus string
+		DB.QueryRow(ctx, `SELECT status FROM tenant_subscriptions WHERE tenant_id = $1`, tenantID).Scan(&subStatus)
+		tenant["subscription_status"] = subStatus
+		tenant["active_vouchers"] = vouchers
+
+		response.JSON(w, http.StatusOK, "Tenant retrieved", tenant)
+
+	case http.MethodPatch:
+		var req struct {
+			Action string `json:"action"` // "activate", "freeze", "delete"
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			response.Error(w, http.StatusBadRequest, "Invalid request body", err)
+			return
+		}
+
+		switch req.Action {
+		case "activate":
+			_, _ = DB.Exec(ctx, `UPDATE tenants SET is_frozen = false, frozen_at = NULL WHERE id = $1`, tenantID)
+			response.JSON(w, http.StatusOK, "Tenant activated", nil)
+		case "freeze":
+			_, _ = DB.Exec(ctx, `UPDATE tenants SET is_frozen = true, frozen_at = NOW() WHERE id = $1`, tenantID)
+			response.JSON(w, http.StatusOK, "Tenant frozen", nil)
+		case "delete":
+			// Delete tenant + cascade (users, subscriptions, etc)
+			_, err := DB.Exec(ctx, `DELETE FROM tenants WHERE id = $1`, tenantID)
+			if err != nil {
+				response.Error(w, http.StatusInternalServerError, "Failed to delete tenant", err)
+				return
+			}
+			slog.Warn("Tenant deleted by superadmin", "tenant_id", tenantID)
+			response.JSON(w, http.StatusOK, "Tenant deleted", nil)
+		default:
+			response.Error(w, http.StatusBadRequest, "action must be: activate, freeze, or delete", nil)
+		}
+
+	default:
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	}
+}
+
+// ─────────────────────────────────────────────
+// Superadmin: Cleanup Expired Pending Subscriptions (F015)
+// POST /admin/cleanup/pending — manual trigger
+// GET  /admin/cleanup/pending — list what would be cleaned
+// Runs automatically via subscription-worker cron
+// ─────────────────────────────────────────────
+
+func handleAdminCleanupPending(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+
+	ctx := r.Context()
+
+	// List pending tenants past timeout
+	rows, err := DB.Query(ctx, `
+		SELECT t.id, t.name, t.email, t.plan, ts.pending_expires_at, t.created_at
+		FROM tenants t
+		JOIN tenant_subscriptions ts ON ts.tenant_id = t.id
+		WHERE ts.status = 'pending'
+		  AND ts.pending_expires_at < NOW()
+		ORDER BY ts.pending_expires_at ASC
+	`)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to query pending tenants", err)
+		return
+	}
+	defer rows.Close()
+
+	type pendingTenant struct {
+		ID              string     `json:"id"`
+		Name            string     `json:"name"`
+		Email           string     `json:"email"`
+		Plan            string     `json:"plan"`
+		PendingExpiredAt *time.Time `json:"pending_expires_at"`
+		CreatedAt       time.Time  `json:"created_at"`
+	}
+
+	pending := []pendingTenant{}
+	for rows.Next() {
+		var pt pendingTenant
+		if rows.Scan(&pt.ID, &pt.Name, &pt.Email, &pt.Plan, &pt.PendingExpiredAt, &pt.CreatedAt) == nil {
+			pending = append(pending, pt)
+		}
+	}
+
+	if r.Method == http.MethodGet {
+		response.JSON(w, http.StatusOK, "Pending tenants (would be cleaned)", map[string]interface{}{
+			"count":   len(pending),
+			"tenants": pending,
+		})
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		// Execute cleanup: delete expired pending tenants + users
+		deleted := 0
+		for _, pt := range pending {
+			_, err := DB.Exec(ctx, `DELETE FROM tenants WHERE id = $1`, pt.ID)
+			if err == nil {
+				_, _ = DB.Exec(ctx, `
+					INSERT INTO pending_tenant_cleanup_log (tenant_id, user_id, email, phone, reason)
+					SELECT $1, id, email, phone_number, 'pending_timeout'
+					FROM users WHERE tenant_id = $1
+				`, pt.ID)
+				deleted++
+				slog.Info("Expired pending tenant cleaned up", "tenant_id", pt.ID, "name", pt.Name)
+			} else {
+				slog.Error("Failed to cleanup pending tenant", "tenant_id", pt.ID, "error", err)
+			}
+		}
+
+		// Also delete any tenant_subscriptions rows that are stuck in pending
+		res, _ := DB.Exec(ctx, `
+			DELETE FROM tenant_subscriptions
+			WHERE status = 'pending' AND pending_expires_at < NOW()
+		`)
+		_, _ = DB.Exec(ctx, `DELETE FROM tenant_subscriptions WHERE status = 'pending' AND pending_expires_at IS NULL AND updated_at < NOW() - INTERVAL '48 hours'`)
+
+		response.JSON(w, http.StatusOK, "Cleanup completed", map[string]interface{}{
+			"deleted_tenants":   deleted,
+			"cleaned_pending_subs": res.RowsAffected(),
+		})
+	}
+}
+
+// ─────────────────────────────────────────────
+// Start pending-cleanup background goroutine (F015)
+// Runs every 15 minutes while service is up
+// ─────────────────────────────────────────────
+
+func startPendingCleanupWorker(ctx context.Context) {
+	ticker := time.NewTicker(15 * time.Minute)
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				cleanupPendingTenants(context.Background())
+			case <-ctx.Done():
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+	slog.Info("Pending cleanup worker started (every 15 min)")
+}
+
+func cleanupPendingTenants(ctx context.Context) {
+	rows, err := DB.Query(ctx, `
+		SELECT t.id FROM tenants t
+		JOIN tenant_subscriptions ts ON ts.tenant_id = t.id
+		WHERE ts.status = 'pending' AND ts.pending_expires_at < NOW()
+	`)
+	if err != nil {
+		slog.Error("Pending cleanup: failed to query", "error", err)
+		return
+	}
+	defer rows.Close()
+
+	deleted := 0
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil {
+			_, err := DB.Exec(ctx, `DELETE FROM tenants WHERE id = $1`, id)
+			if err == nil {
+				deleted++
+			}
+		}
+	}
+	if deleted > 0 {
+		slog.Info("Pending cleanup worker ran", "deleted", deleted)
+	}
 }
 
