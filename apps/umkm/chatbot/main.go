@@ -119,7 +119,19 @@ func atomicAddInt64(addr *int64, val int64) {
 
 var AIGatewayURL = "http://localhost:8002/v1/chat"
 var AccountingURL = "http://localhost:8201"
+var WAGatewayURL = "http://wa-gateway:8202" // Base URL for wa-gateway (refactored from hardcoded full path)
 var redisClient *redis.Client
+
+// waSendURL returns the full URL for posting a WhatsApp message to wa-gateway.
+// Centralised so the base URL is no longer duplicated across 3 call sites and
+// honours cfg.WhatsApp.GatewayURL (with WA_GATEWAY_URL env override).
+func waSendURL() string {
+	base := WAGatewayURL
+	if base == "" {
+		base = "http://wa-gateway:8202"
+	}
+	return base + "/api/wa/send"
+}
 
 // Metrics counters
 var (
@@ -144,6 +156,15 @@ func main() {
 	}
 
 	cfg := config.LoadConfig(".env")
+	// Resolve WA Gateway URL from config (with env override) so the path is no
+	// longer hardcoded. Production (Docker) defaults to the service hostname.
+	if os.Getenv("WA_GATEWAY_URL") != "" {
+		WAGatewayURL = os.Getenv("WA_GATEWAY_URL")
+	} else if cfg.WhatsApp.GatewayURL != "" {
+		WAGatewayURL = cfg.WhatsApp.GatewayURL
+	} else if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+		WAGatewayURL = "http://wa-gateway:8202"
+	}
 	if err := initDB(cfg); err != nil {
 		slog.Error("Failed to init DB", "error", err)
 		os.Exit(1)
@@ -248,7 +269,7 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	if DB != nil {
 		DB.QueryRow(ctx, "SELECT name FROM tenants WHERE id = $1", tenantID).Scan(&tenantName)
 	}
-	systemPrompt := buildSystemPrompt(ctx, tenantID, tenantName, req.Message, "owner")
+	systemPrompt := buildSystemPrompt(ctx, tenantID, tenantName, req.Message, "owner", loadChatbotConfig(ctx, tenantID))
 	// Call AI Gateway
 	aiReqBody := map[string]interface{}{
 		"provider":   "minimax",
@@ -306,6 +327,133 @@ type ChatJob struct {
 }
 
 const redisQueueKey = "chatbot:queue"
+const chatbotConfigCacheTTL = 5 * time.Minute
+
+// chatConfigCache mirrors the subset of fields chatbot needs at runtime.
+// Defined inline to avoid coupling chatbot -> accounting types directly.
+type chatConfigCache struct {
+	IsActive             bool     `json:"is_active"`
+	Language             string   `json:"language"`
+	Tone                 string   `json:"tone"`
+	SystemPrompt         string   `json:"system_prompt"`
+	WelcomeMessage       string   `json:"welcome_message"`
+	FallbackMessage      string   `json:"fallback_message"`
+	OutsideHoursMessage  string   `json:"outside_hours_message"`
+	BusinessHoursStart   string   `json:"business_hours_start"`
+	BusinessHoursEnd     string   `json:"business_hours_end"`
+	BusinessDays         []int    `json:"business_days"`
+	EscalationEnabled    bool     `json:"escalation_enabled"`
+	EscalationKeywords   []string `json:"escalation_keywords"`
+}
+
+// loadChatbotConfig fetches the per-tenant chatbot config from accounting,
+// cached in Redis for 5 minutes. Returns nil if not reachable (graceful
+// degradation: chatbot still works with hardcoded defaults).
+func loadChatbotConfig(ctx context.Context, tenantID string) *chatConfigCache {
+	if tenantID == "" {
+		return nil
+	}
+	cacheKey := "chatbot:config:" + tenantID
+	// Try Redis cache first
+	if redisClient != nil {
+		if val, err := redisClient.Get(ctx, cacheKey).Result(); err == nil && val != "" {
+			var cfg chatConfigCache
+			if err := json.Unmarshal([]byte(val), &cfg); err == nil {
+				return &cfg
+			}
+		}
+	}
+	// Fall back to HTTP fetch
+	url := AccountingURL + "/chatbot/config"
+	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req.Header.Set("X-Tenant-ID", tenantID)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Warn("Failed to load chatbot config (will use defaults)", "tenant", tenantID, "error", err)
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	var apiResp struct {
+		Success bool             `json:"success"`
+		Data    *chatConfigCache `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil || !apiResp.Success || apiResp.Data == nil {
+		return nil
+	}
+	// Store in Redis cache
+	if redisClient != nil {
+		if b, err := json.Marshal(apiResp.Data); err == nil {
+			redisClient.Set(ctx, cacheKey, b, chatbotConfigCacheTTL)
+		}
+	}
+	return apiResp.Data
+}
+
+// evictChatbotConfigCache is exposed for when the FE updates config and we
+// want the new value to take effect immediately (best-effort).
+func evictChatbotConfigCache(tenantID string) {
+	if redisClient == nil || tenantID == "" {
+		return
+	}
+	redisClient.Del(context.Background(), "chatbot:config:"+tenantID)
+}
+
+// isWithinBusinessHours checks the current time against the tenant's business
+// hours configuration. Returns (within, outsideMessage). If config is nil or
+// fields are empty, treats as always-open (returns true, "").
+func isWithinBusinessHours(cfg *chatConfigCache) (bool, string) {
+	if cfg == nil || !cfg.IsActive {
+		// is_active=false means chatbot is off — return outside-hours message
+		msg := ""
+		if cfg != nil {
+			msg = cfg.OutsideHoursMessage
+		}
+		return false, msg
+	}
+	if cfg.BusinessHoursStart == "" || cfg.BusinessHoursEnd == "" {
+		return true, ""
+	}
+	now := time.Now()
+	// Business days: 0=Sunday, default allow Mon-Sat (1-6)
+	if len(cfg.BusinessDays) > 0 {
+		wd := int(now.Weekday())
+		allowed := false
+		for _, d := range cfg.BusinessDays {
+			if d == wd {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return false, cfg.OutsideHoursMessage
+		}
+	}
+	// Compare HH:MM
+	nowHM := now.Format("15:04")
+	if nowHM < cfg.BusinessHoursStart || nowHM > cfg.BusinessHoursEnd {
+		return false, cfg.OutsideHoursMessage
+	}
+	return true, ""
+}
+
+// containsEscalationKeyword returns true if msg (case-insensitive) contains any
+// of the configured keywords.
+func containsEscalationKeyword(msg string, keywords []string) bool {
+	msgLower := strings.ToLower(msg)
+	for _, kw := range keywords {
+		if kw == "" {
+			continue
+		}
+		if strings.Contains(msgLower, strings.ToLower(kw)) {
+			return true
+		}
+	}
+	return false
+}
 
 func startWorkerPool(numWorkers int) {
 	for i := 0; i < numWorkers; i++ {
@@ -492,7 +640,7 @@ func processChatJob(job ChatJob) {
 				slog.Warn("Unregistered phone number attempted to chat", "sender", sender)
 				
 				// Auto-reply to unregistered user via WA Gateway
-				waGatewayURL := "http://wa-gateway:8202/api/wa/send"
+				waGatewayURL := waSendURL()
 				data := url.Values{}
 				data.Set("target", sender)
 				data.Set("message", "Mohon maaf, nomor WhatsApp Anda belum terdaftar sebagai pengguna sistem UMKM WCH. Silakan mendaftar melalui aplikasi web kami terlebih dahulu.")
@@ -513,8 +661,29 @@ func processChatJob(job ChatJob) {
 		}
 	}
 
-	// 2. Call AI Gateway
-	systemPrompt := buildSystemPrompt(ctx, tenantID, tenantName, message, userRole)
+	// 2. Load per-tenant chatbot config (cached) and enforce business hours.
+	chatCfg := loadChatbotConfig(ctx, tenantID)
+	withinHours, outsideMsg := isWithinBusinessHours(chatCfg)
+	if !withinHours {
+		// Skip LLM call to save cost; reply with outside-hours message
+		if outsideMsg == "" {
+			outsideMsg = "Terima kasih telah menghubungi kami. Saat ini di luar jam operasional. Pesan Anda akan dibalas saat jam kerja."
+		}
+		waGatewayURL := waSendURL()
+		data := url.Values{}
+		data.Set("target", sender)
+		data.Set("message", outsideMsg)
+		data.Set("tenant_id", tenantID)
+		reqWA, _ := http.NewRequestWithContext(ctx, "POST", waGatewayURL, strings.NewReader(data.Encode()))
+		reqWA.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if respWA, errWA := http.DefaultClient.Do(reqWA); errWA == nil {
+			respWA.Body.Close()
+		}
+		return
+	}
+
+	// 3. Call AI Gateway (system prompt is built from base + per-tenant overrides)
+	systemPrompt := buildSystemPrompt(ctx, tenantID, tenantName, message, userRole, chatCfg)
 	aiReqBody := map[string]interface{}{
 		"provider":   "minimax",
 		"message":    message,
@@ -537,7 +706,7 @@ func processChatJob(job ChatJob) {
 		if aiGatewayResp.Success && aiGatewayResp.Text != "" {
 			finalText := processAIAnswer(ctx, tenantID, aiGatewayResp.Text, sender, userRole)
 			// 3. Post reply back to WA Gateway API
-			waGatewayURL := "http://wa-gateway:8202/api/wa/send"
+			waGatewayURL := waSendURL()
 			data := url.Values{}
 			data.Set("target", sender)
 			data.Set("message", finalText)
@@ -557,7 +726,7 @@ func processChatJob(job ChatJob) {
 	}
 }
 
-func buildSystemPrompt(ctx context.Context, tenantID, tenantName, message, role string) string {
+func buildSystemPrompt(ctx context.Context, tenantID, tenantName, message, role string, cfg *chatConfigCache) string {
 	var systemPrompt string
 	if role == "customer" {
 		systemPrompt = fmt.Sprintf("Anda adalah asisten virtual (Customer Service) untuk toko bernama '%s'. Jawab dengan ramah dan sopan kepada pelanggan. Jika pelanggan menanyakan daftar harga barang/produk, berikan harga sesuai katalog. Jika pelanggan marah, ada keluhan komplain, atau secara spesifik meminta bicara dengan admin/pemilik, Anda WAJIB merespon dengan mengawali pesan Anda menggunakan format `[FORWARD_TO_ADMIN] {Isi keluhan/pesan pelanggan agar admin tahu}`. Contoh: `[FORWARD_TO_ADMIN] Tolong cek keluhan pelanggan ini mengenai barang rusak.`", tenantName)
@@ -568,6 +737,38 @@ func buildSystemPrompt(ctx context.Context, tenantID, tenantName, message, role 
 		systemPrompt = fmt.Sprintf("Anda adalah asisten keuangan pintar untuk toko '%s' (UMKM WCH). Anda memiliki akses penuh ke laporan keuangan dan operasional. Jawab dalam bahasa Indonesia yang ramah.", tenantName)
 	} else {
 		systemPrompt = fmt.Sprintf("Anda adalah asisten toko '%s'.", tenantName)
+	}
+
+	// F020: Apply per-tenant config overrides (language, tone, custom prompt,
+	// escalation keywords). If the owner has set a custom system_prompt in the
+	// setup wizard, use it as the base and append the language/tone hints.
+	if cfg != nil {
+		if strings.TrimSpace(cfg.SystemPrompt) == "" {
+			// No custom prompt — augment with language + tone hints
+			langHint := ""
+			if cfg.Language == "en" {
+				langHint = " Respond in English."
+			} else if cfg.Language == "id" {
+				langHint = " Jawab dalam bahasa Indonesia."
+			}
+			toneHint := ""
+			switch cfg.Tone {
+			case "formal":
+				toneHint = " Gunakan nada formal dan profesional."
+			case "casual":
+				toneHint = " Gunakan nada santai dan akrab."
+			case "professional":
+				toneHint = " Gunakan nada profesional dan solutif."
+			case "friendly":
+				toneHint = " Gunakan nada ramah, hangat, dan bersahabat."
+			}
+			if langHint != "" || toneHint != "" {
+				systemPrompt += langHint + toneHint
+			}
+		} else {
+			// Custom prompt replaces the base entirely
+			systemPrompt = cfg.SystemPrompt
+		}
 	}
 
 	// Fetch COA if NOT a customer
@@ -740,7 +941,7 @@ func processAIAnswer(ctx context.Context, tenantID, answer, sender, role string)
 				}
 				phone = strings.TrimPrefix(phone, "+")
 				
-				waGatewayURL := "http://wa-gateway:8202/api/wa/send"
+				waGatewayURL := waSendURL()
 				data := url.Values{}
 				data.Set("target", phone)
 				data.Set("message", fmt.Sprintf("⚠️ *ESKALASI OTOMATIS DARI BOT* ⚠️\nPelanggan dengan nomor %s memerlukan bantuan.\n\nKonteks: %s", sender, msgToAdmin))

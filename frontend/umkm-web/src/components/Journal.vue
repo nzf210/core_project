@@ -13,6 +13,9 @@
           📸 Scan Nota
         </button>
         <input type="file" ref="ocrInput" accept="image/*" style="display:none" @change="handleOCR" />
+        <button class="btn btn-secondary" @click="downloadCashFlowPDF" :disabled="!cashFlowRange.from || !cashFlowRange.to" title="Download Laporan Arus Kas PDF">
+          📄 PDF Arus Kas
+        </button>
       </div>
     </div>
 
@@ -186,9 +189,46 @@ const accounts = ref<any[]>([])
 const saving = ref(false)
 const lineError = ref('')
 
-const today = new Date().toISOString().split('T')[0]
+// F021: Cash Flow PDF range
+const today = new Date()
+const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+const cashFlowRange = ref({
+  from: firstOfMonth.toISOString().split('T')[0],
+  to: today.toISOString().split('T')[0],
+})
+const downloadingPDF = ref(false)
+async function downloadCashFlowPDF() {
+  if (!cashFlowRange.value.from || !cashFlowRange.value.to) {
+    alert('Pilih rentang tanggal terlebih dahulu')
+    return
+  }
+  downloadingPDF.value = true
+  try {
+    const url = api.cashFlowPDFUrl(cashFlowRange.value.from, cashFlowRange.value.to)
+    // Trigger browser download (auth header via window.open doesn't work for
+    // protected routes, so we use a temporary <a> with the token in query is
+    // unsafe. Simpler: use fetch + blob)
+    const res = await fetch(url, { headers: { 'X-Tenant-ID': localStorage.getItem('tenant_id') || '', 'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}` } })
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = `arus-kas_${cashFlowRange.value.from}_${cashFlowRange.value.to}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(blobUrl)
+  } catch (e: any) {
+    alert('Gagal download PDF: ' + (e?.message || e))
+  } finally {
+    downloadingPDF.value = false
+  }
+}
+
+const todayDate = new Date().toISOString().split('T')[0]
 const form = ref({
-  date: today,
+  date: todayDate,
   reference: '',
   description: '',
   lines: [
@@ -259,7 +299,7 @@ const saveTransaction = async () => {
     })
     if (data.success) {
       showForm.value = false
-      form.value = { date: today, reference: '', description: '', lines: [{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }] }
+      form.value = { date: todayDate, reference: '', description: '', lines: [{ account_id: '', debit: 0, credit: 0 }, { account_id: '', debit: 0, credit: 0 }] }
       fetchTransactions()
     } else {
       lineError.value = data.message || 'Gagal menyimpan jurnal.'

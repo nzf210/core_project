@@ -14,10 +14,13 @@
         <button class="btn btn-outline" @click="exportCSV" style="margin-right: 0.5rem;" :disabled="exporting">
           {{ exporting ? 'Mengekspor...' : 'Export CSV' }}
         </button>
+        <button class="btn btn-outline" @click="exportXLSX" style="margin-right: 0.5rem;" :disabled="exporting">
+          Export XLSX
+        </button>
 
-        <input type="file" ref="fileInput" accept=".csv" style="display: none" @change="handleFileUpload" />
+        <input type="file" ref="fileInput" accept=".csv,.xlsx" style="display: none" @change="handleFileUpload" />
         <button class="btn btn-outline" @click="( $refs.fileInput as HTMLInputElement ).click()" style="margin-right: 0.5rem;" :disabled="uploading">
-          {{ uploading ? 'Mengimpor...' : 'Import CSV' }}
+          {{ uploading ? 'Mengimpor...' : 'Import (CSV/XLSX)' }}
         </button>
 
         <button class="btn btn-primary" @click="openAddModal">
@@ -341,34 +344,26 @@ const handleFileUpload = async (event: any) => {
   const file = event.target.files[0];
   if (!file) return;
 
-  const fd = new FormData();
-  fd.append('file', file);
-
   uploading.value = true;
   try {
-    const res = await fetch(`${API_BASE}/api/umkm/products/import`, {
-      method: 'POST',
-      headers: {
-        'X-Tenant-ID': tenantId.value,
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-      },
-      body: fd
-    });
-    
-    const data = await res.json();
-    if (data.success) {
-      let msg = data.message || 'Berhasil import produk';
-      if (data.skipCount > 0) {
-        msg += `\n\nID yang tidak ditemukan / dilewati: \n${data.skippedIDs.join(', ')}`;
+    // F022: use new /import/products endpoint (CSV + XLSX, upsert by SKU)
+    const res = await api.importFile('/api/umkm/import/products', file);
+    if (res.success && res.data) {
+      const d = res.data;
+      let msg = `Import selesai: ✅ ${d.imported} berhasil`;
+      if (d.skipped > 0) msg += `, ⚠️ ${d.skipped} dilewati`;
+      if (d.errors && d.errors.length > 0) {
+        msg += `\n\nError (max 10):\n${d.errors.slice(0, 10).map((e: any) => `• Baris ${e.row}: ${e.error}`).join('\n')}`;
+        if (d.errors.length > 10) msg += `\n... +${d.errors.length - 10} lainnya`;
       }
       alert(msg);
       await fetchProducts();
     } else {
-      alert(data.message || 'Gagal import produk');
+      alert(res.message || 'Gagal import produk');
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error(e);
-    alert('Terjadi kesalahan jaringan');
+    alert('Terjadi kesalahan jaringan: ' + (e?.message || e));
   } finally {
     uploading.value = false;
     event.target.value = ''; // reset file input
@@ -378,29 +373,35 @@ const handleFileUpload = async (event: any) => {
 const exportCSV = async () => {
   exporting.value = true;
   try {
-    const res = await fetch(`${API_BASE}/api/umkm/products/export`, {
-      method: 'GET',
-      headers: {
-        'X-Tenant-ID': tenantId.value,
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-      }
-    });
-
-    if (!res.ok) {
-      alert('Gagal mengekspor produk');
-      return;
-    }
-
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
+    // F022: use new /export/products endpoint (supports both formats)
+    const blobUrl = await api.exportFile('/api/umkm/export/products', 'csv');
     const a = document.createElement('a');
-    a.href = url;
+    a.href = blobUrl;
     a.download = `products_export_${new Date().getTime()}.csv`;
     document.body.appendChild(a);
     a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-  } catch (e) {
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (e: any) {
+    console.error(e);
+    alert('Terjadi kesalahan jaringan saat export');
+  } finally {
+    exporting.value = false;
+  }
+};
+
+const exportXLSX = async () => {
+  exporting.value = true;
+  try {
+    const blobUrl = await api.exportFile('/api/umkm/export/products', 'xlsx');
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `products_export_${new Date().getTime()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (e: any) {
     console.error(e);
     alert('Terjadi kesalahan jaringan saat export');
   } finally {

@@ -199,6 +199,17 @@
       </div>
     </div>
 
+    <!-- Customer Service AI (F020) -->
+    <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
+      <h3 style="margin-bottom: 1.5rem;">🤖 Customer Service AI</h3>
+      <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
+        Atur kepribadian, bahasa, jam operasional, dan kapan bot eskalasi ke admin.
+      </p>
+      <router-link to="/chatbot-config" class="btn btn-primary" style="text-decoration: none; display: inline-block;">
+        Setup / Edit AI CS →
+      </router-link>
+    </div>
+
     <!-- Custom Toast -->
     <div v-if="toast.visible" :class="['toast-notification', `toast-${toast.type}`]">
       {{ toast.message }}

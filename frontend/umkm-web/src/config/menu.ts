@@ -17,6 +17,7 @@ export const menuConfig: MenuGroup[] = [
       { label: 'Dashboard', to: '/', icon: '📊' },
       { label: 'Kasir/POS', to: '/pos', icon: '💰' },
       { label: 'Katalog Produk', to: '/catalog', icon: '📦' },
+      { label: 'Impor / Ekspor', to: '/data-transfer', icon: '📥' },
     ],
   },
   {
@@ -29,6 +30,7 @@ export const menuConfig: MenuGroup[] = [
     group: 'Sistem',
     items: [
       { label: 'Automasi', to: '/automations', icon: '⚡' },
+      { label: 'AI Customer Service', to: '/chatbot-config', icon: '🤖' },
       { label: 'Pengaturan', to: '/settings', icon: '⚙️' },
     ],
   },

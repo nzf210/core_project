@@ -81,6 +81,420 @@ Format per feature:
 | F016 | Hybrid WhatsApp (Cloud API + whatsmeow) | ✅ Approved | ✅ Done | 2026-06-13 |
 | F017 | OTP 1-Hour Reuse Window | ✅ Approved | ✅ Done | 2026-06-13 |
 | F018 | Telegram Auth (Register & Login) | ✅ Approved | ✅ Done | 2026-06-13 |
+| F019 | Onboarding Sync via /me (Fix Tier 1) | ✅ Approved | ✅ Done | 2026-06-14 |
+| F020 | AI CS Setup Wizard (Per-Tenant Config UI) | ✅ Approved | ✅ Done | 2026-06-14 |
+| F021 | Cash Flow PDF Export | ✅ Approved | ✅ Done | 2026-06-14 |
+| F022 | Excel/Google Sheet Import & Export | ✅ Approved | ✅ Done | 2026-06-14 |
+
+---
+
+## F022: Excel/Google Sheet Import & Export
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** UMKM bisa export data ke Excel/CSV (untuk backup, akuntan, laporan pajak) dan import data dari spreadsheet ke aplikasi. Mendukung **3 entity**: journal_entries (transaksi), products (katalog), dan contacts (pelanggan/forwarders). Format file: `.xlsx` (Excel) dan `.csv` (Google Sheet export friendly).
+
+**Spec:**
+
+### Backend (apps/umkm/accounting)
+
+**Export endpoints** (returns file blob with proper Content-Disposition):
+
+| Method | Path | Format | Entity |
+|:-------|:-----|:-------|:-------|
+| `GET /export/journal?from=YYYY-MM-DD&to=YYYY-MM-DD&format=xlsx|csv` | download | Journal entries (header + lines) |
+| `GET /export/products?format=xlsx|csv` | download | Product catalog |
+| `GET /export/contacts?format=xlsx|csv` | download | Customer/forwarder contacts |
+
+**Import endpoints** (multipart/form-data, field name `file`):
+
+| Method | Path | Format | Entity |
+|:-------|:-----|:-------|:-------|
+| `POST /import/products` | xlsx/csv | Upsert products by SKU |
+| `POST /import/contacts` | xlsx/csv | Upsert contacts by phone |
+| `POST /import/journal` | xlsx/csv | Create journal entries (validate balanced) |
+
+**Response shape import:**
+```json
+{
+  "success": true,
+  "data": {
+    "imported": 42,
+    "skipped": 3,
+    "errors": [
+      { "row": 5, "error": "SKU kosong" },
+      { "row": 12, "error": "Harga tidak valid" }
+    ]
+  }
+}
+```
+
+**CSV column spec (header row required):**
+
+**products** (`name, sku, category, price_cents, stock, description, image_url`)
+- `price_cents` integer (sen). Comma-as-thousand-separator NOT supported; user harus convert.
+- `stock` integer. Default 0.
+- `image_url` optional.
+
+**contacts** (`name, phone, email, role, notes`)
+- `phone` wajib, unique per tenant
+- `role` ∈ {`customer`, `forwarder`, `supplier`}. Default `customer`.
+- `email` optional.
+
+**journal** (`date, description, reference, debit_account_code, credit_account_code, amount_cents`)
+- Single-line entry per row (debit & credit on same row)
+- For multi-line entry: split into multiple rows with same `reference` (UUID auto-generated per batch, same `reference` = same entry)
+- `amount_cents` integer
+- Validate balanced per `reference` (sum debit == sum credit)
+
+**XLSX support:**
+- 1 sheet per file
+- Header row in row 1
+- Date cells as Excel date (auto-parse)
+- Money cells as number
+
+**Limits:**
+- Max 5000 rows per import
+- Max file size 10 MB
+- File extension whitelist: `.xlsx`, `.csv`
+
+### Frontend
+
+**UI entry points:**
+- Sidebar menu baru: `Operasi` group → "Impor / Ekspor Data" (icon: 📥) → route `/data-transfer`
+- Atau dari `ProductCatalog.vue` → tombol "Export" + "Import" (inline, per entity)
+
+**Page `DataTransfer.vue`:**
+- 3 tab: Jurnal, Produk, Kontak
+- Tiap tab:
+  - Tombol "Download Template" (CSV + XLSX)
+  - Tombol "Export Data" (filter tanggal untuk jurnal)
+  - Drop zone untuk upload file + tombol "Impor"
+  - Preview hasil import (table) sebelum confirm
+  - Toast: imported/skipped/errors count
+
+**Inline di ProductCatalog.vue:**
+- Tombol "📥 Import" → file picker → preview → confirm
+- Tombol "📤 Export" → dropdown xlsx/csv
+
+### Acceptance Criteria (AC):
+- [x] AC-1: GET `/export/products?format=xlsx` return file .xlsx valid
+- [x] AC-2: GET `/export/products?format=csv` return file .csv valid
+- [x] AC-3: GET `/export/journal?from&to` return file dengan multiple baris per entry
+- [x] AC-4: GET `/export/contacts` return file customer + forwarder
+- [x] AC-5: POST `/import/products` (xlsx/csv) → upsert by SKU, response include imported/skipped/errors
+- [x] AC-6: POST `/import/contacts` (xlsx/csv) → upsert by phone
+- [x] AC-7: POST `/import/journal` (xlsx/csv) → create entries, validate balanced per reference
+- [x] AC-8: Frontend `DataTransfer.vue` page dengan 3 tab + download template
+- [x] AC-9: Inline Import/Export di `ProductCatalog.vue`
+- [x] AC-10: Validasi 5000 row max, 10MB max, ext whitelist
+- [x] AC-11: `go build`, `go vet`, `go test`, `vue-tsc` clean
+
+### Files Changed:
+- `apps/umkm/accounting/main.go` — 6 handlers (3 export, 3 import) + helper parseCSV/parseXLSX
+- `shared/sdk/xlsx/` — package baru: `reader.go` (read xlsx), `writer.go` (write xlsx), `csv.go` (CSV helpers)
+- `frontend/umkm-web/src/api.ts` — methods `api.exportProducts/Contacts/Journal`, `api.importProducts/Contacts/Journal`, `api.downloadTemplate`
+- `frontend/umkm-web/src/components/DataTransfer.vue` — page baru
+- `frontend/umkm-web/src/components/ProductCatalog.vue` — inline Import/Export
+- `frontend/umkm-web/src/router/index.ts` — route `/data-transfer`
+- `frontend/umkm-web/src/config/menu.ts` — menu "Impor / Ekspor Data"
+
+### Notes:
+- XLSX pakai library `github.com/jung-kurt/gofpdf` untuk write PDF, dan `github.com/xuri/excelize/v2` untuk read/write xlsx (F021 reuse dependency).
+- Import = upsert (SKU/phone sebagai natural key), bukan replace. User bisa re-import untuk update.
+- Untuk journal import, file CSV/XLSX diasumsikan valid — backend validasi balance + account existence.
+- Bukti audit: setiap import catat ke `import_logs` (insert via mini-migration F022b, atau reuse `subscription_tickets` table sebagai quick win).
+
+---
+
+## F021: Cash Flow PDF Export
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Selesaikan Fase 5 PRD — generate PDF Laporan Arus Kas (Cash Flow Statement) untuk periode yang dipilih. Data sudah tersedia via endpoint JSON `GET /reports/cash-flow`; fitur ini tinggal membungkus output jadi file PDF yang siap download/cetak/share ke akuntan atau bank untuk pengajuan kredit. PDF patuh pada layout SAK-EMKM: header (identitas toko + periode), 3 section aktivitas (Operasional, Investasi, Pendanaan), summary net cash flow, footer (tanggal generate + signature line).
+
+**Spec:**
+
+### Backend (apps/umkm/accounting)
+
+Endpoint baru:
+- `GET /reports/cash-flow/pdf?from=YYYY-MM-DD&to=YYYY-MM-DD` — return `application/pdf` blob.
+
+**PDF Layout (A4 portrait, margins 2cm):**
+
+```
+┌────────────────────────────────────────────────────────┐
+│  [NAMA TOKO]                                           │
+│  Laporan Arus Kas                                      │
+│  Periode: 1 Januari 2026 – 31 Januari 2026            │
+│  Dicetak: 14 Juni 2026 01:44 WITA                      │
+├────────────────────────────────────────────────────────┤
+│  I. ARUS KAS DARI AKTIVITAS OPERASIONAL                │
+│    Kas Masuk:                                          │
+│      Penjualan Tunai        Rp    5.000.000            │
+│      Piutang Tertagih       Rp    2.000.000            │
+│      Pendapatan Lain         Rp      500.000           │
+│    Total Kas Masuk          Rp    7.500.000            │
+│    Kas Keluar:                                          │
+│      Beban Gaji              Rp   2.000.000            │
+│      Beban Listrik           Rp     300.000            │
+│      Beban Bahan Baku        Rp   1.500.000            │
+│    Total Kas Keluar          Rp   3.800.000            │
+│    Arus Kas Operasional     Rp   3.700.000            │
+├────────────────────────────────────────────────────────┤
+│  II. ARUS KAS DARI AKTIVITAS INVESTASI                │
+│    Pembelian Aset           Rp (1.000.000)             │
+│    Arus Kas Investasi       Rp (1.000.000)             │
+├────────────────────────────────────────────────────────┤
+│  III. ARUS KAS DARI AKTIVITAS PENDANAAN               │
+│    Setor Modal               Rp 5.000.000              │
+│    Arus Kas Pendanaan        Rp 5.000.000              │
+├────────────────────────────────────────────────────────┤
+│  KENAIKAN/(PENURUNAN) BERSIH KAS   Rp 7.700.000        │
+│  Kas Awal Periode              Rp   X.XXX.XXX          │
+│  Kas Akhir Periode             Rp X.XXX.XXX + net     │
+├────────────────────────────────────────────────────────┤
+│  Halaman 1 dari 1                                      │
+│  Generated by WCH Platform • core_project              │
+└────────────────────────────────────────────────────────┘
+```
+
+**Activity classification logic (berdasarkan account_type + account_code):**
+
+| Category | Rule |
+|:---------|:-----|
+| Operating Inflow | debit ke cash account (100/101) DAN line counterpart = revenue/piutang (400/120) |
+| Operating Outflow | credit ke cash account (100/101) DAN line counterpart = expense/beban (500-599) atau persediaan (130) |
+| Investing | counterpart account = fixed asset (150-199) |
+| Financing | counterpart account = modal (300), hutang (200-299), prive (310) |
+
+Aturan disederhanakan: kalau counterpart account code di range tertentu → masuk kategori tsb. Sisanya → operating.
+
+**Currency formatting:** IDR dengan format `Rp 1.234.567` (tanpa desimal, pakai titik sebagai thousand separator, tanpa sen — UMKM style).
+
+**Library:** `github.com/jung-kurt/gofpdf` v1.16.2 (UTF-8 ready, lightweight, no native deps).
+
+**Query enhancement:** Extend `handleCashFlow` untuk return per-line breakdown by counterpart account, lalu handler PDF build sectioned report.
+
+### Frontend
+
+**Journal.vue** (Laporan Keuangan section):
+- Tambah tombol "📄 Download PDF" di samping tombol "Filter" untuk tab Arus Kas
+- Klik → set `window.location = API_BASE + '/api/umkm/reports/cash-flow/pdf?from=...&to=...'`
+- Loading state saat generate (PDF bisa 1-2 detik untuk data besar)
+
+### Acceptance Criteria (AC):
+- [x] AC-1: GET `/reports/cash-flow/pdf?from&to` return PDF binary (Content-Type: application/pdf)
+- [x] AC-2: PDF berisi header (nama toko, periode, tanggal cetak)
+- [x] AC-3: PDF punya 3 section (Operasional, Investasi, Pendanaan) + net cash flow + kas awal/akhir
+- [x] AC-4: Currency di-format `Rp X.XXX.XXX`
+- [x] AC-5: Query extend: return per-counterpart breakdown
+- [x] AC-6: Frontend Journal.vue tab Arus Kas punya tombol Download PDF
+- [x] AC-7: `go build`, `go vet`, `go test`, `vue-tsc` clean
+
+### Files Changed:
+- `apps/umkm/accounting/main.go` — handler `handleCashFlowPDF` + extend `handleCashFlow` (return per-line counterpart data)
+- `frontend/umkm-web/src/components/Journal.vue` — tombol Download PDF di tab Arus Kas
+
+### Notes:
+- PDF generation synchronous & on-the-fly (tidak ada background job). Untuk data <500 lines latency <500ms. Jika nanti jadi lambat, bisa di-caching.
+- `gofpdf` dipakai juga di F022 (Excel tidak, pakai `xuri/excelize/v2`).
+- Library `gofpdf` sudah di-pull di F021.
+- Indonesian UMKM style: pakai kata "Beban", "Kas Masuk", "Arus Kas", bukan "Expense", "Cash Inflow", "Cash Flow".
+
+---
+
+## F020: AI CS Setup Wizard (Per-Tenant Chatbot Config UI)
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Wizard UI untuk owner UMKM setup AI Customer Service mereka sendiri — tanpa coding. Owner bisa atur kepribadian bot, bahasa, jam operasional, kapan bot eskalasi ke admin, dan kalimat sapa/pesan di luar jam. Data disimpan di tabel `tenant_chatbot_configs` (sudah ada di migration 000029) dan di-load oleh chatbot service saat melayani customer. Skenario: Owner daftar → onboarding selesai → masuk wizard ini → 3 langkah simpel → AI CS langsung aktif dengan kepribadian sesuai toko.
+
+**Spec:**
+
+### Backend (apps/umkm/accounting)
+
+Endpoint baru di `apps/umkm/accounting/main.go` (sesuai FEATURE_MAP → lokasi UMKM Accounting):
+
+| Method | Path | Deskripsi |
+|:-------|:-----|:----------|
+| `GET /api/umkm/chatbot/config` | Ambil konfigurasi chatbot tenant. Auto-create default row jika belum ada (idempotent). |
+| `PUT /api/umkm/chatbot/config` | Update konfigurasi. Partial update — hanya field yang dikirim yang di-update. |
+| `POST /api/umkm/chatbot/config/test` | Kirim pesan test pakai konfigurasi saat ini (preview — panggil AI Gateway dengan system_prompt yang sudah di-render). Body: `{ "message": "..." }`. Return: `{ "reply": "...", "would_escalate": bool }`. |
+
+**Validation rules:**
+- `language` ∈ {`id`, `en`}
+- `tone` ∈ {`friendly`, `formal`, `casual`, `professional`}
+- `temperature` ∈ [0.0, 1.0]
+- `max_tokens` ∈ [64, 4096]
+- `max_context_messages` ∈ [1, 50]
+- `rag_top_k` ∈ [1, 20]
+- `rag_similarity_threshold` ∈ [0.0, 1.0]
+- `business_hours_start` < `business_hours_end` (jika sama → reject)
+- `business_days` ⊆ {0,1,2,3,4,5,6}
+- `escalation_keywords` non-empty jika `escalation_enabled = true`
+- `channels_enabled` non-empty (minimal 1 channel)
+
+**Response shape (GET):**
+```json
+{
+  "success": true,
+  "data": {
+    "llm_provider": "minimax",
+    "llm_model": "MiniMax-M2.7",
+    "temperature": 0.7,
+    "max_tokens": 1024,
+    "tone": "friendly",
+    "language": "id",
+    "max_context_messages": 10,
+    "welcome_message": "Halo! Ada yang bisa saya bantu?",
+    "fallback_message": "Maaf, saya belum bisa menjawab...",
+    "outside_hours_message": "Terima kasih telah menghubungi...",
+    "business_hours_start": "08:00",
+    "business_hours_end": "22:00",
+    "business_days": [1,2,3,4,5,6],
+    "escalation_enabled": true,
+    "escalation_keywords": ["bicara cs","hubungi admin","operator"],
+    "auto_escalate_after_minutes": 5,
+    "rag_enabled": true,
+    "rag_top_k": 5,
+    "rag_similarity_threshold": 0.7,
+    "channels_enabled": ["whatsapp"],
+    "is_active": true
+  }
+}
+```
+
+### Chatbot integration (apps/umkm/chatbot)
+
+Update `buildSystemPrompt()` di `apps/umkm/chatbot/main.go`:
+- Tambah HTTP call ke `accountingURL + "/api/umkm/chatbot/config"` (header `X-Tenant-ID`).
+- Cache hasil di Redis dengan key `chatbot:config:{tenant_id}` TTL 5 menit — supaya tidak hit DB tiap chat.
+- Jika config `is_active = false` → return `outside_hours_message` regardless jam.
+- Honor `business_hours_start/end` + `business_days` — di luar jam → return `outside_hours_message` tanpa panggil LLM (hemat cost).
+- Honor `language` → tambahkan instruksi bahasa di system prompt.
+- Honor `tone` → tambahkan instruksi nada bicara.
+- Honor `max_context_messages` → batasi context window yang dikirim.
+- Honor `escalation_keywords` → case-insensitive substring match.
+- `system_prompt` custom (jika di-set owner) → pakai itu sebagai base, override default template.
+
+Cache invalidation: saat `PUT /config` dipanggil, chatbot auto-evict cache key (POST notification atau ev langsung via shared Redis key).
+
+### Frontend (frontend/umkm-web)
+
+Component baru: `src/components/ChatbotConfig.vue` (~400 baris).
+
+**Struktur 3-step wizard dengan progress indicator:**
+
+1. **Step 1 — Identitas Bot** (Nama, Bahasa, Tone)
+   - Field: Bot name (input text, default: toko), Bahasa (radio: Indonesia/English), Tone (select: friendly/formal/casual/professional)
+   - Preview panel kanan: "Bot kamu akan bicara dalam [Bahasa] dengan nada [Tone]"
+
+2. **Step 2 — Jam Operasional & Auto-Escalation**
+   - Field: Jam buka-tutup (time pickers), Hari operasional (checkbox 7 hari), Toggle escalation, Escalation keywords (tag input, default suggestions)
+   - Preview: "Bot aktif Senin-Sabtu 08:00-22:00. Di luar jam, customer dapat pesan: ..."
+
+3. **Step 3 — Kalimat & Channel**
+   - Textarea: Welcome message, Fallback message, Outside hours message (3 textarea)
+   - Channel toggles: WhatsApp (default ON, terkunci), Telegram (jika bot token configured), Web chat
+   - Tombol "Test Bot" → modal dengan chat preview
+
+**Navigation:**
+- Tombol "Lanjut" di step 1-2, "Simpan & Aktifkan" di step 3
+- Tombol "Kembali" di step 2-3
+- Klik step indicator boleh loncat ke step yang sudah dikunjungi
+- Progress disimpan per-step (kalau user keluar, draft tersimpan di sessionStorage)
+
+**Entry points:**
+- Setelah onboarding modal activation sukses (F015 flow) → redirect ke `/chatbot-config?first_run=1` (banner "Selamat, lengkapi setup CS AI Anda")
+- Sidebar menu: Operasional → "AI CS" (icon: 🤖)
+- Settings → bagian "Customer Service AI" → link "Setup/Edit"
+
+**UX detail:**
+- Toast success/error pakai pola yang sudah ada
+- Loading state pakai skeleton atau spinner
+- Empty state untuk fresh tenant: ilustration + CTA "Mulai Setup"
+- Responsive: 1 kolom di mobile, 2 kolom (form + preview) di desktop
+
+### Acceptance Criteria (AC):
+- [x] AC-1: `GET /api/umkm/chatbot/config` return default config untuk tenant baru (auto-create)
+- [x] AC-2: `PUT /api/umkm/chatbot/config` update partial fields, validasi semua constraints
+- [x] AC-3: `POST /api/umkm/chatbot/config/test` panggil AI Gateway dengan system_prompt yang sudah di-render
+- [x] AC-4: Chatbot `buildSystemPrompt()` baca config dari DB via accounting service, cache 5 menit
+- [x] AC-5: Chatbot honor `language`, `tone`, `business_hours_*`, `escalation_keywords`, `max_context_messages`
+- [x] AC-6: Di luar jam operasional → return `outside_hours_message` (skip LLM call, hemat cost)
+- [x] AC-7: `is_active = false` → chatbot return `outside_hours_message` regardless jam
+- [x] AC-8: Frontend `ChatbotConfig.vue` 3-step wizard, progress indicator, form validation
+- [x] AC-9: Frontend panggil API real, toast feedback, simpan draft di sessionStorage
+- [x] AC-10: Sidebar & Settings entry point berfungsi, banner first_run setelah onboarding
+- [x] AC-11: `go build ./...`, `go vet`, `go test ./...`, `vue-tsc --noEmit` clean
+
+### Files Changed:
+- `apps/umkm/accounting/main.go` — handler `handleChatbotConfig` (GET/PUT/POST test), SQL helpers
+- `apps/umkm/chatbot/main.go` — update `buildSystemPrompt()`, Redis cache integration, business hours + escalation logic
+- `frontend/umkm-web/src/components/ChatbotConfig.vue` — wizard component baru
+- `frontend/umkm-web/src/api.ts` — method `api.getChatbotConfig`, `api.updateChatbotConfig`, `api.testChatbotConfig`
+- `frontend/umkm-web/src/router/index.ts` — route `/chatbot-config`
+- `frontend/umkm-web/src/components/AppSidebar.vue` — menu "AI CS"
+- `frontend/umkm-web/src/components/Settings.vue` — link "Setup/Edit" CS AI
+- `frontend/umkm-web/src/components/Onboarding.vue` — redirect ke `/chatbot-config?first_run=1` setelah activation
+
+### Notes:
+- Tabel `tenant_chatbot_configs` sudah ada lengkap dari migration 000029 (F007). Tidak perlu migration baru.
+- Backend taruh di `apps/umkm/accounting` (bukan di `chatbot`) karena: (a) accounting sudah jadi hub konfigurasi tenant, (b) chatbot jadi cukup fokus ke runtime, (c) pengurangan coupling — chatbot bisa di-rebuild tanpa ganggu config storage.
+- Cache 5 menit dipilih untuk keseimbangan: konfigurasi baru bisa sampai di chatbot max 5 menit (acceptable untuk setup yang jarang berubah), tapi hemat DB call.
+- Untuk 'eskalasi' yang sudah ada (mark `[FORWARD_TO_ADMIN]`), logic keyword disatukan — `escalation_keywords` config menggantikan/extend keyword hardcoded.
+- Tier 2 — impact langsung ke goal "UMKM bisa bikin CS AI otomatis".
+
+---
+
+## F019: Onboarding Sync via `/me` Endpoint (Fix Tier 1)
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Sediakan endpoint `GET /me` di auth-service untuk sinkronisasi status user & tenant (`onboarding_completed`, `plan`, `role`, `is_frozen`) dari backend, dan refactor router guard frontend untuk refetch saat localStorage kosong (mis. login di device baru / cache dibersihkan). Fix redirect loop ke `/onboarding` yang sudah lama dicatat di CLAUDE.md. Sekaligus refactor hardcoded WA Gateway URL di chatbot ke config.
+
+**Spec:**
+- Endpoint baru `GET /auth/me` di auth-service (alias ringkas dari `/auth/profile` GET). Return JSON berisi `user_id`, `username`, `email`, `phone_number`, `role`, `telegram_chat_id`, `tenant_id`, `plan`, `business_type`, `is_frozen`, `onboarding_completed`.
+- Route di api-gateway: `/api/me` → auth-service (dengan auth middleware + tenant rate limit).
+- Field `onboarding_completed` juga ditambahkan ke response `GET /auth/profile` agar FE bisa sinkronkan via endpoint yang sudah ada.
+- Frontend `router/index.ts`:
+  - Tambah helper `fetchAndSyncMe()` yang cache 30s per `(tenant_id, user_id)`.
+  - `beforeEach` guard: jika `token` ada tapi `onboarding_completed` missing di localStorage → panggil `fetchAndSyncMe()` untuk populate flag dari BE, baru tentukan redirect.
+  - Sync `onboarding_completed`, `plan`, `role`, `subscription_status` ke localStorage/sessionStorage setelah fetch berhasil.
+- Refactor `apps/umkm/chatbot/main.go`:
+  - Tambah `var WAGatewayURL` + helper `waSendURL()`.
+  - Ganti 3 call site hardcoded `http://wa-gateway:8202/api/wa/send` jadi `waSendURL()`.
+  - Resolve order: `WA_GATEWAY_URL` env → `cfg.WhatsApp.GatewayURL` → production default.
+
+**Acceptance Criteria (AC):**
+- [x] AC-1: `GET /api/me` dengan token valid → return JSON berisi semua field yang disyaratkan
+- [x] AC-2: `GET /api/me` tanpa token → 401
+- [x] AC-3: `GET /api/profile` sekarang juga return `onboarding_completed`
+- [x] AC-4: Reload halaman di device baru dengan localStorage kosong → FE panggil `/me` otomatis, populate flag, tidak redirect loop
+- [x] AC-5: Cache `/me` 30s per (tenant_id, user_id) — tidak spam backend
+- [x] AC-6: `go build ./...` & `go vet ./...` clean
+- [x] AC-7: `go test ./...` all packages green
+- [x] AC-8: `vue-tsc --noEmit` clean
+- [x] AC-9: Chatbot `waSendURL()` honour `WA_GATEWAY_URL` env + `cfg.WhatsApp.GatewayURL`
+- [x] AC-10: 0 hardcoded `wa-gateway:8202` di call site chatbot (sisanya cuma default fallback)
+
+**Files Changed:**
+- `services/auth-service/main.go` — `handleMe()` handler baru, field `onboarding_completed` di `handleProfile` GET response, route `/me`
+- `services/api-gateway/main.go` — route `/api/me` → auth-service
+- `frontend/umkm-web/src/api.ts` — method `api.me()`
+- `frontend/umkm-web/src/router/index.ts` — `fetchAndSyncMe()` helper + updated `beforeEach` guard
+- `apps/umkm/chatbot/main.go` — `WAGatewayURL` var, `waSendURL()` helper, 3 call site refactored
+
+**Notes:**
+- Tier 1 fix — menyentuh 2 service + 1 app + 2 frontend file, semua test pass.
+- Branch: `fix/tier1-onboarding-loop`
+- Cache 30s dipilih untuk keseimbangan antara freshness dan hemat backend call. Bisa di-tune via env nanti.
+- Sinkronisasi hanya terjadi jika flag missing — happy path (user sudah onboarded + localStorage ada) tidak menambah request.
 
 ---
 

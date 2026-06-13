@@ -289,6 +289,7 @@ const buyPackage = async () => {
       // Dev mode atau lite plan: langsung aktif
       activationSuccess.value = 'Langganan berhasil diaktifkan!'
       isActivated.value = true
+      sessionStorage.setItem('chatbot_wizard_pending', '1')
     }
   } catch (e: any) {
     activationError.value = e?.message || 'Terjadi kesalahan'
@@ -310,6 +311,7 @@ const redeemVoucher = async () => {
     }
     activationSuccess.value = 'Voucher berhasil diaktifkan! Selamat menikmati WCH Platform.'
     isActivated.value = true
+    sessionStorage.setItem('chatbot_wizard_pending', '1')
     voucherCode.value = ''
   } catch (e: any) {
     activationError.value = e?.message || 'Kode voucher tidak valid atau sudah digunakan'
@@ -319,6 +321,13 @@ const redeemVoucher = async () => {
 }
 
 const goToDashboard = () => {
+  // F020: after first-time activation, send user to the AI CS setup wizard
+  // once. After that, the button just opens the regular dashboard.
+  if (sessionStorage.getItem('chatbot_wizard_pending') === '1') {
+    sessionStorage.removeItem('chatbot_wizard_pending')
+    router.push('/chatbot-config?first_run=1')
+    return
+  }
   router.push('/')
 }
 
