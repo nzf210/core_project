@@ -686,6 +686,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	// Also set in Redis for fast revocation checks
 	Redis.Set(ctx, "refresh_token:"+tokenHash, userID, 7*24*time.Hour)
 
+	// Cache tenant plan in Redis so feature gates (RequireFeature) resolve correctly.
+	var plan string
+	if err := DB.QueryRow(ctx, "SELECT plan FROM tenants WHERE id = $1", tenantID).Scan(&plan); err == nil && plan != "" {
+		Redis.Set(ctx, "tenant:plan:"+tenantID, plan, 30*24*time.Hour)
+	}
+
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
 		Message: "Login successful",
@@ -1444,6 +1450,12 @@ func handleVerifyPhoneLogin(w http.ResponseWriter, r *http.Request) {
 	Redis.Set(ctx, "refresh_token:"+tokenHash, userID, 7*24*time.Hour)
 	// OTP persists for full 1-hour window (reusable during active period)
 	// Redis TTL handles auto-expiry
+
+	// Cache tenant plan in Redis so feature gates (RequireFeature) resolve correctly.
+	var plan string
+	if err := DB.QueryRow(ctx, "SELECT plan FROM tenants WHERE id = $1", tenantID).Scan(&plan); err == nil && plan != "" {
+		Redis.Set(ctx, "tenant:plan:"+tenantID, plan, 30*24*time.Hour)
+	}
 
 	slog.Info("Phone login successful", "phone", req.PhoneNumber, "userId", userID)
 	writeJSON(w, http.StatusOK, Response{

@@ -322,6 +322,54 @@ func loadLLMModels(cfg *Config) LLMConfig {
 		}
 	}
 
+	// Custom / OpenRouter (optional)
+	if getEnv("LLM_API_KEY", "") != "" {
+		modelList := splitEnv(getEnv("LLM_MODELS", getEnv("LLM_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")))
+		caps := splitEnv(getEnv("LLM_CAPABILITIES", "general,coding"))
+		contexts := splitEnv(getEnv("LLM_CONTEXT_WINDOW", "131072"))
+		costsIn := splitEnv(getEnv("LLM_COST_PER_1M_IN", "0.0"))
+		costsOut := splitEnv(getEnv("LLM_COST_PER_1M_OUT", "0.0"))
+		fb1 := splitEnv(getEnv("LLM_FALLBACK_1", "gemini:gemini-1.5-flash"))
+		fb2 := splitEnv(getEnv("LLM_FALLBACK_2", ""))
+		fb3 := splitEnv(getEnv("LLM_FALLBACK_3", ""))
+
+		for i, model := range modelList {
+			m := LLMModel{
+				ID:            "custom:" + model,
+				Provider:      "custom",
+				Model:         model,
+				BaseURL:       getEnv("LLM_BASE_URL", "https://openrouter.ai/api/v1"),
+				APIKey:        getEnv("LLM_API_KEY", ""),
+				Capability:    getOrElse(caps, i, "general"),
+				CostPer1MIn:   getOrElseFloat(costsIn, i, 0.0),
+				CostPer1MOut:  getOrElseFloat(costsOut, i, 0.0),
+				ContextWindow: getOrElseInt(contexts, i, 131072),
+				Priority:      i + 5,
+				FallbackTier1: getOrElse(fb1, i, ""),
+				FallbackTier2: getOrElse(fb2, i, ""),
+				FallbackTier3: getOrElse(fb3, i, ""),
+				IsEnabled:     true,
+				Tier:          1,
+			}
+			models = append(models, m)
+			byProvider["custom"] = append(byProvider["custom"], m)
+			for _, cap := range strings.Split(m.Capability, ",") {
+				cap = strings.TrimSpace(cap)
+				if cap != "" {
+					byCapability[cap] = append(byCapability[cap], m)
+				}
+			}
+
+			// Register "Anthropic:sonnet" alias to route "sonnet" requests to OpenRouter
+			if model == getEnv("LLM_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free") {
+				sonnetAlias := m
+				sonnetAlias.ID = "Anthropic:sonnet"
+				models = append(models, sonnetAlias)
+			}
+		}
+	}
+
+
 	return LLMConfig{
 		Models:       models,
 		ByCapability: byCapability,

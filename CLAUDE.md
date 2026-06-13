@@ -596,3 +596,49 @@ cd frontend/umkm-web && npm run dev
 | [docs/MIGRATION_REGISTRY.md](docs/MIGRATION_REGISTRY.md) | Daftar semua migrasi database |
 | [docs/master_plan.md](docs/master_plan.md) | Rencana bisnis & roadmap produk |
 | [docs/deployment.md](docs/deployment.md) | Panduan deploy ke production |
+
+---
+
+## 🔧 Known Issues & Fixes (2026-06-14 Session)
+
+### Fix 1: journal_entries.metadata Column Missing
+- **Symptom:** `GET /api/umkm/transactions` → 500 "DB error"
+- **Root cause:** `handleGetTransactions` query SELECT `e.metadata` tapi kolom tidak ada
+- **Fix:** Migration 000033 menambah `metadata JSONB` column + GIN index di `journal_entries`
+- **Files:** `shared/migrations/000033_journal_entries_metadata.{up,down}.sql`
+
+### Fix 2: Settings Page 500 — wa_provider Column
+- **Symptom:** `GET /api/umkm/settings` → 500 "DB error"
+- **Root cause:** Query SELECT `wa_provider` dari `tenants` table, tapi kolom tidak ada
+- **Fix:** Hapus semua referensi `wa_provider` dari SELECT, Go variable, response JSON, dan PUT UPDATE
+- **File:** `apps/umkm/accounting/main.go` — `handleSettings` function
+
+### Fix 3: Nginx Drops Authorization Header
+- **Symptom:** Frontend `/settings` → 401 "Missing Authorization header"
+- **Root cause:** `nginx.conf` tidak explicit-pass `Authorization` dan `X-Tenant-ID` headers
+- **Fix:** Tambah `proxy_set_header Authorization $http_authorization` dan `proxy_set_header X-Tenant-ID $http_x_tenant_id` di semua proxy location blocks
+- **File:** `frontend/umkm-web/nginx.conf`
+
+### Fix 4: WA Gateway 404 — StripPrefix Mismatch
+- **Symptom:** `POST /api/wa/status` → 404
+- **Root cause:** API Gateway pakai `http.StripPrefix("/api/wa", ...)` tapi wa-gateway handler registered di `/api/wa/status` (full path)
+- **Fix:** Hapus `http.StripPrefix` dari proxy `/api/wa/` agar path diteruskan utuh
+- **File:** `services/api-gateway/main.go` (line 92)
+
+### Fix 5: Feature Gating — Plan Cache Not Populated
+- **Symptom:** Tenant dengan plan "lite" dapat 403 "Fitur Chatbot memerlukan paket Lite"
+- **Root cause:** `GetTenantPlan()` di `quota.go` baca Redis key `tenant:plan:{id}`, tapi login handler TIDAK populate cache. Redis miss → fallback ke `"free"` → `HasChatbot: false`
+- **Fix:**
+  - Tambah `"superadmin"` tier di `Plans` map (`shared/sdk/auth/quota.go`)
+  - Auth-service login handlers (`handleLogin`, `handlePhoneLogin`, `handleSuperAdminLogin`) sekarang set Redis key setelah login sukses
+- **Files:** `shared/sdk/auth/quota.go`, `services/auth-service/main.go`
+
+### Fix 6: FAQ Edit Button
+- **Symptom:** User mau edit FAQ setelah AI generate — tidak ada tombol edit
+- **Fix:** Tambah inline edit mode di Settings.vue FAQ section + PUT handler di backend
+- **Files:** `frontend/umkm-web/src/components/Settings.vue`, `apps/umkm/accounting/main.go` (`handleFaqs` PUT)
+
+### Architecture Note: Plan Redis Cache Dependency
+- Key `tenant:plan:{id}` HARUS ada di Redis atau semua tenant dianggap "free"
+- Auth-service login populate cache. Untuk existing tenant sebelum fix ini, set manual: `docker exec wch-redis redis-cli SET "tenant:plan:{id}" "{plan}"`
+- `GetTenantPlan()` akan refactored untuk fallback ke DB di versi berikutnya

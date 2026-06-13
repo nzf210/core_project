@@ -1781,6 +1781,29 @@ func handleFaqs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method == http.MethodPut {
+		var req struct {
+			ID       string `json:"id"`
+			Question string `json:"question"`
+			Answer   string `json:"answer"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid input"})
+			return
+		}
+		if req.ID == "" {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing id"})
+			return
+		}
+		_, err := DB.Exec(ctx, "UPDATE tenant_faqs SET question = $1, answer = $2, updated_at = NOW() WHERE id = $3 AND tenant_id = $4", req.Question, req.Answer, req.ID, tenantID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Update error"})
+			return
+		}
+		writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "FAQ updated"})
+		return
+	}
+
 	if r.Method == http.MethodDelete {
 		id := r.URL.Query().Get("id")
 		DB.Exec(ctx, "DELETE FROM tenant_faqs WHERE id = $1 AND tenant_id = $2", id, tenantID)

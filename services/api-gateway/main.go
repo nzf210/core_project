@@ -89,7 +89,7 @@ func main() {
 	mux.Handle("/subscribe", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("", newTenantProxy(getTarget("billing-service", "8003"))))))
 	mux.Handle("/subscription", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("", newTenantProxy(getTarget("billing-service", "8003"))))))
 	mux.Handle("/voucher/redeem", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("", newTenantProxy(getTarget("billing-service", "8003"))))))
-	mux.Handle("/api/wa/", auth.Middleware(tenantRateLimitMiddleware(auth.RequireFeature("chatbot")(http.StripPrefix("/api/wa", newTenantProxy(getTarget("wa-gateway", "8202")))))))
+	mux.Handle("/api/wa/", auth.Middleware(tenantRateLimitMiddleware(auth.RequireFeature("chatbot")(newTenantProxy(getTarget("wa-gateway", "8202"))))))
 	mux.Handle("/api/notifications/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/notifications", newTenantProxy(getTarget("notification-service", "8005"))))))
 
 	// Aggregated health check — panggil semua service & return ringkas

@@ -166,9 +166,22 @@
 
       <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem;">
         <div v-for="faq in faqs" :key="faq.id" style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px;">
-          <div style="font-weight: bold; margin-bottom: 0.3rem;">Q: {{ faq.question }}</div>
-          <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">A: {{ faq.answer }}</div>
-          <button class="btn btn-secondary btn-sm" style="color: #ef4444; border-color: #ef4444;" @click="deleteFAQ(faq.id)">Hapus</button>
+          <template v-if="editingFaqId === faq.id">
+            <input type="text" v-model="editFaqForm.question" class="form-control" style="margin-bottom: 0.5rem;" />
+            <textarea v-model="editFaqForm.answer" class="form-control" rows="2" style="margin-bottom: 0.5rem;"></textarea>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn btn-primary btn-sm" @click="saveEditFAQ(faq.id)" :disabled="!editFaqForm.question || !editFaqForm.answer">Simpan</button>
+              <button class="btn btn-secondary btn-sm" @click="cancelEditFAQ">Batal</button>
+            </div>
+          </template>
+          <template v-else>
+            <div style="font-weight: bold; margin-bottom: 0.3rem;">Q: {{ faq.question }}</div>
+            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">A: {{ faq.answer }}</div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn btn-secondary btn-sm" @click="startEditFAQ(faq)">✏️ Edit</button>
+              <button class="btn btn-secondary btn-sm" style="color: #ef4444; border-color: #ef4444;" @click="deleteFAQ(faq.id)">Hapus</button>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -508,6 +521,39 @@ const addFAQ = async () => {
 const deleteFAQ = async (id: string) => {
   const res = await api.del(`/api/umkm/faqs?id=${id}`)
   if (res.success) loadFaqs()
+}
+
+const editingFaqId = ref<string | null>(null)
+const editFaqForm = ref({ question: '', answer: '' })
+
+const startEditFAQ = (faq: any) => {
+  editingFaqId.value = faq.id
+  editFaqForm.value = { question: faq.question, answer: faq.answer }
+}
+
+const cancelEditFAQ = () => {
+  editingFaqId.value = null
+  editFaqForm.value = { question: '', answer: '' }
+}
+
+const saveEditFAQ = async (id: string) => {
+  try {
+    const res = await api.put('/api/umkm/faqs', {
+      id,
+      question: editFaqForm.value.question,
+      answer: editFaqForm.value.answer,
+    })
+    if (res.success) {
+      showToast('FAQ berhasil diupdate')
+      editingFaqId.value = null
+      editFaqForm.value = { question: '', answer: '' }
+      loadFaqs()
+    } else {
+      showToast(res.message || 'Gagal update FAQ', 'error')
+    }
+  } catch (e) {
+    showToast('Network error', 'error')
+  }
 }
 
 const generateFAQ = async () => {

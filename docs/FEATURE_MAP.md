@@ -85,6 +85,7 @@ Format per feature:
 | F020 | AI CS Setup Wizard (Per-Tenant Config UI) | ✅ Approved | ✅ Done | 2026-06-14 |
 | F021 | Cash Flow PDF Export | ✅ Approved | ✅ Done | 2026-06-14 |
 | F022 | Excel/Google Sheet Import & Export | ✅ Approved | ✅ Done | 2026-06-14 |
+| F023 | FAQ Bot AI — Edit & Generate | ✅ Approved | ✅ Done | 2026-06-14 |
 
 ---
 
@@ -205,6 +206,61 @@ Format per feature:
 - Import = upsert (SKU/phone sebagai natural key), bukan replace. User bisa re-import untuk update.
 - Untuk journal import, file CSV/XLSX diasumsikan valid — backend validasi balance + account existence.
 - Bukti audit: setiap import catat ke `import_logs` (insert via mini-migration F022b, atau reuse `subscription_tickets` table sebagai quick win).
+
+---
+
+## F023: FAQ Bot AI — Edit & Generate
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Tenant bisa mengelola FAQ Bot AI di halaman Settings. Setiap item FAQ bisa ditambah manual, di-generate otomatis oleh AI, diedit secara inline, dan dihapus.
+
+**Spec:**
+
+### Backend (`apps/umkm/accounting/main.go`)
+
+| Method | Path | Deskripsi |
+|:-------|:-----|:----------|
+| `GET` | `/api/umkm/faqs` | List semua FAQ tenant |
+| `POST` | `/api/umkm/faqs` | Tambah FAQ baru (`{question, answer}`) |
+| `PUT` | `/api/umkm/faqs` | Edit FAQ existing (`{id, question, answer}`) |
+| `DELETE` | `/api/umkm/faqs?id=...` | Hapus FAQ |
+| `POST` | `/api/umkm/faqs/generate` | AI generate 3 FAQ otomatis via LLM |
+
+### Frontend (`frontend/umkm-web/src/components/Settings.vue`)
+
+- **FAQ list:** Tampilkan semua FAQ dengan Q/A + tombol Edit & Hapus per item
+- **Inline edit:** Klik Edit → input fields muncul menggantikan display text → Save / Cancel
+- **AI generate:** Tombol "✨ Generate Otomatis" → panggil AI Gateway → FAQ langsung muncul di list
+- **Manual add:** Input question + answer di bagian bawah → Add
+
+**Acceptance Criteria:**
+- [x] AC-1: FAQ bisa ditambah manual
+- [x] AC-2: AI generate FAQ otomatis berdasarkan nama toko
+- [x] AC-3: FAQ hasil generate bisa diedit inline
+- [x] AC-4: FAQ bisa dihapus
+- [x] AC-5: PUT `/api/umkm/faqs` menerima `{id, question, answer}` untuk edit
+
+**Files:**
+- `apps/umkm/accounting/main.go` — `handleFaqs` (PUT handler)
+- `frontend/umkm-web/src/components/Settings.vue` — inline edit mode
+- `frontend/umkm-web/src/api.ts` — `api.put('/api/umkm/faqs', ...)`
+
+---
+
+## 🐛 Bug Fixes (2026-06-14 Session)
+
+| # | Bug | Root Cause | Fix | File |
+|:--|:----|:-----------|:----|:-----|
+| 1 | `GET /transactions` → 500 | `journal_entries.metadata` column missing | Migration 000033: add `metadata JSONB` | `shared/migrations/000033_*` |
+| 2 | `GET /settings` → 500 | Query SELECT `wa_provider` — column not in `tenants` table | Remove all `wa_provider` references from query, variable, response | `apps/umkm/accounting/main.go` |
+| 3 | Frontend `/settings` → 401 | Nginx drops `Authorization` and `X-Tenant-ID` headers | Add `proxy_set_header` for both headers in nginx.conf | `frontend/umkm-web/nginx.conf` |
+| 4 | `POST /api/wa/status` → 404 | API Gateway `StripPrefix("/api/wa")` strips path before proxy to wa-gateway | Remove `http.StripPrefix` from wa-gateway proxy | `services/api-gateway/main.go` |
+| 5 | 403 "Fitur Chatbot memerlukan paket Lite" for lite/superadmin tenants | `GetTenantPlan()` reads Redis `tenant:plan:{id}` — never populated by login. Fallback to "free" → `HasChatbot: false` | Add `"superadmin"` to `Plans` map + populate Redis cache on login | `shared/sdk/auth/quota.go`, `services/auth-service/main.go` |
+| 6 | `ERR_CONNECTION_REFUSED` port 8202 | WA Gateway service not running | Start wa-gateway service | `services/wa-gateway` |
+| 7 | Port docs mismatch (8212 vs 8202) | CLAUDE.md port registry had wrong WA Gateway port | Update port registry in CLAUDE.md | `CLAUDE.md` |
+| 8 | `bin/` binaries tracked in git | Binaries committed before `.gitignore` rule added | `git rm --cached` binaries, `.gitignore` already correct | `.gitignore` |
 
 ---
 
