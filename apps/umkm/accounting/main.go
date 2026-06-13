@@ -33,9 +33,17 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
+var AIGatewayURL = "http://localhost:8002/v1/chat"
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
+
+	if os.Getenv("AI_GATEWAY_URL") != "" {
+		AIGatewayURL = os.Getenv("AI_GATEWAY_URL")
+	} else if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+		AIGatewayURL = "http://ai-gateway:8002/v1/chat"
+	}
 
 	cfg := config.LoadConfig(".env")
 	if err := initDB(cfg); err != nil {
@@ -80,6 +88,8 @@ mux := http.NewServeMux()
 
 	// ── Chatbot / N8N Hybrid Endpoints ──────────────────────────────────
 	mux.HandleFunc("/internal/tenant/{tenant_id}/chatbot-config", handleInternalChatbotConfig)
+	mux.HandleFunc("/chatbot/config", handleChatbotConfig)         // F020: GET/PUT per-tenant chatbot config (X-Tenant-ID)
+	mux.HandleFunc("/chatbot/config/test", handleChatbotConfigTest) // F020: POST preview with current config
 	mux.HandleFunc("/internal/tenant/{tenant_id}/rag/search", handleInternalRAGSearch)
 	mux.HandleFunc("/internal/conversation/log", handleInternalConversationLog)
 	mux.HandleFunc("/internal/escalation/log", handleInternalEscalationLog)
@@ -2683,6 +2693,387 @@ type ChatbotConfig struct {
 	RAGSimilarityThreshold       float64  `json:"rag_similarity_threshold"`
 	ChannelsEnabled              []string `json:"channels_enabled"`
 	IsActive                     bool     `json:"is_active"`
+}
+
+// loadChatbotConfigByTenant reads the chatbot config for a tenant. If no row
+// exists, it auto-creates one with DB defaults (idempotent) — used by both the
+// public /chatbot/config GET handler and the /chatbot/config/test preview.
+func loadChatbotConfigByTenant(ctx context.Context, tenantID string) (*ChatbotConfig, error) {
+	// Try insert-if-not-exists with default row, ignore conflict
+	_, _ = DB.Exec(ctx, `
+		INSERT INTO tenant_chatbot_configs (tenant_id)
+		VALUES ($1)
+		ON CONFLICT (tenant_id) DO NOTHING
+	`, tenantID)
+
+	rows, err := DB.Query(ctx,
+		`SELECT llm_provider, llm_model, temperature, max_tokens, system_prompt,
+		        tone, language, max_context_messages, welcome_message, fallback_message,
+			outside_hours_message, business_hours_start, business_hours_end, business_days,
+			escalation_enabled, escalation_keywords, escalation_confidence_threshold,
+			auto_escalate_after_minutes, rag_enabled, rag_top_k, rag_similarity_threshold,
+			channels_enabled, is_active
+		 FROM tenant_chatbot_configs WHERE tenant_id = $1`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return nil, fmt.Errorf("chatbot config not found after upsert")
+	}
+
+	var cfg ChatbotConfig
+	var sysPrompt, welcome, fallback, outsideHrs *string
+	var escalationKW []byte
+	if err := rows.Scan(
+		&cfg.LLMProvider, &cfg.LLMModel, &cfg.Temperature, &cfg.MaxTokens,
+		&sysPrompt, &cfg.Tone, &cfg.Language, &cfg.MaxContextMessages,
+		&welcome, &fallback, &outsideHrs,
+		&cfg.BusinessHoursStart, &cfg.BusinessHoursEnd, &cfg.BusinessDays,
+		&cfg.EscalationEnabled, &escalationKW, &cfg.EscalationConfidenceThreshold,
+		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
+		&cfg.ChannelsEnabled, &cfg.IsActive,
+	); err != nil {
+		return nil, err
+	}
+	if sysPrompt != nil {
+		cfg.SystemPrompt = *sysPrompt
+	}
+	if welcome != nil {
+		cfg.WelcomeMessage = *welcome
+	}
+	if fallback != nil {
+		cfg.FallbackMessage = *fallback
+	}
+	if outsideHrs != nil {
+		cfg.OutsideHoursMessage = *outsideHrs
+	}
+	json.Unmarshal(escalationKW, &cfg.EscalationKeywords)
+	return &cfg, nil
+}
+
+// validateChatbotConfig checks all constraints from F020 spec. Returns first
+// error message or empty string if valid.
+func validateChatbotConfig(c *ChatbotConfig) string {
+	switch c.Language {
+	case "id", "en":
+	default:
+		return "language harus 'id' atau 'en'"
+	}
+	switch c.Tone {
+	case "friendly", "formal", "casual", "professional", "":
+	default:
+		return "tone tidak valid"
+	}
+	if c.Temperature < 0 || c.Temperature > 1 {
+		return "temperature harus di antara 0.0 dan 1.0"
+	}
+	if c.MaxTokens < 64 || c.MaxTokens > 4096 {
+		return "max_tokens harus di antara 64 dan 4096"
+	}
+	if c.MaxContextMessages < 1 || c.MaxContextMessages > 50 {
+		return "max_context_messages harus di antara 1 dan 50"
+	}
+	if c.RAGTopK < 1 || c.RAGTopK > 20 {
+		return "rag_top_k harus di antara 1 dan 20"
+	}
+	if c.RAGSimilarityThreshold < 0 || c.RAGSimilarityThreshold > 1 {
+		return "rag_similarity_threshold harus di antara 0.0 dan 1.0"
+	}
+	if c.EscalationConfidenceThreshold < 0 || c.EscalationConfidenceThreshold > 1 {
+		return "escalation_confidence_threshold harus di antara 0.0 dan 1.0"
+	}
+	if c.BusinessHoursStart != "" && c.BusinessHoursEnd != "" &&
+		c.BusinessHoursStart >= c.BusinessHoursEnd {
+		return "business_hours_start harus lebih awal dari business_hours_end"
+	}
+	for _, d := range c.BusinessDays {
+		if d < 0 || d > 6 {
+			return "business_days harus berisi angka 0-6"
+		}
+	}
+	if c.EscalationEnabled && len(c.EscalationKeywords) == 0 {
+		return "escalation_keywords tidak boleh kosong jika escalation_enabled = true"
+	}
+	if len(c.ChannelsEnabled) == 0 {
+		return "channels_enabled minimal 1 channel"
+	}
+	return ""
+}
+
+// handleChatbotConfig — F020 public endpoint.
+// GET  /chatbot/config        — load (auto-create if missing)
+// PUT  /chatbot/config        — partial update, validates all constraints
+func handleChatbotConfig(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		cfg, err := loadChatbotConfigByTenant(r.Context(), tenantID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal memuat konfigurasi: " + err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: cfg})
+
+	case http.MethodPut:
+		// Load current first so partial PUT only overrides sent fields
+		current, err := loadChatbotConfigByTenant(r.Context(), tenantID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal memuat konfigurasi: " + err.Error()})
+			return
+		}
+		var body ChatbotConfig
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Body tidak valid: " + err.Error()})
+			return
+		}
+		// Merge: only override fields that were explicitly set
+		merged := *current
+		if body.LLMProvider != "" {
+			merged.LLMProvider = body.LLMProvider
+		}
+		if body.LLMModel != "" {
+			merged.LLMModel = body.LLMModel
+		}
+		if body.Temperature != 0 {
+			merged.Temperature = body.Temperature
+		}
+		if body.MaxTokens != 0 {
+			merged.MaxTokens = body.MaxTokens
+		}
+		if body.SystemPrompt != "" {
+			merged.SystemPrompt = body.SystemPrompt
+		}
+		if body.Tone != "" {
+			merged.Tone = body.Tone
+		}
+		if body.Language != "" {
+			merged.Language = body.Language
+		}
+		if body.MaxContextMessages != 0 {
+			merged.MaxContextMessages = body.MaxContextMessages
+		}
+		if body.WelcomeMessage != "" {
+			merged.WelcomeMessage = body.WelcomeMessage
+		}
+		if body.FallbackMessage != "" {
+			merged.FallbackMessage = body.FallbackMessage
+		}
+		if body.OutsideHoursMessage != "" {
+			merged.OutsideHoursMessage = body.OutsideHoursMessage
+		}
+		if body.BusinessHoursStart != "" {
+			merged.BusinessHoursStart = body.BusinessHoursStart
+		}
+		if body.BusinessHoursEnd != "" {
+			merged.BusinessHoursEnd = body.BusinessHoursEnd
+		}
+		if body.BusinessDays != nil {
+			merged.BusinessDays = body.BusinessDays
+		}
+		if body.EscalationKeywords != nil {
+			merged.EscalationKeywords = body.EscalationKeywords
+		}
+		if body.AutoEscalateAfterMinutes != 0 {
+			merged.AutoEscalateAfterMinutes = body.AutoEscalateAfterMinutes
+		}
+		if body.RAGTopK != 0 {
+			merged.RAGTopK = body.RAGTopK
+		}
+		if body.RAGSimilarityThreshold != 0 {
+			merged.RAGSimilarityThreshold = body.RAGSimilarityThreshold
+		}
+		if body.ChannelsEnabled != nil {
+			merged.ChannelsEnabled = body.ChannelsEnabled
+		}
+		// Bools selalu di-set (false = explicit turn-off)
+		merged.EscalationEnabled = body.EscalationEnabled
+		merged.RAGEnabled = body.RAGEnabled
+		merged.IsActive = body.IsActive
+
+		if msg := validateChatbotConfig(&merged); msg != "" {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: msg})
+			return
+		}
+
+		kwJSON, _ := json.Marshal(merged.EscalationKeywords)
+		daysJSON, _ := json.Marshal(merged.BusinessDays)
+		channelsJSON, _ := json.Marshal(merged.ChannelsEnabled)
+
+		_, err = DB.Exec(r.Context(), `
+			UPDATE tenant_chatbot_configs SET
+				llm_provider = $1, llm_model = $2, temperature = $3, max_tokens = $4,
+				system_prompt = $5, tone = $6, language = $7, max_context_messages = $8,
+				welcome_message = $9, fallback_message = $10, outside_hours_message = $11,
+				business_hours_start = $12, business_hours_end = $13, business_days = $14,
+				escalation_enabled = $15, escalation_keywords = $16,
+				escalation_confidence_threshold = $17, auto_escalate_after_minutes = $18,
+				rag_enabled = $19, rag_top_k = $20, rag_similarity_threshold = $21,
+				channels_enabled = $22, is_active = $23, updated_at = NOW()
+			WHERE tenant_id = $24
+		`, merged.LLMProvider, merged.LLMModel, merged.Temperature, merged.MaxTokens,
+			nullString(merged.SystemPrompt), merged.Tone, merged.Language, merged.MaxContextMessages,
+			merged.WelcomeMessage, merged.FallbackMessage, merged.OutsideHoursMessage,
+			merged.BusinessHoursStart, merged.BusinessHoursEnd, daysJSON,
+			merged.EscalationEnabled, kwJSON, merged.EscalationConfidenceThreshold,
+			merged.AutoEscalateAfterMinutes, merged.RAGEnabled, merged.RAGTopK, merged.RAGSimilarityThreshold,
+			channelsJSON, merged.IsActive, tenantID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal update: " + err.Error()})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, APIResponse{
+			Success: true,
+			Message: "Konfigurasi chatbot berhasil diperbarui",
+			Data:    merged,
+		})
+
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+	}
+}
+
+// handleChatbotConfigTest — F020 preview endpoint.
+// POST /chatbot/config/test  body: {"message": "..."}
+// Calls AI Gateway with the system prompt rendered from the tenant's current
+// config. Returns the reply and whether it would be escalated.
+func handleChatbotConfigTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		return
+	}
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		return
+	}
+
+	var body struct {
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Body tidak valid"})
+		return
+	}
+	if strings.TrimSpace(body.Message) == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "message wajib diisi"})
+		return
+	}
+
+	cfg, err := loadChatbotConfigByTenant(r.Context(), tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal memuat konfigurasi: " + err.Error()})
+		return
+	}
+
+	// Render the system prompt the same way the chatbot runtime does.
+	systemPrompt := renderSystemPromptFromConfig(cfg, tenantID, "UMKM WCH", "owner")
+
+	// Check escalation keywords (case-insensitive substring).
+	msgLower := strings.ToLower(body.Message)
+	wouldEscalate := false
+	if cfg.EscalationEnabled {
+		for _, kw := range cfg.EscalationKeywords {
+			if strings.Contains(msgLower, strings.ToLower(kw)) {
+				wouldEscalate = true
+				break
+			}
+		}
+	}
+
+	// Call AI Gateway (best-effort: if AI is down, return error but still report
+	// escalation state so the FE preview stays useful).
+	aiReqBody, _ := json.Marshal(map[string]interface{}{
+		"provider":   cfg.LLMProvider,
+		"message":    body.Message,
+		"system_msg": systemPrompt,
+		"tenant_id":  tenantID,
+	})
+	aiReq, _ := http.NewRequestWithContext(r.Context(), "POST", AIGatewayURL, bytes.NewBuffer(aiReqBody))
+	aiReq.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 25 * time.Second}
+	aiResp, err := client.Do(aiReq)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, APIResponse{Message: "AI Gateway tidak dapat dihubungi: " + err.Error()})
+		return
+	}
+	defer aiResp.Body.Close()
+	var aiBody struct {
+		Success bool   `json:"success"`
+		Text    string `json:"text"`
+	}
+	json.NewDecoder(aiResp.Body).Decode(&aiBody)
+	if !aiBody.Success {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "AI Gateway mengembalikan error"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"reply":           aiBody.Text,
+			"would_escalate":  wouldEscalate,
+			"system_prompt":   systemPrompt,
+		},
+	})
+}
+
+// renderSystemPromptFromConfig is the single source of truth for how the
+// chatbot builds its system prompt from a ChatbotConfig. Kept in sync with
+// apps/umkm/chatbot/main.go buildSystemPrompt logic (extracted helper).
+func renderSystemPromptFromConfig(cfg *ChatbotConfig, tenantID, tenantName, role string) string {
+	if !cfg.IsActive {
+		return cfg.OutsideHoursMessage
+	}
+	// Honor language & tone
+	langHint := "Jawab dalam bahasa Indonesia"
+	if cfg.Language == "en" {
+		langHint = "Respond in English"
+	}
+	toneHint := "Gunakan nada yang ramah dan helpful"
+	switch cfg.Tone {
+	case "formal":
+		toneHint = "Gunakan nada formal dan profesional"
+	case "casual":
+		toneHint = "Gunakan nada santai dan akrab"
+	case "professional":
+		toneHint = "Gunakan nada profesional dan solutif"
+	case "friendly":
+		toneHint = "Gunakan nada ramah, hangat, dan bersahabat"
+	}
+
+	base := fmt.Sprintf("Anda adalah asisten virtual untuk toko '%s'. %s. %s.", tenantName, langHint, toneHint)
+
+	// If owner set a custom system_prompt, use it as primary and append hints
+	if strings.TrimSpace(cfg.SystemPrompt) != "" {
+		base = cfg.SystemPrompt + "\n\n" + langHint + ". " + toneHint + "."
+	}
+
+	// Add escalation instructions
+	if cfg.EscalationEnabled && len(cfg.EscalationKeywords) > 0 {
+		base += fmt.Sprintf(
+			"\n\nJika pelanggan menggunakan kata kunci seperti [%s], atau secara eksplisit minta bicara dengan admin/pemilik, Anda WAJIB membalas dengan marker [FORWARD_TO_ADMIN] di awal pesan Anda.",
+			strings.Join(cfg.EscalationKeywords, ", "),
+		)
+	}
+
+	return base
+}
+
+// nullString returns nil for empty strings so SQL stores NULL (preserves the
+// distinction between "user set empty" and "user never set").
+func nullString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func handleInternalRAGSearch(w http.ResponseWriter, r *http.Request) {

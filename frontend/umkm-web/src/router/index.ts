@@ -15,6 +15,7 @@ import SuperAdminLogin from '../components/SuperAdminLogin.vue'
 import ForgotPassword from '../components/ForgotPassword.vue'
 import ResetPassword from '../components/ResetPassword.vue'
 import Automations from '../components/Automations.vue'
+import ChatbotConfig from '../components/ChatbotConfig.vue'
 
 const routes = [
   { path: '/', component: DynamicDashboard, name: 'Dashboard' },
@@ -27,6 +28,7 @@ const routes = [
   { path: '/superadmin', component: SuperAdminDashboard, name: 'SuperAdminDashboard' },
   { path: '/settings', component: Settings, name: 'Settings' },
   { path: '/automations', component: Automations, name: 'Automations' },
+  { path: '/chatbot-config', component: ChatbotConfig, name: 'ChatbotConfig' },
   { path: '/login', component: Login, name: 'Login', meta: { requiresGuest: true } },
   { path: '/register', component: Register, name: 'Register', meta: { requiresGuest: true } },
   { path: '/superadmin-login', component: SuperAdminLogin, name: 'SuperAdminLogin', meta: { requiresGuest: true } },

@@ -29,6 +29,7 @@ export const menuConfig: MenuGroup[] = [
     group: 'Sistem',
     items: [
       { label: 'Automasi', to: '/automations', icon: '⚡' },
+      { label: 'AI Customer Service', to: '/chatbot-config', icon: '🤖' },
       { label: 'Pengaturan', to: '/settings', icon: '⚙️' },
     ],
   },

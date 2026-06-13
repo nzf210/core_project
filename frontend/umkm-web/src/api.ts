@@ -142,6 +142,31 @@ export const api = {
     }
   },
 
+  // Chatbot config (F020) — per-tenant AI Customer Service setup
+  async getChatbotConfig() {
+    const res = await fetch(`${API_BASE}/api/umkm/chatbot/config`, {
+      method: 'GET',
+      headers: headers(),
+    })
+    return res.json()
+  },
+  async updateChatbotConfig(partial: Record<string, any>) {
+    const res = await fetch(`${API_BASE}/api/umkm/chatbot/config`, {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify(partial),
+    })
+    return res.json()
+  },
+  async testChatbotConfig(message: string) {
+    const res = await fetch(`${API_BASE}/api/umkm/chatbot/config/test`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ message }),
+    })
+    return res.json()
+  },
+
   async register(body: Record<string, any>) {
     const res = await fetch(`${API_BASE}/api/umkm/admin/tenants`, {
       method: 'POST',
