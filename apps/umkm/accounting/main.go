@@ -1091,20 +1091,19 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
-		var waNumber, xenditApiKey, xenditWebhookToken, waProvider, reportTime *string
+		var waNumber, xenditApiKey, xenditWebhookToken, reportTime *string
 		var qrisEnabled, reportEnabled *bool
-		err := DB.QueryRow(r.Context(), "SELECT wa_number, xendit_api_key, xendit_webhook_token, wa_provider, qris_enabled, report_enabled, report_time FROM tenants WHERE id = $1", tenantID).Scan(&waNumber, &xenditApiKey, &xenditWebhookToken, &waProvider, &qrisEnabled, &reportEnabled, &reportTime)
+		err := DB.QueryRow(r.Context(), "SELECT wa_number, xendit_api_key, xendit_webhook_token, qris_enabled, report_enabled, report_time FROM tenants WHERE id = $1", tenantID).Scan(&waNumber, &xenditApiKey, &xenditWebhookToken, &qrisEnabled, &reportEnabled, &reportTime)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
 			return
 		}
 
-		wNum, xApiKey, xWebToken, provider, rTime := "", "", "", "internal", "07:00"
+		wNum, xApiKey, xWebToken, rTime := "", "", "", "07:00"
 		qEnabled, rEnabled := false, false
 		if waNumber != nil { wNum = *waNumber }
 		if xenditApiKey != nil { xApiKey = *xenditApiKey }
 		if xenditWebhookToken != nil { xWebToken = *xenditWebhookToken }
-		if waProvider != nil && *waProvider != "" { provider = *waProvider }
 		if qrisEnabled != nil { qEnabled = *qrisEnabled }
 		if reportEnabled != nil { rEnabled = *reportEnabled }
 		if reportTime != nil { rTime = *reportTime }
@@ -1113,7 +1112,6 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 			Success: true,
 			Data: map[string]interface{}{
 				"wa_number": wNum,
-				"wa_provider": provider,
 				"xendit_api_key": xApiKey,
 				"xendit_webhook_token": xWebToken,
 				"qris_enabled": qEnabled,
@@ -1145,8 +1143,7 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 			req.WaNumber = *existingWNum
 		}
 
-		// WA provider is always 'internal' — legacy Fonnte token is no longer supported.
-		_, err := DB.Exec(r.Context(), "UPDATE tenants SET wa_number = $1, wa_provider = 'internal', xendit_api_key = $2, xendit_webhook_token = $3, qris_enabled = $4, report_enabled = $5, report_time = $6, updated_at = NOW() WHERE id = $7", req.WaNumber, req.XenditApiKey, req.XenditWebhookToken, req.QrisEnabled, req.ReportEnabled, req.ReportTime, tenantID)
+		_, err := DB.Exec(r.Context(), "UPDATE tenants SET wa_number = $1, xendit_api_key = $2, xendit_webhook_token = $3, qris_enabled = $4, report_enabled = $5, report_time = $6, updated_at = NOW() WHERE id = $7", req.WaNumber, req.XenditApiKey, req.XenditWebhookToken, req.QrisEnabled, req.ReportEnabled, req.ReportTime, tenantID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to update settings"})
 			return

@@ -115,11 +115,12 @@ core_project/                   ← Root monorepo (satu go.mod)
 │   │   ├── response/           ← Standard JSON response helper
 │   │   ├── migrate/            ← Auto-migration runner (shared/sdk/migrate)
 │   │   └── webhook/            ← Webhook utilities
-│   └── migrations/             ← Database SQL migrations (000001 — 000031)
+│   └── migrations/             ← Database SQL migrations (000001 — 000033)
 │
 ├── frontend/
-│   ├── umkm-web/               ← Vue 3 + Vite (Port 3201)
-│   └── campaign-web/           ← Vue 3 + Vite (Port 3301)
+│   ├── umkm-web/               ← Vue 3 + Vite (Port 3201, Docker scaled: 3201-3203)
+│   ├── campaign-web/           ← Vue 3 + Vite (Port 3301)
+│   └── superadmin-web/         ← Vue 3 + Vite (Port 3401)
 │
 ├── tools/
 │   ├── scripts/               ← Archived fix/patch scripts
@@ -151,27 +152,30 @@ core_project/                   ← Root monorepo (satu go.mod)
 
 | Port | Service | Direktori |
 |:-----|:--------|:----------|
-| `8010` | API Gateway | `services/api-gateway` (Docker mapped port) |
-| `8001` | Auth Service | `services/auth-service` |
-| `8002` | AI Gateway | `services/ai-gateway` |
-| `8013` | Billing Service | `services/billing-service` (Docker mapped port) |
-| `8015` | Notification Service | `services/notification-service` (Docker mapped port) |
-| `8016` | Subscription Worker | `services/subscription-worker` (Docker mapped port) |
-| `8201` | UMKM Accounting | `apps/umkm/accounting` |
-| `8212` | WA Gateway | `services/wa-gateway` (Docker mapped port) |
-| `8210` | WA Cloud API | `services/wa-cloud-api` (Meta Official WhatsApp API) |
-| `8202` | UMKM Chatbot | `apps/umkm/chatbot` |
-| `8213` | UMKM Automation | `apps/umkm/automation` (Docker mapped port) |
+| `8010` | API Gateway | `services/api-gateway` (Docker mapped: `8010:8000`) |
+| `8001` | Auth Service | `services/auth-service` (via API Gateway, no direct listen) |
+| `8002` | AI Gateway | `services/ai-gateway` (via API Gateway, no direct listen) |
+| `8013` | Billing Service | `services/billing-service` (Docker mapped: `8013:8003`) |
+| `8015` | Notification Service | `services/notification-service` (Docker mapped: `8015:8005`) |
+| `8016` | Subscription Worker | `services/subscription-worker` (Docker mapped: `8016:8006`) |
+| `8201` | UMKM Accounting | `apps/umkm/accounting` (native, no Docker mapping) |
+| `8202` | WA Gateway | `services/wa-gateway` (native, shared port with Chatbot) |
+| `8210` | WA Cloud API | `services/wa-cloud-api` (Docker mapped: `8210:8210`) |
+| `8202` | UMKM Chatbot | `apps/umkm/chatbot` (native, shared port with WA Gateway) |
+| `8213` | UMKM Automation | `apps/umkm/automation` (Docker mapped: `8213:8203`) |
 | `9001` | UMKM Business | `apps/umkm/business` |
 | `9002` | Campaign API | `apps/campaign/api` |
-| `3000` | Chatwoot (Self-hosted) | docker-compose (chatwoot) |
-| `3201` | Frontend UMKM | `frontend/umkm-web` |
+| `3000` | Chatwoot (Self-hosted) | docker-compose (`3000:3000`) |
+| `3201` | Frontend UMKM | `frontend/umkm-web` (Docker `3201:80`, scaled 3x → 3201-3203) |
+| `3202` | Frontend UMKM (replica) | `frontend/umkm-web` (Docker scaled) |
+| `3203` | Frontend UMKM (replica) | `frontend/umkm-web` (Docker scaled) |
 | `3301` | Frontend Campaign | `frontend/campaign-web` |
-| `5433` | PostgreSQL + pgvector (Docker) | docker-compose |
-| `5678` | N8N Main (Queue Mode) | docker-compose (n8n-main) |
-| `6381` | Redis (Docker) | docker-compose |
+| `3401` | Frontend Superadmin | `frontend/superadmin-web` |
+| `5433` | PostgreSQL + pgvector (Docker) | docker-compose (`5433:5432`) |
+| `5678` | N8N Main (Queue Mode) | docker-compose (`5678:5678`) |
+| `6381` | Redis (Docker) | docker-compose (`6381:6379`) |
 
-> ⚠️ Jika berjalan tanpa Docker (native), WA Gateway dan UMKM Chatbot secara default sama-sama menggunakan port 8202. Saat berjalan dengan Docker, WA Gateway di-expose ke port host 8212.
+> ⚠️ WA Gateway dan UMKM Chatbot **tidak bisa jalan bersamaan di satu host** karena berbagi port 8202. Saat berjalan native, jalankan salah satu saja — jika dua-duanya perlu, gunakan Docker di mana Chatbot internal via API Gateway.
 
 ---
 

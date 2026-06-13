@@ -94,3 +94,5 @@ business
 automation
 auto-bin
 bin/auth-service.*
+bin/accounting.*
+bin/wa-gateway.*
