@@ -565,6 +565,65 @@ User sampai modal activation
     └─ Masukkan Voucher          → validate → activateSubscription() + generate system voucher
 ```
 
+### Voucher Generation Flow (Superadmin)
+
+```
+Superadmin buka SuperAdminDashboard.vue
+    └─ Klik "Generate Voucher" → modal input (plan, validity_days, quantity, program_name, max_uses)
+           │
+           ▼
+    POST /api/superadmin/billing/vouchers/generate
+           │  billing-service/main.go: handleAdminGenerateVouchers()
+           │  1. Upsert voucher_programs (plan_id, program_name, free_months=0)
+           │  2. INSERT N × voucher_codes (code, program_id, validity_days, is_redeemed=false)
+           │  3. Return { codes: [{code, days}] }
+           ▼
+    Response → modal tampilkan semua kode + Download CSV + Copy
+```
+
+### Voucher Redemption Flow (User)
+
+```
+User masukkan kode voucher di modal activation
+    │
+    ▼
+POST /auth/vouchers/redeem { code, phone }
+    │  billing-service/main.go: handleRedeemVoucher()
+    │  1. SELECT voucher_codes + voucher_programs (JOIN) WHERE code = $1 AND is_redeemed = false
+    │  2. Cek tenant: SELECT tenants WHERE phone = $2
+    │  3. Upsert voucher_subscriptions (akumulasi hari per plan, atau voucher baru jika plan berbeda)
+    │  4. activateSubscription():
+    │     ├─ Upsert tenant_subscriptions (remaining_days, current_plan_expires_at)
+    │     ├─ Update tenants (plan, is_frozen=false, plan_priority)
+    │     └─ INSERT subscription_tickets (tipe=voucher)
+    │  5. UPDATE voucher_codes SET is_redeemed=true, used_by=tenant_id, used_at=NOW()
+    │  6. Generate system voucher: INSERT voucher_codes (WCH-{id}-{ts}, system_generated)
+    │  7. Kirim WA notification dengan kode voucher sistem
+    ▼
+Response → subscription aktif, masa aktif {validity_days} hari
+```
+
+### Day-Duration Logic (activateSubscription detail)
+
+```
+Tenant redeem voucher dengan validity_days = 30:
+
+  Cek: apakah tenant sudah punya voucher_subscriptions dengan plan_id yang sama?
+  │
+  ├─ SUDAH ADA (same plan):
+  │     UPDATE voucher_subscriptions SET remaining_days = remaining_days + 30
+  │     UPDATE tenant_subscriptions SET remaining_days = remaining_days + 30,
+  │                                    current_plan_expires_at = NOW() + 30 days
+  │
+  └─ BELUM ADA (new plan):
+         INSERT voucher_subscriptions (tenant_id, plan_id, remaining_days=30, ...)
+         INSERT tenant_subscriptions (tenant_id, plan_id, remaining_days=30, ...)
+         UPDATE tenants SET plan=plan_name, is_frozen=false, plan_priority=X
+
+  Priority plan: Pro > Business > Lite
+  → Plan tertinggi menentukan menu/fitur yang bisa diakses user
+```
+
 ### Auto-Generate System Voucher (setelah aktivasi via Xendit)
 
 - Saat payment confirmed via Xendit webhook → sistem generate `voucher_codes` entry untuk tenant tersebut
