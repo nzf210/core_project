@@ -114,12 +114,15 @@
       <div class="card glass-card">
         <div class="card-header">
           <h3>Voucher Billing</h3>
+          <button class="btn btn-sm" style="background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); padding: 0.25rem 0.6rem; font-size: 0.75rem;" @click="openVoucherList">
+            Lihat Daftar
+          </button>
         </div>
         <div class="card-body">
           <p class="text-muted" style="margin-bottom: 1rem; font-size: 0.85rem;">
             Generate link aktivasi instan untuk B2B.
           </p>
-          <button class="btn btn-primary" style="width: 100%; padding: 0.5rem;" @click="showToast('Fitur Generate Voucher segera hadir')">
+          <button class="btn btn-primary" style="width: 100%; padding: 0.5rem;" @click="openGenerateVoucher">
             Generate Voucher
           </button>
         </div>
@@ -172,7 +175,7 @@
                     <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                   </svg>
                 </button>
-                <button class="btn-delete" @click="confirmDelete(t)" title="Hapus tenant ini">
+                <button v-if="!isMyOwnTenant(t)" class="btn-delete" @click="confirmDelete(t)" title="Hapus tenant ini">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="3 6 5 6 21 6" />
@@ -348,6 +351,146 @@
           </button>
         </div>
         <div v-if="deleteError" style="margin-top: 1rem; color: #ef4444; font-size: 0.85rem;">{{ deleteError }}</div>
+      </div>
+    </div>
+
+    <!-- Modal Generate Voucher -->
+    <div v-if="showGenerateVoucherModal" class="modal-overlay" @click.self="showGenerateVoucherModal = false">
+      <div class="modal-card" style="max-width: 520px;">
+        <h3 style="margin: 0 0 0.25rem 0;">Generate Voucher</h3>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem;">
+          Generate kode voucher untuk distribusi ke customer B2B.
+        </p>
+
+        <div class="form-group">
+          <label>Program Name <span style="color: var(--text-secondary); font-weight: 400; font-size: 0.75rem;">(opsional, untuk grouping)</span></label>
+          <input v-model="voucherForm.program_name" type="text" class="form-control" placeholder="cth: Program B2B Juni 2026" />
+        </div>
+
+        <div class="form-group">
+          <label>Paket</label>
+          <select v-model="voucherForm.plan_id" class="form-control">
+            <option value="">-- Pilih Paket --</option>
+            <option v-for="plan in planOptions" :key="plan.id" :value="plan.id">{{ plan.name }} — Rp {{ (plan.price_monthly/100).toLocaleString('id-ID') }}/bln</option>
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+          <div class="form-group">
+            <label>Jumlah Voucher</label>
+            <input v-model.number="voucherForm.quantity" type="number" class="form-control" min="1" max="1000" placeholder="1-1000" />
+          </div>
+          <div class="form-group">
+            <label>Masa Aktif (hari)</label>
+            <input v-model.number="voucherForm.validity_days" type="number" class="form-control" min="1" max="3650" placeholder="cth: 30" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Max Uses per Voucher <span style="color: var(--text-secondary); font-weight: 400; font-size: 0.75rem;">(opsional)</span></label>
+          <input v-model.number="voucherForm.max_uses" type="number" class="form-control" min="1" placeholder="default: unlimited" />
+        </div>
+
+        <div v-if="voucherError" style="color: #ef4444; font-size: 0.85rem; margin-bottom: 0.75rem;">{{ voucherError }}</div>
+
+        <!-- Result: show generated codes -->
+        <div v-if="generatedVoucherCodes.length > 0" class="voucher-result">
+          <div class="voucher-result-header">
+            <span>{{ generatedVoucherCodes.length }} kode berhasil di-generate</span>
+            <button class="btn btn-sm" style="background: var(--accent-primary); color: white; border: none; padding: 0.2rem 0.5rem; font-size: 0.7rem;" @click="downloadVoucherCSV">
+              📥 Download CSV
+            </button>
+          </div>
+          <div class="voucher-codes-list">
+            <div v-for="v in generatedVoucherCodes" :key="v.code" class="voucher-code-row">
+              <code>{{ v.code }}</code>
+              <button class="copy-btn" @click="copyText(v.code)" title="Copy">📋</button>
+            </div>
+            <div v-if="generatedVoucherCodes.length > 20" style="text-align: center; color: var(--text-secondary); font-size: 0.8rem; padding: 0.5rem;">
+              + {{ generatedVoucherCodes.length - 20 }} lagi — download CSV untuk semua
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem;">
+          <button class="btn btn-secondary" @click="showGenerateVoucherModal = false" :disabled="generatingVoucher">Tutup</button>
+          <button v-if="generatedVoucherCodes.length === 0" class="btn btn-primary" @click="executeGenerateVoucher" :disabled="generatingVoucher || !voucherForm.plan_id || !voucherForm.quantity || !voucherForm.validity_days">
+            {{ generatingVoucher ? 'Generating...' : 'Generate Sekarang' }}
+          </button>
+          <button v-else class="btn btn-primary" @click="generatedVoucherCodes = []">
+            Generate Lagi
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Voucher List -->
+    <div v-if="showVoucherListModal" class="modal-overlay" @click.self="showVoucherListModal = false">
+      <div class="modal-card" style="max-width: 720px; max-height: 85vh; overflow-y: auto;">
+        <h3 style="margin: 0 0 0.25rem 0;">Daftar Voucher</h3>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+          Semua voucher yang pernah di-generate. Voucher yang sudah digunakan tidak bisa di-redeem ulang.
+        </p>
+
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+          <select v-model="voucherListFilter.used" class="form-control" style="width: auto; min-width: 140px;" @change="fetchVoucherList">
+            <option value="">Semua</option>
+            <option value="false">Belum Terpakai</option>
+            <option value="true">Sudah Terpakai</option>
+          </select>
+          <select v-model="voucherListFilter.plan_id" class="form-control" style="width: auto; min-width: 140px;" @change="fetchVoucherList">
+            <option value="">Semua Paket</option>
+            <option v-for="plan in planOptions" :key="plan.id" :value="plan.id">{{ plan.name }}</option>
+          </select>
+          <button class="btn btn-secondary" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;" @click="fetchVoucherList" :disabled="loadingVoucherList">
+            {{ loadingVoucherList ? '...' : 'Refresh' }}
+          </button>
+        </div>
+
+        <div v-if="loadingVoucherList" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+          Memuat...
+        </div>
+        <div v-else-if="voucherList.length === 0" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+          Belum ada voucher. Generate dulu dari card "Voucher Billing".
+        </div>
+        <div v-else class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Kode</th>
+                <th>Program</th>
+                <th>Paket</th>
+                <th>Status</th>
+                <th>Digunakan Oleh</th>
+                <th>Tanggal</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(v, idx) in voucherList" :key="v.id">
+                <td>{{ idx + 1 }}</td>
+                <td><code style="font-size: 0.8rem; color: var(--accent-primary);">{{ v.code }}</code></td>
+                <td style="font-size: 0.8rem;">{{ v.program_name || '-' }}</td>
+                <td><span class="badge" :class="'badge-' + (v.target_plan || 'lite')">{{ (v.target_plan || '?').toUpperCase() }}</span></td>
+                <td>
+                  <span v-if="v.is_redeemed" class="badge" style="background: rgba(16,185,129,0.15); color: #10b981;">Terpakai</span>
+                  <span v-else class="badge" style="background: rgba(245,158,11,0.15); color: #fbbf24;">Unused</span>
+                </td>
+                <td style="font-size: 0.8rem;">{{ v.used_by || '-' }}</td>
+                <td style="font-size: 0.75rem; color: var(--text-secondary);">
+                  {{ v.created_at ? new Date(v.created_at).toLocaleDateString('id-ID') : '-' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
+            Menampilkan {{ voucherList.length }} voucher terbaru.
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem;">
+          <button class="btn btn-secondary" @click="showVoucherListModal = false">Tutup</button>
+        </div>
       </div>
     </div>
 
@@ -572,6 +715,12 @@ const confirmDelete = (tenant: any) => {
   deleteError.value = ''
 }
 
+// Get current superadmin's own tenant ID (stored after login)
+const myTenantId = computed(() => localStorage.getItem('tenant_id') || '')
+
+// Check if a tenant is the superadmin's own tenant
+const isMyOwnTenant = (tenant: any) => tenant.id === myTenantId.value
+
 const executeDelete = async () => {
   if (!deleteTarget.value) return
   deleting.value = true
@@ -769,6 +918,109 @@ const editablePlans = ref<any[]>([])
 const loadingPlans = ref(false)
 const savingPlans = ref(false)
 const planError = ref('')
+const planOptions = [
+  { id: 'lite', name: 'Lite', price_monthly: 15000000 },
+  { id: 'pro', name: 'Pro', price_monthly: 45000000 },
+  { id: 'ultimate', name: 'Ultimate', price_monthly: 150000000 },
+]
+
+// ── Voucher Generation ────────────────────────────────────────────────────────
+const showGenerateVoucherModal = ref(false)
+const showVoucherListModal = ref(false)
+const generatingVoucher = ref(false)
+const voucherError = ref('')
+const voucherForm = ref({
+  program_name: '',
+  plan_id: '',
+  quantity: 10,
+  validity_days: 30,
+  max_uses: null as number | null,
+})
+const voucherList = ref<any[]>([])
+const loadingVoucherList = ref(false)
+const voucherListFilter = ref({ used: '', plan_id: '' })
+const generatedVoucherCodes = ref<any[]>([])
+
+const openGenerateVoucher = () => {
+  voucherError.value = ''
+  generatedVoucherCodes.value = []
+  voucherForm.value = { program_name: '', plan_id: '', quantity: 10, validity_days: 30, max_uses: null }
+  showGenerateVoucherModal.value = true
+}
+
+const openVoucherList = () => {
+  voucherListFilter.value = { used: '', plan_id: '' }
+  fetchVoucherList()
+  showVoucherListModal.value = true
+}
+
+const executeGenerateVoucher = async () => {
+  if (!voucherForm.value.plan_id || !voucherForm.value.quantity || !voucherForm.value.validity_days) return
+  generatingVoucher.value = true
+  voucherError.value = ''
+  try {
+    const data = await superadminApi.generateVouchers({
+      plan_id: voucherForm.value.plan_id,
+      validity_days: voucherForm.value.validity_days,
+      quantity: voucherForm.value.quantity,
+      program_name: voucherForm.value.program_name || undefined,
+      max_uses: voucherForm.value.max_uses || undefined,
+    })
+    if (data.success || data.status === 200) {
+      generatedVoucherCodes.value = data.data?.codes || []
+      showToast(`Berhasil generate ${data.data?.count || 0} voucher!`, 'success')
+    } else {
+      voucherError.value = data.message || 'Gagal generate voucher'
+    }
+  } catch (e) {
+    voucherError.value = 'Kesalahan jaringan'
+  } finally {
+    generatingVoucher.value = false
+  }
+}
+
+const downloadVoucherCSV = () => {
+  if (!generatedVoucherCodes.value.length) return
+  const header = 'code,validity_days\n'
+  const rows = generatedVoucherCodes.value.map((v: any) => `${v.code},${v.days}`).join('\n')
+  const csv = header + rows
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `vouchers-${Date.now()}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const copyText = (text: string) => {
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Kode berhasil disalin!', 'success')
+  })
+}
+
+const fetchVoucherList = async () => {
+  loadingVoucherList.value = true
+  try {
+    const data = await superadminApi.listVouchers({
+      used: voucherListFilter.value.used || undefined,
+      plan_id: voucherListFilter.value.plan_id || undefined,
+      limit: 200,
+    })
+    if ((data.success || data.status === 200) && data.data?.codes) {
+      voucherList.value = data.data.codes
+    } else if (data.data && Array.isArray(data.data)) {
+      voucherList.value = data.data
+    } else {
+      voucherList.value = []
+    }
+  } catch (e) {
+    console.error('Failed to fetch voucher list', e)
+    voucherList.value = []
+  } finally {
+    loadingVoucherList.value = false
+  }
+}
 
 const openPlanEditor = async () => {
   showPlanEditor.value = true
@@ -776,7 +1028,7 @@ const openPlanEditor = async () => {
   loadingPlans.value = true
   try {
     const data = await superadminApi.getPlans()
-    const plans = data.data || (data.success ? data.data : null)
+    const plans = data.data || (data.success && data.data)
     if (plans && Array.isArray(plans)) {
       editablePlans.value = plans.map((p: any) => ({
         ...p,
@@ -1257,6 +1509,60 @@ onMounted(() => {
   .plan-editor-fields {
     grid-template-columns: 1fr;
   }
+}
+
+/* Voucher generation result */
+.voucher-result {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.voucher-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.voucher-codes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.voucher-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.voucher-code-row code {
+  font-size: 0.8rem;
+  color: var(--accent-primary);
+  background: var(--bg-secondary);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.copy-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.copy-btn:hover {
+  background: var(--bg-secondary);
 }
 
 </style>

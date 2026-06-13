@@ -483,6 +483,30 @@ Sistem memiliki 3 level/jenis user, yaitu:
 
 ---
 
+## 🎫 Superadmin Voucher Management UI
+
+Card "Voucher Billing" di `frontend/umkm-web/src/components/SuperAdminDashboard.vue` menyediakan UI untuk generate dan lihat voucher:
+
+**Generate Voucher Modal:**
+- Input: program name (opsional), paket (lite/pro/ultimate), jumlah (1-1000), masa aktif (hari), max uses (opsional)
+- Tombol "Generate Sekarang" → `POST /api/superadmin/billing/vouchers/generate`
+- Setelah generate: tampilkan semua kode voucher + tombol **Download CSV** + tombol **Copy** per kode
+- Tombol "Generate Lagi" untuk reset dan generate batch baru
+
+**Voucher List Modal:**
+- Tombol "Lihat Daftar" di header card → buka modal daftar voucher
+- Filter: used/unused, paket
+- Tabel: #, Kode, Program, Paket, Status, Digunakan Oleh, Tanggal
+- Tombol Refresh untuk reload data
+
+**API Methods (`superadminApi.ts`):**
+- `generateVouchers({ plan_id, validity_days, quantity, program_name?, max_uses? })` → returns `{plan_id, validity_days, count, codes: [{code, days}]}`
+- `listVouchers({ plan_id?, used?, limit? })` → returns `{total, used, unused, codes: [...]}`
+
+**Routing:** `/api/superadmin/billing/` → strips prefix → proxies ke billing-service:8003 `/admin`
+
+---
+
 ## 🚫 Larangan Keras
 
 1. ❌ **JANGAN** commit file `.env` ke git

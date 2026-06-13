@@ -73,9 +73,15 @@ const checkAuth = async () => {
     if (hasTenantId) {
       try {
         const data = await api.get('/api/profile')
-        if (data.success && data.data && data.data.business_name) {
-          businessName.value = data.data.business_name
-          localStorage.setItem('business_name', data.data.business_name)
+        if (data.success && data.data) {
+          if (data.data.business_name) {
+            businessName.value = data.data.business_name
+            localStorage.setItem('business_name', data.data.business_name)
+          }
+          if (data.data.plan) {
+            plan.value = data.data.plan
+            localStorage.setItem('plan', data.data.plan)
+          }
         }
         if (data.data && typeof data.data.is_frozen === 'boolean') {
           isFrozen.value = data.data.is_frozen

@@ -151,7 +151,18 @@ export const superadminApi = {
     return res.json()
   },
 
-  async generateVouchers(data: { plan_id: string; validity_days: number; quantity: number; program_name: string; max_uses: number }) {
+  async listVouchers(params?: { plan_id?: string; used?: string; limit?: number }) {
+    const qs = new URLSearchParams()
+    if (params?.plan_id) qs.set('plan_id', params.plan_id)
+    if (params?.used) qs.set('used', params.used)
+    if (params?.limit) qs.set('limit', String(params.limit))
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/vouchers?${qs}`, {
+      headers: { 'Content-Type': 'application/json' },
+    })
+    return res.json()
+  },
+
+  async generateVouchers(data: { plan_id: string; validity_days: number; quantity: number; program_name?: string; max_uses?: number }) {
     const res = await authFetch(`${API_BASE}/api/superadmin/billing/vouchers/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -271,7 +271,75 @@ const handleVerifyOTP = async () => {
     padding: 2rem;
   }
   .auth-form-wrapper {
+    padding: 2rem;
+    max-width: 480px;
+  }
+}
+
+@media (min-width: 640px) {
+  .auth-form-wrapper {
     padding: 2.5rem;
+    max-width: 520px;
+  }
+}
+
+.login-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem;
+}
+
+.tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.35rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+@media (min-width: 480px) {
+  .tab-btn {
+    gap: 0.5rem;
+    padding: 0.6rem 0.65rem;
+    font-size: 0.82rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .tab-btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.88rem;
+  }
+}
+
+.tab-btn.active {
+  background: var(--surface-0);
+  color: var(--accent-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.tab-btn:hover:not(.active) {
+  color: var(--text-primary);
+}
+
+@media (max-width: 480px) {
+  .tab-btn svg {
+    display: none;
   }
 }
 

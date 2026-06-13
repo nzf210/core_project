@@ -2518,17 +2518,20 @@ func handleAdminGenerateVouchers(w http.ResponseWriter, r *http.Request) {
 
 	// Find or create program
 	var programID string
-	if req.ProgramName != "" {
-		err := DB.QueryRow(ctx, `
-			INSERT INTO voucher_programs (name, voucher_type, target_plan_id, duration_months, max_uses, is_active)
-			VALUES ($1, 'free_months', $2, 0, $3, true)
-			ON CONFLICT DO NOTHING
-			RETURNING id
-		`, req.ProgramName, req.PlanID, req.MaxUses).Scan(&programID)
-		if err != nil {
-			// Try to get existing
-			DB.QueryRow(ctx, `SELECT id FROM voucher_programs WHERE name = $1`, req.ProgramName).Scan(&programID)
-		}
+	programName := req.ProgramName
+	if programName == "" {
+		programName = "Ad-hoc Voucher - " + req.PlanID
+	}
+
+	err := DB.QueryRow(ctx, `
+		INSERT INTO voucher_programs (name, voucher_type, target_plan_id, duration_months, max_uses, is_active)
+		VALUES ($1, 'free_months', $2, 0, $3, true)
+		ON CONFLICT DO NOTHING
+		RETURNING id
+	`, programName, req.PlanID, req.MaxUses).Scan(&programID)
+	if err != nil {
+		// Try to get existing
+		DB.QueryRow(ctx, `SELECT id FROM voucher_programs WHERE name = $1`, programName).Scan(&programID)
 	}
 
 	type codeOut struct {
@@ -2596,7 +2599,7 @@ func handleAdminListVouchers(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		SELECT vc.id, vc.code, vc.program_id, COALESCE(vp.name, ''),
-		       vc.is_redeemed, COALESCE(vc.used_by, ''), vc.used_at, vc.created_at,
+		       vc.is_redeemed, COALESCE(vc.used_by::text, ''), vc.used_at, vc.created_at,
 		       COALESCE(vp.target_plan_id, ''), COALESCE(vp.is_active, false)
 		FROM voucher_codes vc
 		LEFT JOIN voucher_programs vp ON vp.id = vc.program_id

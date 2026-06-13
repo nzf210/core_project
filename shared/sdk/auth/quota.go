@@ -40,6 +40,7 @@ var Plans = map[string]PlanTier{
 	"lite":     {Tier: "lite", MaxUsers: 3, MaxTransactions: 1000, MaxAIRequests: 250, MaxBots: 0, CanExport: true, HasAdvancedReport: false, HasMultiUser: true, Features: FeatureFlags{HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: false}},
 	"pro":      {Tier: "pro", MaxUsers: 10, MaxTransactions: 10000, MaxAIRequests: 5000, MaxBots: 3, CanExport: true, HasAdvancedReport: true, HasMultiUser: true, Features: FeatureFlags{HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: true}},
 	"enterprise": {Tier: "enterprise", MaxUsers: -1, MaxTransactions: -1, MaxAIRequests: -1, MaxBots: -1, CanExport: true, HasAdvancedReport: true, HasMultiUser: true, Features: FeatureFlags{HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: true}},
+	"ultimate": {Tier: "ultimate", MaxUsers: -1, MaxTransactions: -1, MaxAIRequests: -1, MaxBots: -1, CanExport: true, HasAdvancedReport: true, HasMultiUser: true, Features: FeatureFlags{HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: true}},
 }
 
 func GetTenantPlan(ctx context.Context, tenantID string) string {

@@ -77,7 +77,7 @@ Format per feature:
 | F012 | Sidebar Navigation UI | ✅ Approved | ✅ Done | 2026-06-12 |
 | F013 | N8N Integration via Super Admin | ❌ Removed | — | — |
 | F014 | Flexible LLM Model System | ✅ Approved | ✅ Done | 2026-06-12 |
-| F015 | Onboarding Activation Flow | ✅ Approved | ✅ Done | 2026-06-13 |
+| F015 | Onboarding Activation Flow | ✅ Approved | ✅ Done | 2026-06-13 (UI: 2026-06-14) |
 | F016 | Hybrid WhatsApp (Cloud API + whatsmeow) | ✅ Approved | ✅ Done | 2026-06-13 |
 | F017 | OTP 1-Hour Reuse Window | ✅ Approved | ✅ Done | 2026-06-13 |
 | F018 | Telegram Auth (Register & Login) | ✅ Approved | ✅ Done | 2026-06-13 |
@@ -590,10 +590,15 @@ User sampai modal activation
 ### Superadmin Voucher Management
 
 - `POST /admin/vouchers/generate` — generate N voucher codes sekaligus
-  - Body: `{ plan_id, validity_days, quantity, program_name }`
+  - Body: `{ plan_id, validity_days, quantity, program_name, max_uses }`
   - Generate N kode acak, simpan ke `voucher_codes`
+  - Response: `{ plan_id, validity_days, count, codes: [{code, days}] }`
 - `GET /admin/vouchers` — list semua voucher (filter: used/unused, plan_id, program)
+  - Response: `{ total, used, unused, codes: [{id, code, program_name, is_redeemed, used_by, used_at, created_at, target_plan}] }`
 - `GET /admin/tenants/{id}/vouchers` — list voucher aktif per tenant (untuk melihat masa aktif)
+- **UI:** Card "Voucher Billing" di `SuperAdminDashboard.vue` memiliki:
+  - Tombol "Lihat Daftar" di header card → buka modal daftar voucher (tabel filterable)
+  - Tombol "Generate Voucher" → buka modal generate (input: program name, paket, jumlah, masa aktif) → tampilkan semua kode yang di-generate + Download CSV + Copy per kode
 
 ### WhatsApp Notification (Activation)
 
@@ -609,19 +614,21 @@ User sampai modal activation
   ```
 
 **Acceptance Criteria:**
-- [ ] AC-1: User baru daftar → sampai step 2 onboarding → tidak diblokir, modal activation muncul
-- [ ] AC-2: Pilih "Beli Paket" → invoice Xendit dibuat, status subscription = `pending`
-- [ ] AC-3: Bayar Xendit → webhook confirmed → tenant aktif, kode voucher sistem di-generate, dikirim via WA
-- [ ] AC-4: Pending > 24 jam tidak dibayar → tenant + user dihapus otomatis
-- [ ] AC-5: Pilih "Masukkan Voucher" → valid → langsung aktivasi + kode voucher sistem dikirim via WA
-- [ ] AC-6: Redeem voucher plan sama → hari aktif diakumulasi
-- [ ] AC-7: Redeem voucher plan berbeda → buat voucher baru, priority tetap plan tertinggi
-- [ ] AC-8: Superadmin bisa generate N voucher codes sekaligus via API
-- [ ] AC-9: Superadmin bisa lihat voucher aktif per tenant
+- [x] AC-1: User baru daftar → sampai step 2 onboarding → tidak diblokir, modal activation muncul
+- [x] AC-2: Pilih "Beli Paket" → invoice Xendit dibuat, status subscription = `pending`
+- [x] AC-3: Bayar Xendit → webhook confirmed → tenant aktif, kode voucher sistem di-generate, dikirim via WA
+- [x] AC-4: Pending > 24 jam tidak dibayar → tenant + user dihapus otomatis
+- [x] AC-5: Pilih "Masukkan Voucher" → valid → langsung aktivasi + kode voucher sistem dikirim via WA
+- [x] AC-6: Redeem voucher plan sama → hari aktif diakumulasi
+- [x] AC-7: Redeem voucher plan berbeda → buat voucher baru, priority tetap plan tertinggi
+- [x] AC-8: Superadmin bisa generate N voucher codes sekaligus via API
+- [x] AC-9: Superadmin bisa lihat voucher aktif per tenant
 
 **Files yang perlu diubah:**
 - `frontend/umkm-web/src/components/Onboarding.vue` — hapus gate di step 1 & 2, tambah modal activation
-- `services/billing-service/main.go` — `pending` subscription status, auto-delete expired, generate system voucher, day-duration logic
+- `frontend/umkm-web/src/components/SuperAdminDashboard.vue` — Generate Voucher modal + Voucher List modal (UI layer)
+- `frontend/umkm-web/src/superadminApi.ts` — `listVouchers()` + `generateVouchers()` API methods
+- `services/billing-service/main.go` — `pending` subscription status, auto-delete expired, generate system voucher, day-duration logic, `handleAdminGenerateVouchers`, `handleAdminListVouchers`
 - `services/auth-service/main.go` — sync `is_frozen` dan plan cache saat activate
 - `shared/migrations/` — add `validity_days` / `remaining_days` columns, `pending_timeout` di `tenant_subscriptions`
 - `services/subscription-worker/main.go` — cron job auto-delete expired pending tenants
@@ -632,7 +639,8 @@ User sampai modal activation
 - Billing-service adalah source of truth untuk subscription state
 - Auth-service baca dari Redis cache, di-sync saat `activateSubscription()` dipanggil
 - Pending timeout default: 24 jam (bisa di-config via env `SUBSCRIPTION_PENDING_TIMEOUT_HOURS`)
-- Superadmin generate voucher: kode di-generate client-side (frontend) atau server-side? Disarankan server-side via billing-service admin endpoint
+- Superadmin generate voucher: server-side via `POST /admin/vouchers/generate` di billing-service
+- Superadmin UI voucher: `SuperAdminDashboard.vue` memiliki modal Generate (tampilkan semua kode + CSV download) dan modal List (tabel filterable semua voucher)
 
 ---
 

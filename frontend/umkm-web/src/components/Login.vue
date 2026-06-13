@@ -205,6 +205,7 @@ const handleVerifyPhoneLogin = async () => {
       try {
         const profileRes = await api.get('/api/profile')
         if (profileRes.success && profileRes.data) {
+          localStorage.setItem('plan', profileRes.data.plan || 'lite')
           if (profileRes.data.business_name || data.data.role !== 'owner') {
             localStorage.setItem('onboarding_completed', 'true')
           }
@@ -265,6 +266,7 @@ const handleTelegramVerifyLogin = async () => {
       try {
         const profileRes = await api.get('/api/profile')
         if (profileRes.success && profileRes.data) {
+          localStorage.setItem('plan', profileRes.data.plan || 'lite')
           if (profileRes.data.business_name || data.data.role !== 'owner') {
             localStorage.setItem('onboarding_completed', 'true')
           }
@@ -306,6 +308,7 @@ const handleLogin = async () => {
       try {
         const profileRes = await api.get('/api/profile')
         if (profileRes.success && profileRes.data) {
+          localStorage.setItem('plan', profileRes.data.plan || 'lite')
           if (profileRes.data.business_name || data.data.role !== 'owner') {
             localStorage.setItem('onboarding_completed', 'true')
           }
@@ -393,7 +396,15 @@ const handleLogin = async () => {
     padding: 2rem;
   }
   .auth-form-wrapper {
+    padding: 2rem;
+    max-width: 480px;
+  }
+}
+
+@media (min-width: 640px) {
+  .auth-form-wrapper {
     padding: 2.5rem;
+    max-width: 520px;
   }
 }
 
@@ -411,23 +422,33 @@ const handleLogin = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.6rem 0.5rem;
+  gap: 0.35rem;
+  padding: 0.6rem 0.35rem;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 @media (min-width: 480px) {
   .tab-btn {
+    gap: 0.5rem;
+    padding: 0.6rem 0.65rem;
+    font-size: 0.82rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .tab-btn {
     padding: 0.6rem 1rem;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
   }
 }
 

@@ -361,6 +361,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey}
       - XENDIT_API_KEY=${XENDIT_API_KEY}
       - XENDIT_WEBHOOK_TOKEN=${XENDIT_WEBHOOK_TOKEN}
     ports:
