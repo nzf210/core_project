@@ -227,9 +227,7 @@
         <div class="form-group">
           <label>Pilih Paket Langganan</label>
           <select v-model="formData.plan" class="form-control">
-            <option value="lite">Lite (Rp 150.000)</option>
-            <option value="pro">Pro (Rp 450.000)</option>
-            <option value="ultimate">Ultimate (Rp 1.500.000)</option>
+            <option v-for="plan in planOptions" :key="plan.id" :value="plan.id">{{ plan.name }} (Rp {{ (plan.price_monthly/100).toLocaleString('id-ID') }})</option>
           </select>
         </div>
 
@@ -311,9 +309,7 @@
         </div>
         <div class="form-group"><label>Paket</label>
           <select v-model="editForm.plan" class="form-control">
-            <option value="free">FREE</option>
-            <option value="lite">LITE</option>
-            <option value="pro">PRO</option>
+            <option v-for="plan in planOptions" :key="plan.id" :value="plan.id">{{ plan.name }}</option>
           </select>
         </div>
         <div class="form-group"><label>Reset Password Owner <span
@@ -426,79 +422,93 @@
 
     <!-- Modal Voucher List -->
     <div v-if="showVoucherListModal" class="modal-overlay" @click.self="showVoucherListModal = false">
-      <div class="modal-card" style="max-width: 720px; max-height: 85vh; overflow-y: auto;">
-        <h3 style="margin: 0 0 0.25rem 0;">Daftar Voucher</h3>
+      <div class="modal-card" style="max-width: 1100px; max-height: 90vh; overflow-y: auto; width: 90vw;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+          <h3 style="margin: 0;">Daftar Voucher</h3>
+          <span style="font-size: 0.8rem; color: var(--text-secondary);">{{ voucherList.length }} voucher</span>
+        </div>
         <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
           Semua voucher yang pernah di-generate. Voucher yang sudah digunakan tidak bisa di-redeem ulang.
         </p>
 
-        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
-          <select v-model="voucherListFilter.used" class="form-control" style="width: auto; min-width: 140px;" @change="fetchVoucherList">
+        <div style="display: flex; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; align-items: center;">
+          <select v-model="voucherListFilter.used" class="form-control" style="width: auto; min-width: 150px;" @change="fetchVoucherList">
             <option value="">Semua</option>
             <option value="false">Belum Terpakai</option>
             <option value="true">Sudah Terpakai</option>
           </select>
-          <select v-model="voucherListFilter.plan_id" class="form-control" style="width: auto; min-width: 140px;" @change="fetchVoucherList">
+          <select v-model="voucherListFilter.plan_id" class="form-control" style="width: auto; min-width: 150px;" @change="fetchVoucherList">
             <option value="">Semua Paket</option>
             <option v-for="plan in planOptions" :key="plan.id" :value="plan.id">{{ plan.name }}</option>
           </select>
-          <button class="btn btn-secondary" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;" @click="fetchVoucherList" :disabled="loadingVoucherList">
-            {{ loadingVoucherList ? '...' : 'Refresh' }}
+          <button class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem;" @click="fetchVoucherList" :disabled="loadingVoucherList">
+            ↻ {{ loadingVoucherList ? 'Memuat...' : 'Refresh' }}
           </button>
         </div>
 
-        <div v-if="loadingVoucherList" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-          Memuat...
+        <div v-if="loadingVoucherList" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⏳</div>
+          Memuat daftar voucher...
         </div>
-        <div v-else-if="voucherList.length === 0" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+        <div v-else-if="voucherList.length === 0" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">📋</div>
           Belum ada voucher. Generate dulu dari card "Voucher Billing".
         </div>
         <div v-else class="table-container">
           <table class="data-table">
             <thead>
               <tr>
-                <th>#</th>
-                <th>Kode</th>
+                <th style="width: 50px;">#</th>
+                <th>Kode Voucher</th>
                 <th>Program</th>
                 <th>Paket</th>
                 <th>Status</th>
                 <th>Digunakan Oleh</th>
                 <th>Tanggal</th>
-                <th>Aksi</th>
+                <th style="width: 100px;">Aksi</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(v, idx) in voucherList" :key="v.id">
-                <td>{{ idx + 1 }}</td>
-                <td><code style="font-size: 0.8rem; color: var(--accent-primary);">{{ v.code }}</code></td>
-                <td style="font-size: 0.8rem;">{{ v.program_name || '-' }}</td>
+                <td style="color: var(--text-muted); font-size: 0.8rem;">{{ idx + 1 }}</td>
+                <td>
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <code style="font-size: 0.85rem; color: var(--accent-primary); background: rgba(99,102,241,0.1); padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 600;">{{ v.code }}</code>
+                    <button
+                      class="btn btn-secondary"
+                      style="padding: 0.25rem 0.5rem; font-size: 0.7rem; border-radius: 4px;"
+                      @click="copyToClipboard(v.code)"
+                      title="Copy kode voucher"
+                    >
+                      📋
+                    </button>
+                  </div>
+                </td>
+                <td style="font-size: 0.85rem;">{{ v.program_name || '-' }}</td>
                 <td><span class="badge" :class="'badge-' + (v.target_plan || 'lite')">{{ (v.target_plan || '?').toUpperCase() }}</span></td>
                 <td>
-                  <span v-if="v.is_redeemed" class="badge" style="background: rgba(16,185,129,0.15); color: #10b981;">Terpakai</span>
-                  <span v-else class="badge" style="background: rgba(245,158,11,0.15); color: #fbbf24;">Unused</span>
+                  <span v-if="v.is_redeemed" class="badge" style="background: rgba(16,185,129,0.15); color: #10b981;">✓ Terpakai</span>
+                  <span v-else class="badge" style="background: rgba(245,158,11,0.15); color: #fbbf24;">○ Unused</span>
                 </td>
-                <td style="font-size: 0.8rem;">{{ v.used_by || '-' }}</td>
-                <td style="font-size: 0.75rem; color: var(--text-secondary);">
+                <td style="font-size: 0.85rem;">{{ v.used_by || '-' }}</td>
+                <td style="font-size: 0.8rem; color: var(--text-secondary);">
                   {{ v.created_at ? new Date(v.created_at).toLocaleDateString('id-ID') : '-' }}
                 </td>
                 <td>
                   <button
                     v-if="!v.is_redeemed"
                     class="btn btn-danger"
-                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem;"
+                    style="padding: 0.35rem 0.75rem; font-size: 0.75rem;"
                     @click="deleteVoucher(v.id, v.code)"
                     :disabled="deletingVoucherId === v.id"
                   >
-                    {{ deletingVoucherId === v.id ? '...' : '🗑 Hapus' }}
+                    {{ deletingVoucherId === v.id ? '...' : '🗑️' }}
                   </button>
-                  <span v-else style="font-size: 0.7rem; color: var(--text-muted);">-</span>
+                  <span v-else style="font-size: 0.7rem; color: var(--text-muted);">—</span>
                 </td>
               </tr>
             </tbody>
           </table>
-          <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
-            Menampilkan {{ voucherList.length }} voucher terbaru.
-          </p>
         </div>
 
         <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem;">
@@ -931,11 +941,7 @@ const editablePlans = ref<any[]>([])
 const loadingPlans = ref(false)
 const savingPlans = ref(false)
 const planError = ref('')
-const planOptions = [
-  { id: 'lite', name: 'Lite', price_monthly: 15000000 },
-  { id: 'pro', name: 'Pro', price_monthly: 45000000 },
-  { id: 'ultimate', name: 'Ultimate', price_monthly: 150000000 },
-]
+const planOptions = ref<any[]>([])
 
 // ── Voucher Generation ────────────────────────────────────────────────────────
 const showGenerateVoucherModal = ref(false)
@@ -955,17 +961,37 @@ const voucherListFilter = ref({ used: '', plan_id: '' })
 const generatedVoucherCodes = ref<any[]>([])
 const deletingVoucherId = ref<string | null>(null)
 
-const openGenerateVoucher = () => {
+const openGenerateVoucher = async () => {
   voucherError.value = ''
   generatedVoucherCodes.value = []
   voucherForm.value = { program_name: '', plan_id: '', quantity: 10, validity_days: 30, max_uses: null }
   showGenerateVoucherModal.value = true
+  // Fetch latest plan prices from backend
+  try {
+    const data = await superadminApi.getPlans()
+    const plans = data.data || (data.success && data.data)
+    if (plans && Array.isArray(plans)) {
+      planOptions.value = plans
+    }
+  } catch (e) {
+    console.error('Failed to fetch plan options', e)
+  }
 }
 
-const openVoucherList = () => {
+const openVoucherList = async () => {
   voucherListFilter.value = { used: '', plan_id: '' }
   fetchVoucherList()
   showVoucherListModal.value = true
+  // Fetch latest plan prices from backend
+  try {
+    const data = await superadminApi.getPlans()
+    const plans = data.data || (data.success && data.data)
+    if (plans && Array.isArray(plans)) {
+      planOptions.value = plans
+    }
+  } catch (e) {
+    console.error('Failed to fetch plan options', e)
+  }
 }
 
 const executeGenerateVoucher = async () => {
@@ -990,6 +1016,15 @@ const executeGenerateVoucher = async () => {
     voucherError.value = 'Kesalahan jaringan'
   } finally {
     generatingVoucher.value = false
+  }
+}
+
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    showToast('Kode voucher berhasil disalin!', 'success')
+  } catch {
+    showToast('Gagal menyalin kode voucher', 'error')
   }
 }
 
@@ -1137,10 +1172,20 @@ const saveNewTenant = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   checkVerifierStatus()
   fetchTenants()
   loadMyProfile()
+  // Load plan options for dropdowns
+  try {
+    const data = await superadminApi.getPlans()
+    const plans = data.data || (data.success && data.data)
+    if (plans && Array.isArray(plans)) {
+      planOptions.value = plans
+    }
+  } catch (e) {
+    console.error('Failed to fetch plan options', e)
+  }
 })
 </script>
 

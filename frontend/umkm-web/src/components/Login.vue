@@ -9,29 +9,46 @@
 
     <div class="auth-form-side">
       <div class="auth-form-wrapper glass-card animate-fade-in">
-        <div style="margin-bottom: 2rem; display: flex; flex-direction: column; align-items: center; text-align: center;">
-          <img v-if="logoUrl" :src="API_BASE + logoUrl" alt="Logo" style="max-height: 80px; margin-bottom: 1rem; border-radius: var(--radius-sm);" />
-          <h2 style="margin: 0; margin-bottom: 0.5rem;">{{ businessName === 'WCH UMKM' ? 'Selamat Datang Kembali' : 'Selamat Datang di ' + businessName }}</h2>
+        <div
+          style="margin-bottom: 2rem; display: flex; flex-direction: column; align-items: center; text-align: center;">
+          <img v-if="logoUrl" :src="API_BASE + logoUrl" alt="Logo"
+            style="max-height: 80px; margin-bottom: 1rem; border-radius: var(--radius-sm);" />
+          <h2 style="margin: 0; margin-bottom: 0.5rem;">{{ businessName === 'WCH UMKM' ? 'Selamat Datang Kembali' :
+            'Selamat Datang di ' + businessName }}</h2>
           <p class="text-muted">Masuk ke dashboard keuangan Anda</p>
         </div>
 
         <div class="login-tabs">
           <button :class="['tab-btn', { active: loginMode === 'wa' }]" @click="loginMode = 'wa'">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21"/><path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1Zm0 0a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2">
+              <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
+              <path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1Zm0 0a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1" />
+            </svg>
             WhatsApp
           </button>
           <button :class="['tab-btn', { active: loginMode === 'telegram' }]" @click="loginMode = 'telegram'">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2.5 2.5 10.5 10 14l3-10 8.5-1.5Z"/><path d="M10 14v6.5l4-3"/><path d="m2.5 10.5 19-8"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2">
+              <path d="M21.5 2.5 2.5 10.5 10 14l3-10 8.5-1.5Z" />
+              <path d="M10 14v6.5l4-3" />
+              <path d="m2.5 10.5 19-8" />
+            </svg>
             Telegram
           </button>
           <button :class="['tab-btn', { active: loginMode === 'password' }]" @click="loginMode = 'password'">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
             Password
           </button>
         </div>
 
         <!-- WA Login Form -->
-        <form v-if="loginMode === 'wa'" @submit.prevent="phoneStep === 'input' ? handlePhoneLogin() : handleVerifyPhoneLogin()">
+        <form v-if="loginMode === 'wa'"
+          @submit.prevent="phoneStep === 'input' ? handlePhoneLogin() : handleVerifyPhoneLogin()">
           <div v-if="phoneStep === 'input'" class="form-group">
             <label>Nomor WhatsApp</label>
             <input v-model="phoneNumber" type="text" class="form-control" placeholder="Contoh: 081234567890" required />
@@ -39,7 +56,8 @@
 
           <div v-if="phoneStep === 'verify'" class="form-group">
             <label>Kode OTP (dikirim ke {{ phoneNumber }})</label>
-            <input v-model="phoneOTP" type="text" class="form-control" placeholder="Masukkan 6 digit OTP" maxlength="6" required />
+            <input v-model="phoneOTP" type="text" class="form-control" placeholder="Masukkan 6 digit OTP" maxlength="6"
+              required />
             <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">
               <a href="#" @click.prevent="phoneStep = 'input'" style="color: var(--accent-primary);">Ganti nomor</a>
             </p>
@@ -51,12 +69,14 @@
         </form>
 
         <!-- Telegram Login Form -->
-        <form v-if="loginMode === 'telegram'" @submit.prevent="telegramStep === 'input' ? handleTelegramLogin() : handleTelegramVerifyLogin()">
+        <form v-if="loginMode === 'telegram'"
+          @submit.prevent="telegramStep === 'input' ? handleTelegramLogin() : handleTelegramVerifyLogin()">
           <div v-if="telegramStep === 'input'" class="form-group">
             <label>Chat ID Telegram</label>
             <input v-model="telegramChatId" type="text" class="form-control" placeholder="cth: 123456789" required />
             <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-              Chat bot kami di <a href="https://t.me/WCHBot" target="_blank" style="color: var(--accent-primary);">@WCHBot</a> — kirim /start untuk dapat Chat ID
+              Chat bot kami di <a href="https://t.me/WCHBot" target="_blank"
+                style="color: var(--accent-primary);">@core_tesbot</a> — kirim /start untuk dapat Chat ID
             </p>
           </div>
 
@@ -67,14 +87,17 @@
 
           <div v-if="telegramStep === 'verify'" class="form-group">
             <label>Kode OTP (dikirim ke Telegram Anda)</label>
-            <input v-model="telegramOTP" type="text" class="form-control" placeholder="Masukkan 6 digit OTP" maxlength="6" required />
+            <input v-model="telegramOTP" type="text" class="form-control" placeholder="Masukkan 6 digit OTP"
+              maxlength="6" required />
             <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">
-              <a href="#" @click.prevent="telegramStep = 'input'" style="color: var(--accent-primary);">Ganti Chat ID / nomor</a>
+              <a href="#" @click.prevent="telegramStep = 'input'" style="color: var(--accent-primary);">Ganti Chat ID /
+                nomor</a>
             </p>
           </div>
 
           <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;" :disabled="loading">
-            {{ loading ? 'Memproses...' : (telegramStep === 'input' ? 'Kirim OTP via Telegram' : 'Verifikasi & Masuk') }}
+            {{ loading ? 'Memproses...' : (telegramStep === 'input' ? 'Kirim OTP via Telegram' : 'Verifikasi & Masuk')
+            }}
           </button>
         </form>
 
@@ -395,6 +418,7 @@ const handleLogin = async () => {
   .auth-form-side {
     padding: 2rem;
   }
+
   .auth-form-wrapper {
     padding: 2rem;
     max-width: 480px;
@@ -455,7 +479,7 @@ const handleLogin = async () => {
 .tab-btn.active {
   background: var(--surface-0);
   color: var(--accent-primary);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .tab-btn:hover:not(.active) {
@@ -466,6 +490,7 @@ const handleLogin = async () => {
   .auth-split-container {
     border-radius: 0;
   }
+
   .tab-btn svg {
     display: none;
   }
