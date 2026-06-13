@@ -730,24 +730,26 @@ func handleRedeemVoucher(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Lookup voucher
+	// Lookup voucher — include validity_days from code row (set at generate time)
 	var programID, programName, voucherType string
-	var discountValue, durationMonths int
+	var discountValue, programDurationMonths int
 	var targetPlanID *string
 	var expiresAt *time.Time
 	var maxUses, usesCount int
+	var codeValidityDays int
 
 	err := DB.QueryRow(ctx, `
 		SELECT vp.id, vp.name, vp.voucher_type, vp.discount_value, vp.duration_months,
-		       vp.target_plan_id, vp.expires_at, vp.max_uses, vp.uses_count
+		       vp.target_plan_id, vp.expires_at, vp.max_uses, vp.uses_count,
+		       vc.validity_days
 		FROM voucher_programs vp
 		JOIN voucher_codes vc ON vc.program_id = vp.id
 		WHERE vc.code = $1 AND vc.is_redeemed = false
 		  AND vp.is_active = true
 		  AND (vp.expires_at IS NULL OR vp.expires_at > NOW())
 		LIMIT 1
-	`, req.Code).Scan(&programID, &programName, &voucherType, &discountValue, &durationMonths,
-		&targetPlanID, &expiresAt, &maxUses, &usesCount)
+	`, req.Code).Scan(&programID, &programName, &voucherType, &discountValue, &programDurationMonths,
+		&targetPlanID, &expiresAt, &maxUses, &usesCount, &codeValidityDays)
 
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, "Voucher invalid or already used", nil)
@@ -772,8 +774,6 @@ func handleRedeemVoucher(w http.ResponseWriter, r *http.Request) {
 
 	// Activate subscription based on voucher type
 	amountToCharge := priceMonthly
-	effectiveMonths := durationMonths
-
 	switch voucherType {
 	case "free_months":
 		amountToCharge = 0
@@ -795,15 +795,15 @@ func handleRedeemVoucher(w http.ResponseWriter, r *http.Request) {
 	// Increment usage count
 	_, _ = DB.Exec(ctx, `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`, programID)
 
-	// Activate subscription (effectiveMonths is months → convert to days)
-	ticketID := activateSubscription(ctx, tenantID, planID, planName, effectiveMonths*30, "voucher", nil, "")
+	// Activate subscription — use validity_days from the code row (set at generate time)
+	ticketID := activateSubscription(ctx, tenantID, planID, planName, codeValidityDays, "voucher", nil, "")
 
 	response.JSON(w, http.StatusOK, "Voucher redeemed successfully", map[string]interface{}{
 		"program_name":    programName,
 		"voucher_type":    voucherType,
 		"discount_value":  discountValue,
 		"target_plan":     planName,
-		"duration_months": effectiveMonths,
+		"validity_days":   codeValidityDays,
 		"amount_charged":  amountToCharge,
 		"ticket_id":       ticketID,
 	})
@@ -2543,9 +2543,9 @@ func handleAdminGenerateVouchers(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < req.Quantity; i++ {
 		code := generateVoucherCode(req.PlanID, uuid.NewString()[:8])
 		_, err := DB.Exec(ctx, `
-			INSERT INTO voucher_codes (program_id, code, is_redeemed, created_at)
-			VALUES ($1, $2, false, NOW())
-		`, programID, code)
+			INSERT INTO voucher_codes (program_id, code, is_redeemed, validity_days, created_at)
+			VALUES ($1, $2, false, $3, NOW())
+		`, programID, code, req.ValidityDays)
 		if err != nil {
 			slog.Warn("Failed to create voucher code", "error", err)
 			continue
