@@ -17,6 +17,7 @@ import ResetPassword from '../components/ResetPassword.vue'
 import Automations from '../components/Automations.vue'
 import ChatbotConfig from '../components/ChatbotConfig.vue'
 import DataTransfer from '../components/DataTransfer.vue'
+import Reports from '../components/Reports.vue'
 
 const routes = [
   { path: '/', component: DynamicDashboard, name: 'Dashboard' },
@@ -24,6 +25,7 @@ const routes = [
   { path: '/dashboard-classic', component: Dashboard, name: 'DashboardClassic' },
   { path: '/onboarding', component: Onboarding, name: 'Onboarding' },
   { path: '/journal', component: Journal, name: 'Journal' },
+  { path: '/reports', component: Reports, name: 'Reports' },
   { path: '/catalog', component: ProductCatalog, name: 'ProductCatalog' },
   { path: '/pos', component: POS, name: 'POS' },
   { path: '/superadmin', component: SuperAdminDashboard, name: 'SuperAdminDashboard' },
