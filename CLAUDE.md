@@ -502,6 +502,12 @@ Card "Voucher Billing" di `frontend/umkm-web/src/components/SuperAdminDashboard.
 **API Methods (`superadminApi.ts`):**
 - `generateVouchers({ plan_id, validity_days, quantity, program_name?, max_uses? })` → returns `{plan_id, validity_days, count, codes: [{code, days}]}`
 - `listVouchers({ plan_id?, used?, limit? })` → returns `{total, used, unused, codes: [...]}`
+- `deleteVoucher(id)` → `DELETE /api/superadmin/billing/vouchers?id=...` — hanya unused vouchers
+
+**Delete Voucher (Button Hapus):**
+- Muncul di tabel Daftar Voucher untuk setiap voucher yang belum terpakai (`is_redeemed = false`)
+- Konfirmasi dialog sebelum hapus, lalu `DELETE /admin/vouchers?id=<id>` di billing-service
+- Backend validasi: hanya superadmin, hanya unused vouchers (redeemed → 400 error), 404 jika tidak ditemukan
 
 **Routing:** `/api/superadmin/billing/` → strips prefix → proxies ke billing-service:8003 `/admin`
 

@@ -595,9 +595,12 @@ User sampai modal activation
   - Response: `{ plan_id, validity_days, count, codes: [{code, days}] }`
 - `GET /admin/vouchers` — list semua voucher (filter: used/unused, plan_id, program)
   - Response: `{ total, used, unused, codes: [{id, code, program_name, is_redeemed, used_by, used_at, created_at, target_plan}] }`
+- `DELETE /admin/vouchers?id=<voucher_id>` — hapus voucher yang belum terpakai
+  - Hanya bisa menghapus voucher dengan `is_redeemed = false` (redeemed → 400)
+  - Response sukses: `{ status: 200, message: "Voucher deleted successfully" }`
 - `GET /admin/tenants/{id}/vouchers` — list voucher aktif per tenant (untuk melihat masa aktif)
 - **UI:** Card "Voucher Billing" di `SuperAdminDashboard.vue` memiliki:
-  - Tombol "Lihat Daftar" di header card → buka modal daftar voucher (tabel filterable)
+  - Tombol "Lihat Daftar" di header card → buka modal daftar voucher (tabel filterable + tombol **🗑 Hapus** untuk unused vouchers)
   - Tombol "Generate Voucher" → buka modal generate (input: program name, paket, jumlah, masa aktif) → tampilkan semua kode yang di-generate + Download CSV + Copy per kode
 
 ### WhatsApp Notification (Activation)
@@ -623,6 +626,7 @@ User sampai modal activation
 - [x] AC-7: Redeem voucher plan berbeda → buat voucher baru, priority tetap plan tertinggi
 - [x] AC-8: Superadmin bisa generate N voucher codes sekaligus via API
 - [x] AC-9: Superadmin bisa lihat voucher aktif per tenant
+- [x] AC-10: Superadmin bisa hapus voucher yang belum terpakai via button Hapus di daftar voucher
 
 **Files yang perlu diubah:**
 - `frontend/umkm-web/src/components/Onboarding.vue` — hapus gate di step 1 & 2, tambah modal activation

@@ -330,7 +330,7 @@ func main() {
 
 	// Superadmin batch voucher codes (F015)
 	mux.Handle("/admin/vouchers/generate", auth.Middleware(http.HandlerFunc(handleAdminGenerateVouchers)))
-	mux.Handle("/admin/vouchers", auth.Middleware(http.HandlerFunc(handleAdminListVouchers)))
+	mux.Handle("/admin/vouchers", auth.Middleware(http.HandlerFunc(handleAdminVouchers)))
 	mux.Handle("/admin/tenants/", auth.Middleware(http.HandlerFunc(handleAdminTenantItem)))
 
 	// Cleanup expired pending subscriptions (F015)
@@ -2572,6 +2572,21 @@ func handleAdminGenerateVouchers(w http.ResponseWriter, r *http.Request) {
 }
 
 // ─────────────────────────────────────────────
+// Superadmin: Voucher Codes (GET list / DELETE remove)
+// ─────────────────────────────────────────────
+
+func handleAdminVouchers(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		handleAdminListVouchers(w, r)
+	case http.MethodDelete:
+		handleAdminDeleteVoucher(w, r)
+	default:
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	}
+}
+
+// ─────────────────────────────────────────────
 // Superadmin: List All Voucher Codes (F015)
 // GET /admin/vouchers?plan_id=&used=&limit=
 // ─────────────────────────────────────────────
@@ -2653,6 +2668,51 @@ func handleAdminListVouchers(w http.ResponseWriter, r *http.Request) {
 		"unused": unused,
 		"codes":  out,
 	})
+}
+
+// ─────────────────────────────────────────────
+// Superadmin: Delete Voucher Code
+// DELETE /admin/vouchers?id=<voucher_id>
+// Only unused vouchers can be deleted
+// ─────────────────────────────────────────────
+
+func handleAdminDeleteVoucher(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+	if r.Method != http.MethodDelete {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+
+	voucherID := r.URL.Query().Get("id")
+	if voucherID == "" {
+		response.Error(w, http.StatusBadRequest, "Missing voucher id", nil)
+		return
+	}
+
+	ctx := r.Context()
+
+	var isRedeemed bool
+	err := DB.QueryRow(ctx, `SELECT is_redeemed FROM voucher_codes WHERE id = $1`, voucherID).Scan(&isRedeemed)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "Voucher not found", err)
+		return
+	}
+	if isRedeemed {
+		response.Error(w, http.StatusBadRequest, "Cannot delete a voucher that has already been used", nil)
+		return
+	}
+
+	_, err = DB.Exec(ctx, `DELETE FROM voucher_codes WHERE id = $1 AND is_redeemed = false`, voucherID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to delete voucher", err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "Voucher deleted successfully", nil)
 }
 
 // ─────────────────────────────────────────────

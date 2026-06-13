@@ -171,4 +171,11 @@ export const superadminApi = {
     return res.json()
   },
 
+  async deleteVoucher(id: string) {
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/vouchers?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+    return res.json()
+  },
+
 }

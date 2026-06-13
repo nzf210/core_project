@@ -464,6 +464,7 @@
                 <th>Status</th>
                 <th>Digunakan Oleh</th>
                 <th>Tanggal</th>
+                <th>Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -479,6 +480,18 @@
                 <td style="font-size: 0.8rem;">{{ v.used_by || '-' }}</td>
                 <td style="font-size: 0.75rem; color: var(--text-secondary);">
                   {{ v.created_at ? new Date(v.created_at).toLocaleDateString('id-ID') : '-' }}
+                </td>
+                <td>
+                  <button
+                    v-if="!v.is_redeemed"
+                    class="btn btn-danger"
+                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem;"
+                    @click="deleteVoucher(v.id, v.code)"
+                    :disabled="deletingVoucherId === v.id"
+                  >
+                    {{ deletingVoucherId === v.id ? '...' : '🗑 Hapus' }}
+                  </button>
+                  <span v-else style="font-size: 0.7rem; color: var(--text-muted);">-</span>
                 </td>
               </tr>
             </tbody>
@@ -940,6 +953,7 @@ const voucherList = ref<any[]>([])
 const loadingVoucherList = ref(false)
 const voucherListFilter = ref({ used: '', plan_id: '' })
 const generatedVoucherCodes = ref<any[]>([])
+const deletingVoucherId = ref<string | null>(null)
 
 const openGenerateVoucher = () => {
   voucherError.value = ''
@@ -976,6 +990,24 @@ const executeGenerateVoucher = async () => {
     voucherError.value = 'Kesalahan jaringan'
   } finally {
     generatingVoucher.value = false
+  }
+}
+
+const deleteVoucher = async (id: string, code: string) => {
+  if (!confirm(`Hapus voucher "${code}"? Voucher yang belum terpakai akan dihapus permanen.`)) return
+  deletingVoucherId.value = id
+  try {
+    const data = await superadminApi.deleteVoucher(id)
+    if (data.success || data.status === 200) {
+      voucherList.value = voucherList.value.filter(v => v.id !== id)
+      showToast(`Voucher ${code} berhasil dihapus`, 'success')
+    } else {
+      showToast(data.message || 'Gagal menghapus voucher', 'error')
+    }
+  } catch (e) {
+    showToast('Kesalahan jaringan', 'error')
+  } finally {
+    deletingVoucherId.value = null
   }
 }
 
