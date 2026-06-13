@@ -271,12 +271,11 @@ export const api = {
     return res.json()
   },
 
-  // WA Gateway
+  // WA Gateway (via API Gateway)
   async wa(method: string, body?: Record<string, any>) {
-    const waGateway = import.meta.env.VITE_WA_GATEWAY_URL || 'http://localhost:8202'
-    const res = await fetch(`${waGateway}/api/wa/${method}`, {
+    const res = await fetch(`${API_BASE}/api/wa/${method}`, {
       method: body ? 'POST' : 'GET',
-      headers: body ? { 'Content-Type': 'application/json' } : {},
+      headers: headers(),
       body: body ? JSON.stringify(body) : undefined,
     })
     return res.json()

@@ -81,6 +81,7 @@ func main() {
 	mux.Handle("/api/ai/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(auth.RequireFeature("ai")(http.StripPrefix("/api/ai", newTenantProxy(getTarget("ai-gateway", "8002"))))))))
 	mux.Handle("/api/umkm/business/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/umkm/business", newTenantProxy(getTarget("umkm-business", "9005"))))))
 	mux.Handle("/api/umkm/automation/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/umkm/automation", newTenantProxy(getTarget("umkm-automation", "8203"))))))
+	mux.Handle("/api/umkm/chat", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/umkm", newTenantProxy(getTarget("umkm-chatbot", "8203")))))))
 	mux.Handle("/api/umkm/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/umkm", newTenantProxy(getTarget("umkm-accounting", "8201")))))))
 	mux.Handle("/api/campaign/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/campaign", newTenantProxy(getTarget("campaign-api", "9002")))))))
 	mux.Handle("/api/billing/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/billing", newTenantProxy(getTarget("billing-service", "8003"))))))

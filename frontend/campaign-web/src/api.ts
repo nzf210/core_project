@@ -1,7 +1,7 @@
 const API_GATEWAY_URL = 'http://localhost:8000';
 const CAMPAIGN_API_BASE = `${API_GATEWAY_URL}/api/campaign`;
 const AUTH_BASE = `${API_GATEWAY_URL}/auth`;
-const WA_GATEWAY_URL = 'http://localhost:8202/api/wa';
+const WA_GATEWAY_URL = `${API_GATEWAY_URL}/api/wa`;
 
 async function ensureAuthenticated() {
   let token = localStorage.getItem('accessToken');
@@ -98,10 +98,20 @@ export const publicApi = {
 
 export const waApi = {
   async status(tenantId: string) {
-    return fetch(`${WA_GATEWAY_URL}/status?tenant_id=${tenantId}`);
+    const token = localStorage.getItem('accessToken');
+    const headers = new Headers();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    return fetch(`${WA_GATEWAY_URL}/status?tenant_id=${tenantId}`, { headers });
   },
 
   async qr(tenantId: string) {
-    return fetch(`${WA_GATEWAY_URL}/qr?tenant_id=${tenantId}`);
+    const token = localStorage.getItem('accessToken');
+    const headers = new Headers();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    return fetch(`${WA_GATEWAY_URL}/qr?tenant_id=${tenantId}`, { headers });
   }
 };

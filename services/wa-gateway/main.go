@@ -34,9 +34,9 @@ import (
 
 // Redis key prefixes
 const (
-	sessionLockPrefix    = "wa:lock:"      // Distributed lock per tenant
-	sessionOwnerPrefix   = "wa:owner:"     // Which instance owns the session
-	sessionTTL           = 5 * time.Minute // Lock TTL
+	sessionLockPrefix    = "wa:lock:"       // Distributed lock per tenant
+	sessionOwnerPrefix   = "wa:owner:"      // Which instance owns the session
+	sessionTTL           = 5 * time.Minute  // Lock TTL
 	instanceHeartbeatKey = "wa:instance:%s" // This instance's heartbeat
 )
 
@@ -58,15 +58,15 @@ var (
 	instanceID  string
 
 	// Postgres connection
-	db     *sql.DB
-	dbURI  string
+	db    *sql.DB
+	dbURI string
 
 	// Rate limiter for whatsmeow messages (per-tenant token bucket)
 	rateLimiter = NewTenantRateLimiter(5) // 5 messages per minute per tenant
 
 	// Reconnect backoff state
 	reconnectMu       sync.Mutex
-	reconnectAttempts = make(map[string]int)     // tenant_id → attempt count
+	reconnectAttempts = make(map[string]int)       // tenant_id → attempt count
 	reconnectBackoff  = make(map[string]time.Time) // tenant_id → last reconnect time
 )
 
@@ -240,29 +240,47 @@ func routeToCloudAPI(tenantID, target, message, msgType string) (string, error) 
 
 func getDBURI() string {
 	user := os.Getenv("DB_USER")
-	if user == "" { user = "postgres" }
+	if user == "" {
+		user = "postgres"
+	}
 	pass := os.Getenv("DB_PASSWORD")
-	if pass == "" { pass = "postgres" }
+	if pass == "" {
+		pass = "postgres"
+	}
 	host := os.Getenv("DB_HOST")
-	if host == "" { host = "localhost" }
+	if host == "" {
+		host = "localhost"
+	}
 	port := os.Getenv("DB_PORT")
-	if port == "" { port = "5433" }
+	if port == "" {
+		port = "5433"
+	}
 	dbname := os.Getenv("DB_NAME")
-	if dbname == "" { dbname = "wch_core" }
+	if dbname == "" {
+		dbname = "wch_core"
+	}
 	sslmode := os.Getenv("DB_SSLMODE")
-	if sslmode == "" { sslmode = "disable" }
+	if sslmode == "" {
+		sslmode = "disable"
+	}
 
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", user, pass, host, port, dbname, sslmode)
 }
 
 func initRedis() *redis.Client {
 	redisHost := os.Getenv("REDIS_HOST")
-	if redisHost == "" { redisHost = "localhost" }
+	if redisHost == "" {
+		redisHost = "localhost"
+	}
 	redisPort := os.Getenv("REDIS_PORT")
-	if redisPort == "" { redisPort = "6379" }
+	if redisPort == "" {
+		redisPort = "6379"
+	}
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 	redisDB := os.Getenv("REDIS_DB")
-	if redisDB == "" { redisDB = "0" }
+	if redisDB == "" {
+		redisDB = "0"
+	}
 
 	client := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%s", redisHost, redisPort),
@@ -406,11 +424,11 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":         "ok",
-		"instance_id":    instanceID,
+		"status":             "ok",
+		"instance_id":        instanceID,
 		"connected_sessions": connected,
-		"redis":          redisStatus,
-		"database":       dbStatus,
+		"redis":              redisStatus,
+		"database":           dbStatus,
 	})
 }
 
@@ -558,7 +576,7 @@ func main() {
 	port := ":8202"
 	log.Printf("WA Gateway running on port %s (instance: %s)", port, instanceID)
 	log.Printf("Active WhatsApp sessions: %d", len(clientMap))
-	log.Fatal(http.ListenAndServe(port, nil))
+	log.Fatal(http.ListenAndServe(port, corsMiddleware(http.DefaultServeMux)))
 }
 
 // wrapWithCORS wraps an http.Handler with CORS headers
@@ -583,7 +601,7 @@ func restoreSessions(ctx context.Context, container *sqlstore.Container) {
 
 	// Add jitter delay to avoid race condition between replicas
 	// First instance gets a short delay, second gets longer
-	delayMs := 1000 + (time.Now().UnixNano()%3000)
+	delayMs := 1000 + (time.Now().UnixNano() % 3000)
 	time.Sleep(time.Duration(delayMs) * time.Millisecond)
 
 	rows, err := db.Query(`SELECT tenant_id, jid FROM wa_tenant_sessions`)
@@ -623,7 +641,7 @@ func restoreSessions(ctx context.Context, container *sqlstore.Container) {
 	}
 }
 
-func setupRoutes(ctx context.Context, container *sqlstore.Container) {
+func setupRoutes(_ context.Context, container *sqlstore.Container) {
 	// Health endpoints
 	http.HandleFunc("/health", handleHealth)
 	http.HandleFunc("/healthz", handleHealthz)
@@ -765,7 +783,7 @@ func setupRoutes(ctx context.Context, container *sqlstore.Container) {
 					return
 				}
 			}
-			
+
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "disconnected",
@@ -948,7 +966,15 @@ func eventHandler(tenantID string, evt interface{}) {
 		}
 		jsonBody, _ := json.Marshal(payload)
 
-		webhookURL := "http://umkm-chatbot:8202/webhook/wa?tenant_id=" + tenantID
+		chatbotURL := os.Getenv("CHATBOT_URL")
+		if chatbotURL == "" {
+			if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+				chatbotURL = "http://umkm-chatbot:8203"
+			} else {
+				chatbotURL = "http://localhost:8203"
+			}
+		}
+		webhookURL := chatbotURL + "/webhook/wa?tenant_id=" + tenantID
 		resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonBody))
 		if err != nil {
 			log.Printf("Failed to forward message to chatbot: %v", err)
