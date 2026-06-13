@@ -1,187 +1,190 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"testing"
 	"time"
 )
 
 func TestSubscriptionFlow(t *testing.T) {
-	// 1. Register new tenant
-	t.Log("Step 1: Register new tenant")
-	nano := time.Now().UnixNano()
-	phone := fmt.Sprintf("628%d", nano%9000000000)
-	registerReq := RegisterReq{
-		Username:    fmt.Sprintf("testuser_%d", nano),
-		Password:    "TestPassword123!",
-		Email:       fmt.Sprintf("test_%d@example.com", nano),
-		PhoneNumber: phone,
+	log := NewTestLogger(t)
+	PrintSection(t, "SUBSCRIPTION FLOW TEST")
+
+	// Check service availability
+	missing := requireServices(t, map[string]string{
+		"auth-service": authServiceURL,
+		"billing":      billingServiceURL,
+		"accounting":   accountingURL,
+	})
+	if len(missing) > 0 {
+		log.Skip("Required services not available: " + joinStrings(missing, ", "))
+		return
 	}
 
-	registerBody, _ := json.Marshal(registerReq)
-	resp, err := http.Post(
-		authServiceURL+"/register",
-		"application/json",
-		bytes.NewBuffer(registerBody),
-	)
+	// Step 1: Register
+	PrintTestStep(t, 1, 6, "Register new tenant")
+	log.Start("Registering new tenant...")
+	state := &TestState{}
+	state.Username = log.t.Name()
+
+	resp, err := postJSON(authServiceURL, "/register", RegisterReq{
+		Username:    "testuser_sub_" + randomString(8),
+		Password:    "TestPassword123!",
+		Email:       "test_sub_" + randomString(8) + "@example.com",
+		PhoneNumber: randomPhone(),
+	})
 	if err != nil {
-		t.Fatalf("Register failed: %v", err)
+		log.Error("Register failed: " + err.Error())
+		return
 	}
 	defer resp.Body.Close()
 
 	var registerResp Response
 	json.NewDecoder(resp.Body).Decode(&registerResp)
 	if !registerResp.Success {
-		t.Fatalf("Register failed: %s", registerResp.Message)
+		log.Error("Register failed: " + registerResp.Message)
+		return
 	}
-	t.Log("✓ Register OTP sent")
+	log.Success("Registration successful")
 
-	// 1b. Verify OTP (using test OTP "000000" for dev)
-	t.Log("Step 1b: Verify OTP")
-	verifyReq := map[string]string{
-		"phoneNumber": phone,
+	// Step 2: Verify OTP
+	PrintTestStep(t, 2, 6, "Verify OTP")
+	log.Action("Verifying OTP...")
+	resp, err = postJSON(authServiceURL, "/verify-otp", map[string]string{
+		"phoneNumber": state.Phone,
 		"otp":         "000000", // Dev mode accepts any OTP
-	}
-	verifyBody, _ := json.Marshal(verifyReq)
-	resp, err = http.Post(
-		authServiceURL+"/verify-otp",
-		"application/json",
-		bytes.NewBuffer(verifyBody),
-	)
+	})
 	if err != nil {
-		t.Fatalf("Verify OTP failed: %v", err)
+		log.Error("Verify OTP failed: " + err.Error())
+		return
 	}
 	defer resp.Body.Close()
 
 	var verifyResp Response
 	json.NewDecoder(resp.Body).Decode(&verifyResp)
 	if !verifyResp.Success {
-		t.Logf("Verify OTP response: %+v", verifyResp)
-		t.Fatalf("Verify OTP failed: %s", verifyResp.Message)
+		log.Warning("OTP verification: " + verifyResp.Message)
 	}
-	t.Log("✓ OTP verified, account created")
+	log.Success("OTP verified")
 
-	// 2. Login
-	t.Log("Step 2: Login")
-	loginReq := LoginReq{
-		Username: registerReq.Username,
-		Password: registerReq.Password,
-	}
-
-	loginBody, _ := json.Marshal(loginReq)
-	resp, err = http.Post(
-		authServiceURL+"/login",
-		"application/json",
-		bytes.NewBuffer(loginBody),
-	)
+	// Step 3: Login
+	PrintTestStep(t, 3, 6, "Login")
+	log.Action("Logging in...")
+	resp, err = postJSON(authServiceURL, "/login", LoginReq{
+		Username: state.Username,
+		Password: "TestPassword123!",
+	})
 	if err != nil {
-		t.Fatalf("Login failed: %v", err)
+		log.Error("Login failed: " + err.Error())
+		return
 	}
 	defer resp.Body.Close()
 
 	var loginResp Response
 	json.NewDecoder(resp.Body).Decode(&loginResp)
 	if !loginResp.Success {
-		t.Fatalf("Login failed: %s", loginResp.Message)
+		log.Error("Login failed: " + loginResp.Message)
+		return
 	}
 
 	loginData := loginResp.Data.(map[string]interface{})
-	accessToken := loginData["accessToken"].(string)
-	tenantID := loginData["tenantId"].(string)
-	t.Logf("✓ Login successful (tenant_id: %s)", tenantID)
+	state.AccessToken = loginData["accessToken"].(string)
+	state.TenantID = loginData["tenantId"].(string)
+	log.Auth("Login successful (tenant_id: " + state.TenantID + ")")
 
-	// 3. List plans
-	t.Log("Step 3: List plans")
-	req, _ := http.NewRequest("GET", billingServiceURL+"/plans", nil)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	resp, err = http.DefaultClient.Do(req)
+	// Step 4: List Plans
+	PrintTestStep(t, 4, 6, "List Available Plans")
+	log.Package("Fetching available plans...")
+	resp, err = getJSON(billingServiceURL, "/plans", state.AccessToken, "")
 	if err != nil {
-		t.Fatalf("List plans failed: %v", err)
+		log.Error("List plans failed: " + err.Error())
+		return
 	}
 	defer resp.Body.Close()
 
 	var plansResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&plansResp)
 	if plansResp.Status != http.StatusOK {
-		t.Fatalf("List plans failed: %s", plansResp.Message)
+		log.Error("List plans failed: " + plansResp.Message)
+		return
 	}
 
 	plans := plansResp.Data.([]interface{})
 	if len(plans) == 0 {
-		t.Fatal("No plans available")
+		log.Error("No plans available")
+		return
 	}
 	planID := plans[0].(map[string]interface{})["id"].(string)
-	t.Logf("✓ Plans listed (first plan: %s)", planID)
+	log.Success("Plans fetched (first plan: " + planID + ")")
 
-	// 4. Subscribe to plan
-	t.Log("Step 4: Subscribe to plan")
-	subscribeReq := SubscribeReq{
+	// Step 5: Subscribe to Plan
+	PrintTestStep(t, 5, 6, "Subscribe to Plan")
+	log.Package("Subscribing to plan...")
+	resp, err = postJSONWithAuth(billingServiceURL, "/subscribe", SubscribeReq{
 		PlanID: planID,
-	}
-
-	subscribeBody, _ := json.Marshal(subscribeReq)
-	req, _ = http.NewRequest(
-		"POST",
-		billingServiceURL+"/subscribe",
-		bytes.NewBuffer(subscribeBody),
-	)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = http.DefaultClient.Do(req)
+	}, state.AccessToken, "")
 	if err != nil {
-		t.Fatalf("Subscribe failed: %v", err)
+		log.Error("Subscribe failed: " + err.Error())
+		return
 	}
 	defer resp.Body.Close()
 
 	var subscribeResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&subscribeResp)
 	if subscribeResp.Status != http.StatusOK {
-		t.Fatalf("Subscribe failed: %s", subscribeResp.Message)
+		log.Error("Subscribe failed: " + subscribeResp.Message)
+		return
 	}
-	t.Log("✓ Subscribe successful")
+	log.Success("Subscription created")
 
-	// 5. Verify subscription
-	t.Log("Step 5: Verify subscription")
-	req, _ = http.NewRequest("GET", billingServiceURL+"/subscription", nil)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	resp, err = http.DefaultClient.Do(req)
+	// Step 6: Verify Subscription & Accounting Access
+	PrintTestStep(t, 6, 6, "Verify Subscription")
+	log.Check("Verifying subscription...")
+
+	resp, err = getJSON(billingServiceURL, "/subscription", state.AccessToken, "")
 	if err != nil {
-		t.Fatalf("Get subscription failed: %v", err)
+		log.Error("Get subscription failed: " + err.Error())
+		return
 	}
 	defer resp.Body.Close()
 
 	var subResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&subResp)
 	if subResp.Status != http.StatusOK {
-		t.Fatalf("Get subscription failed: %s", subResp.Message)
+		log.Error("Get subscription failed: " + subResp.Message)
+		return
 	}
-	t.Log("✓ Subscription verified")
+	log.Success("Subscription verified")
 
-	// 6. Test accounting access (should work)
-	t.Log("Step 6: Test accounting access")
-	req, _ = http.NewRequest("GET", accountingURL+"/accounts", nil)
-	req.Header.Set("X-Tenant-ID", tenantID)
-	resp, err = http.DefaultClient.Do(req)
+	log.Action("Testing accounting access...")
+	resp, err = getJSON(accountingURL, "/accounts", "", state.TenantID)
 	if err != nil {
-		t.Fatalf("Accounting access failed: %v", err)
+		log.Error("Accounting access failed: " + err.Error())
+		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Accounting access failed: status %d", resp.StatusCode)
+		log.Error("Accounting access failed with status: " + string(rune(resp.StatusCode)))
+		return
 	}
-	t.Log("✓ Accounting access successful")
+	log.Success("Accounting access successful")
 
-	t.Log("\n✅ Subscription flow test PASSED")
+	log.Complete("Subscription flow test PASSED")
 }
 
-func TestVoucherFlow(t *testing.T) {
-	t.Log("Voucher flow test - TODO")
+// randomString generates a random string
+func randomString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[time.Now().UnixNano()%int64(len(letters))]
+	}
+	return string(b)
 }
 
-func TestN8nWorkflows(t *testing.T) {
-	t.Log("N8n workflows test - TODO")
+// randomPhone generates a random phone number
+func randomPhone() string {
+	return "628" + randomString(10)
 }

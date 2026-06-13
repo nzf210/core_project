@@ -898,7 +898,7 @@ func createAdminTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Plan == "" {
-		req.Plan = "free"
+		req.Plan = "lite"
 	}
 
 	ctx := r.Context()

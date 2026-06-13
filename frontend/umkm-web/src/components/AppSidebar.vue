@@ -58,11 +58,11 @@
           <div class="avatar">{{ (businessName || 'U')[0].toUpperCase() }}</div>
           <div v-if="!isCollapsed" class="user-info">
             <span class="business-name">{{ businessName || 'My UMKM' }}</span>
-            <span v-if="plan !== 'free' && plan !== 'inactive'" :class="['plan-chip', `plan-${plan}`]">
+            <span v-if="plan !== 'lite' && plan !== 'inactive'" :class="['plan-chip', `plan-${plan}`]">
               {{ plan.toUpperCase() }}
             </span>
             <span v-else-if="plan === 'inactive'" class="plan-chip plan-inactive">INACTIVE</span>
-            <span v-else class="plan-chip plan-free">FREE</span>
+            <span v-else class="plan-chip plan-lite">LITE</span>
           </div>
         </div>
         <button @click="logout" class="logout-btn" :title="isCollapsed ? 'Keluar' : ''">
@@ -375,10 +375,9 @@ const logout = () => {
   width: fit-content;
 }
 
-.plan-free { background: rgba(100, 116, 139, 0.15); color: #94a3b8; }
 .plan-lite { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
 .plan-pro { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
-.plan-enterprise { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+.plan-ultimate { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
 .plan-inactive { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
 
 .logout-btn {

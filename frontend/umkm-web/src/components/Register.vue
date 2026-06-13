@@ -148,7 +148,7 @@ const formData = ref({
   phone_number: '',
   telegramChatId: '',
   password: '',
-  plan: 'free'
+  plan: 'lite'
 })
 
 const handleRegister = async () => {

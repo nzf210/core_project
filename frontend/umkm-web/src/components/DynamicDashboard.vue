@@ -6,8 +6,8 @@
         <p class="db-subtitle">{{ typeLabel }} · {{ planLabel }} Plan</p>
       </div>
       <div class="db-actions">
-        <span v-if="plan === 'free'" class="quota-badge">{{ quotaUsed }}/{{ quotaLimit }} transaksi</span>
-        <button v-if="plan === 'free'" class="btn btn-upgrade" @click="showUpgrade = true">
+        <span v-if="plan === 'lite'" class="quota-badge">{{ quotaUsed }}/{{ quotaLimit }} transaksi</span>
+        <button v-if="plan === 'lite'" class="btn btn-upgrade" @click="showUpgrade = true">
           Upgrade →
         </button>
         <button class="btn btn-primary" @click="syncData" :disabled="loading">
@@ -17,8 +17,8 @@
     </div>
 
     <div v-if="showUpgrade" class="upgrade-banner">
-      <span>Upgrade ke Lite (Rp 49K/bln) untuk transaksi unlimited & AI Assistant.</span>
-      <button class="btn btn-success" @click="upgradePlan('lite')">Upgrade Sekarang</button>
+      <span>Upgrade ke Pro (Rp 450K/bln) untuk fitur advanced & AI unlimited.</span>
+      <button class="btn btn-success" @click="upgradePlan('pro')">Upgrade Sekarang</button>
       <button class="btn-close" @click="showUpgrade = false">×</button>
     </div>
 
@@ -97,7 +97,7 @@ const router = useRouter()
 
 const businessName = ref('')
 const businessType = ref('umum')
-const plan = ref('free')
+const plan = ref('lite')
 const loading = ref(false)
 const showUpgrade = ref(false)
 const quotaUsed = ref(0)
@@ -114,14 +114,13 @@ const typeLabels: Record<string, string> = {
 }
 
 const planLabels: Record<string, string> = {
-  free: 'Free',
   lite: 'Lite',
   pro: 'Pro',
-  enterprise: 'Enterprise'
+  ultimate: 'Ultimate'
 }
 
 const typeLabel = computed(() => typeLabels[businessType.value] || 'Umum')
-const planLabel = computed(() => planLabels[plan.value] || 'Free')
+const planLabel = computed(() => planLabels[plan.value] || 'Lite')
 
 interface Widget {
   id: string
@@ -241,8 +240,8 @@ const upgradePlan = (targetPlan: string) => {
 onMounted(() => {
   businessType.value = localStorage.getItem('business_type') || 'umum'
   businessName.value = localStorage.getItem('business_name') || ''
-  plan.value = localStorage.getItem('plan') || 'free'
-  quotaLimit.value = plan.value === 'free' ? 100 : plan.value === 'lite' ? 1000 : 10000
+  plan.value = localStorage.getItem('plan') || 'lite'
+  quotaLimit.value = plan.value === 'lite' ? 100 : plan.value === 'pro' ? 1000 : 10000
   syncData()
 })
 </script>

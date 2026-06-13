@@ -54,6 +54,6 @@ WHERE EXISTS (SELECT 1 FROM users WHERE tenant_id = t.id)
 INSERT INTO plan_features (plan_id, feature_key, feature_name, feature_value, is_enabled) VALUES
     ('lite',     'max_stores', 'Jumlah toko maksimum',         '1',     true),
     ('pro',      'max_stores', 'Jumlah toko maksimum',         '1',     true),
-    ('business', 'max_stores', 'Jumlah toko maksimum',         '5',     true)
+    ('ultimate', 'max_stores', 'Jumlah toko maksimum',         '5',     true)
 ON CONFLICT (plan_id, feature_key) DO UPDATE SET
     feature_value = EXCLUDED.feature_value;

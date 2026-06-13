@@ -6,13 +6,13 @@
         <p style="color: var(--text-secondary);">Buat jadwal otomatis untuk laporan, notifikasi stok, dan lainnya.</p>
       </div>
       <div class="flex items-center gap-3">
-        <span class="plan-badge" :class="`plan-${planInfo.plan}`">{{ (planInfo.plan || 'free').toUpperCase() }}</span>
+        <span class="plan-badge" :class="`plan-${planInfo.plan}`">{{ (planInfo.plan || 'lite').toUpperCase() }}</span>
         <span class="usage-counter" v-if="planInfo.limit > 0">{{ planInfo.count }}/{{ planInfo.limit }} digunakan</span>
       </div>
     </div>
 
     <!-- Free Plan Banner -->
-    <div v-if="planInfo.plan === 'free'" class="upgrade-banner glass-card animate-fade-in" style="max-width: 700px;">
+    <div v-if="planInfo.plan === 'lite'" class="upgrade-banner glass-card animate-fade-in" style="max-width: 700px;">
       <div class="upgrade-icon">🔒</div>
       <div>
         <h3 style="margin-bottom: 0.5rem;">Fitur Automasi Terkunci</h3>
@@ -38,7 +38,7 @@
     </div>
 
     <!-- Automations List -->
-    <div v-if="planInfo.plan !== 'free'" style="max-width: 700px;">
+    <div v-if="planInfo.plan !== 'lite'" style="max-width: 700px;">
 
       <!-- Add Button -->
       <button class="btn btn-primary add-automation-btn" @click="showForm = true" v-if="!showForm && planInfo.count < planInfo.limit">
@@ -174,7 +174,7 @@ import { ref, computed, onMounted } from 'vue'
 import { api } from '../api'
 
 const automations = ref<any[]>([])
-const planInfo = ref({ plan: 'free', limit: 0, count: 0 })
+const planInfo = ref({ plan: 'lite', limit: 0, count: 0 })
 const showForm = ref(false)
 const editingId = ref<string | null>(null)
 const saving = ref(false)
@@ -252,7 +252,7 @@ const loadAutomations = async () => {
     if (res.success && res.data) {
       automations.value = res.data.automations || []
       planInfo.value = {
-        plan: res.data.plan || 'free',
+        plan: res.data.plan || 'lite',
         limit: res.data.limit || 0,
         count: res.data.count || 0,
       }
@@ -378,9 +378,9 @@ onMounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.plan-free { background: rgba(100, 116, 139, 0.15); color: #94a3b8; }
 .plan-lite { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
 .plan-pro { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+.plan-ultimate { background: rgba(139, 92, 246, 0.15); color: #a78bfa; }
 .plan-enterprise { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
 .plan-superadmin { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 

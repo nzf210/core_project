@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS plans (
 );
 
 INSERT INTO plans (id, name, price_idr, max_bots, max_ai_requests) VALUES
-('free', 'Free Tier', 0, 1, 5),
 ('lite', 'Lite', 150000, 3, 500),
-('pro', 'Pro', 450000, 10, 5000)
+('pro', 'Pro', 450000, 10, 5000),
+('ultimate', 'Ultimate', 1500000, 50, 50000)
 ON CONFLICT DO NOTHING;
 
 -- Tenants Subscriptions

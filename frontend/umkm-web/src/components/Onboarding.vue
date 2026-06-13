@@ -286,7 +286,7 @@ const buyPackage = async () => {
       paymentInfo.value = data.data.payment_url
       activationError.value = ''
     } else {
-      // Dev mode atau free plan: langsung aktif
+      // Dev mode atau lite plan: langsung aktif
       activationSuccess.value = 'Langganan berhasil diaktifkan!'
       isActivated.value = true
     }

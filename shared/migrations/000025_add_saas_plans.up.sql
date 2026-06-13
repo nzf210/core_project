@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS tenant_subscriptions (
 -- 1. SaaS Plan Definitions
 -- ─────────────────────────────────────────────
 CREATE TABLE saas_plans (
-    id            VARCHAR(20) PRIMARY KEY,  -- 'lite', 'pro', 'business'
+    id            VARCHAR(20) PRIMARY KEY,  -- 'lite', 'pro', 'ultimate'
     name          VARCHAR(50) NOT NULL,
     description   TEXT,
     price_monthly BIGINT NOT NULL,           -- harga dalam SEN (1 rupiah = 100 sen)
@@ -51,7 +51,7 @@ CREATE TABLE voucher_programs (
     description     TEXT,
     voucher_type    VARCHAR(20) NOT NULL,  -- 'discount_percent', 'discount_fixed', 'free_months', 'plan_upgrade'
     discount_value  INT NOT NULL DEFAULT 0,
-    target_plan_id  VARCHAR(20),           -- NULL = all plans, e.g. 'lite', 'pro', 'business'
+    target_plan_id  VARCHAR(20),           -- NULL = all plans, e.g. 'lite', 'pro', 'ultimate'
     duration_months INT NOT NULL DEFAULT 1,
     max_uses        INT NOT NULL DEFAULT 0, -- 0 = unlimited
     max_uses_per_tenant INT NOT NULL DEFAULT 1,
@@ -127,7 +127,7 @@ ALTER TABLE tenant_subscriptions
 INSERT INTO saas_plans (id, name, description, price_monthly, price_yearly, sort_order) VALUES
     ('lite',     'Lite',     'Untuk bisnis kecil yang baru memulai. Fitur dasar Accounting, POS, dan Chatbot AI.',     15000000, 150000000, 1),  -- 150k/month, 1.5M/year
     ('pro',      'Pro',      'Untuk bisnis berkembang. Semua fitur Lite + AI advanced, multi-user, priority support.', 45000000, 450000000, 2),  -- 450k/month, 4.5M/year
-    ('business', 'Business', 'Untuk bisnis skala besar. Unlimited users, API access, custom branding, dedicated support.', 150000000, 1500000000, 3); -- 1.5M/month, 15M/year
+    ('ultimate', 'Ultimate', 'Untuk bisnis skala besar. Unlimited users, API access, custom branding, dedicated support.', 150000000, 1500000000, 3); -- 1.5M/month, 15M/year
 
 -- ─────────────────────────────────────────────
 -- 8. Seed: Default Features per Plan
@@ -164,21 +164,21 @@ INSERT INTO plan_features (plan_id, feature_key, feature_name, feature_value, is
     ('pro', 'custom_branding',   'Custom Branding',               'false',  false),
     ('pro', 'priority_support',  'Priority Support',              'true',   true);
 
--- BUSINESS features
+-- ULTIMATE features
 INSERT INTO plan_features (plan_id, feature_key, feature_name, feature_value, is_enabled) VALUES
-    ('business', 'accounting',       'Double-Entry Accounting',         'true',      true),
-    ('business', 'pos',              'Point of Sale (POS)',              'true',      true),
-    ('business', 'chatbot',          'AI Chatbot WhatsApp',             'unlimited', true),
-    ('business', 'chatbot_messages', 'Chatbot pesan/bulan',            'unlimited', true),
-    ('business', 'products',         'Produk',                          'unlimited', true),
-    ('business', 'users',            'User seat',                       'unlimited', true),
-    ('business', 'ai_requests',      'AI request/bulan',               'unlimited', true),
-    ('business', 'reports',          'Laporan keuangan',               'full',      true),
-    ('business', 'inventory',        'Inventory management',           'true',      true),
-    ('business', 'customer_db',      'Database pelanggan',             'true',      true),
-    ('business', 'api_access',        'API Access',                    'true',      true),
-    ('business', 'custom_branding',  'Custom Branding',               'true',      true),
-    ('business', 'priority_support', 'Priority Support',              'true',      true);
+    ('ultimate', 'accounting',       'Double-Entry Accounting',         'true',      true),
+    ('ultimate', 'pos',              'Point of Sale (POS)',              'true',      true),
+    ('ultimate', 'chatbot',          'AI Chatbot WhatsApp',             'unlimited', true),
+    ('ultimate', 'chatbot_messages', 'Chatbot pesan/bulan',            'unlimited', true),
+    ('ultimate', 'products',         'Produk',                          'unlimited', true),
+    ('ultimate', 'users',            'User seat',                       'unlimited', true),
+    ('ultimate', 'ai_requests',      'AI request/bulan',               'unlimited', true),
+    ('ultimate', 'reports',          'Laporan keuangan',               'full',      true),
+    ('ultimate', 'inventory',        'Inventory management',           'true',      true),
+    ('ultimate', 'customer_db',      'Database pelanggan',             'true',      true),
+    ('ultimate', 'api_access',        'API Access',                    'true',      true),
+    ('ultimate', 'custom_branding',  'Custom Branding',               'true',      true),
+    ('ultimate', 'priority_support', 'Priority Support',              'true',      true);
 
 -- ─────────────────────────────────────────────
 -- 9. Seed: Default Voucher Programs (global)
@@ -194,8 +194,8 @@ VALUES
      'free_months', 3, 'pro', 3, 50, NOW() + INTERVAL '90 days', true),
 
     ('a3333333-3333-3333-3333-333333333333', NULL,
-     'Diskon 30% Business', 'Diskon 30% untuk paket Business',
-     'discount_percent', 30, 'business', 1, 20, NOW() + INTERVAL '90 days', true),
+     'Diskon 30% Ultimate', 'Diskon 30% untuk paket Ultimate',
+     'discount_percent', 30, 'ultimate', 1, 20, NOW() + INTERVAL '90 days', true),
 
     ('a4444444-4444-4444-4444-444444444444', NULL,
      'Gratis 1 Bulan All Plan', 'Gratis 1 bulan untuk semua paket',
@@ -211,8 +211,8 @@ INSERT INTO voucher_codes (program_id, code, expires_at) VALUES
     -- Gratis 3 Bulan Pro
     ('a2222222-2222-2222-2222-222222222222', 'PRO3-FREE',    NOW() + INTERVAL '90 days'),
     ('a2222222-2222-2222-2222-222222222222', 'PROMO-PRO90',  NOW() + INTERVAL '90 days'),
-    -- Diskon 30% Business
-    ('a3333333-3333-3333-3333-333333333333', 'BIZ30-OFF',    NOW() + INTERVAL '90 days'),
+    -- Diskon 30% Ultimate
+    ('a3333333-3333-3333-3333-333333333333', 'ULT30-OFF',    NOW() + INTERVAL '90 days'),
     -- Gratis 1 Bulan All Plan
     ('a4444444-4444-4444-4444-444444444444', 'FREE1MONTH',   NOW() + INTERVAL '90 days'),
     ('a4444444-4444-4444-4444-444444444444', 'ONEMONTHFREE', NOW() + INTERVAL '90 days');

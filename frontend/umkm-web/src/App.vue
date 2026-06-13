@@ -52,7 +52,7 @@ const isLoggedIn = ref(false)
 const userRole = ref('user')
 const isMobileMenuOpen = ref(false)
 const businessName = ref('')
-const plan = ref('free')
+const plan = ref('lite')
 const isFrozen = ref(false)
 
 const checkAuth = async () => {
@@ -65,7 +65,7 @@ const checkAuth = async () => {
     isLoggedIn.value = true
     userRole.value = role || 'user'
     businessName.value = localStorage.getItem('business_name') || ''
-    plan.value = localStorage.getItem('plan') || 'free'
+    plan.value = localStorage.getItem('plan') || 'lite'
 
     const cachedStatus = sessionStorage.getItem('subscription_status')
     isFrozen.value = cachedStatus === 'frozen'

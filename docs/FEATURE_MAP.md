@@ -14,7 +14,7 @@ USER menulis SPEC      →       AI review & clarify      →       USER approve
                               ↓                                  ↓
                       AI wait for approval          AI implement dari SPEC
                                                             ↓
-                                                    USER review diff
+                                                    USER review diff\n                                                            ↓\n                                                    JALANKAN TESTING
 ```
 
 ### Aturan untuk AI:
@@ -24,6 +24,9 @@ USER menulis SPEC      →       AI review & clarify      →       USER approve
    - "SPEC ini sudah diapprove?" → kalau belum, jangan implement
 3. Kalau ada ambiguitas di SPEC, tanya clarification
 4. Setelah implement, update kolom `Implementation` di tabel
+n5. **Testing Wajib** — Setiap kali ada *perubahan*, *tambah fungsi*, atau *hapus fungsi*, JALANKAN TEST sebelum menyelesaikan task:
+   - `make check` (untuk menjalankan linter, build, dan semua test)
+   - Atau `go test ./apps/umkm/... -v` (untuk test spesifik)
 
 ---
 
@@ -134,7 +137,7 @@ Format per feature:
 - Step 1 (Pilih Jenis Usaha) — **tanpa gate**, user boleh pilih atau skip
 - Step 2 (Detail Usaha: nama, alamat, nomor WA) — **tanpa gate**, boleh lanjut tanpa harus aktifkan
 - Setelah step 2 selesai (klik "Lanjut"), muncul **Modal Activation**:
-  - **Opsi A: Beli Paket** — pilih paket (Lite/Pro/Business) → generate Xendit invoice → status subscription = `pending`
+  - **Opsi A: Beli Paket** — pilih paket (Lite/Pro/Ultimate) → generate Xendit invoice → status subscription = `pending`
   - **Opsi B: Masukkan Kode Voucher** — input kode → validasi → langsung aktivasi jika valid
 
 ### Subscription Status Lifecycle
@@ -458,7 +461,7 @@ GET /v1/models
 **Spec:**
 - 1 owner = banyak `stores` dengan `business_type` berbeda (restoran + cafe, dll)
 - Quota di-enforce via `plan_features.feature_key='max_stores'`
-- Default per tier: Lite=1, Pro=1, Business=5
+- Default per tier: Lite=1, Pro=1, Ultimate=5
 - Superadmin bisa ubah quota via billing-service tanpa migration
 
 **Acceptance Criteria:**

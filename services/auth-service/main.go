@@ -1036,9 +1036,10 @@ func handleUploadProfileLogo(w http.ResponseWriter, r *http.Request) {
 	os.MkdirAll(filepath.Join(uploadDir, "logos"), 0755)
 
 	outExt := ".png"
-	if ext == ".jpg" || ext == ".jpeg" {
+	switch ext {
+	case ".jpg", ".jpeg":
 		outExt = ".jpg"
-	} else if ext == ".webp" {
+	case ".webp":
 		outExt = ".webp"
 	}
 
@@ -1837,9 +1838,10 @@ func handleUploadTenantLogo(w http.ResponseWriter, r *http.Request) {
 	os.MkdirAll(filepath.Join(uploadDir, "logos"), 0755)
 
 	outExt := ".png"
-	if ext == ".jpg" || ext == ".jpeg" {
+	switch ext {
+	case ".jpg", ".jpeg":
 		outExt = ".jpg"
-	} else if ext == ".webp" {
+	case ".webp":
 		outExt = ".webp"
 	}
 

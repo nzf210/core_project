@@ -82,6 +82,7 @@ help:
 	@echo "    make vet              — Static analysis (go vet)"
 	@echo "    make tidy             — Bersihkan dependencies"
 	@echo "    make check            — tidy + vet + build + test"
+	@echo "    make test-umkm        — Jalankan semua unit test untuk service UMKM"        — Jalankan semua unit test untuk service UMKM
 	@echo ""
 	@echo "  CLEANUP:"
 	@echo "    make clean-logs       — Hapus semua log files di logs/"
@@ -329,6 +330,10 @@ test:
 test-verbose:
 	@echo "▶ Running all tests (verbose)..."
 	@go test -v ./...
+
+test-umkm:
+	@echo "▶ Running UMKM tests..."
+	@go test ./apps/umkm/... -v -count=1
 
 test-race:
 	@echo "▶ Running tests with race detector..."

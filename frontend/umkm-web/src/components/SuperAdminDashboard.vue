@@ -104,9 +104,9 @@
         </div>
         <div class="card-body">
           <div class="plan-stats">
-            <div class="plan-stat"><span class="badge badge-free">FREE</span> {{ planCounts.free }}</div>
             <div class="plan-stat"><span class="badge badge-lite">LITE</span> {{ planCounts.lite }}</div>
             <div class="plan-stat"><span class="badge badge-pro">PRO</span> {{ planCounts.pro }}</div>
+            <div class="plan-stat"><span class="badge badge-ultimate">ULTIMATE</span> {{ planCounts.ultimate }}</div>
           </div>
         </div>
       </div>
@@ -224,9 +224,9 @@
         <div class="form-group">
           <label>Pilih Paket Langganan</label>
           <select v-model="formData.plan" class="form-control">
-            <option value="free">Free Tier (Rp 0)</option>
             <option value="lite">Lite (Rp 150.000)</option>
             <option value="pro">Pro (Rp 450.000)</option>
+            <option value="ultimate">Ultimate (Rp 1.500.000)</option>
           </select>
         </div>
 
@@ -446,7 +446,7 @@ const formData = ref({
   email: '',
   phone_number: '',
   role: 'owner',
-  plan: 'free',
+  plan: 'lite',
   subdomain: '',
   custom_domain: ''
 })
@@ -460,7 +460,7 @@ const editForm = ref({
   owner_phone: '',
   business_address: '',
   business_type: '',
-  plan: 'free',
+  plan: 'lite',
   new_password: '',
   logo_url: '',
   subdomain: '',
@@ -543,7 +543,7 @@ const saveMyProfile = async () => {
 }
 
 const planCounts = computed(() => {
-  const counts = { free: 0, lite: 0, pro: 0 }
+  const counts = { free: 0, lite: 0, pro: 0, ultimate: 0 }
   tenants.value.forEach((t: any) => {
     const plan = t.plan as keyof typeof counts
     if (counts[plan] !== undefined) {
@@ -670,7 +670,7 @@ const openEditProfile = async (tenant: any) => {
       editForm.value.wa_number = p.wa_number || ''
       editForm.value.business_address = p.business_address || ''
       editForm.value.business_type = p.business_type || 'umum'
-      editForm.value.plan = p.plan || 'free'
+      editForm.value.plan = p.plan || 'lite'
       editForm.value.logo_url = p.logo_url || ''
       editForm.value.owner_phone = p.owner_phone || ''
       editForm.value.subdomain = p.subdomain || ''
@@ -759,7 +759,7 @@ const saveProfile = async () => {
 
 const closeAddModal = () => {
   showAddTenant.value = false
-  formData.value = { name: '', username: '', password: 'Password123', email: '', phone_number: '', role: 'owner', plan: 'free', subdomain: '', custom_domain: '' }
+  formData.value = { name: '', username: '', password: 'Password123', email: '', phone_number: '', role: 'owner', plan: 'lite', subdomain: '', custom_domain: '' }
 }
 
 // ── Plan Editor ──────────────────────────────────────────────────────────────────
@@ -1013,11 +1013,6 @@ onMounted(() => {
   text-transform: uppercase;
 }
 
-.badge-free {
-  background: rgba(100, 116, 139, 0.2);
-  color: #94a3b8;
-}
-
 .badge-lite {
   background: rgba(245, 158, 11, 0.2);
   color: #fbbf24;
@@ -1028,7 +1023,7 @@ onMounted(() => {
   color: #60a5fa;
 }
 
-.badge-business {
+.badge-ultimate {
   background: rgba(168, 85, 247, 0.2);
   color: #c084fc;
 }

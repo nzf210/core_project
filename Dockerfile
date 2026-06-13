@@ -1,5 +1,7 @@
 # Build Stage
-FROM golang:alpine AS builder
+FROM golang:1.25-alpine3.21 AS builder
+
+ENV GOTOOLCHAIN=auto
 
 WORKDIR /app
 
@@ -25,7 +27,7 @@ RUN go build -o /bin/campaign-api ./apps/campaign/api
 RUN go build -o /bin/wa-gateway ./services/wa-gateway
 RUN go build -o /bin/wa-cloud-api ./services/wa-cloud-api
 # Final Stage
-FROM alpine:latest
+FROM alpine:3.21
 
 WORKDIR /app
 

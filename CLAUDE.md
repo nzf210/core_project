@@ -31,6 +31,8 @@ USER menulis SPEC      →       AI review & clarify      →       USER approve
                       AI wait for approval          AI implement dari SPEC
                                                             ↓
                                                     USER review diff
+                                                            ↓
+                                                    JALANKAN TESTING 
 ```
 
 ### Checklist Sebelum Coding:
@@ -41,6 +43,9 @@ USER menulis SPEC      →       AI review & clarify      →       USER approve
    - Jika ❌ Rejected: Jangan implement
 3. **Ambiguitas?** — Tanya USER clarification dulu
 4. **Implementasi selesai?** — Update `Implementation` status di FEATURE_MAP.md
+5. **Testing Wajib** — Setiap kali ada *perubahan*, *tambah fungsi*, atau *hapus fungsi*, JALANKAN TEST sebelum menyelesaikan task:
+   - `make check` (untuk menjalankan linter, build, dan semua test)
+   - Atau `go test ./apps/umkm/... -v` (untuk test spesifik)
 
 ### Cara Menambah Fitur Baru:
 
@@ -524,6 +529,7 @@ make logs-all          # tail -f logs/*.log
 
 # Testing & Quality
 go test ./...          # Test semua package
+make test-umkm         # Test seluruh layanan UMKM saja
 go build ./...         # Compile check
 go vet ./...           # Linting
 go mod tidy            # Bersihkan dependencies

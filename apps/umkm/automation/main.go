@@ -18,6 +18,7 @@ import (
 var AIGatewayURL = "http://localhost:8002/v1/chat"
 var NotificationServiceURL = "http://localhost:8005/api/notification/send"
 var DB *pgxpool.Pool
+var isTest bool
 
 type EventPayload struct {
 	TenantID string `json:"tenant_id"`
@@ -118,6 +119,16 @@ func handleMonthlyReport(tenantID string) {
 	var telegramChatID string
 	var waNumber string
 	var email string
+
+	// DB guard untuk testing
+	if DB == nil {
+		if isTest {
+			slog.Info("✅ AI Report Generated (test mode, skip DB query)", "tenant_id", tenantID)
+			return
+		}
+		slog.Error("Database connection not available")
+		return
+	}
 
 	// Defaults and queries
 	DB.QueryRow(context.Background(), `

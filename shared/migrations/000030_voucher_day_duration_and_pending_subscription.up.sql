@@ -58,7 +58,7 @@ ALTER TABLE tenant_subscriptions ADD COLUMN system_voucher_code TEXT;
 -- 8. Backfill plan_priority for existing plans (Lite=1, Pro=2, Business=3)
 UPDATE tenants SET plan_priority = 1 WHERE plan = 'lite';
 UPDATE tenants SET plan_priority = 2 WHERE plan = 'pro';
-UPDATE tenants SET plan_priority = 3 WHERE plan = 'business';
+UPDATE tenants SET plan_priority = 3 WHERE plan = 'ultimate';
 
 -- 9. Backfill existing voucher_codes with default validity_days
 UPDATE voucher_codes SET redeemed_at = used_at WHERE used_at IS NOT NULL AND redeemed_at IS NULL;

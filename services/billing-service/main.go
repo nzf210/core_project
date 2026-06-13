@@ -519,7 +519,7 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	// Check if voucher is provided — apply discount
 	var voucherApplied bool
 	if req.VoucherCode != "" {
-		voucherApplied, _ = applyVoucher(ctx, req.VoucherCode, req.PlanID, tenantID, priceMonthly)
+		voucherApplied, _ = applyVoucher(ctx, req.VoucherCode, req.PlanID, tenantID)
 		if voucherApplied {
 			slog.Info("Voucher applied", "tenant_id", tenantID, "code", req.VoucherCode)
 		}
@@ -536,12 +536,13 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 			JOIN voucher_codes vc ON vc.program_id = vp.id WHERE vc.code = $1
 		`, req.VoucherCode).Scan(&discountType, &discountValue)
 
-		if discountType == "discount_percent" {
+		switch discountType {
+		case "discount_percent":
 			finalPrice = priceMonthly * int64(100-discountValue) / 100
-		} else if discountType == "discount_fixed" {
+		case "discount_fixed":
 			finalPrice = maxInt64(0, priceMonthly-int64(discountValue))
+		// free_months: finalPrice stays same, handled elsewhere
 		}
-		// free_months: finalPrice stays same, we'll handle differently
 	}
 
 	// Generate Xendit invoice
@@ -773,12 +774,12 @@ func handleRedeemVoucher(w http.ResponseWriter, r *http.Request) {
 	amountToCharge := priceMonthly
 	effectiveMonths := durationMonths
 
-	if voucherType == "free_months" {
-		// No charge, just activate
+	switch voucherType {
+	case "free_months":
 		amountToCharge = 0
-	} else if voucherType == "discount_percent" {
+	case "discount_percent":
 		amountToCharge = priceMonthly * int64(100-discountValue) / 100
-	} else if voucherType == "discount_fixed" {
+	case "discount_fixed":
 		amountToCharge = maxInt64(0, priceMonthly-int64(discountValue))
 	}
 
@@ -1002,7 +1003,7 @@ func activateSubscription(ctx context.Context, tenantID, planID, planName string
 	err = DB.QueryRow(ctx, `
 		SELECT vs.plan_id,
 			   CASE vs.plan_id
-				   WHEN 'business' THEN 4 WHEN 'pro' THEN 3 WHEN 'lite' THEN 2
+				   WHEN 'ultimate' THEN 4 WHEN 'pro' THEN 3 WHEN 'lite' THEN 2
 				   ELSE 1
 			   END AS priority,
 			   vs.remaining_days
@@ -1094,7 +1095,7 @@ func activateSubscription(ctx context.Context, tenantID, planID, planName string
 // Voucher Application
 // ─────────────────────────────────────────────
 
-func applyVoucher(ctx context.Context, code, planID, tenantID string, priceMonthly int64) (bool, *string) {
+func applyVoucher(ctx context.Context, code, planID, tenantID string) (bool, *string) {
 	// Check voucher validity
 	var programID string
 	var voucherType string
@@ -2600,18 +2601,12 @@ func handleAdminListVouchers(w http.ResponseWriter, r *http.Request) {
 		FROM voucher_codes vc
 		LEFT JOIN voucher_programs vp ON vp.id = vc.program_id
 		WHERE ($1 = '' OR vp.target_plan_id = $1)
-		  AND ($2 = '' OR ($3 = 'true' AND vc.is_redeemed = true) OR ($3 = 'false' AND vc.is_redeemed = false))
+		  AND ($2 = '' OR ($2 = 'true' AND vc.is_redeemed = true) OR ($2 = 'false' AND vc.is_redeemed = false))
 		ORDER BY vc.created_at DESC
-		LIMIT $4
+		LIMIT $3
 	`
-	usedFilter := ""
-	if usedStr == "true" {
-		usedFilter = "true"
-	} else if usedStr == "false" {
-		usedFilter = "false"
-	}
 
-	rows, err := DB.Query(ctx, query, planID, usedStr, usedFilter, limit)
+	rows, err := DB.Query(ctx, query, planID, usedStr, limit)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to list vouchers", err)
 		return

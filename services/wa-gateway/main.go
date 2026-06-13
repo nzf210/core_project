@@ -609,7 +609,7 @@ func restoreSessions(ctx context.Context, container *sqlstore.Container) {
 		device, _ := container.GetDevice(context.Background(), jid)
 		if device != nil {
 			client := whatsmeow.NewClient(device, waLog.Stdout("Client-"+tID, "INFO", true))
-			client.AddEventHandler(func(evt interface{}) { eventHandler(ctx, tID, evt) })
+			client.AddEventHandler(func(evt interface{}) { eventHandler(tID, evt) })
 			if err := client.Connect(); err == nil {
 				clientMu.Lock()
 				clientMap[tID] = client
@@ -664,7 +664,7 @@ func setupRoutes(ctx context.Context, container *sqlstore.Container) {
 			newStore := container.NewDevice()
 			clientLog := waLog.Stdout("Client-"+tenantID, "INFO", true)
 			client = whatsmeow.NewClient(newStore, clientLog)
-			client.AddEventHandler(func(evt interface{}) { eventHandler(ctx, tenantID, evt) })
+			client.AddEventHandler(func(evt interface{}) { eventHandler(tenantID, evt) })
 			clientMap[tenantID] = client
 		}
 		clientMu.Unlock()
@@ -923,7 +923,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 // eventHandler handles WhatsApp events for a tenant
-func eventHandler(ctx context.Context, tenantID string, evt interface{}) {
+func eventHandler(tenantID string, evt interface{}) {
 	switch v := evt.(type) {
 	case *events.Message:
 		text := v.Message.GetConversation()

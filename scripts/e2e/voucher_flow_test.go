@@ -10,22 +10,43 @@ import (
 )
 
 func TestVoucherFlowIntegration(t *testing.T) {
-	// Setup: Get auth token and tenant ID
-	t.Log("Setup: Authenticate and get tenant")
-	accessToken, _ := setupAuth(t)
+	log := NewTestLogger(t)
+	PrintSection(t, "VOUCHER FLOW INTEGRATION TEST")
 
-	// 1. Create voucher program
-	t.Log("Step 1: Create voucher program")
+	// Check service availability
+	missing := requireServices(t, map[string]string{
+		"auth-service": authServiceURL,
+		"billing":      billingServiceURL,
+	})
+	if len(missing) > 0 {
+		log.Skip("Required services not available: " + joinStrings(missing, ", "))
+		return
+	}
+
+	// Setup: Get superadmin token
+	log.Start("Authenticating as superadmin...")
+	superToken := SuperadminLogin(t)
+	if superToken == "" {
+		log.Error("Superadmin authentication failed")
+		return
+	}
+	log.Auth("Superadmin authenticated")
+
+	// Step 1: Create voucher program
+	PrintTestStep(t, 1, 4, "Create Voucher Program")
+	log.Voucher("Creating voucher program...")
+	programName := fmt.Sprintf("Test Promo %d", time.Now().Unix())
+
 	createProgramReq := map[string]interface{}{
-		"name":              fmt.Sprintf("Test Promo %d", time.Now().Unix()),
-		"description":       "Test voucher program",
-		"voucher_type":      "discount_percent",
-		"discount_value":    10,
-		"target_plan_id":    "lite", // Assuming lite plan exists
-		"duration_months":   1,
-		"max_uses":          100,
-		"starts_at":         time.Now().Format("2006-01-02T15:04:05Z"),
-		"expires_at":        time.Now().AddDate(0, 1, 0).Format("2006-01-02T15:04:05Z"),
+		"name":            programName,
+		"description":     "Test voucher program",
+		"voucher_type":    "discount_percent",
+		"discount_value":  10,
+		"target_plan_id": "lite",
+		"duration_months": 1,
+		"max_uses":        100,
+		"starts_at":       time.Now().Format("2006-01-02T15:04:05Z"),
+		"expires_at":      time.Now().AddDate(0, 1, 0).Format("2006-01-02T15:04:05Z"),
 	}
 
 	programBody, _ := json.Marshal(createProgramReq)
@@ -34,27 +55,30 @@ func TestVoucherFlowIntegration(t *testing.T) {
 		billingServiceURL+"/admin/voucher-programs",
 		bytes.NewBuffer(programBody),
 	)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Authorization", "Bearer "+superToken)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("Create program failed: %v", err)
+		log.Error("Create program failed: " + err.Error())
+		return
 	}
 	defer resp.Body.Close()
 
 	var createResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&createResp)
 	if createResp.Status != http.StatusOK && createResp.Status != http.StatusCreated {
-		t.Logf("Create program response: %+v", createResp)
-		t.Fatalf("Create program failed: %s", createResp.Message)
+		log.Data("Create program response: %+v", createResp)
+		log.Error("Create program failed: " + createResp.Message)
+		return
 	}
-	t.Log("✓ Voucher program created")
+	log.Success("Voucher program created: " + programName)
 
-	// 2. Generate voucher links
-	t.Log("Step 2: Generate voucher links")
+	// Step 2: Generate voucher links
+	PrintTestStep(t, 2, 4, "Generate Voucher Links")
 	programData := createResp.Data.(map[string]interface{})
 	programID := programData["id"].(string)
 
+	log.Voucher("Generating voucher links...")
 	generateReq := map[string]interface{}{
 		"program_id": programID,
 		"count":      10,
@@ -68,94 +92,77 @@ func TestVoucherFlowIntegration(t *testing.T) {
 		billingServiceURL+"/admin/voucher-links/generate",
 		bytes.NewBuffer(generateBody),
 	)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Authorization", "Bearer "+superToken)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("Generate links failed: %v", err)
+		log.Error("Generate links failed: " + err.Error())
+		return
 	}
 	defer resp.Body.Close()
 
 	var generateResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&generateResp)
 	if generateResp.Status != http.StatusOK && generateResp.Status != http.StatusCreated {
-		t.Fatalf("Generate links failed: %s", generateResp.Message)
+		log.Error("Generate links failed: " + generateResp.Message)
+		return
 	}
 
 	generateData := generateResp.Data.(map[string]interface{})
 	links := generateData["links"].([]interface{})
 	if len(links) == 0 {
-		t.Fatal("No voucher links generated")
+		log.Error("No voucher links generated")
+		return
 	}
-	t.Logf("✓ Generated %d voucher links", len(links))
+	log.Success(fmt.Sprintf("Generated %d voucher links", len(links)))
 
-	// 3. List voucher links
-	t.Log("Step 3: List voucher links")
+	// Step 3: List voucher links
+	PrintTestStep(t, 3, 4, "List Voucher Links")
+	log.Voucher("Fetching voucher links...")
 	req, _ = http.NewRequest(
 		"GET",
 		fmt.Sprintf("%s/admin/voucher-links?program_id=%s", billingServiceURL, programID),
 		nil,
 	)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Authorization", "Bearer "+superToken)
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("List links failed: %v", err)
+		log.Error("List links failed: " + err.Error())
+		return
 	}
 	defer resp.Body.Close()
 
 	var listResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&listResp)
 	if listResp.Status != http.StatusOK {
-		t.Fatalf("List links failed: %s", listResp.Message)
+		log.Error("List links failed: " + listResp.Message)
+		return
 	}
-	t.Log("✓ Voucher links listed")
+	log.Success("Voucher links listed")
 
-	// 4. Get voucher analytics
-	t.Log("Step 4: Get voucher analytics")
+	// Step 4: Get voucher analytics
+	PrintTestStep(t, 4, 4, "Get Voucher Analytics")
+	log.Voucher("Fetching voucher analytics...")
 	req, _ = http.NewRequest(
 		"GET",
 		fmt.Sprintf("%s/admin/voucher-analytics?program_id=%s", billingServiceURL, programID),
 		nil,
 	)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Authorization", "Bearer "+superToken)
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("Get analytics failed: %v", err)
+		log.Error("Get analytics failed: " + err.Error())
+		return
 	}
 	defer resp.Body.Close()
 
 	var analyticsResp BillingResponse
 	json.NewDecoder(resp.Body).Decode(&analyticsResp)
 	if analyticsResp.Status != http.StatusOK {
-		t.Fatalf("Get analytics failed: %s", analyticsResp.Message)
+		log.Error("Get analytics failed: " + analyticsResp.Message)
+		return
 	}
-	t.Log("✓ Voucher analytics retrieved")
+	log.Success("Voucher analytics retrieved")
 
-	t.Log("\n✅ Voucher flow test PASSED")
-}
-
-func setupAuth(t *testing.T) (string, string) {
-	superLogin := map[string]string{
-		"username": "superadmin",
-		"password": "superadmin123",
-	}
-	superBody, _ := json.Marshal(superLogin)
-	resp, err := http.Post(
-		authServiceURL+"/superadmin/login",
-		"application/json",
-		bytes.NewBuffer(superBody),
-	)
-	if err != nil {
-		t.Fatalf("Superadmin login failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var loginResp Response
-	json.NewDecoder(resp.Body).Decode(&loginResp)
-	if !loginResp.Success {
-		t.Fatalf("Superadmin login failed: %s", loginResp.Message)
-	}
-
-	loginData := loginResp.Data.(map[string]interface{})
-	return loginData["accessToken"].(string), ""
+	log.Complete("Voucher flow test PASSED")
 }
