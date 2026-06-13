@@ -119,7 +119,19 @@ func atomicAddInt64(addr *int64, val int64) {
 
 var AIGatewayURL = "http://localhost:8002/v1/chat"
 var AccountingURL = "http://localhost:8201"
+var WAGatewayURL = "http://wa-gateway:8202" // Base URL for wa-gateway (refactored from hardcoded full path)
 var redisClient *redis.Client
+
+// waSendURL returns the full URL for posting a WhatsApp message to wa-gateway.
+// Centralised so the base URL is no longer duplicated across 3 call sites and
+// honours cfg.WhatsApp.GatewayURL (with WA_GATEWAY_URL env override).
+func waSendURL() string {
+	base := WAGatewayURL
+	if base == "" {
+		base = "http://wa-gateway:8202"
+	}
+	return base + "/api/wa/send"
+}
 
 // Metrics counters
 var (
@@ -144,6 +156,15 @@ func main() {
 	}
 
 	cfg := config.LoadConfig(".env")
+	// Resolve WA Gateway URL from config (with env override) so the path is no
+	// longer hardcoded. Production (Docker) defaults to the service hostname.
+	if os.Getenv("WA_GATEWAY_URL") != "" {
+		WAGatewayURL = os.Getenv("WA_GATEWAY_URL")
+	} else if cfg.WhatsApp.GatewayURL != "" {
+		WAGatewayURL = cfg.WhatsApp.GatewayURL
+	} else if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+		WAGatewayURL = "http://wa-gateway:8202"
+	}
 	if err := initDB(cfg); err != nil {
 		slog.Error("Failed to init DB", "error", err)
 		os.Exit(1)
@@ -492,7 +513,7 @@ func processChatJob(job ChatJob) {
 				slog.Warn("Unregistered phone number attempted to chat", "sender", sender)
 				
 				// Auto-reply to unregistered user via WA Gateway
-				waGatewayURL := "http://wa-gateway:8202/api/wa/send"
+				waGatewayURL := waSendURL()
 				data := url.Values{}
 				data.Set("target", sender)
 				data.Set("message", "Mohon maaf, nomor WhatsApp Anda belum terdaftar sebagai pengguna sistem UMKM WCH. Silakan mendaftar melalui aplikasi web kami terlebih dahulu.")
@@ -537,7 +558,7 @@ func processChatJob(job ChatJob) {
 		if aiGatewayResp.Success && aiGatewayResp.Text != "" {
 			finalText := processAIAnswer(ctx, tenantID, aiGatewayResp.Text, sender, userRole)
 			// 3. Post reply back to WA Gateway API
-			waGatewayURL := "http://wa-gateway:8202/api/wa/send"
+			waGatewayURL := waSendURL()
 			data := url.Values{}
 			data.Set("target", sender)
 			data.Set("message", finalText)
@@ -740,7 +761,7 @@ func processAIAnswer(ctx context.Context, tenantID, answer, sender, role string)
 				}
 				phone = strings.TrimPrefix(phone, "+")
 				
-				waGatewayURL := "http://wa-gateway:8202/api/wa/send"
+				waGatewayURL := waSendURL()
 				data := url.Values{}
 				data.Set("target", phone)
 				data.Set("message", fmt.Sprintf("⚠️ *ESKALASI OTOMATIS DARI BOT* ⚠️\nPelanggan dengan nomor %s memerlukan bantuan.\n\nKonteks: %s", sender, msgToAdmin))

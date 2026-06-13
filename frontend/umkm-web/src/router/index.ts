@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { api } from '../api'
 import Dashboard from '../components/Dashboard.vue'
 import DynamicDashboard from '../components/DynamicDashboard.vue'
 import Onboarding from '../components/Onboarding.vue'
@@ -38,7 +39,41 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, _from, next) => {
+// In-memory cache of the last /api/me result, used to avoid hammering the
+// backend on every navigation. Keyed by tenant_id+user_id pair.
+let _meCache: { key: string; ts: number; data: any } | null = null
+const ME_CACHE_TTL_MS = 30_000 // 30s
+
+async function fetchAndSyncMe(): Promise<any | null> {
+  const token = localStorage.getItem('access_token')
+  const tenantId = localStorage.getItem('tenant_id')
+  if (!token || !tenantId) return null
+  const key = `${tenantId}:${localStorage.getItem('user_id') || ''}`
+  const now = Date.now()
+  if (_meCache && _meCache.key === key && (now - _meCache.ts) < ME_CACHE_TTL_MS) {
+    return _meCache.data
+  }
+  const res = await api.me()
+  if (res && res.success && res.data) {
+    _meCache = { key, ts: now, data: res.data }
+    // Sync flags to localStorage so the rest of the app sees consistent state.
+    if (res.data.onboarding_completed !== undefined) {
+      localStorage.setItem('onboarding_completed', res.data.onboarding_completed ? 'true' : 'false')
+    }
+    if (res.data.plan !== undefined) {
+      localStorage.setItem('plan', res.data.plan || '')
+    }
+    if (res.data.role !== undefined) {
+      localStorage.setItem('role', res.data.role || '')
+    }
+    if (res.data.is_frozen !== undefined) {
+      sessionStorage.setItem('subscription_status', res.data.is_frozen ? 'frozen' : 'active')
+    }
+  }
+  return res && res.success ? res.data : null
+}
+
+router.beforeEach(async (to, _from, next) => {
   const token = localStorage.getItem('access_token')
   const tenantId = localStorage.getItem('tenant_id')
   const role = localStorage.getItem('role')
@@ -53,9 +88,20 @@ router.beforeEach((to, _from, next) => {
     }
   } else {
     if (isLoggedIn || isSuperadmin) {
+      // Re-sync server state if onboarding flag is missing — fixes the
+      // redirect loop when localStorage is empty (new device, cleared cache).
+      const onboardingDone = localStorage.getItem('onboarding_completed')
+      if (!onboardingDone && !isSuperadmin) {
+        try {
+          await fetchAndSyncMe()
+        } catch (e) {
+          // If /me fails, fall through to existing behaviour (redirect to onboarding)
+        }
+      }
+
       if (to.path !== '/onboarding' && to.path !== '/login' && to.path !== '/register') {
-        const onboardingDone = localStorage.getItem('onboarding_completed')
-        if (!onboardingDone && !isSuperadmin) {
+        const onboardingDone2 = localStorage.getItem('onboarding_completed')
+        if (!onboardingDone2 && !isSuperadmin) {
           next({ path: '/onboarding' })
           return
         }

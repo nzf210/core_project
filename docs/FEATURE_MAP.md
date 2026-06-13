@@ -81,6 +81,54 @@ Format per feature:
 | F016 | Hybrid WhatsApp (Cloud API + whatsmeow) | ✅ Approved | ✅ Done | 2026-06-13 |
 | F017 | OTP 1-Hour Reuse Window | ✅ Approved | ✅ Done | 2026-06-13 |
 | F018 | Telegram Auth (Register & Login) | ✅ Approved | ✅ Done | 2026-06-13 |
+| F019 | Onboarding Sync via /me (Fix Tier 1) | ✅ Approved | ✅ Done | 2026-06-14 |
+
+---
+
+## F019: Onboarding Sync via `/me` Endpoint (Fix Tier 1)
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Sediakan endpoint `GET /me` di auth-service untuk sinkronisasi status user & tenant (`onboarding_completed`, `plan`, `role`, `is_frozen`) dari backend, dan refactor router guard frontend untuk refetch saat localStorage kosong (mis. login di device baru / cache dibersihkan). Fix redirect loop ke `/onboarding` yang sudah lama dicatat di CLAUDE.md. Sekaligus refactor hardcoded WA Gateway URL di chatbot ke config.
+
+**Spec:**
+- Endpoint baru `GET /auth/me` di auth-service (alias ringkas dari `/auth/profile` GET). Return JSON berisi `user_id`, `username`, `email`, `phone_number`, `role`, `telegram_chat_id`, `tenant_id`, `plan`, `business_type`, `is_frozen`, `onboarding_completed`.
+- Route di api-gateway: `/api/me` → auth-service (dengan auth middleware + tenant rate limit).
+- Field `onboarding_completed` juga ditambahkan ke response `GET /auth/profile` agar FE bisa sinkronkan via endpoint yang sudah ada.
+- Frontend `router/index.ts`:
+  - Tambah helper `fetchAndSyncMe()` yang cache 30s per `(tenant_id, user_id)`.
+  - `beforeEach` guard: jika `token` ada tapi `onboarding_completed` missing di localStorage → panggil `fetchAndSyncMe()` untuk populate flag dari BE, baru tentukan redirect.
+  - Sync `onboarding_completed`, `plan`, `role`, `subscription_status` ke localStorage/sessionStorage setelah fetch berhasil.
+- Refactor `apps/umkm/chatbot/main.go`:
+  - Tambah `var WAGatewayURL` + helper `waSendURL()`.
+  - Ganti 3 call site hardcoded `http://wa-gateway:8202/api/wa/send` jadi `waSendURL()`.
+  - Resolve order: `WA_GATEWAY_URL` env → `cfg.WhatsApp.GatewayURL` → production default.
+
+**Acceptance Criteria (AC):**
+- [x] AC-1: `GET /api/me` dengan token valid → return JSON berisi semua field yang disyaratkan
+- [x] AC-2: `GET /api/me` tanpa token → 401
+- [x] AC-3: `GET /api/profile` sekarang juga return `onboarding_completed`
+- [x] AC-4: Reload halaman di device baru dengan localStorage kosong → FE panggil `/me` otomatis, populate flag, tidak redirect loop
+- [x] AC-5: Cache `/me` 30s per (tenant_id, user_id) — tidak spam backend
+- [x] AC-6: `go build ./...` & `go vet ./...` clean
+- [x] AC-7: `go test ./...` all packages green
+- [x] AC-8: `vue-tsc --noEmit` clean
+- [x] AC-9: Chatbot `waSendURL()` honour `WA_GATEWAY_URL` env + `cfg.WhatsApp.GatewayURL`
+- [x] AC-10: 0 hardcoded `wa-gateway:8202` di call site chatbot (sisanya cuma default fallback)
+
+**Files Changed:**
+- `services/auth-service/main.go` — `handleMe()` handler baru, field `onboarding_completed` di `handleProfile` GET response, route `/me`
+- `services/api-gateway/main.go` — route `/api/me` → auth-service
+- `frontend/umkm-web/src/api.ts` — method `api.me()`
+- `frontend/umkm-web/src/router/index.ts` — `fetchAndSyncMe()` helper + updated `beforeEach` guard
+- `apps/umkm/chatbot/main.go` — `WAGatewayURL` var, `waSendURL()` helper, 3 call site refactored
+
+**Notes:**
+- Tier 1 fix — menyentuh 2 service + 1 app + 2 frontend file, semua test pass.
+- Branch: `fix/tier1-onboarding-loop`
+- Cache 30s dipilih untuk keseimbangan antara freshness dan hemat backend call. Bisa di-tune via env nanti.
+- Sinkronisasi hanya terjadi jika flag missing — happy path (user sudah onboarded + localStorage ada) tidak menambah request.
 
 ---
 

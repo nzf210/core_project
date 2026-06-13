@@ -121,6 +121,27 @@ export const api = {
     return res.json()
   },
 
+  /**
+   * GET /api/me — lightweight, GET-only summary of the current user + tenant.
+   * Used by the frontend router guard to re-sync onboarding_completed, plan,
+   * role, is_frozen on every page reload. Fixes the onboarding redirect loop
+   * when localStorage flags are missing (e.g. login on a new device).
+   */
+  async me() {
+    try {
+      const res = await fetch(`${API_BASE}/api/me`, {
+        method: 'GET',
+        headers: headers(),
+      })
+      if (!res.ok) {
+        return { success: false, message: `HTTP ${res.status}` }
+      }
+      return res.json()
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Network error' }
+    }
+  },
+
   async register(body: Record<string, any>) {
     const res = await fetch(`${API_BASE}/api/umkm/admin/tenants`, {
       method: 'POST',
