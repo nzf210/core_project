@@ -174,7 +174,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { api, API_BASE } from '../api';
+import { api } from '../api';
 
 interface Product {
   id: string;
@@ -187,7 +187,6 @@ interface Product {
   additional_photos: string[];
 }
 
-const tenantId = ref(localStorage.getItem('tenant_id') || '')
 const products = ref<Product[]>([]);
 const loading = ref(true);
 const saving = ref(false);

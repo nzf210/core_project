@@ -64,10 +64,10 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":      status,
-		"database":     dbStatus,
-		"redis":        redisStatus,
-		"ai_gateway":   aiStatus,
+		"status":     status,
+		"database":   dbStatus,
+		"redis":      redisStatus,
+		"ai_gateway": aiStatus,
 	})
 }
 
@@ -332,18 +332,18 @@ const chatbotConfigCacheTTL = 5 * time.Minute
 // chatConfigCache mirrors the subset of fields chatbot needs at runtime.
 // Defined inline to avoid coupling chatbot -> accounting types directly.
 type chatConfigCache struct {
-	IsActive             bool     `json:"is_active"`
-	Language             string   `json:"language"`
-	Tone                 string   `json:"tone"`
-	SystemPrompt         string   `json:"system_prompt"`
-	WelcomeMessage       string   `json:"welcome_message"`
-	FallbackMessage      string   `json:"fallback_message"`
-	OutsideHoursMessage  string   `json:"outside_hours_message"`
-	BusinessHoursStart   string   `json:"business_hours_start"`
-	BusinessHoursEnd     string   `json:"business_hours_end"`
-	BusinessDays         []int    `json:"business_days"`
-	EscalationEnabled    bool     `json:"escalation_enabled"`
-	EscalationKeywords   []string `json:"escalation_keywords"`
+	IsActive            bool     `json:"is_active"`
+	Language            string   `json:"language"`
+	Tone                string   `json:"tone"`
+	SystemPrompt        string   `json:"system_prompt"`
+	WelcomeMessage      string   `json:"welcome_message"`
+	FallbackMessage     string   `json:"fallback_message"`
+	OutsideHoursMessage string   `json:"outside_hours_message"`
+	BusinessHoursStart  string   `json:"business_hours_start"`
+	BusinessHoursEnd    string   `json:"business_hours_end"`
+	BusinessDays        []int    `json:"business_days"`
+	EscalationEnabled   bool     `json:"escalation_enabled"`
+	EscalationKeywords  []string `json:"escalation_keywords"`
 }
 
 // loadChatbotConfig fetches the per-tenant chatbot config from accounting,
@@ -625,7 +625,7 @@ func processChatJob(job ChatJob) {
 				}
 				rows.Close()
 			}
-			
+
 			// Auto-save contact
 			_, errSave := DB.Exec(ctx, "INSERT INTO tenant_contacts (tenant_id, phone_number) VALUES ($1, $2) ON CONFLICT (tenant_id, phone_number) DO NOTHING", tenantID, cleanSender)
 			if errSave != nil {
@@ -638,14 +638,14 @@ func processChatJob(job ChatJob) {
 			err := DB.QueryRow(ctx, "SELECT tenant_id FROM users WHERE phone_number = $1 LIMIT 1", sender).Scan(&tenantID)
 			if err != nil {
 				slog.Warn("Unregistered phone number attempted to chat", "sender", sender)
-				
+
 				// Auto-reply to unregistered user via WA Gateway
 				waGatewayURL := waSendURL()
 				data := url.Values{}
 				data.Set("target", sender)
 				data.Set("message", "Mohon maaf, nomor WhatsApp Anda belum terdaftar sebagai pengguna sistem UMKM WCH. Silakan mendaftar melalui aplikasi web kami terlebih dahulu.")
-				data.Set("tenant_id", "global") 
-				
+				data.Set("tenant_id", "global")
+
 				reqWA, _ := http.NewRequestWithContext(ctx, "POST", waGatewayURL, strings.NewReader(data.Encode()))
 				reqWA.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				respWA, errF := http.DefaultClient.Do(reqWA)
@@ -728,14 +728,15 @@ func processChatJob(job ChatJob) {
 
 func buildSystemPrompt(ctx context.Context, tenantID, tenantName, message, role string, cfg *chatConfigCache) string {
 	var systemPrompt string
-	if role == "customer" {
+	switch role {
+	case "customer":
 		systemPrompt = fmt.Sprintf("Anda adalah asisten virtual (Customer Service) untuk toko bernama '%s'. Jawab dengan ramah dan sopan kepada pelanggan. Jika pelanggan menanyakan daftar harga barang/produk, berikan harga sesuai katalog. Jika pelanggan marah, ada keluhan komplain, atau secara spesifik meminta bicara dengan admin/pemilik, Anda WAJIB merespon dengan mengawali pesan Anda menggunakan format `[FORWARD_TO_ADMIN] {Isi keluhan/pesan pelanggan agar admin tahu}`. Contoh: `[FORWARD_TO_ADMIN] Tolong cek keluhan pelanggan ini mengenai barang rusak.`", tenantName)
 		// We DO NOT return early anymore because we want to inject the Product Catalog for customers too!
-	} else if role == "kasir" || role == "staff" {
+	case "kasir", "staff":
 		systemPrompt = fmt.Sprintf("Anda adalah asisten Kasir untuk toko '%s' (UMKM WCH). Tugas Anda HANYA membantu mencatat transaksi masuk/keluar harian dan menghitung jumlah kas hari ini. \n\nPERINGATAN: DILARANG KERAS memberikan informasi rahasia seperti laporan Laba/Rugi, Modal, atau Total Neraca jika ditanya. Jika ditanya soal Laba/Rugi, katakan bahwa Anda tidak memiliki hak akses untuk itu.", tenantName)
-	} else if role == "owner" || role == "admin" || role == "user" {
+	case "owner", "admin", "user":
 		systemPrompt = fmt.Sprintf("Anda adalah asisten keuangan pintar untuk toko '%s' (UMKM WCH). Anda memiliki akses penuh ke laporan keuangan dan operasional. Jawab dalam bahasa Indonesia yang ramah.", tenantName)
-	} else {
+	default:
 		systemPrompt = fmt.Sprintf("Anda adalah asisten toko '%s'.", tenantName)
 	}
 
@@ -746,9 +747,10 @@ func buildSystemPrompt(ctx context.Context, tenantID, tenantName, message, role 
 		if strings.TrimSpace(cfg.SystemPrompt) == "" {
 			// No custom prompt — augment with language + tone hints
 			langHint := ""
-			if cfg.Language == "en" {
+			switch cfg.Language {
+			case "en":
 				langHint = " Respond in English."
-			} else if cfg.Language == "id" {
+			case "id":
 				langHint = " Jawab dalam bahasa Indonesia."
 			}
 			toneHint := ""
@@ -894,7 +896,7 @@ Jika ada pertanyaan yang TIDAK BISA ANDA JAWAB (tidak ada di FAQ, produk, atau w
 	return systemPrompt
 }
 
-func processAIAnswer(ctx context.Context, tenantID, answer, sender, role string) string {
+func processAIAnswer(ctx context.Context, tenantID, answer, sender, _ string) string {
 	// 1. Process [FORWARD_TO_ADMIN]
 	if strings.Contains(answer, "[FORWARD_TO_ADMIN]") {
 		startIdx := strings.Index(answer, "[FORWARD_TO_ADMIN]")
@@ -904,14 +906,16 @@ func processAIAnswer(ctx context.Context, tenantID, answer, sender, role string)
 		if endIdx != -1 {
 			msgToAdmin = msgToAdmin[:endIdx]
 		}
-		
+
 		// Clean up the answer shown to user
 		answer = strings.Replace(answer, answer[startIdx:startIdx+18+len(msgToAdmin)], "Mohon ditunggu ya, pesan Anda sedang kami teruskan ke Admin.", 1)
-		
+
 		// Forward message to all forwarders or owner
 		go func() {
-			if DB == nil { return }
-			
+			if DB == nil {
+				return
+			}
+
 			// Get forwarders
 			var forwarders []string
 			rows, err := DB.Query(context.Background(), "SELECT phone_number FROM tenant_forwarders WHERE tenant_id = $1", tenantID)
@@ -940,7 +944,7 @@ func processAIAnswer(ctx context.Context, tenantID, answer, sender, role string)
 					phone = "62" + phone[1:]
 				}
 				phone = strings.TrimPrefix(phone, "+")
-				
+
 				waGatewayURL := waSendURL()
 				data := url.Values{}
 				data.Set("target", phone)
@@ -960,16 +964,16 @@ func processAIAnswer(ctx context.Context, tenantID, answer, sender, role string)
 		endIdx := strings.Index(endBlock, "```")
 		if endIdx != -1 {
 			jsonStr := endBlock[:endIdx]
-			
+
 			// POST expense
 			txReq, _ := http.NewRequestWithContext(ctx, "POST", AccountingURL+"/expenses", strings.NewReader(jsonStr))
 			txReq.Header.Set("X-Tenant-ID", tenantID)
 			txReq.Header.Set("Content-Type", "application/json")
 			txResp, err := http.DefaultClient.Do(txReq)
-			
+
 			cleanMsg := strings.Replace(answer, answer[startExpIdx:startExpIdx+15+endIdx+3], "", 1)
 			cleanMsg = strings.TrimSpace(cleanMsg)
-			
+
 			if err == nil && txResp.StatusCode == http.StatusOK {
 				cleanMsg += "\n\n✅ Pengeluaran telah berhasil dicatat ke sistem akuntansi Anda!"
 			} else {
@@ -996,16 +1000,16 @@ func processAIAnswer(ctx context.Context, tenantID, answer, sender, role string)
 			endIdx := strings.Index(endBlock, "```")
 			if endIdx != -1 {
 				jsonStr := endBlock[:endIdx]
-				
+
 				// POST transaction
 				txReq, _ := http.NewRequestWithContext(ctx, "POST", AccountingURL+"/transactions", strings.NewReader(jsonStr))
 				txReq.Header.Set("X-Tenant-ID", tenantID)
 				txReq.Header.Set("Content-Type", "application/json")
 				txResp, err := http.DefaultClient.Do(txReq)
-				
+
 				cleanMsg := strings.Replace(answer, answer[startIdx:startIdx+7+endIdx+3], "", 1)
 				cleanMsg = strings.TrimSpace(cleanMsg)
-				
+
 				if err == nil && txResp.StatusCode == http.StatusOK {
 					cleanMsg += "\n\n✅ Transaksi telah berhasil dicatat ke sistem akuntansi Anda!"
 				} else {
@@ -1025,4 +1029,3 @@ func processAIAnswer(ctx context.Context, tenantID, answer, sender, role string)
 	}
 	return answer
 }
-

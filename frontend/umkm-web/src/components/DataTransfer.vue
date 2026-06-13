@@ -27,10 +27,10 @@
 
       <!-- Actions row -->
       <div class="actions-row" style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem;">
-        <a :href="api.templateURL(activeTab, 'csv')" class="btn btn-secondary" target="_blank">
+        <a :href="api.templateURL(activeTabTyped, 'csv')" class="btn btn-secondary" target="_blank">
           📋 Download Template CSV
         </a>
-        <a :href="api.templateURL(activeTab, 'xlsx')" class="btn btn-secondary" target="_blank">
+        <a :href="api.templateURL(activeTabTyped, 'xlsx')" class="btn btn-secondary" target="_blank">
           📋 Download Template XLSX
         </a>
         <button class="btn btn-primary" @click="exportData('xlsx')" :disabled="exporting">
@@ -80,15 +80,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { api } from '../api'
 
-const tabs = [
+const tabs: { key: 'products' | 'contacts' | 'journal'; label: string; icon: string }[] = [
   { key: 'products', label: 'Produk', icon: '📦' },
   { key: 'contacts', label: 'Kontak', icon: '👥' },
   { key: 'journal', label: 'Jurnal', icon: '📒' },
 ]
-const activeTab = ref('products')
+const activeTab = ref<'products' | 'contacts' | 'journal'>('products')
+const activeTabTyped = computed(() => activeTab.value)
 
 const today = new Date()
 const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
