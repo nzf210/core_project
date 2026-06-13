@@ -190,6 +190,12 @@ const handleRegister = async () => {
   try {
     let data
     if (registerChannel.value === 'telegram') {
+      console.log('[REGISTER:TELEGRAM] Sending request with:', {
+        telegramChatId: formData.value.telegramChatId,
+        phoneNumber: formData.value.phone_number,
+        username: formData.value.username,
+        businessName: formData.value.name,
+      })
       data = await api.telegramRegister({
         telegramChatId: formData.value.telegramChatId,
         phoneNumber: formData.value.phone_number,
@@ -198,6 +204,7 @@ const handleRegister = async () => {
         email: formData.value.email || formData.value.phone_number + '@wa.user',
         businessName: formData.value.name,
       })
+      console.log('[REGISTER:TELEGRAM] Response:', data)
     } else {
       data = await api.registerWA({
         phoneNumber: formData.value.phone_number,
@@ -210,11 +217,14 @@ const handleRegister = async () => {
     if (data.success) {
       step.value = 'verify'
       successMsg.value = data.message || 'OTP telah dikirim.'
+      console.log('[REGISTER] OTP sent OK — channel:', registerChannel.value, '| phone:', formData.value.phone_number, '| chatID:', formData.value.telegramChatId)
     } else {
       errorMsg.value = data.message || 'Gagal mengirim OTP.'
+      console.warn('[REGISTER] OTP send failed:', data.message)
     }
   } catch (e) {
     errorMsg.value = 'Kesalahan jaringan. Pastikan backend menyala.'
+    console.error('[REGISTER] Network error:', e)
   } finally {
     loading.value = false
   }

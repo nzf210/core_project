@@ -21,6 +21,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var telegramBotToken string
+
 type RegisterRequest struct {
 	Username     string `json:"username"`
 	Password     string `json:"password"`
@@ -190,6 +192,13 @@ func main() {
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(uploadDir))))
 
 	slog.Info(fmt.Sprintf("🔑 Starting Auth Service in %s mode on port %s...", cfg.Env, port))
+
+	// Initialize Telegram bot token for package-level use
+	telegramBotToken = cfg.Telegram.BotToken
+
+	// Start Telegram polling goroutine if bot token is configured
+	go startTelegramPolling(cfg)
+
 	serverAddress := fmt.Sprintf(":%s", port)
 	
 	// Wrap mux with CORS then Logging
@@ -1949,17 +1958,17 @@ func derefStr(s *string) string {
 // Telegram Auth Handlers
 // ─────────────────────────────────────────────
 
-// sendTelegramOTP sends an OTP message to a Telegram chat ID using the Telegram Bot API.
-func sendTelegramOTP(chatID, message string) error {
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	if botToken == "" {
+// sendTelegramMessage sends a text message to a Telegram chat ID using the Telegram Bot API.
+func sendTelegramMessage(chatID, message string) error {
+	if telegramBotToken == "" {
 		return fmt.Errorf("TELEGRAM_BOT_TOKEN not configured")
 	}
 
-	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", telegramBotToken)
 	payload := map[string]interface{}{
 		"chat_id": chatID,
 		"text":    message,
+		"parse_mode": "Markdown",
 	}
 	body, _ := json.Marshal(payload)
 
@@ -1971,6 +1980,38 @@ func sendTelegramOTP(chatID, message string) error {
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram API returned %d: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+
+// sendTelegramOTP sends an OTP message to a Telegram chat ID using the Telegram Bot API.
+func sendTelegramOTP(chatID, message string) error {
+	if telegramBotToken == "" {
+		return fmt.Errorf("TELEGRAM_BOT_TOKEN not configured")
+	}
+
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", telegramBotToken)
+	payload := map[string]interface{}{
+		"chat_id":    chatID,
+		"text":       message,
+		"parse_mode": "Markdown",
+	}
+	body, _ := json.Marshal(payload)
+
+	slog.Info("[TELEGRAM:OTP] Calling Telegram API", "chatID", chatID, "url", apiURL, "payload", string(body))
+
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		slog.Error("[TELEGRAM:OTP] HTTP request failed", "chatID", chatID, "error", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	slog.Info("[TELEGRAM:OTP] API response", "chatID", chatID, "status", resp.StatusCode, "body", string(respBody))
+
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("telegram API returned %d: %s", resp.StatusCode, string(respBody))
 	}
 	return nil
@@ -1989,6 +2030,8 @@ func handleTelegramRegister(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
 		return
 	}
+
+	slog.Info("[TELEGRAM:REGISTER] Incoming request", "chatID", req.TelegramChatID, "phone", req.PhoneNumber, "username", req.Username, "businessName", req.BusinessName)
 
 	if req.PhoneNumber == "" || req.Password == "" || req.TelegramChatID == "" {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "telegramChatId, phoneNumber, and password are required"})
@@ -2035,9 +2078,11 @@ func handleTelegramRegister(w http.ResponseWriter, r *http.Request) {
 
 	// Send OTP via Telegram
 	go func() {
-		msg := fmt.Sprintf("🔐 *Kode OTP Registrasi WCH*\n\nKode OTP Anda: *%s*\n\nBerlaku selama 1 jam. Jangan berikan kode ini kepada siapapun.", otp)
+		msg := fmt.Sprintf("🔐 *Kode OTP Registrasi WCH*\n\nKode OTP Anda: *%s*\n\n📌 Masukkan kode ini di aplikasi WCH untuk menyelesaikan pendaftaran.\n\n⚠️ Jangan bagikan kode ini kepada siapapun.\n\nBerlaku selama 1 jam.", otp)
 		if err := sendTelegramOTP(req.TelegramChatID, msg); err != nil {
 			slog.Error("Failed to send register OTP via Telegram", "chatID", req.TelegramChatID, "error", err)
+		} else {
+			slog.Info("Telegram register OTP sent successfully", "chatID", req.TelegramChatID)
 		}
 	}()
 
@@ -2081,19 +2126,9 @@ func handleTelegramLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// OTP 1-hour reuse: check if valid OTP already exists
-	otpKey := "phone-login-otp:" + req.PhoneNumber
-	if existingOTP, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingOTP != "" {
-		ttl, _ := Redis.TTL(ctx, otpKey).Result()
-		slog.Info("Login OTP still active, reusing existing (Telegram)", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
-		writeJSON(w, http.StatusOK, Response{
-			Success: true,
-			Message: "OTP sudah dikirim sebelumnya. Masih berlaku selama 1 jam. Silakan cek Telegram Anda.",
-		})
-		return
-	}
-
+	// Always generate new OTP for Telegram (no reuse — Telegram is not rate-limited like WA)
 	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	otpKey := "phone-login-otp:" + req.PhoneNumber
 	err = Redis.Set(ctx, otpKey, otp, 1*time.Hour).Err()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process login"})
@@ -2108,9 +2143,11 @@ func handleTelegramLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Send OTP via Telegram
 	go func() {
-		msg := fmt.Sprintf("🔐 *Kode OTP Login WCH*\n\nKode OTP Anda: *%s*\n\nBerlaku selama 1 jam. Jangan berikan kode ini kepada siapapun.", otp)
+		msg := fmt.Sprintf("🔐 *Kode OTP Login WCH*\n\nKode OTP Anda: *%s*\n\n📌 Masukkan kode ini di aplikasi WCH untuk masuk ke akun Anda.\n\n⚠️ Jangan bagikan kode ini kepada siapapun.\n\nBerlaku selama 1 jam.", otp)
 		if err := sendTelegramOTP(req.TelegramChatID, msg); err != nil {
 			slog.Error("Failed to send login OTP via Telegram", "chatID", req.TelegramChatID, "error", err)
+		} else {
+			slog.Info("Telegram login OTP sent successfully", "chatID", req.TelegramChatID)
 		}
 	}()
 
@@ -2119,6 +2156,107 @@ func handleTelegramLogin(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Message: "OTP telah dikirim ke Telegram Anda. Silakan verifikasi.",
 	})
+}
+
+// startTelegramPolling polls Telegram for updates when no webhook is set.
+// Falls back to getUpdates polling so /start works in dev without a public URL.
+func startTelegramPolling(cfg *config.Config) {
+	botToken := cfg.Telegram.BotToken
+	if botToken == "" {
+		slog.Warn("TELEGRAM_BOT_TOKEN not set, skipping Telegram polling")
+		return
+	}
+
+	baseURL := fmt.Sprintf("https://api.telegram.org/bot%s", botToken)
+	client := &http.Client{Timeout: 10 * time.Second}
+	nextUpdateID := int64(0)
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	slog.Info("Telegram polling started", "bot", "Core_tesbot")
+
+	for range ticker.C {
+		// Check if webhook is configured — if yes, stop polling
+		resp, err := client.Get(baseURL + "/getWebhookInfo")
+		if err == nil {
+			var result struct {
+				OK     bool   `json:"ok"`
+				Result struct {
+					URL string `json:"url"`
+				} `json:"result"`
+			}
+			if json.NewDecoder(resp.Body).Decode(&result) == nil && result.Result.URL != "" {
+				resp.Body.Close()
+				slog.Info("Telegram webhook is set, stopping polling")
+				return
+			}
+			resp.Body.Close()
+		}
+
+		// Fetch updates since last ID (no timeout — ticker handles polling cadence)
+		url := fmt.Sprintf("%s/getUpdates?offset=%d", baseURL, nextUpdateID)
+		resp, err = client.Get(url)
+		if err != nil {
+			continue
+		}
+		var updates struct {
+			OK      bool                     `json:"ok"`
+			Result  []map[string]interface{} `json:"result"`
+			ErrCode int                      `json:"error_code"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&updates); err != nil {
+			resp.Body.Close()
+			continue
+		}
+		resp.Body.Close()
+
+		if len(updates.Result) > 0 {
+			slog.Info("Telegram updates received", "count", len(updates.Result), "next_offset", nextUpdateID)
+		} else {
+			slog.Info("Telegram poll cycle", "offset", nextUpdateID, "updates", 0)
+		}
+
+		for _, update := range updates.Result {
+			updateIDFloat, ok := update["update_id"].(float64)
+			if ok {
+				nextUpdateID = int64(updateIDFloat) + 1
+			}
+
+			message, ok := update["message"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			chat, ok := message["chat"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			chatIDFloat, ok := chat["id"].(float64)
+			if !ok {
+				continue
+			}
+			chatID := fmt.Sprintf("%.0f", chatIDFloat)
+			text, _ := message["text"].(string)
+
+			if text == "/start" {
+				welcomeMsg := fmt.Sprintf(
+					"👋 *Selamat datang di WCH Platform!*\n\n"+
+						"✅ Bot berhasil terhubung!\n"+
+						"Chat ID Anda: `%s`\n\n"+
+						"Buka aplikasi WCH dan pilih *Masuk dengan Telegram* untuk mendaftar atau login.\n\n"+
+						"Bot ini akan mengirimkan notifikasi penting seperti:\n"+
+						"• Update langganan & tagihan\n"+
+						"• Kode OTP untuk verifikasi\n"+
+						"• Pengingat automate\n\n"+
+						"Hubungi admin jika butuh bantuan.",
+					chatID,
+				)
+				sendTelegramMessage(chatID, welcomeMsg)
+			} else {
+				sendTelegramMessage(chatID, fmt.Sprintf("✅ Bot aktif!\n\nChat ID Anda: `%s`\n\nKirim `/start` untuk melihat panduan.", chatID))
+			}
+		}
+	}
 }
 
 // handleTelegramWebhook handles incoming Telegram Bot webhooks.
@@ -2162,17 +2300,19 @@ func handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	if text == "/start" {
 		welcomeMsg := fmt.Sprintf(
 			"👋 *Selamat datang di WCH Platform!*\n\n"+
-				"Chat ID Telegram Anda: `%s`\n\n"+
-				"Untuk mendaftar:\n"+
-				"1. Kirim POST ke `/telegram/register` dengan `telegramChatId: %s` dan data pendaftaran\n"+
-				"2. Untuk login: POST ke `/telegram/login` dengan `telegramChatId: %s` dan nomor WA\n\n"+
-				"Simpan Chat ID ini untuk pendaftaran & login.",
-			chatID, chatID, chatID,
+				"✅ Bot berhasil terhubung!\n"+
+				"Chat ID Anda: `%s`\n\n"+
+				"Buka aplikasi WCH dan pilih *Masuk dengan Telegram* untuk mendaftar atau login.\n\n"+
+				"Bot ini akan mengirimkan notifikasi penting seperti:\n"+
+				"• Update langganan & tagihan\n"+
+				"• Kode OTP untuk verifikasi\n"+
+				"• Pengingat automate\n\n"+
+				"Hubungi admin jika butuh bantuan.",
+			chatID,
 		)
 		sendTelegramOTP(chatID, welcomeMsg)
 	} else {
-		// Respond to any other message
-		sendTelegramOTP(chatID, fmt.Sprintf("Chat ID Anda: `%s`\n\nGunakan `/start` untuk melihat petunjuk.", chatID))
+		sendTelegramOTP(chatID, fmt.Sprintf("✅ Bot aktif!\n\nChat ID Anda: `%s`\n\nKirim `/start` untuk melihat panduan.", chatID))
 	}
 
 	writeJSON(w, http.StatusOK, Response{Success: true, Message: "OK"})

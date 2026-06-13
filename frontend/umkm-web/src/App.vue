@@ -26,11 +26,12 @@
       :user-role="userRole"
       :business-name="businessName"
       :plan="plan"
+      :is-frozen="isFrozen"
       @close="isMobileMenuOpen = false"
     />
 
     <!-- Main Content -->
-    <main class="app-main" :class="{ 'with-sidebar': isLoggedIn }">
+    <main class="app-main" :class="{ 'with-sidebar': isLoggedIn, 'frozen-active': isFrozen }">
       <div class="container animate-fade-in">
         <router-view />
         <Chatbot v-if="isLoggedIn" />
@@ -120,9 +121,11 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   font-size: 14px;
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 50;
+  left: 0;
+  right: 0;
+  z-index: 110;
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
@@ -162,6 +165,10 @@ onMounted(() => {
 
 .app-main.with-sidebar {
   margin-left: 260px;
+}
+
+.app-main.frozen-active {
+  padding-top: 4rem;
 }
 
 /* Mobile Responsiveness */

@@ -581,9 +581,11 @@
     </div>
 
     <!-- Toast -->
-    <div v-if="toast.visible" :class="['toast-notification', `toast-${toast.type}`]">
+    <Teleport to="body">
+    <div v-if="toast.visible" :class="['toast-notification', `toast-${toast.type}`]" :style="{ top: toastTop + 'px' }">
       {{ toast.message }}
     </div>
+    </Teleport>
   </div>
 </template>
 
@@ -649,8 +651,10 @@ const businessTypes = [
 ]
 
 const toast = ref({ visible: false, message: '', type: 'success' })
+const toastTop = ref(0)
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
   toast.value = { visible: true, message, type }
+  toastTop.value = window.scrollY + 16
   setTimeout(() => { toast.value.visible = false }, 3000)
 }
 
@@ -1359,15 +1363,15 @@ onMounted(async () => {
 
 .toast-notification {
   position: fixed;
-  bottom: 2rem;
+  top: 2rem;
   right: 2rem;
   padding: 1rem 1.5rem;
   border-radius: 8px;
   color: #fff;
   font-weight: 500;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   z-index: 9999;
-  animation: slideIn 0.3s ease-out;
+  animation: slideDown 0.3s ease-out;
 }
 
 .toast-success {
@@ -1378,14 +1382,14 @@ onMounted(async () => {
   background-color: #ef4444;
 }
 
-@keyframes slideIn {
+@keyframes slideDown {
   from {
-    transform: translateX(100%);
+    transform: translateY(-100%);
     opacity: 0;
   }
 
   to {
-    transform: translateX(0);
+    transform: translateY(0);
     opacity: 1;
   }
 }

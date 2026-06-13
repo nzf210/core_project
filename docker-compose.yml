@@ -80,6 +80,7 @@ services:
       - DB_SSLMODE=disable
       - REDIS_HOST=redis
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
     depends_on:
       postgres:
         condition: service_healthy
@@ -134,6 +135,8 @@ services:
     command:
       - umkm-business
     environment:
+      - APP_ENV=production
+      - PORT=9005
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=${DB_USER:-postgres}

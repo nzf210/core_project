@@ -1,5 +1,5 @@
 <template>
-  <aside :class="['app-sidebar', { 'is-open': isOpen, 'is-collapsed': isCollapsed }]">
+  <aside :class="['app-sidebar', { 'is-open': isOpen, 'is-collapsed': isCollapsed, 'frozen-offset': isFrozen }]">
     <!-- Overlay for mobile -->
     <div class="sidebar-overlay" @click="$emit('close')"></div>
 
@@ -84,6 +84,7 @@ const props = defineProps<{
   userRole: string
   businessName: string
   plan: string
+  isFrozen?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -159,6 +160,11 @@ const logout = () => {
 
 .app-sidebar.is-collapsed {
   width: var(--sidebar-collapsed-width);
+}
+
+.app-sidebar.frozen-offset {
+  top: 48px;
+  height: calc(100vh - 48px);
 }
 
 .sidebar-overlay {
