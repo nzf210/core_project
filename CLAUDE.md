@@ -511,6 +511,11 @@ Card "Voucher Billing" di `frontend/umkm-web/src/components/SuperAdminDashboard.
 
 **Routing:** `/api/superadmin/billing/` → strips prefix → proxies ke billing-service:8003 `/admin`
 
+**⚠️ Bug Fix — Voucher Redemption (v2):**
+- `handleAdminGenerateVouchers` menyimpan `validity_days` ke kolom `voucher_codes.validity_days` saat INSERT (sebelumnya hanya di-echo di response, tidak disimpan)
+- `handleRedeemVoucher` membaca `validity_days` langsung dari row `voucher_codes` via JOIN (sebelumnya membaca `duration_months` dari `voucher_programs` yang selalu 0 untuk `free_months` → menghasilkan 0 hari aktif)
+- `activateSubscription` menggunakan `validity_days` as-is (bukan `duration_months*30`)
+
 ---
 
 ## 🚫 Larangan Keras

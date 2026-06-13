@@ -633,6 +633,7 @@ User sampai modal activation
 - `frontend/umkm-web/src/components/SuperAdminDashboard.vue` — Generate Voucher modal + Voucher List modal (UI layer)
 - `frontend/umkm-web/src/superadminApi.ts` — `listVouchers()` + `generateVouchers()` API methods
 - `services/billing-service/main.go` — `pending` subscription status, auto-delete expired, generate system voucher, day-duration logic, `handleAdminGenerateVouchers`, `handleAdminListVouchers`
+  - ⚠️ Bug fix: `handleAdminGenerateVouchers` menyimpan `validity_days` ke kolom `voucher_codes.validity_days` saat INSERT; `handleRedeemVoucher` baca `validity_days` dari row `voucher_codes` (JOIN), bukan `voucher_programs.duration_months` (yang selalu 0 untuk `free_months`)
 - `services/auth-service/main.go` — sync `is_frozen` dan plan cache saat activate
 - `shared/migrations/` — add `validity_days` / `remaining_days` columns, `pending_timeout` di `tenant_subscriptions`
 - `services/subscription-worker/main.go` — cron job auto-delete expired pending tenants
