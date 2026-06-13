@@ -44,7 +44,12 @@
 
     <!-- INCOME STATEMENT (Laba Rugi) -->
     <div v-else-if="activeTab === 'income-statement'" class="glass-card" style="padding: 1.5rem;">
-      <h3 style="margin-bottom: 1rem;">Laba Rugi — {{ formatDateRange() }}</h3>
+      <div class="flex items-center justify-between" style="margin-bottom: 1rem;">
+        <h3 style="margin: 0;">Laba Rugi — {{ formatDateRange() }}</h3>
+        <button class="btn btn-secondary" @click="downloadIncomePDF" :disabled="downloadingPDF">
+          {{ downloadingPDF ? 'Membuat PDF...' : '📄 Download PDF' }}
+        </button>
+      </div>
       <div v-for="section in incomeStatementSections" :key="section.title" style="margin-bottom: 1.25rem;">
         <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.95rem;">{{ section.title }}</h4>
         <table class="data-table">
@@ -73,7 +78,12 @@
 
     <!-- BALANCE SHEET (Neraca) -->
     <div v-else-if="activeTab === 'balance-sheet'" class="glass-card" style="padding: 1.5rem;">
-      <h3 style="margin-bottom: 1rem;">Neraca — per {{ formatDate(balanceDate) }}</h3>
+      <div class="flex items-center justify-between" style="margin-bottom: 1rem;">
+        <h3 style="margin: 0;">Neraca — per {{ formatDate(balanceDate) }}</h3>
+        <button class="btn btn-secondary" @click="downloadBalancePDF" :disabled="downloadingPDF">
+          {{ downloadingPDF ? 'Membuat PDF...' : '📄 Download PDF' }}
+        </button>
+      </div>
       <div v-for="section in balanceSheetSections" :key="section.title" style="margin-bottom: 1.25rem;">
         <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.95rem;">{{ section.title }}</h4>
         <table class="data-table">
@@ -202,9 +212,30 @@ async function loadReport() {
 }
 
 async function downloadCashFlowPDF() {
+  await downloadPDF(
+    api.cashFlowPDFUrl(dateRange.from, dateRange.to),
+    `arus-kas_${dateRange.from}_${dateRange.to}.pdf`,
+  )
+}
+
+async function downloadIncomePDF() {
+  await downloadPDF(
+    api.incomeStatementPDFUrl(dateRange.from, dateRange.to),
+    `laba-rugi_${dateRange.from}_${dateRange.to}.pdf`,
+  )
+}
+
+async function downloadBalancePDF() {
+  await downloadPDF(
+    api.balanceSheetPDFUrl(balanceDate.value),
+    `neraca_${balanceDate.value}.pdf`,
+  )
+}
+
+async function downloadPDF(url: string, filename: string) {
   downloadingPDF.value = true
   try {
-    const res = await fetch(api.cashFlowPDFUrl(dateRange.from, dateRange.to), {
+    const res = await fetch(url, {
       headers: {
         'X-Tenant-ID': localStorage.getItem('tenant_id') || '',
         'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
@@ -212,13 +243,13 @@ async function downloadCashFlowPDF() {
     })
     if (!res.ok) throw new Error('HTTP ' + res.status)
     const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
+    const blobUrl = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url
-    a.download = `arus-kas_${dateRange.from}_${dateRange.to}.pdf`
+    a.href = blobUrl
+    a.download = filename
     a.click()
     a.remove()
-    URL.revokeObjectURL(url)
+    URL.revokeObjectURL(blobUrl)
   } catch (e: any) {
     alert('Gagal download PDF: ' + (e?.message || e))
   } finally {

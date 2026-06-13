@@ -172,6 +172,14 @@ export const api = {
     return `${API_BASE}/api/umkm/reports/cash-flow/pdf?from=${from}&to=${to}`
   },
 
+  // Income Statement & Balance Sheet PDF (B)
+  incomeStatementPDFUrl(from: string, to: string) {
+    return `${API_BASE}/api/umkm/reports/income-statement/pdf?from=${from}&to=${to}`
+  },
+  balanceSheetPDFUrl(date: string) {
+    return `${API_BASE}/api/umkm/reports/balance-sheet/pdf?date=${date}`
+  },
+
   // Import / Export (F022) — returns blob URL for download or JSON for import
   async exportFile(endpoint: string, format: 'xlsx' | 'csv', extraParams: Record<string, string> = {}) {
     const params = new URLSearchParams({ format, ...extraParams })
