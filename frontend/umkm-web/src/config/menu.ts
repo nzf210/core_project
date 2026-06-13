@@ -17,6 +17,7 @@ export const menuConfig: MenuGroup[] = [
       { label: 'Dashboard', to: '/', icon: '📊' },
       { label: 'Kasir/POS', to: '/pos', icon: '💰' },
       { label: 'Katalog Produk', to: '/catalog', icon: '📦' },
+      { label: 'Impor / Ekspor', to: '/data-transfer', icon: '📥' },
     ],
   },
   {

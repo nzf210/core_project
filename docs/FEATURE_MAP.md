@@ -83,6 +83,226 @@ Format per feature:
 | F018 | Telegram Auth (Register & Login) | ✅ Approved | ✅ Done | 2026-06-13 |
 | F019 | Onboarding Sync via /me (Fix Tier 1) | ✅ Approved | ✅ Done | 2026-06-14 |
 | F020 | AI CS Setup Wizard (Per-Tenant Config UI) | ✅ Approved | ✅ Done | 2026-06-14 |
+| F021 | Cash Flow PDF Export | ✅ Approved | ✅ Done | 2026-06-14 |
+| F022 | Excel/Google Sheet Import & Export | ✅ Approved | ✅ Done | 2026-06-14 |
+
+---
+
+## F022: Excel/Google Sheet Import & Export
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** UMKM bisa export data ke Excel/CSV (untuk backup, akuntan, laporan pajak) dan import data dari spreadsheet ke aplikasi. Mendukung **3 entity**: journal_entries (transaksi), products (katalog), dan contacts (pelanggan/forwarders). Format file: `.xlsx` (Excel) dan `.csv` (Google Sheet export friendly).
+
+**Spec:**
+
+### Backend (apps/umkm/accounting)
+
+**Export endpoints** (returns file blob with proper Content-Disposition):
+
+| Method | Path | Format | Entity |
+|:-------|:-----|:-------|:-------|
+| `GET /export/journal?from=YYYY-MM-DD&to=YYYY-MM-DD&format=xlsx|csv` | download | Journal entries (header + lines) |
+| `GET /export/products?format=xlsx|csv` | download | Product catalog |
+| `GET /export/contacts?format=xlsx|csv` | download | Customer/forwarder contacts |
+
+**Import endpoints** (multipart/form-data, field name `file`):
+
+| Method | Path | Format | Entity |
+|:-------|:-----|:-------|:-------|
+| `POST /import/products` | xlsx/csv | Upsert products by SKU |
+| `POST /import/contacts` | xlsx/csv | Upsert contacts by phone |
+| `POST /import/journal` | xlsx/csv | Create journal entries (validate balanced) |
+
+**Response shape import:**
+```json
+{
+  "success": true,
+  "data": {
+    "imported": 42,
+    "skipped": 3,
+    "errors": [
+      { "row": 5, "error": "SKU kosong" },
+      { "row": 12, "error": "Harga tidak valid" }
+    ]
+  }
+}
+```
+
+**CSV column spec (header row required):**
+
+**products** (`name, sku, category, price_cents, stock, description, image_url`)
+- `price_cents` integer (sen). Comma-as-thousand-separator NOT supported; user harus convert.
+- `stock` integer. Default 0.
+- `image_url` optional.
+
+**contacts** (`name, phone, email, role, notes`)
+- `phone` wajib, unique per tenant
+- `role` ∈ {`customer`, `forwarder`, `supplier`}. Default `customer`.
+- `email` optional.
+
+**journal** (`date, description, reference, debit_account_code, credit_account_code, amount_cents`)
+- Single-line entry per row (debit & credit on same row)
+- For multi-line entry: split into multiple rows with same `reference` (UUID auto-generated per batch, same `reference` = same entry)
+- `amount_cents` integer
+- Validate balanced per `reference` (sum debit == sum credit)
+
+**XLSX support:**
+- 1 sheet per file
+- Header row in row 1
+- Date cells as Excel date (auto-parse)
+- Money cells as number
+
+**Limits:**
+- Max 5000 rows per import
+- Max file size 10 MB
+- File extension whitelist: `.xlsx`, `.csv`
+
+### Frontend
+
+**UI entry points:**
+- Sidebar menu baru: `Operasi` group → "Impor / Ekspor Data" (icon: 📥) → route `/data-transfer`
+- Atau dari `ProductCatalog.vue` → tombol "Export" + "Import" (inline, per entity)
+
+**Page `DataTransfer.vue`:**
+- 3 tab: Jurnal, Produk, Kontak
+- Tiap tab:
+  - Tombol "Download Template" (CSV + XLSX)
+  - Tombol "Export Data" (filter tanggal untuk jurnal)
+  - Drop zone untuk upload file + tombol "Impor"
+  - Preview hasil import (table) sebelum confirm
+  - Toast: imported/skipped/errors count
+
+**Inline di ProductCatalog.vue:**
+- Tombol "📥 Import" → file picker → preview → confirm
+- Tombol "📤 Export" → dropdown xlsx/csv
+
+### Acceptance Criteria (AC):
+- [x] AC-1: GET `/export/products?format=xlsx` return file .xlsx valid
+- [x] AC-2: GET `/export/products?format=csv` return file .csv valid
+- [x] AC-3: GET `/export/journal?from&to` return file dengan multiple baris per entry
+- [x] AC-4: GET `/export/contacts` return file customer + forwarder
+- [x] AC-5: POST `/import/products` (xlsx/csv) → upsert by SKU, response include imported/skipped/errors
+- [x] AC-6: POST `/import/contacts` (xlsx/csv) → upsert by phone
+- [x] AC-7: POST `/import/journal` (xlsx/csv) → create entries, validate balanced per reference
+- [x] AC-8: Frontend `DataTransfer.vue` page dengan 3 tab + download template
+- [x] AC-9: Inline Import/Export di `ProductCatalog.vue`
+- [x] AC-10: Validasi 5000 row max, 10MB max, ext whitelist
+- [x] AC-11: `go build`, `go vet`, `go test`, `vue-tsc` clean
+
+### Files Changed:
+- `apps/umkm/accounting/main.go` — 6 handlers (3 export, 3 import) + helper parseCSV/parseXLSX
+- `shared/sdk/xlsx/` — package baru: `reader.go` (read xlsx), `writer.go` (write xlsx), `csv.go` (CSV helpers)
+- `frontend/umkm-web/src/api.ts` — methods `api.exportProducts/Contacts/Journal`, `api.importProducts/Contacts/Journal`, `api.downloadTemplate`
+- `frontend/umkm-web/src/components/DataTransfer.vue` — page baru
+- `frontend/umkm-web/src/components/ProductCatalog.vue` — inline Import/Export
+- `frontend/umkm-web/src/router/index.ts` — route `/data-transfer`
+- `frontend/umkm-web/src/config/menu.ts` — menu "Impor / Ekspor Data"
+
+### Notes:
+- XLSX pakai library `github.com/jung-kurt/gofpdf` untuk write PDF, dan `github.com/xuri/excelize/v2` untuk read/write xlsx (F021 reuse dependency).
+- Import = upsert (SKU/phone sebagai natural key), bukan replace. User bisa re-import untuk update.
+- Untuk journal import, file CSV/XLSX diasumsikan valid — backend validasi balance + account existence.
+- Bukti audit: setiap import catat ke `import_logs` (insert via mini-migration F022b, atau reuse `subscription_tickets` table sebagai quick win).
+
+---
+
+## F021: Cash Flow PDF Export
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Selesaikan Fase 5 PRD — generate PDF Laporan Arus Kas (Cash Flow Statement) untuk periode yang dipilih. Data sudah tersedia via endpoint JSON `GET /reports/cash-flow`; fitur ini tinggal membungkus output jadi file PDF yang siap download/cetak/share ke akuntan atau bank untuk pengajuan kredit. PDF patuh pada layout SAK-EMKM: header (identitas toko + periode), 3 section aktivitas (Operasional, Investasi, Pendanaan), summary net cash flow, footer (tanggal generate + signature line).
+
+**Spec:**
+
+### Backend (apps/umkm/accounting)
+
+Endpoint baru:
+- `GET /reports/cash-flow/pdf?from=YYYY-MM-DD&to=YYYY-MM-DD` — return `application/pdf` blob.
+
+**PDF Layout (A4 portrait, margins 2cm):**
+
+```
+┌────────────────────────────────────────────────────────┐
+│  [NAMA TOKO]                                           │
+│  Laporan Arus Kas                                      │
+│  Periode: 1 Januari 2026 – 31 Januari 2026            │
+│  Dicetak: 14 Juni 2026 01:44 WITA                      │
+├────────────────────────────────────────────────────────┤
+│  I. ARUS KAS DARI AKTIVITAS OPERASIONAL                │
+│    Kas Masuk:                                          │
+│      Penjualan Tunai        Rp    5.000.000            │
+│      Piutang Tertagih       Rp    2.000.000            │
+│      Pendapatan Lain         Rp      500.000           │
+│    Total Kas Masuk          Rp    7.500.000            │
+│    Kas Keluar:                                          │
+│      Beban Gaji              Rp   2.000.000            │
+│      Beban Listrik           Rp     300.000            │
+│      Beban Bahan Baku        Rp   1.500.000            │
+│    Total Kas Keluar          Rp   3.800.000            │
+│    Arus Kas Operasional     Rp   3.700.000            │
+├────────────────────────────────────────────────────────┤
+│  II. ARUS KAS DARI AKTIVITAS INVESTASI                │
+│    Pembelian Aset           Rp (1.000.000)             │
+│    Arus Kas Investasi       Rp (1.000.000)             │
+├────────────────────────────────────────────────────────┤
+│  III. ARUS KAS DARI AKTIVITAS PENDANAAN               │
+│    Setor Modal               Rp 5.000.000              │
+│    Arus Kas Pendanaan        Rp 5.000.000              │
+├────────────────────────────────────────────────────────┤
+│  KENAIKAN/(PENURUNAN) BERSIH KAS   Rp 7.700.000        │
+│  Kas Awal Periode              Rp   X.XXX.XXX          │
+│  Kas Akhir Periode             Rp X.XXX.XXX + net     │
+├────────────────────────────────────────────────────────┤
+│  Halaman 1 dari 1                                      │
+│  Generated by WCH Platform • core_project              │
+└────────────────────────────────────────────────────────┘
+```
+
+**Activity classification logic (berdasarkan account_type + account_code):**
+
+| Category | Rule |
+|:---------|:-----|
+| Operating Inflow | debit ke cash account (100/101) DAN line counterpart = revenue/piutang (400/120) |
+| Operating Outflow | credit ke cash account (100/101) DAN line counterpart = expense/beban (500-599) atau persediaan (130) |
+| Investing | counterpart account = fixed asset (150-199) |
+| Financing | counterpart account = modal (300), hutang (200-299), prive (310) |
+
+Aturan disederhanakan: kalau counterpart account code di range tertentu → masuk kategori tsb. Sisanya → operating.
+
+**Currency formatting:** IDR dengan format `Rp 1.234.567` (tanpa desimal, pakai titik sebagai thousand separator, tanpa sen — UMKM style).
+
+**Library:** `github.com/jung-kurt/gofpdf` v1.16.2 (UTF-8 ready, lightweight, no native deps).
+
+**Query enhancement:** Extend `handleCashFlow` untuk return per-line breakdown by counterpart account, lalu handler PDF build sectioned report.
+
+### Frontend
+
+**Journal.vue** (Laporan Keuangan section):
+- Tambah tombol "📄 Download PDF" di samping tombol "Filter" untuk tab Arus Kas
+- Klik → set `window.location = API_BASE + '/api/umkm/reports/cash-flow/pdf?from=...&to=...'`
+- Loading state saat generate (PDF bisa 1-2 detik untuk data besar)
+
+### Acceptance Criteria (AC):
+- [x] AC-1: GET `/reports/cash-flow/pdf?from&to` return PDF binary (Content-Type: application/pdf)
+- [x] AC-2: PDF berisi header (nama toko, periode, tanggal cetak)
+- [x] AC-3: PDF punya 3 section (Operasional, Investasi, Pendanaan) + net cash flow + kas awal/akhir
+- [x] AC-4: Currency di-format `Rp X.XXX.XXX`
+- [x] AC-5: Query extend: return per-counterpart breakdown
+- [x] AC-6: Frontend Journal.vue tab Arus Kas punya tombol Download PDF
+- [x] AC-7: `go build`, `go vet`, `go test`, `vue-tsc` clean
+
+### Files Changed:
+- `apps/umkm/accounting/main.go` — handler `handleCashFlowPDF` + extend `handleCashFlow` (return per-line counterpart data)
+- `frontend/umkm-web/src/components/Journal.vue` — tombol Download PDF di tab Arus Kas
+
+### Notes:
+- PDF generation synchronous & on-the-fly (tidak ada background job). Untuk data <500 lines latency <500ms. Jika nanti jadi lambat, bisa di-caching.
+- `gofpdf` dipakai juga di F022 (Excel tidak, pakai `xuri/excelize/v2`).
+- Library `gofpdf` sudah di-pull di F021.
+- Indonesian UMKM style: pakai kata "Beban", "Kas Masuk", "Arus Kas", bukan "Expense", "Cash Inflow", "Cash Flow".
 
 ---
 

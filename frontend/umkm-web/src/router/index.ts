@@ -16,6 +16,7 @@ import ForgotPassword from '../components/ForgotPassword.vue'
 import ResetPassword from '../components/ResetPassword.vue'
 import Automations from '../components/Automations.vue'
 import ChatbotConfig from '../components/ChatbotConfig.vue'
+import DataTransfer from '../components/DataTransfer.vue'
 
 const routes = [
   { path: '/', component: DynamicDashboard, name: 'Dashboard' },
@@ -29,6 +30,7 @@ const routes = [
   { path: '/settings', component: Settings, name: 'Settings' },
   { path: '/automations', component: Automations, name: 'Automations' },
   { path: '/chatbot-config', component: ChatbotConfig, name: 'ChatbotConfig' },
+  { path: '/data-transfer', component: DataTransfer, name: 'DataTransfer' },
   { path: '/login', component: Login, name: 'Login', meta: { requiresGuest: true } },
   { path: '/register', component: Register, name: 'Register', meta: { requiresGuest: true } },
   { path: '/superadmin-login', component: SuperAdminLogin, name: 'SuperAdminLogin', meta: { requiresGuest: true } },

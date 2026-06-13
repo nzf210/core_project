@@ -167,6 +167,44 @@ export const api = {
     return res.json()
   },
 
+  // Cash Flow PDF (F021) — trigger browser download via window.location
+  cashFlowPDFUrl(from: string, to: string) {
+    return `${API_BASE}/api/umkm/reports/cash-flow/pdf?from=${from}&to=${to}`
+  },
+
+  // Import / Export (F022) — returns blob URL for download or JSON for import
+  async exportFile(endpoint: string, format: 'xlsx' | 'csv', extraParams: Record<string, string> = {}) {
+    const params = new URLSearchParams({ format, ...extraParams })
+    const res = await fetch(`${API_BASE}${endpoint}?${params}`, {
+      method: 'GET',
+      headers: headers(),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    return URL.createObjectURL(blob)
+  },
+
+  async importFile(endpoint: string, file: File) {
+    const form = new FormData()
+    form.append('file', file)
+    // Don't set Content-Type — let browser set multipart boundary
+    const h: Record<string, string> = {
+      'X-Tenant-ID': getTenantID(),
+    }
+    const token = getToken()
+    if (token) h['Authorization'] = `Bearer ${token}`
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      method: 'POST',
+      headers: h,
+      body: form,
+    })
+    return res.json()
+  },
+
+  templateURL(entity: 'products' | 'contacts' | 'journal', format: 'xlsx' | 'csv' = 'csv') {
+    return `${API_BASE}/api/umkm/import/template?entity=${entity}&format=${format}`
+  },
+
   async register(body: Record<string, any>) {
     const res = await fetch(`${API_BASE}/api/umkm/admin/tenants`, {
       method: 'POST',

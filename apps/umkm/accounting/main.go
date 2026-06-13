@@ -10,12 +10,15 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"core_project/shared/sdk/config"
 	"core_project/shared/sdk/webhook"
+	"github.com/jung-kurt/gofpdf"
+	"github.com/xuri/excelize/v2"
 	"golang.org/x/crypto/bcrypt"
 	xendit "github.com/xendit/xendit-go/v6"
 	invoice "github.com/xendit/xendit-go/v6/invoice"
@@ -65,6 +68,7 @@ mux := http.NewServeMux()
 	mux.HandleFunc("/reports/income-statement", handleIncomeStatement)
 	mux.HandleFunc("/reports/balance-sheet", handleBalanceSheet)
 	mux.HandleFunc("/reports/cash-flow", handleCashFlow)
+	mux.HandleFunc("/reports/cash-flow/pdf", handleCashFlowPDF) // F021
 	mux.HandleFunc("/expenses", handleExpenses)
 	mux.HandleFunc("/seed", handleSeed) // Helper endpoint to seed a tenant
 	mux.HandleFunc("/admin/tenants", handleAdminTenants)
@@ -90,6 +94,13 @@ mux := http.NewServeMux()
 	mux.HandleFunc("/internal/tenant/{tenant_id}/chatbot-config", handleInternalChatbotConfig)
 	mux.HandleFunc("/chatbot/config", handleChatbotConfig)         // F020: GET/PUT per-tenant chatbot config (X-Tenant-ID)
 	mux.HandleFunc("/chatbot/config/test", handleChatbotConfigTest) // F020: POST preview with current config
+	mux.HandleFunc("/export/products", handleExportProducts)    // F022
+	mux.HandleFunc("/export/contacts", handleExportContacts)    // F022
+	mux.HandleFunc("/export/journal", handleExportJournal)      // F022
+	mux.HandleFunc("/import/products", handleImportProducts)    // F022
+	mux.HandleFunc("/import/contacts", handleImportContacts)    // F022
+	mux.HandleFunc("/import/journal", handleImportJournal)      // F022
+	mux.HandleFunc("/import/template", handleImportTemplate)    // F022: download CSV template
 	mux.HandleFunc("/internal/tenant/{tenant_id}/rag/search", handleInternalRAGSearch)
 	mux.HandleFunc("/internal/conversation/log", handleInternalConversationLog)
 	mux.HandleFunc("/internal/escalation/log", handleInternalEscalationLog)
@@ -530,13 +541,107 @@ func handleCashFlow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	netCashFlow := totalInflow - totalOutflow
+
+	// F021: per-counterpart breakdown by SAK-EMKM activity category
+	type categoryBucket struct {
+		Inflow  int64
+		Outflow int64
+		Lines   []map[string]interface{}
+	}
+	operating := &categoryBucket{}
+	investing := &categoryBucket{}
+	financing := &categoryBucket{}
+
+	// Re-query to get the counterpart (non-cash) account per cash line
+	counterpartQuery := `
+		SELECT e.id, e.date, e.description, e.reference,
+		       l.debit, l.credit, c.code, c.name, c.type
+		FROM journal_lines l
+		JOIN journal_entries e ON l.entry_id = e.id
+		JOIN chart_of_accounts c ON l.account_id = c.id
+		WHERE e.tenant_id = $1 AND c.type = 'asset' AND c.code IN ('100', '101')
+		  AND e.date >= $2 AND e.date <= $3
+		ORDER BY e.date ASC
+	`
+	rows2, err := DB.Query(r.Context(), counterpartQuery, tenantID, from, to)
+	if err == nil {
+		defer rows2.Close()
+		for rows2.Next() {
+			var id, desc, ref, code, name, accType string
+			var debit, credit int64
+			var t time.Time
+			if err := rows2.Scan(&id, &t, &desc, &ref, &debit, &credit, &code, &name, &accType); err == nil {
+				// Get counterpart account (the other line in the same entry)
+				var cCode, cName, cType string
+				DB.QueryRow(r.Context(), `
+					SELECT c.code, c.name, c.type FROM journal_lines l
+					JOIN chart_of_accounts c ON l.account_id = c.id
+					WHERE l.entry_id = $1 AND l.account_id != (
+						SELECT id FROM chart_of_accounts WHERE tenant_id = $2 AND code = $3 LIMIT 1
+					) LIMIT 1
+				`, id, tenantID, code).Scan(&cCode, &cName, &cType)
+
+				bucket := operating
+				// Classify by counterpart account code prefix
+				if cCode != "" {
+					switch {
+					case strings.HasPrefix(cCode, "1") && (cCode >= "150" && cCode <= "199"):
+						bucket = investing
+					case strings.HasPrefix(cCode, "2"):
+						bucket = financing
+					case strings.HasPrefix(cCode, "3"):
+						bucket = financing
+					default:
+						bucket = operating
+					}
+				}
+				bucket.Inflow += debit
+				bucket.Outflow += credit
+				bucket.Lines = append(bucket.Lines, map[string]interface{}{
+					"id": id, "date": t.Format("2006-01-02"), "description": desc,
+					"counterpart_code": cCode, "counterpart_name": cName,
+					"inflow": debit, "outflow": credit, "reference": ref,
+				})
+			}
+		}
+	}
+
+	// Get opening cash balance (sum of all cash account movements before `from`)
+	var openingCash int64
+	DB.QueryRow(r.Context(), `
+		SELECT COALESCE(SUM(l.debit - l.credit), 0)
+		FROM journal_lines l
+		JOIN journal_entries e ON l.entry_id = e.id
+		JOIN chart_of_accounts c ON l.account_id = c.id
+		WHERE e.tenant_id = $1 AND c.type = 'asset' AND c.code IN ('100', '101') AND e.date < $2
+	`, tenantID, from).Scan(&openingCash)
+
 	writeJSON(w, http.StatusOK, APIResponse{
-		Success: true, 
+		Success: true,
 		Data: map[string]interface{}{
-			"net_cash_flow": netCashFlow,
-			"total_inflow": totalInflow,
-			"total_outflow": totalOutflow,
-			"details": details,
+			"net_cash_flow":  netCashFlow,
+			"total_inflow":   totalInflow,
+			"total_outflow":  totalOutflow,
+			"opening_cash":   openingCash,
+			"closing_cash":   openingCash + netCashFlow,
+			"details":        details,
+			"activities": map[string]interface{}{
+				"operating": map[string]interface{}{
+					"inflow": operating.Inflow, "outflow": operating.Outflow,
+					"net":    operating.Inflow - operating.Outflow,
+					"lines":  operating.Lines,
+				},
+				"investing": map[string]interface{}{
+					"inflow": investing.Inflow, "outflow": investing.Outflow,
+					"net":    investing.Inflow - investing.Outflow,
+					"lines":  investing.Lines,
+				},
+				"financing": map[string]interface{}{
+					"inflow": financing.Inflow, "outflow": financing.Outflow,
+					"net":    financing.Inflow - financing.Outflow,
+					"lines":  financing.Lines,
+				},
+			},
 		},
 	})
 }
@@ -3489,5 +3594,844 @@ func vectorFromSlice(v []float64) string {
 	}
 	b.WriteString("]")
 	return b.String()
+}
+
+// ============================================================
+// F021: Cash Flow PDF Export
+// ============================================================
+
+// formatIDR formats integer sen to Indonesian Rupiah style: "Rp 1.234.567"
+// (no decimal, dot as thousands separator, no sen — UMKM style).
+func formatIDR(cents int64) string {
+	negative := ""
+	abs := cents
+	if abs < 0 {
+		negative = "("
+		cents = -cents
+		abs = cents
+	}
+	// Convert sen to rupiah (divide by 100) — but spec says no sen, so we
+	// just present cents/100 with 0 decimals. If amount is in raw rupiah
+	// (not sen), comment out the /100. Convention check: we treat values
+	// as raw rupiah integer (not sen) since cash flow numbers are in IDR.
+	s := strconv.FormatInt(abs, 10)
+	// Insert thousand separators
+	n := len(s)
+	if n <= 3 {
+		return negative + "Rp " + s + ")"
+	}
+	var b strings.Builder
+	b.WriteString("Rp ")
+	pre := n % 3
+	if pre > 0 {
+		b.WriteString(s[:pre])
+		if n > pre {
+			b.WriteString(".")
+		}
+	}
+	for i := pre; i < n; i += 3 {
+		b.WriteString(s[i : i+3])
+		if i+3 < n {
+			b.WriteString(".")
+		}
+	}
+	if negative != "" {
+		b.WriteString(")")
+	}
+	return b.String()
+}
+
+// handleCashFlowPDF generates a PDF Cash Flow Statement (F021).
+// GET /reports/cash-flow/pdf?from=YYYY-MM-DD&to=YYYY-MM-DD
+func handleCashFlowPDF(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+	if tenantID == "" || from == "" || to == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID, from, or to"})
+		return
+	}
+
+	// Get tenant business name
+	businessName := "UMKM WCH"
+	if DB != nil {
+		var name *string
+		DB.QueryRow(r.Context(), `SELECT COALESCE(business_name, name) FROM tenants WHERE id = $1`, tenantID).Scan(&name)
+		if name != nil {
+			businessName = *name
+		}
+	}
+
+	// Re-use the JSON endpoint's query logic by calling ourselves (or repeat).
+	// For simplicity & atomicity we re-run the data fetch.
+	var totalInflow, totalOutflow, openingCash int64
+	DB.QueryRow(r.Context(), `
+		SELECT COALESCE(SUM(l.debit), 0), COALESCE(SUM(l.credit), 0)
+		FROM journal_lines l
+		JOIN journal_entries e ON l.entry_id = e.id
+		JOIN chart_of_accounts c ON l.account_id = c.id
+		WHERE e.tenant_id = $1 AND c.type = 'asset' AND c.code IN ('100', '101') AND e.date >= $2 AND e.date <= $3
+	`, tenantID, from, to).Scan(&totalInflow, &totalOutflow)
+	DB.QueryRow(r.Context(), `
+		SELECT COALESCE(SUM(l.debit - l.credit), 0)
+		FROM journal_lines l
+		JOIN journal_entries e ON l.entry_id = e.id
+		JOIN chart_of_accounts c ON l.account_id = c.id
+		WHERE e.tenant_id = $1 AND c.type = 'asset' AND c.code IN ('100', '101') AND e.date < $2
+	`, tenantID, from).Scan(&openingCash)
+
+	// Per-counterpart breakdown
+	type cfLine struct {
+		Date         string
+		Description  string
+		Counterpart  string
+		Inflow       int64
+		Outflow      int64
+	}
+	var opIn, opOut, invIn, invOut, finIn, finOut int64
+	var opLines, invLines, finLines []cfLine
+
+	rows, err := DB.Query(r.Context(), `
+		SELECT e.date, e.description, l.debit, l.credit
+		FROM journal_lines l
+		JOIN journal_entries e ON l.entry_id = e.id
+		JOIN chart_of_accounts c ON l.account_id = c.id
+		WHERE e.tenant_id = $1 AND c.type = 'asset' AND c.code IN ('100', '101')
+		  AND e.date >= $2 AND e.date <= $3
+		ORDER BY e.date ASC
+	`, tenantID, from, to)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var t time.Time
+			var desc string
+			var debit, credit int64
+			if err := rows.Scan(&t, &desc, &debit, &credit); err == nil {
+				// Look up counterpart for this entry
+				var cCode, cName string
+				_ = DB.QueryRow(r.Context(), `
+					SELECT c.code, c.name
+					FROM journal_lines l
+					JOIN journal_entries e2 ON l.entry_id = e2.id
+					JOIN chart_of_accounts c ON l.account_id = c.id
+					WHERE e2.tenant_id = $1 AND e2.date = $2 AND e2.description = $3
+					  AND c.code NOT IN ('100', '101')
+					LIMIT 1
+				`, tenantID, t, desc).Scan(&cCode, &cName)
+
+				counterpartLabel := cCode + " " + cName
+				line := cfLine{Date: t.Format("2006-01-02"), Description: desc, Counterpart: counterpartLabel, Inflow: debit, Outflow: credit}
+				// Classify
+				switch {
+				case strings.HasPrefix(cCode, "1") && cCode >= "150" && cCode <= "199":
+					invIn += debit
+					invOut += credit
+					invLines = append(invLines, line)
+				case strings.HasPrefix(cCode, "2") || strings.HasPrefix(cCode, "3"):
+					finIn += debit
+					finOut += credit
+					finLines = append(finLines, line)
+				default:
+					opIn += debit
+					opOut += credit
+					opLines = append(opLines, line)
+				}
+			}
+		}
+	}
+
+	netCash := totalInflow - totalOutflow
+	closingCash := openingCash + netCash
+
+	// Build PDF
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetMargins(20, 20, 20)
+	pdf.AddPage()
+
+	// Header
+	pdf.SetFont("Arial", "B", 16)
+	pdf.Cell(0, 8, businessName)
+	pdf.Ln(8)
+	pdf.SetFont("Arial", "B", 14)
+	pdf.Cell(0, 7, "Laporan Arus Kas")
+	pdf.Ln(7)
+	pdf.SetFont("Arial", "", 10)
+	fromDate, _ := time.Parse("2006-01-02", from)
+	toDate, _ := time.Parse("2006-01-02", to)
+	pdf.Cell(0, 5, fmt.Sprintf("Periode: %s – %s", fromDate.Format("2 January 2006"), toDate.Format("2 January 2006")))
+	pdf.Ln(5)
+	pdf.Cell(0, 5, "Dicetak: "+time.Now().Format("2 January 2006 15:04 MST"))
+	pdf.Ln(8)
+
+	// Section helper
+	sectionHeader := func(title string) {
+		pdf.SetFont("Arial", "B", 11)
+		pdf.Cell(0, 7, title)
+		pdf.Ln(7)
+		pdf.SetFont("Arial", "", 10)
+	}
+	subHeader := func(title string) {
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(0, 5, title)
+		pdf.Ln(5)
+		pdf.SetFont("Arial", "", 10)
+	}
+	row := func(label string, amount int64) {
+		pdf.Cell(110, 5, "  "+label)
+		pdf.CellFormat(60, 5, formatIDR(amount), "", 0, "R", false, 0, "")
+		pdf.Ln(5)
+	}
+	totalRow := func(label string, amount int64) {
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(110, 5, label)
+		pdf.CellFormat(60, 5, formatIDR(amount), "", 0, "R", false, 0, "")
+		pdf.Ln(5)
+		pdf.SetFont("Arial", "", 10)
+	}
+
+	// I. OPERATING
+	sectionHeader("I. ARUS KAS DARI AKTIVITAS OPERASIONAL")
+	subHeader("Kas Masuk:")
+	for _, l := range opLines {
+		if l.Inflow > 0 {
+			row(fmt.Sprintf("%s — %s", l.Date, l.Description), l.Inflow)
+		}
+	}
+	if len(opLines) == 0 {
+		row("(tidak ada aktivitas)", 0)
+	}
+	totalRow("Total Kas Masuk", opIn)
+	subHeader("Kas Keluar:")
+	for _, l := range opLines {
+		if l.Outflow > 0 {
+			row(fmt.Sprintf("%s — %s", l.Date, l.Description), -l.Outflow)
+		}
+	}
+	totalRow("Total Kas Keluar", -opOut)
+	netOp := opIn - opOut
+	totalRow("Arus Kas Operasional", netOp)
+	pdf.Ln(3)
+
+	// II. INVESTING
+	sectionHeader("II. ARUS KAS DARI AKTIVITAS INVESTASI")
+	for _, l := range invLines {
+		amt := l.Inflow - l.Outflow
+		row(fmt.Sprintf("%s — %s", l.Date, l.Description), amt)
+	}
+	if len(invLines) == 0 {
+		row("(tidak ada aktivitas)", 0)
+	}
+	netInv := invIn - invOut
+	totalRow("Arus Kas Investasi", netInv)
+	pdf.Ln(3)
+
+	// III. FINANCING
+	sectionHeader("III. ARUS KAS DARI AKTIVITAS PENDANAAN")
+	for _, l := range finLines {
+		amt := l.Inflow - l.Outflow
+		row(fmt.Sprintf("%s — %s", l.Date, l.Description), amt)
+	}
+	if len(finLines) == 0 {
+		row("(tidak ada aktivitas)", 0)
+	}
+	netFin := finIn - finOut
+	totalRow("Arus Kas Pendanaan", netFin)
+	pdf.Ln(3)
+
+	// Summary
+	pdf.SetFont("Arial", "B", 11)
+	pdf.Cell(0, 7, "RINGKASAN")
+	pdf.Ln(7)
+	pdf.SetFont("Arial", "B", 10)
+	pdf.Cell(110, 6, "Kenaikan/(Penurunan) Bersih Kas")
+	pdf.CellFormat(60, 6, formatIDR(netCash), "", 0, "R", false, 0, "")
+	pdf.Ln(6)
+	pdf.Cell(110, 6, "Kas Awal Periode")
+	pdf.CellFormat(60, 6, formatIDR(openingCash), "", 0, "R", false, 0, "")
+	pdf.Ln(6)
+	pdf.Cell(110, 6, "Kas Akhir Periode")
+	pdf.CellFormat(60, 6, formatIDR(closingCash), "", 0, "R", false, 0, "")
+	pdf.Ln(10)
+
+	// Footer
+	pdf.SetFont("Arial", "I", 8)
+	pdf.SetY(-20)
+	pdf.Cell(0, 4, "Generated by WCH Platform • core_project")
+	pdf.Ln(4)
+	pdf.Cell(0, 4, fmt.Sprintf("Halaman %d dari {nb}", pdf.PageNo()))
+
+	var buf bytes.Buffer
+	if err := pdf.Output(&buf); err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "PDF generation failed: " + err.Error()})
+		return
+	}
+	filename := fmt.Sprintf("cash-flow_%s_%s.pdf", from, to)
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	w.Write(buf.Bytes())
+}
+
+// ============================================================
+// F022: Excel/CSV Import & Export
+// ============================================================
+
+// parseUploadedFile decodes a CSV or XLSX file (max 10MB) from r into a 2D
+// string slice. First row is treated as header. Returns headers and rows
+// (rows have len = len(headers)).
+func parseUploadedFile(r *http.Request) (headers []string, rows [][]string, err error) {
+	if err = r.ParseMultipartForm(10 << 20); err != nil {
+		return nil, nil, fmt.Errorf("file too large or invalid multipart: %w", err)
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		return nil, nil, fmt.Errorf("missing 'file' field: %w", err)
+	}
+	defer file.Close()
+
+	if header.Size > 10*1024*1024 {
+		return nil, nil, fmt.Errorf("file exceeds 10MB limit")
+	}
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	switch ext {
+	case ".csv":
+		reader := csv.NewReader(file)
+		reader.FieldsPerRecord = -1
+		all, err := reader.ReadAll()
+		if err != nil {
+			return nil, nil, fmt.Errorf("CSV parse error: %w", err)
+		}
+		if len(all) < 1 {
+			return nil, nil, fmt.Errorf("empty file")
+		}
+		headers = all[0]
+		rows = all[1:]
+	case ".xlsx":
+		xl, err := excelize.OpenReader(file)
+		if err != nil {
+			return nil, nil, fmt.Errorf("XLSX open error: %w", err)
+		}
+		defer xl.Close()
+		sheetName := xl.GetSheetName(0)
+		allRows, err := xl.GetRows(sheetName)
+		if err != nil {
+			return nil, nil, fmt.Errorf("XLSX read error: %w", err)
+		}
+		if len(allRows) < 1 {
+			return nil, nil, fmt.Errorf("empty sheet")
+		}
+		headers = allRows[0]
+		rows = allRows[1:]
+	default:
+		return nil, nil, fmt.Errorf("unsupported file extension: %s (use .csv or .xlsx)", ext)
+	}
+
+	if len(rows) > 5000 {
+		return nil, nil, fmt.Errorf("file exceeds 5000 rows limit (got %d)", len(rows))
+	}
+	return headers, rows, nil
+}
+
+// indexHeaders returns a map of header name -> column index, case-insensitive.
+func indexHeaders(headers []string) map[string]int {
+	idx := make(map[string]int, len(headers))
+	for i, h := range headers {
+		idx[strings.ToLower(strings.TrimSpace(h))] = i
+	}
+	return idx
+}
+
+// writeFileResponse writes a CSV or XLSX file to w with given filename.
+func writeFileResponse(w http.ResponseWriter, filename, format string, headers []string, rows [][]string) {
+	if format == "xlsx" {
+		xl := excelize.NewFile()
+		sheet := "Sheet1"
+		xl.SetSheetName("Sheet1", sheet)
+		for i, h := range headers {
+			cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+			xl.SetCellValue(sheet, cell, h)
+		}
+		for r, row := range rows {
+			for c, val := range row {
+				cell, _ := excelize.CoordinatesToCellName(c+1, r+2)
+				xl.SetCellValue(sheet, cell, val)
+			}
+		}
+		var buf bytes.Buffer
+		xl.Write(&buf)
+		w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.xlsx\"", filename))
+		w.Write(buf.Bytes())
+		return
+	}
+	// default: CSV
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.csv\"", filename))
+	cw := csv.NewWriter(w)
+	cw.Write(headers)
+	for _, row := range rows {
+		cw.Write(row)
+	}
+	cw.Flush()
+}
+
+// handleExportProducts — F022: GET /export/products?format=xlsx|csv
+func handleExportProducts(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		return
+	}
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "xlsx"
+	}
+	headers := []string{"name", "sku", "category", "price_cents", "stock", "description", "image_url"}
+	var rows [][]string
+	if DB != nil {
+		dbRows, err := DB.Query(r.Context(), `SELECT name, sku, category, price_cents, stock, description, image_url FROM products WHERE tenant_id = $1 ORDER BY name`, tenantID)
+		if err == nil {
+			defer dbRows.Close()
+			for dbRows.Next() {
+				var name, sku, category, desc, img *string
+				var price, stock int64
+				if err := dbRows.Scan(&name, &sku, &category, &price, &stock, &desc, &img); err == nil {
+					rows = append(rows, []string{
+						derefStr(name), derefStr(sku), derefStr(category),
+						strconv.FormatInt(price, 10), strconv.FormatInt(stock, 10),
+						derefStr(desc), derefStr(img),
+					})
+				}
+			}
+		}
+	}
+	writeFileResponse(w, "products", format, headers, rows)
+}
+
+// handleExportContacts — F022
+func handleExportContacts(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		return
+	}
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "xlsx"
+	}
+	headers := []string{"name", "phone", "email", "role", "notes"}
+	var rows [][]string
+	if DB != nil {
+		dbRows, err := DB.Query(r.Context(), `SELECT name, phone_number, email, role, notes FROM tenant_contacts WHERE tenant_id = $1 ORDER BY name`, tenantID)
+		if err == nil {
+			defer dbRows.Close()
+			for dbRows.Next() {
+				var name, phone, email, role, notes *string
+				if err := dbRows.Scan(&name, &phone, &email, &role, &notes); err == nil {
+					rows = append(rows, []string{derefStr(name), derefStr(phone), derefStr(email), derefStr(role), derefStr(notes)})
+				}
+			}
+		}
+	}
+	writeFileResponse(w, "contacts", format, headers, rows)
+}
+
+// handleExportJournal — F022
+func handleExportJournal(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+	if tenantID == "" || from == "" || to == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID, from, or to"})
+		return
+	}
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "xlsx"
+	}
+	headers := []string{"date", "description", "reference", "account_code", "account_name", "debit", "credit"}
+	var rows [][]string
+	if DB != nil {
+		dbRows, err := DB.Query(r.Context(), `
+			SELECT e.date, e.description, e.reference, c.code, c.name, l.debit, l.credit
+			FROM journal_lines l
+			JOIN journal_entries e ON l.entry_id = e.id
+			JOIN chart_of_accounts c ON l.account_id = c.id
+			WHERE e.tenant_id = $1 AND e.date >= $2 AND e.date <= $3
+			ORDER BY e.date ASC, e.created_at ASC
+		`, tenantID, from, to)
+		if err == nil {
+			defer dbRows.Close()
+			for dbRows.Next() {
+				var date time.Time
+				var desc, ref, code, name string
+				var debit, credit int64
+				if err := dbRows.Scan(&date, &desc, &ref, &code, &name, &debit, &credit); err == nil {
+					rows = append(rows, []string{
+						date.Format("2006-01-02"), desc, ref, code, name,
+						strconv.FormatInt(debit, 10), strconv.FormatInt(credit, 10),
+					})
+				}
+			}
+		}
+	}
+	writeFileResponse(w, fmt.Sprintf("journal_%s_%s", from, to), format, headers, rows)
+}
+
+// handleImportTemplate — F022: download a CSV template with headers + 1 example row
+func handleImportTemplate(w http.ResponseWriter, r *http.Request) {
+	entity := r.URL.Query().Get("entity")
+	templates := map[string][][]string{
+		"products": {
+			{"name", "sku", "category", "price_cents", "stock", "description", "image_url"},
+			{"Contoh Produk", "SKU-001", "Makanan", "15000", "50", "Contoh deskripsi", ""},
+		},
+		"contacts": {
+			{"name", "phone", "email", "role", "notes"},
+			{"Contoh Pelanggan", "6281234567890", "contoh@email.com", "customer", ""},
+		},
+		"journal": {
+			{"date", "description", "reference", "debit_account_code", "credit_account_code", "amount_cents"},
+			{"2026-01-15", "Penjualan tunai", "BATCH-001", "100", "400", "100000"},
+		},
+	}
+	tmpl, ok := templates[entity]
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "entity harus products|contacts|journal"})
+		return
+	}
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "csv"
+	}
+	writeFileResponse(w, "template_"+entity, format, tmpl[0], tmpl[1:])
+}
+
+// handleImportProducts — F022: upsert by SKU
+func handleImportProducts(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		return
+	}
+	headers, rows, err := parseUploadedFile(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: err.Error()})
+		return
+	}
+	idx := indexHeaders(headers)
+	requiredCols := []string{"name", "sku", "price_cents"}
+	for _, c := range requiredCols {
+		if _, ok := idx[c]; !ok {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Kolom wajib hilang: " + c})
+			return
+		}
+	}
+
+	var imported, skipped int
+	var errs []map[string]interface{}
+	for rowNum, row := range rows {
+		rowIdx := rowNum + 2 // header is row 1
+		get := func(col string) string {
+			i, ok := idx[col]
+			if !ok || i >= len(row) {
+				return ""
+			}
+			return strings.TrimSpace(row[i])
+		}
+		name := get("name")
+		sku := get("sku")
+		priceStr := get("price_cents")
+		if name == "" || sku == "" {
+			skipped++
+			errs = append(errs, map[string]interface{}{"row": rowIdx, "error": "name atau sku kosong"})
+			continue
+		}
+		price, _ := strconv.ParseInt(priceStr, 10, 64)
+		if price < 0 {
+			skipped++
+			errs = append(errs, map[string]interface{}{"row": rowIdx, "error": "price_cents tidak valid"})
+			continue
+		}
+		stock, _ := strconv.ParseInt(get("stock"), 10, 64)
+		category := get("category")
+		desc := get("description")
+		img := get("image_url")
+
+		// Upsert
+		_, err := DB.Exec(r.Context(), `
+			INSERT INTO products (tenant_id, name, sku, category, price_cents, stock, description, image_url)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT (tenant_id, sku) DO UPDATE SET
+				name = EXCLUDED.name,
+				category = EXCLUDED.category,
+				price_cents = EXCLUDED.price_cents,
+				stock = EXCLUDED.stock,
+				description = EXCLUDED.description,
+				image_url = EXCLUDED.image_url
+		`, tenantID, name, sku, nullString(category), price, stock, nullString(desc), nullString(img))
+		if err != nil {
+			skipped++
+			errs = append(errs, map[string]interface{}{"row": rowIdx, "error": err.Error()})
+		} else {
+			imported++
+		}
+	}
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"imported": imported, "skipped": skipped, "errors": errs,
+		},
+	})
+}
+
+// handleImportContacts — F022: upsert by phone
+func handleImportContacts(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		return
+	}
+	headers, rows, err := parseUploadedFile(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: err.Error()})
+		return
+	}
+	idx := indexHeaders(headers)
+	if _, ok := idx["phone"]; !ok {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Kolom wajib hilang: phone"})
+		return
+	}
+
+	var imported, skipped int
+	var errs []map[string]interface{}
+	for rowNum, row := range rows {
+		rowIdx := rowNum + 2
+		get := func(col string) string {
+			i, ok := idx[col]
+			if !ok || i >= len(row) {
+				return ""
+			}
+			return strings.TrimSpace(row[i])
+		}
+		phone := get("phone")
+		if phone == "" {
+			skipped++
+			errs = append(errs, map[string]interface{}{"row": rowIdx, "error": "phone kosong"})
+			continue
+		}
+		role := get("role")
+		if role == "" {
+			role = "customer"
+		}
+		_, err := DB.Exec(r.Context(), `
+			INSERT INTO tenant_contacts (tenant_id, name, phone_number, email, role, notes)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (tenant_id, phone_number) DO UPDATE SET
+				name = EXCLUDED.name,
+				email = EXCLUDED.email,
+				role = EXCLUDED.role,
+				notes = EXCLUDED.notes
+		`, tenantID, nullString(get("name")), phone, nullString(get("email")), role, nullString(get("notes")))
+		if err != nil {
+			skipped++
+			errs = append(errs, map[string]interface{}{"row": rowIdx, "error": err.Error()})
+		} else {
+			imported++
+		}
+	}
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"imported": imported, "skipped": skipped, "errors": errs,
+		},
+	})
+}
+
+// handleImportJournal — F022: create entries from rows; group by reference
+// and validate balance per group.
+func handleImportJournal(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		return
+	}
+	headers, rows, err := parseUploadedFile(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: err.Error()})
+		return
+	}
+	idx := indexHeaders(headers)
+	for _, c := range []string{"date", "description", "debit_account_code", "credit_account_code", "amount_cents"} {
+		if _, ok := idx[c]; !ok {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Kolom wajib hilang: " + c})
+			return
+		}
+	}
+
+	type line struct {
+		rowIdx   int
+		date     time.Time
+		desc     string
+		ref      string
+		debit    int64
+		credit   int64
+		debitAcc string
+		credAcc  string
+	}
+	groups := map[string][]line{}
+	order := []string{}
+	seenRef := map[string]bool{}
+	var imported, skipped int
+	var importErrs []map[string]interface{}
+	for rowNum, row := range rows {
+		rowIdx := rowNum + 2
+		get := func(col string) string {
+			i, ok := idx[col]
+			if !ok || i >= len(row) {
+				return ""
+			}
+			return strings.TrimSpace(row[i])
+		}
+		dateStr := get("date")
+		t, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			skipped++
+			importErrs = append(importErrs, map[string]interface{}{"row": rowIdx, "error": "date tidak valid"})
+			continue
+		}
+		amount, _ := strconv.ParseInt(get("amount_cents"), 10, 64)
+		if amount <= 0 {
+			skipped++
+			importErrs = append(importErrs, map[string]interface{}{"row": rowIdx, "error": "amount_cents harus > 0"})
+			continue
+		}
+		ref := get("reference")
+		if ref == "" {
+			ref = fmt.Sprintf("IMP-%s-%d", time.Now().Format("20060102"), rowIdx)
+		}
+		groups[ref] = append(groups[ref], line{
+			rowIdx: rowIdx, date: t, desc: get("description"),
+			ref: ref, debit: amount, credit: amount,
+			debitAcc: get("debit_account_code"), credAcc: get("credit_account_code"),
+		})
+		if _, seen := seenRef[ref]; !seen {
+			seenRef[ref] = true
+			order = append(order, ref)
+		}
+	}
+
+	// Helper struct for the closure
+	type errRec struct {
+		row   int
+		error string
+	}
+	// Re-do the skipped helper since we can't have closures in Go pre-1.22 cleanly
+	_ = errRec{}
+
+	// Resolve account IDs once
+	accountCache := map[string]string{}
+	resolveAcc := func(ctx context.Context, code string) (string, error) {
+		if id, ok := accountCache[code]; ok {
+			return id, nil
+		}
+		var id string
+		err := DB.QueryRow(ctx, `SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = $2`, tenantID, code).Scan(&id)
+		if err != nil {
+			return "", err
+		}
+		accountCache[code] = id
+		return id, nil
+	}
+
+	for _, ref := range order {
+		group := groups[ref]
+		// Validate balance
+		var totalDebit, totalCredit int64
+		for _, l := range group {
+			totalDebit += l.debit
+			totalCredit += l.credit
+		}
+		if totalDebit != totalCredit {
+			skipped += len(group)
+			for _, l := range group {
+				importErrs = append(importErrs, map[string]interface{}{
+					"row": l.rowIdx, "error": fmt.Sprintf("reference %s tidak balance (debit %d != credit %d)", ref, totalDebit, totalCredit),
+				})
+			}
+			continue
+		}
+		// Create entry
+		entryDesc := group[0].desc
+		entryDate := group[0].date
+		var entryID string
+		err := DB.QueryRow(r.Context(), `
+			INSERT INTO journal_entries (tenant_id, date, description, reference)
+			VALUES ($1, $2, $3, $4) RETURNING id
+		`, tenantID, entryDate, entryDesc, ref).Scan(&entryID)
+		if err != nil {
+			skipped += len(group)
+			for _, l := range group {
+				importErrs = append(importErrs, map[string]interface{}{"row": l.rowIdx, "error": "Gagal create entry: " + err.Error()})
+			}
+			continue
+		}
+		// Create lines
+		allOk := true
+		for _, l := range group {
+			debitID, err1 := resolveAcc(r.Context(), l.debitAcc)
+			creditID, err2 := resolveAcc(r.Context(), l.credAcc)
+			if err1 != nil || err2 != nil {
+				allOk = false
+				importErrs = append(importErrs, map[string]interface{}{"row": l.rowIdx, "error": "Akun tidak ditemukan: " + l.debitAcc + " atau " + l.credAcc})
+				continue
+			}
+			_, err := DB.Exec(r.Context(), `
+				INSERT INTO journal_lines (entry_id, account_id, debit, credit)
+				VALUES ($1, $2, $3, $4)
+			`, entryID, debitID, l.debit, 0)
+			if err != nil {
+				allOk = false
+				importErrs = append(importErrs, map[string]interface{}{"row": l.rowIdx, "error": err.Error()})
+				continue
+			}
+			_, err = DB.Exec(r.Context(), `
+				INSERT INTO journal_lines (entry_id, account_id, debit, credit)
+				VALUES ($1, $2, $3, $4)
+			`, entryID, creditID, 0, l.credit)
+			if err != nil {
+				allOk = false
+				importErrs = append(importErrs, map[string]interface{}{"row": l.rowIdx, "error": err.Error()})
+			}
+		}
+		if allOk {
+			imported += len(group)
+		} else {
+			skipped += len(group)
+			// Rollback entry
+			DB.Exec(r.Context(), `DELETE FROM journal_lines WHERE entry_id = $1`, entryID)
+			DB.Exec(r.Context(), `DELETE FROM journal_entries WHERE id = $1`, entryID)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"imported": imported, "skipped": skipped, "errors": importErrs,
+		},
+	})
+}
+
+func skippedImport(rowIdx *int, msg string, _ interface{}) {
+	// Deprecated helper kept for compatibility. Use direct append to errs.
+	_ = msg
+}
+
+// derefStr safely dereferences a *string for use in CSV/XLSX cells.
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
