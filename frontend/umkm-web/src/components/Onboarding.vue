@@ -88,6 +88,11 @@
 
           <!-- Beli Paket -->
           <div v-if="activationTab === 'buy'" class="activation-panel">
+            <!-- Billing cycle toggle -->
+            <div class="billing-toggle">
+              <button :class="['toggle-btn', billingCycle === 'monthly' ? 'active' : '']" @click="billingCycle = 'monthly'">Bulanan</button>
+              <button :class="['toggle-btn', billingCycle === 'yearly' ? 'active' : '']" @click="billingCycle = 'yearly'">Tahunan <span class="save-badge">Hemat</span></button>
+            </div>
             <div class="plan-selector">
               <div
                 v-for="plan in plans"
@@ -97,7 +102,10 @@
               >
                 <div class="plan-badge" v-if="plan.sort_order === 2">Populer</div>
                 <div class="plan-name">{{ plan.name }}</div>
-                <div class="plan-price">Rp {{ formatPrice(plan.price_monthly) }}<span>/bulan</span></div>
+                <div class="plan-price">
+                  <span v-if="billingCycle === 'monthly'">Rp {{ formatPrice(plan.price_monthly) }}<span>/bulan</span></span>
+                  <span v-else>Rp {{ formatPrice(plan.price_yearly) }}<span>/tahun</span></span>
+                </div>
                 <ul class="plan-features">
                   <li v-for="f in plan.features" :key="f.feature_key">{{ f.feature_name }}</li>
                 </ul>
@@ -165,6 +173,7 @@ const businessName = ref('')
 const businessAddress = ref('')
 const waNumber = ref('')
 const selectedPlan = ref('')
+const billingCycle = ref<'monthly' | 'yearly'>('monthly')
 const activationTab = ref<'buy' | 'voucher'>('buy')
 const isActivating = ref(false)
 const isActivated = ref(false)
@@ -277,7 +286,7 @@ const buyPackage = async () => {
   activationError.value = ''
   paymentInfo.value = ''
   try {
-    const data = await api.post('/subscribe', { plan_id: selectedPlan.value })
+    const data = await api.post('/subscribe', { plan_id: selectedPlan.value, billing_cycle: billingCycle.value })
     if (data.status >= 400) {
       activationError.value = data.message || 'Gagal membuat invoice'
       return
@@ -781,5 +790,45 @@ onMounted(async () => {
 
 .payment-info a {
   color: #3b82f6;
+}
+
+.billing-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 4px;
+  width: fit-content;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.toggle-btn.active {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.save-badge {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 </style>
