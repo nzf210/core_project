@@ -116,6 +116,13 @@ func main() {
 	mux.Handle("/v1/chat", tenantContextMiddleware(quota(http.HandlerFunc(handleChat))))
 	mux.Handle("/v1/chat/stream", tenantContextMiddleware(quota(http.HandlerFunc(handleChatStream))))
 	mux.Handle("/v1/embeddings", tenantContextMiddleware(quota(http.HandlerFunc(handleEmbeddings))))
+	
+	// Quota-wrapped multimodal endpoints (MOCK)
+	mux.Handle("/v1/vision", tenantContextMiddleware(auth.QuotaMiddlewareFeature("ai_vision")(http.HandlerFunc(HandleVision))))
+	mux.Handle("/v1/audio/transcribe", tenantContextMiddleware(auth.QuotaMiddlewareFeature("ai_audio_stt")(http.HandlerFunc(HandleTranscribe))))
+	mux.Handle("/v1/audio/speak", tenantContextMiddleware(auth.QuotaMiddlewareFeature("ai_audio_tts")(http.HandlerFunc(HandleSpeak))))
+	mux.Handle("/v1/image/generate", tenantContextMiddleware(auth.QuotaMiddlewareFeature("image_gen")(http.HandlerFunc(HandleGenerateImage))))
+
 	mux.HandleFunc("/v1/models", handleListModels)
 	mux.HandleFunc("/health", handleHealth)
 	mux.HandleFunc("/metrics", handleMetrics)
