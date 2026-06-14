@@ -949,7 +949,10 @@ func eventHandler(tenantID string, evt interface{}) {
 			text = v.Message.GetExtendedTextMessage().GetText()
 		}
 		if text == "" {
-			return
+			// Try to handle image/audio
+			if v.Message.GetImageMessage() == nil && v.Message.GetAudioMessage() == nil {
+				return
+			}
 		}
 		senderJID := v.Info.Sender.ToNonAD().String()
 
@@ -957,12 +960,53 @@ func eventHandler(tenantID string, evt interface{}) {
 			return
 		}
 
-		log.Printf("[Tenant %s] Received message from %s: %s", tenantID, senderJID, text)
+		msgType := "text"
+		mediaPath := ""
+
+		if imgMsg := v.Message.GetImageMessage(); imgMsg != nil {
+			clientMu.RLock()
+			c := clientMap[tenantID]
+			clientMu.RUnlock()
+			if c != nil {
+				data, err := c.Download(context.Background(), imgMsg)
+				if err == nil {
+					os.MkdirAll("/tmp/wa-media", 0755)
+					msgID := v.Info.ID
+					filePath := fmt.Sprintf("/tmp/wa-media/%s.jpg", msgID)
+					if err := os.WriteFile(filePath, data, 0644); err == nil {
+						msgType = "image"
+						mediaPath = filePath
+						log.Printf("[Tenant %s] Downloaded image to %s", tenantID, filePath)
+					}
+				}
+			}
+		} else if audioMsg := v.Message.GetAudioMessage(); audioMsg != nil {
+			clientMu.RLock()
+			c := clientMap[tenantID]
+			clientMu.RUnlock()
+			if c != nil {
+				data, err := c.Download(context.Background(), audioMsg)
+				if err == nil {
+					os.MkdirAll("/tmp/wa-media", 0755)
+					msgID := v.Info.ID
+					filePath := fmt.Sprintf("/tmp/wa-media/%s.ogg", msgID)
+					if err := os.WriteFile(filePath, data, 0644); err == nil {
+						msgType = "audio"
+						mediaPath = filePath
+						log.Printf("[Tenant %s] Downloaded audio to %s", tenantID, filePath)
+					}
+				}
+			}
+		}
+
+		log.Printf("[Tenant %s] Received %s message from %s", tenantID, msgType, senderJID)
 
 		// Forward to Chatbot
 		payload := map[string]interface{}{
-			"sender":  senderJID,
-			"message": text,
+			"sender":     senderJID,
+			"message":    text,
+			"msg_type":   msgType,
+			"media_path": mediaPath,
 		}
 		jsonBody, _ := json.Marshal(payload)
 

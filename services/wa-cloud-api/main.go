@@ -350,6 +350,43 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 					for _, m := range messages {
 						msg, _ := m.(map[string]interface{})
 						slog.Info("Incoming message", "from", msg["from"], "id", msg["id"])
+
+						senderJID, _ := msg["from"].(string)
+						text := ""
+						msgType := "text"
+						mediaPath := ""
+
+						if textObj, ok := msg["text"].(map[string]interface{}); ok {
+							text, _ = textObj["body"].(string)
+						}
+
+						// For cloud API, we only get media ID. Download using graph API
+						if imageObj, ok := msg["image"].(map[string]interface{}); ok {
+							msgType = "image"
+							mediaID, _ := imageObj["id"].(string)
+							// Note: Real Cloud API media download requires an additional API call to get URL
+							// Then a GET request with Bearer token.
+							// For this implementation, we just pass the ID or simulate path
+							mediaPath = fmt.Sprintf("/tmp/wa-media/%s.jpg", mediaID)
+							slog.Info("Simulated media download", "type", msgType, "media_id", mediaID)
+						} else if audioObj, ok := msg["audio"].(map[string]interface{}); ok {
+							msgType = "audio"
+							mediaID, _ := audioObj["id"].(string)
+							mediaPath = fmt.Sprintf("/tmp/wa-media/%s.ogg", mediaID)
+							slog.Info("Simulated media download", "type", msgType, "media_id", mediaID)
+						}
+
+						// We need to forward to chatbot
+						// In a real app we'd need tenant_id from the incoming webhook url query
+						// or resolve from phone_number_id. Let's just log it for now
+						payload := map[string]interface{}{
+							"sender":     senderJID,
+							"message":    text,
+							"msg_type":   msgType,
+							"media_path": mediaPath,
+						}
+						jsonBody, _ := json.Marshal(payload)
+						slog.Info("Prepared Chatbot Payload", "payload", string(jsonBody))
 					}
 				}
 			}
