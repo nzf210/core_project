@@ -280,4 +280,54 @@ export const api = {
     })
     return res.json()
   },
+
+  // Quota usage (F025, Task 2.9) — superadmin-only dashboard endpoint
+  // GET /api/superadmin/billing/admin/quota/{tenant_id}
+  // (api-gateway strips /api/superadmin/billing, forwards to billing-service /admin/quota/{id})
+  async getQuotaUsage(tenantId: string) {
+    const res = await fetch(`${API_BASE}/api/superadmin/billing/admin/quota/${tenantId}`, {
+      method: 'GET',
+      headers: headers(),
+    })
+    return res.json()
+  },
+}
+
+// ─── Quota usage types (F025, Task 2.9) ─────────────────────────
+// Mirrors billing-service handleAdminQuotaUsage response shape.
+export interface QuotaCounter {
+  feature: string
+  used: number
+  reset_at: string
+}
+
+export interface QuotaPlanLimits {
+  max_users: number
+  max_transactions: number
+  max_ai_text: number
+  max_ai_vision: number
+  max_ai_audio_minutes: number
+  max_image_gen: number
+  max_products: number
+  max_customers: number
+  max_storage_mb: number
+  api_rate_limit_per_min: number
+  data_retention_months: number
+}
+
+export interface QuotaUsage {
+  tenant_id: string
+  tier: string
+  plan_name: string
+  period: string
+  limits: QuotaPlanLimits
+  usage: QuotaCounter[]
+}
+
+// Typed convenience wrapper around api.getQuotaUsage.
+// Returns null if the request fails or returns success:false (e.g. 403 for non-superadmin).
+export async function getQuotaUsage(tenantId: string): Promise<QuotaUsage | null> {
+  const res = await api.getQuotaUsage(tenantId)
+  if (res && res.success && res.data) return res.data as QuotaUsage
+  return null
 }

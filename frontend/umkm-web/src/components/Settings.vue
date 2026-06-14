@@ -122,6 +122,53 @@
       </button>
     </div>
 
+    <!-- Quota Usage (F025, Task 2.9) — superadmin only -->
+    <div v-if="isSuperadmin" class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
+      <h3 style="margin-bottom: 1.5rem;">📊 Quota Usage (Superadmin)</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+        Inspect quota counters and plan limits for any tenant. Endpoint: <code>/api/superadmin/billing/admin/quota/{tenant_id}</code>
+      </p>
+
+      <div class="flex gap-2" style="margin-bottom: 1rem;">
+        <input
+          v-model="quotaTenantInput"
+          placeholder="Tenant ID (UUID)"
+          class="form-control"
+          style="flex: 1;"
+        />
+        <button class="btn btn-primary" @click="loadQuota" :disabled="loadingQuota || !quotaTenantInput">
+          {{ loadingQuota ? 'Memuat...' : 'Muat' }}
+        </button>
+      </div>
+
+      <div v-if="quotaError" style="background: rgba(239,68,68,0.1); color: #ef4444; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem;">
+        {{ quotaError }}
+      </div>
+
+      <div v-if="quota" class="quota-section">
+        <p style="margin-bottom: 0.25rem;">
+          Plan: <strong>{{ quota.tier }}</strong> ({{ quota.plan_name }})
+        </p>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+          Tenant: <code>{{ quota.tenant_id }}</code> · Period: {{ quota.period }}
+        </p>
+
+        <div v-for="row in quotaRows" :key="row.key" class="quota-bar" style="margin-bottom: 0.75rem;">
+          <div class="quota-bar-label" style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.25rem;">
+            <span>{{ row.label }}</span>
+            <span>{{ row.used }} / {{ row.limitText }}</span>
+          </div>
+          <div class="quota-bar-track" style="background: var(--bg-tertiary); height: 8px; border-radius: 4px; overflow: hidden;">
+            <div
+              class="quota-bar-fill"
+              :class="row.percent >= 80 ? 'quota-bar-warn' : ''"
+              :style="{ width: row.percent + '%' }"
+            ></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Laporan Harian Otomatis -->
     <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
       <h3 style="margin-bottom: 1rem;">Pengaturan Automasi & Laporan</h3>
@@ -231,8 +278,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { api, API_BASE } from '../api'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { api, API_BASE, getQuotaUsage, type QuotaUsage } from '../api'
 
 const tenantId = ref(localStorage.getItem('tenant_id') || '')
 const waStatus = ref<'checking' | 'connected' | 'disconnected'>('checking')
@@ -594,6 +641,65 @@ const deleteForwarder = async (id: string) => {
   if (res.success) loadForwarders()
 }
 
+// Quota Usage (F025, Task 2.9) — superadmin only
+const isSuperadmin = computed(() => (localStorage.getItem('role') || '') === 'superadmin')
+const quota = ref<QuotaUsage | null>(null)
+const quotaError = ref('')
+const quotaTenantInput = ref(localStorage.getItem('tenant_id') || '')
+const loadingQuota = ref(false)
+
+function quotaPercent(used: number, limit: number): number {
+  if (!limit || limit < 0) return 0   // 0 = disabled, <0 = unlimited
+  return Math.min(100, Math.round((used / limit) * 100))
+}
+
+function limitDisplay(limit: number): string {
+  if (limit === 0) return 'off'
+  if (limit < 0) return '∞'
+  return String(limit)
+}
+
+const quotaRows = computed(() => {
+  if (!quota.value) return []
+  const limits = quota.value.limits
+  const usedBy: Record<string, number> = {}
+  for (const u of quota.value.usage || []) {
+    usedBy[u.feature] = (usedBy[u.feature] || 0) + (u.used || 0)
+  }
+  const rows: { key: string; label: string; used: number; limitText: string; percent: number }[] = [
+    { key: 'ai_text',         label: 'AI Text Requests',         used: usedBy.ai_text         || 0, limitText: limitDisplay(limits.max_ai_text),          percent: quotaPercent(usedBy.ai_text         || 0, limits.max_ai_text) },
+    { key: 'ai_vision',       label: 'AI Vision (Image→Text)',   used: usedBy.ai_vision       || 0, limitText: limitDisplay(limits.max_ai_vision),        percent: quotaPercent(usedBy.ai_vision       || 0, limits.max_ai_vision) },
+    { key: 'ai_audio_stt',    label: 'AI Audio (STT minutes)',   used: usedBy.ai_audio_stt    || 0, limitText: limitDisplay(limits.max_ai_audio_minutes), percent: quotaPercent(usedBy.ai_audio_stt    || 0, limits.max_ai_audio_minutes) },
+    { key: 'image_gen',       label: 'AI Image Generation',      used: usedBy.image_gen       || 0, limitText: limitDisplay(limits.max_image_gen),        percent: quotaPercent(usedBy.image_gen       || 0, limits.max_image_gen) },
+    { key: 'chatbot_messages',label: 'Chatbot Messages',         used: usedBy.chatbot_messages|| 0, limitText: '—',                                          percent: 0 },
+    { key: 'transactions',    label: 'Transactions (period)',    used: 0,                       limitText: limitDisplay(limits.max_transactions),      percent: 0 },
+  ]
+  return rows
+})
+
+const loadQuota = async () => {
+  const tid = quotaTenantInput.value.trim()
+  if (!tid) {
+    quotaError.value = 'Tenant ID required'
+    return
+  }
+  loadingQuota.value = true
+  quotaError.value = ''
+  quota.value = null
+  try {
+    const data = await getQuotaUsage(tid)
+    if (data) {
+      quota.value = data
+    } else {
+      quotaError.value = 'Gagal memuat quota (403/404 atau respons tidak valid).'
+    }
+  } catch (e: any) {
+    quotaError.value = e?.message || 'Kesalahan jaringan'
+  } finally {
+    loadingQuota.value = false
+  }
+}
+
 onMounted(() => {
   checkWaStatus()
   loadSettings()
@@ -748,5 +854,17 @@ input:checked+.slider:before {
   width: 256px;
   height: 256px;
   margin: 0 auto;
+}
+
+/* Quota Usage (F025, Task 2.9) */
+.quota-bar-fill {
+  background: #4f46e5;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.quota-bar-warn {
+  background: #f59e0b;
 }
 </style>
