@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS citizens (
     address TEXT,
     gender VARCHAR(10),
     age INT,
+    tps_id UUID REFERENCES tps(id) ON DELETE SET NULL, -- Default TPS (bisa ditarik dari DPT jika cocok)
+    is_dpt_verified BOOLEAN DEFAULT FALSE, -- True jika NIK ini ditemukan di dpt_records
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
