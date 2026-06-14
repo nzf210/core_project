@@ -627,7 +627,7 @@ cd frontend/umkm-web && npm run dev
 
 ### Fix 5: Feature Gating — Plan Cache Not Populated
 - **Symptom:** Tenant dengan plan "lite" dapat 403 "Fitur Chatbot memerlukan paket Lite"
-- **Root cause:** `GetTenantPlan()` di `quota.go` baca Redis key `tenant:plan:{id}`, tapi login handler TIDAK populate cache. Redis miss → fallback ke `"free"` → `HasChatbot: false`
+- **Root cause:** `GetTenantPlan()` di `quota.go` baca Redis key `tenant:plan:{id}`, tapi login handler TIDAK populate cache. Redis miss → fallback ke tier tanpa akses (`inactive` setelah 2026-06-14) → `HasChatbot: false`
 - **Fix:**
   - Tambah `"superadmin"` tier di `Plans` map (`shared/sdk/auth/quota.go`)
   - Auth-service login handlers (`handleLogin`, `handlePhoneLogin`, `handleSuperAdminLogin`) sekarang set Redis key setelah login sukses
@@ -639,6 +639,6 @@ cd frontend/umkm-web && npm run dev
 - **Files:** `frontend/umkm-web/src/components/Settings.vue`, `apps/umkm/accounting/main.go` (`handleFaqs` PUT)
 
 ### Architecture Note: Plan Redis Cache Dependency
-- Key `tenant:plan:{id}` HARUS ada di Redis atau semua tenant dianggap "free"
+- Key `tenant:plan:{id}` HARUS ada di Redis atau `GetTenantPlan()` fallback ke `'inactive'` (fail-safe lock, semua fitur off). Setelah 2026-06-14, tier `free` sudah dihapus.
 - Auth-service login populate cache. Untuk existing tenant sebelum fix ini, set manual: `docker exec wch-redis redis-cli SET "tenant:plan:{id}" "{plan}"`
 - `GetTenantPlan()` akan refactored untuk fallback ke DB di versi berikutnya

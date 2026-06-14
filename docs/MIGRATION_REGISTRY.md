@@ -1,6 +1,6 @@
 # Database Migration Registry
 
-This document provides a comprehensive overview of all database migrations in the WCH Platform project, covering migrations 000001 through 000032.
+This document provides a comprehensive overview of all database migrations in the WCH Platform project, covering migrations 000001 through 000038.
 
 ---
 
@@ -40,6 +40,10 @@ This document provides a comprehensive overview of all database migrations in th
 | 000030 | wa_cloud_api_credentials | Per-tenant Meta Cloud API credentials for official WhatsApp Business API | wa_cloud_api_credentials |
 | 000031 | telegram_auth | Telegram Bot auth — register/login via Telegram instead of WhatsApp | users (telegram_chat_id), auth_tokens (telegram_id) |
 | 000032 | wa_tenant_sessions | Proper tracked migration for wa_tenant_sessions table (previously created in-code) | wa_tenant_sessions |
+| 000033 | journal_entries_metadata | Add `metadata JSONB` column + GIN index to journal_entries (F022 bug fix: GET /transactions 500) | journal_entries (modified) |
+| 000034 | tenant_faqs_updated_at | Add `updated_at` column to tenant_faqs for PUT /faqs handler (F023) | tenant_faqs (modified) |
+| 000035 | billing_cycle | Add `billing_cycle` column to invoices + tenant_subscriptions, support monthly/yearly pricing | invoices (modified), tenant_subscriptions (modified) |
+| 000038 | remove_free_tier | Remove `free` tier — migrate all `tenants.plan` and `usage_quotas.plan_tier` to `lite`, change DEFAULT to `'lite'` (F024) | tenants (modified), usage_quotas (modified) |
 
 ---
 
@@ -58,7 +62,7 @@ This document provides a comprehensive overview of all database migrations in th
 |--------|------|-------------|-------------|
 | id | UUID | PRIMARY KEY | Unique tenant identifier |
 | name | VARCHAR(255) | NOT NULL | Tenant/business name |
-| plan | VARCHAR(50) | NOT NULL, DEFAULT 'free' | Subscription plan (free, lite, etc.) |
+| plan | VARCHAR(50) | NOT NULL, DEFAULT 'lite' | Subscription plan (lite, pro, ultimate) |
 | api_quota | INT | NOT NULL, DEFAULT 0 | API request quota |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
 | updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last update timestamp |
@@ -890,8 +894,14 @@ Added business type:
 
 **Data Changes:**
 - Default promo coupon seeded: 'PROMO-LITE-90' (3 free months)
-- usage_quotas.plan_tier default changed from 'free' to 'lite'
-- All existing 'free' tenants migrated to 'lite'
+- usage_quotas.plan_tier default set to 'lite'
+- All existing default-tier tenants normalized to 'lite'
+
+**Data Changes (2026-06-14, migration 000038):**
+- Tier `free` dihapus dari seluruh registry
+- `tenants.plan` dan `usage_quotas.plan_tier` DEFAULT diubah ke `'lite'`
+- Semua tenant existing tier `free` di-migrate ke `'lite'`
+- `shared/sdk/auth/quota.go` Plans map: hapus entry `free`, fallback `GetTenantPlan`/`GetPlan` sekarang return `'inactive'` (fail-safe lock)
 
 ---
 

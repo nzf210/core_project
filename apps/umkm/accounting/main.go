@@ -2274,14 +2274,14 @@ func handleInternalReportsSummary(w http.ResponseWriter, r *http.Request) {
 
 func getAutomationLimit(plan string) int {
 	switch plan {
-	case "free":
-		return 0
 	case "lite":
 		return 3
 	case "pro":
 		return 10
+	case "enterprise", "ultimate", "superadmin":
+		return 999
 	default:
-		return 999 // enterprise, superadmin
+		return 0 // unknown / inactive = no automation
 	}
 }
 

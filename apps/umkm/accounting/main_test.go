@@ -13,7 +13,7 @@
 //  4. vectorFromSlice    - Konversi vector ke format PostgreSQL
 //  5. getAutomationLimit - Ambil limit automasi per plan
 //  6. cronMatchesNow     - Cron expression matching
-//  7. fieldMatches      - Single cron field matching
+//  7. fieldMatches       - Single cron field matching
 //
 // HANDLERS YANG DITEST (via HTTP):
 //  - handleAccounts      - CRUD chart of accounts
@@ -474,12 +474,13 @@ func TestGetAutomationLimit(t *testing.T) {
 		plan string
 		want int
 	}{
-		{"free", 0},
 		{"lite", 3},
 		{"pro", 10},
 		{"enterprise", 999},
-		{"unknown", 999},
-		{"", 999},
+		{"ultimate", 999},
+		{"superadmin", 999},
+		{"unknown", 0},
+		{"", 0},
 	}
 
 	for _, tt := range tests {
