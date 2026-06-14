@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/config"
 	"github.com/redis/go-redis/v9"
 	openai "github.com/sashabaranov/go-openai"
@@ -108,9 +109,13 @@ func main() {
 	)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/chat", handleChat)
-	mux.HandleFunc("/v1/chat/stream", handleChatStream)
-	mux.HandleFunc("/v1/embeddings", handleEmbeddings)
+	// Quota-enforced text routes: API Gateway forwards X-Tenant-ID header (set from
+	// JWT claims). tenantContextMiddleware lifts that into r.Context() so the
+	// shared auth.QuotaMiddlewareFeature (which reads TenantIDKey) can enforce.
+	quota := auth.QuotaMiddlewareFeature("ai_text")
+	mux.Handle("/v1/chat", tenantContextMiddleware(quota(http.HandlerFunc(handleChat))))
+	mux.Handle("/v1/chat/stream", tenantContextMiddleware(quota(http.HandlerFunc(handleChatStream))))
+	mux.Handle("/v1/embeddings", tenantContextMiddleware(quota(http.HandlerFunc(handleEmbeddings))))
 	mux.HandleFunc("/v1/models", handleListModels)
 	mux.HandleFunc("/health", handleHealth)
 	mux.HandleFunc("/metrics", handleMetrics)
@@ -126,6 +131,19 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		slog.Error("Failed to start AI Gateway", "error", err)
 	}
+}
+
+// tenantContextMiddleware bridges the X-Tenant-ID header (set by API Gateway
+// from JWT claims) into the request context under auth.TenantIDKey. Required
+// because auth.QuotaMiddlewareFeature reads tenant from context, not header.
+func tenantContextMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tenantID := r.Header.Get("X-Tenant-ID")
+		if tenantID != "" {
+			r = r.WithContext(context.WithValue(r.Context(), auth.TenantIDKey, tenantID))
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {
@@ -211,6 +229,7 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 			slog.Info("cache hit", "key", cacheKey[:16])
 			aiCacheHits.Add(1)
 			aiRequestsTotal.Add(1)
+			auth.IncrementQuota(r.Context(), req.TenantID, "ai_text", 1)
 			writeJSON(w, http.StatusOK, ChatResponse{
 				Success:  true,
 				Provider: req.Provider,
@@ -267,6 +286,7 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	auth.IncrementQuota(r.Context(), req.TenantID, "ai_text", 1)
 	writeJSON(w, http.StatusOK, ChatResponse{
 		Success:      true,
 		Provider:     provider,
@@ -290,6 +310,16 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "Invalid request payload"})
 		return
+	}
+	if req.Message == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "message cannot be empty"})
+		return
+	}
+	if req.TenantID == "" {
+		req.TenantID = r.Header.Get("X-Tenant-ID")
+		if req.TenantID == "" {
+			req.TenantID = "00000000-0000-0000-0000-000000000000"
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -321,6 +351,8 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	defer stream.Close()
 
+	// Increment quota once per stream on first successful chunk.
+	firstChunk := true
 	for {
 		chunk, err := stream.Recv()
 		if err == io.EOF {
@@ -336,6 +368,10 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 		content := chunk.Choices[0].Delta.Content
 		if content != "" {
+			if firstChunk {
+				auth.IncrementQuota(r.Context(), req.TenantID, "ai_text", 1)
+				firstChunk = false
+			}
 			data, _ := json.Marshal(map[string]string{"text": content})
 			fmt.Fprintf(w, "data: %s\n\n", data)
 			flusher.Flush()
@@ -448,6 +484,12 @@ func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "input cannot be empty"})
 		return
 	}
+	if req.TenantID == "" {
+		req.TenantID = r.Header.Get("X-Tenant-ID")
+		if req.TenantID == "" {
+			req.TenantID = "00000000-0000-0000-0000-000000000000"
+		}
+	}
 
 	// Use OpenAI embeddings by default (ada-002, 1536 dimensions)
 	// Falls back to Anthropic's embed endpoint if configured
@@ -470,6 +512,7 @@ func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	auth.IncrementQuota(r.Context(), req.TenantID, "ai_text", 1)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"object": "list",
 		"data": []map[string]interface{}{
