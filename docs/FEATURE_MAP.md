@@ -88,8 +88,9 @@ Format per feature:
 | F023 | FAQ Bot AI — Edit & Generate | ✅ Approved | ✅ Done | 2026-06-14 |
 | F024 | Free Tier Removal (Hardening) | ✅ Approved | ✅ Done | 2026-06-14 |
 | F025 | Tier Restrictions Overhaul + AI Multimodal | ✅ Approved | ✅ Done (Phase 1+2) / ⏳ Pending (Phase 3) | 2026-06-14 |
-| F026 | N8N Notification Webhooks & Workflows | ✅ Approved | ✅ Done | 2026-06-14 |
-| F027 | Core Business Flow Fixes & Optimizations | ✅ Approved | ✅ Done | 2026-06-14 |
+| F029 | Dynamic Multimodal Guardrails | ✅ Approved | ✅ Done | 2026-06-14 |
+| F030 | GetPlanFeatures DB Integration | ✅ Approved | ✅ Done | 2026-06-14 |
+| F031 | Campaign Anti-Double Validation | ⏳ Draft | ⏳ Pending | 2026-06-14 |
 
 ---
 
@@ -1563,4 +1564,154 @@ Wajib update:
 
 ---
 
-*Lihat [CONTRIBUTING.md](../CONTRIBUTING.md) untuk panduan coding.*
+*Lihat [CONTRIBUTING.md](../CONTRIBUTING.md) untuk panduan coding.*### F028: N8N Media Delivery (PDF/Excel via WA)
+
+**Spec Status:** ✅ Approved
+**Implementation:** ⏳ Pending
+
+**Deskripsi:** Upgrade pipeline notifikasi WA agar N8N bisa mengirimkan file attachment (PDF/Excel) ke WhatsApp.
+
+**Spec:**
+1. **notification-service (`N8NPayload`)**
+   - Tambah opsional field `media_url` dan `media_name` pada payload `/webhook/n8n/whatsapp`.
+   - Teruskan data tersebut saat POST ke `wa-gateway` endpoint `/api/wa/send`.
+2. **wa-gateway (`/api/wa/send`)**
+   - Tambah parsing parameter `media_url` dan `media_name` dari form request.
+   - Download file dari `media_url` ke memory (buffer).
+   - Gunakan `client.Upload(..., whatsmeow.MediaDocument)` untuk upload file.
+   - Bangun `waE2E.DocumentMessage` dengan parameter `message` sebagai caption.
+
+**Acceptance Criteria:**
+- [ ] AC-1: `notification-service` meneruskan parameter media.
+- [ ] AC-2: `wa-gateway` download file dan upload ke WA.
+- [ ] AC-3: File terkirim ke WhatsApp sebagai dokumen.
+- [ ] AC-4: `make check` pass.
+### F028: N8N Media Delivery (PDF/Excel via WA)
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Upgrade pipeline notifikasi WA agar N8N bisa mengirim file attachment (PDF/Excel) ke WhatsApp user.
+
+**Spec:**
+1. **notification-service (`N8NPayload`)**: Tambah field `media_url` & `media_name`, teruskan ke `wa-gateway`.
+2. **wa-gateway (`/api/wa/send`)**:
+   - Parse `media_url` & `media_name`.
+   - Download file ke buffer memory.
+   - Upload via `whatsmeow.MediaDocument`.
+   - Kirim `waE2E.DocumentMessage` dengan caption teks.
+
+**Acceptance Criteria:**
+- [x] AC-1: `notification-service` teruskan parameter media.
+- [x] AC-2: `wa-gateway` download file dari `media_url`.
+- [x] AC-3: File terkirim ke WA user.
+- [x] AC-4: Linter & Tests pass.
+### F028-B: N8N Media Delivery (Telegram & Email Extension)
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Melengkapi fitur pengiriman media (PDF/Excel) F028 agar juga berlaku ke channel Telegram dan Email (jika ada) saat dikirim dari N8N. 
+
+**Spec:**
+1. **notification-service**: Tambah handler untuk Telegram `/webhook/n8n/telegram`.
+2. **notification-service**: Fungsi baru `sendTelegramMedia` yang menggunakan endpoint `sendDocument` dari Telegram API jika `media_url` dikirim.
+
+**Acceptance Criteria:**
+- [x] AC-1: Endpoint N8N telegram terpasang.
+- [x] AC-2: `sendTelegramMedia` handle multipart upload.
+- [x] AC-3: Linter pass.
+### F029: Dynamic Multimodal Guardrails (Feature Toggles)
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Implementasi guardrail dinamis berbasis kuota pada UMKM Chatbot.
+
+**Spec:**
+1. **`apps/umkm/chatbot/main.go`**:
+   - Tarik plan tenant pakai `auth.GetPlan()`.
+   - Cek `MaxAIAudioMinutes == 0`. Jika ya, tolak pesan audio.
+   - Cek `MaxAIVision == 0`. Jika ya, tolak pesan gambar.
+2. **Pesan Penolakan**:
+   - Audio: "layanan pesan suara belum diaktifkan..."
+   - Image: "layanan analisa gambar belum diaktifkan..."
+
+**Acceptance Criteria:**
+- [x] AC-1: Chatbot baca limit tier.
+- [x] AC-2: Chatbot blokir jika 0.
+- [x] AC-3: Linter clean.
+### F030: Real DB Integration for Plan Features
+
+**Spec Status:** ✅ Approved
+**Implementation:** ⏳ Pending
+
+**Deskripsi:** Menghapus STUB pada fungsi `GetPlanFeatures()` di SDK agar Chatbot (dan layanan lain) membaca batasan plan secara *real* dari database. Menyediakan endpoint untuk UI Superadmin agar form "Plan Matrix" bisa mengambil data *current limit* secara aktual.
+
+**Spec:**
+1. **SDK `GetPlanFeatures` (Backend)**:
+   - Modifikasi `shared/sdk/auth/plan_features.go`. Ganti `STUB` dengan logika SQL read:
+     1. Ambil `plan` milik `tenant_id` dari cache/DB.
+     2. SELECT semua kolom `max_*` dari tabel `plan_features` sesuai `plan_id`.
+     3. Terapkan Redis caching per `plan_id` (TTL 1 jam) agar Chatbot tidak spam DB saat mengecek guardrail.
+2. **Billing Service (Backend)**:
+   - Buat endpoint `GET /admin/plan-features-matrix` yang mengembalikan `SELECT * FROM plan_features` agar UI memiliki data numerik *initial state* saat meload form.
+3. **Superadmin Web (Frontend)**:
+   - Modifikasi `PlanFeatures.vue` dan `client.ts` untuk memanggil `GET /admin/plan-features-matrix` alih-alih `listPlans()`. Data hasil fetch dipetakan (mapped) ke `formStates`.
+
+**Acceptance Criteria:**
+- [ ] AC-1: `GetPlanFeatures` mereturn data asli dari PostgreSQL tabel `plan_features`.
+- [ ] AC-2: Endpoint Matrix `GET` ada di `billing-service` dan terpanggil oleh `superadmin-web`.
+- [ ] AC-3: UI Plan Matrix menampilkan angka limit sesuai database saat dimuat ulang.
+- [ ] AC-4: `make check` pass.
+### F030: Fix GetPlanFeatures Cache Invalidations and Real DB Reads
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** SDK `GetPlanFeatures` diubah dari yang tadinya mock menjadi fungsi utuh yang menarik tabel DB asli. Ketika fitur tier di-update oleh Superadmin, cache-nya divalidasi agar aktif instan.
+
+**Spec:**
+1. **`shared/sdk/auth/plan_features.go` (`GetPlanFeatures`)**:
+   - Tarik limit fitur untuk tenant menggunakan query SQL asli.
+   - Simpan data limit di Redis (`plan_features:<tier>`) selama 1 jam biar ngga beratkan DB.
+2. **`services/billing-service/main.go` (`handleAdminPlanFeaturesMatrixUpdate`)**:
+   - Menambahkan perintah penghapusan cache `cache.Client.Del("plan_features:"+planID)`.
+3. **Penyatuan Dependensi**: Import `core_project/shared/sdk/cache` ke billing-service.
+
+**Acceptance Criteria:**
+- [x] AC-1: `GetPlanFeatures` melayani data DB sejati.
+- [x] AC-2: Redis diclear pada update limit.
+- [x] AC-3: API, Frontend, & Chatbot tersambung real-time.
+
+---
+
+## F031: Campaign Validation & Data Integrity (Anti-Double)
+
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
+
+**Deskripsi:** Sistem pencegahan data ganda, validasi NIK (Nomor Induk Kependudukan), dan pencegahan "pencaplokan" dukungan silang oleh timses/paslon yang berbeda pada modul Campaign. Fitur ini memastikan DPT (Daftar Pemilih Tetap) dan data KTP relawan 100% akurat, clean, dan tidak bisa disabotase.
+
+**Spec:**
+1. **Cek Relawan Double (Intra-Campaign)**:
+   - Relawan/timses A mendaftarkan NIK `1234`.
+   - Jika timses B (masih satu kubu/paslon yang sama) mencoba mendaftarkan NIK `1234`, tolak pendaftaran dengan warning: "NIK ini sudah diklaim oleh [Nama Relawan A]".
+2. **Cek Pemilih Silang (Inter-Campaign/Paslon Lain)**:
+   - Jika sistem di-deploy multi-tenant (banyak paslon dalam 1 instance):
+   - NIK `1234` sudah terdaftar di Paslon X.
+   - Jika Paslon Y mencoba mendaftarkan, sistem menghitung: "Jumlah dukungan ganda: N".
+   - Admin dashboard menampilkan daftar NIK yang *conflict/disengketakan* antar calon.
+3. **Validasi Format NIK (KTP)**:
+   - Cek format NIK (16 digit angka, validasi rumus checksum Disdukcapil: DD/MM/YY + wilayah).
+   - Jika tidak valid: Tolak/pisahkan ke tabel/kategori `Invalid NIK`.
+4. **Rekonsiliasi DPT (Data KPU)**:
+   - Dashboard menampilkan statistik:
+     - **Valid DPT**: Berapa orang yang sudah terdaftar di DPT KPU.
+     - **Non-DPT (Unregistered)**: Berapa warga pendukung yang KTP-nya benar namun namanya tidak ada di DPT area pemilihan calon tersebut.
+
+**Acceptance Criteria (AC):**
+- [ ] AC-1: API pendaftaran (dari Webhook N8N/WA) me-reject input NIK ganda di kubu sendiri.
+- [ ] AC-2: Format NIK yang bukan 16 digit angka valid langsung digeser ke status "Invalid".
+- [ ] AC-3: Relasi join antara tabel `voters` (dukungan KTP) dengan tabel `dpt` (data KPU).
+- [ ] AC-4: UI Dashboard Campaign menampilkan rasio: Valid, Invalid, Terdaftar Paslon Lain, dan Non-DPT.
