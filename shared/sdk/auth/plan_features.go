@@ -66,5 +66,5 @@ func (p PlanFeaturesRow) IsUnlimited(field string) bool {
 func GetPlanFeatures(ctx context.Context, tenantID string) (PlanFeaturesRow, error) {
 	_ = ctx
 	_ = tenantID
-	return PlanFeaturesRow{Tier: "inactive"}, nil
+	return PlanFeaturesRow{Tier: "inactive", PlanName: "inactive"}, nil
 }
