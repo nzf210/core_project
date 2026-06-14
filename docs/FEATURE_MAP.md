@@ -1695,12 +1695,13 @@ Wajib update:
 
 **Spec:**
 1. **Cek Relawan Double (Intra-Campaign)**:
-   - Relawan/timses A mendaftarkan NIK `1234`.
-   - Jika timses B (masih satu kubu/paslon yang sama) mencoba mendaftarkan NIK `1234`, tolak pendaftaran dengan warning: "NIK ini sudah diklaim oleh [Nama Relawan A]".
+   - Relawan/timses A mendaftarkan NIK `1234567890123456`.
+   - Jika timses B (masih satu kubu/paslon yang sama) mencoba mendaftarkan NIK yang sama, sistem **menerima data tersebut namun memberikan flag/tandai**.
+   - UI memunculkan indikator/warning bahwa NIK ini diinput ganda oleh timses internal, sehingga tim pemenangan bisa memverifikasi siapa yang sebenarnya merekrut pemilih tersebut.
 2. **Cek Pemilih Silang (Inter-Campaign/Paslon Lain)**:
    - Jika sistem di-deploy multi-tenant (banyak paslon dalam 1 instance):
-   - NIK `1234` sudah terdaftar di Paslon X.
-   - Jika Paslon Y mencoba mendaftarkan, sistem menghitung: "Jumlah dukungan ganda: N".
+   - NIK `1234567890123456` sudah terdaftar di Paslon X.
+   - Jika Paslon Y mencoba mendaftarkan, sistem **tetap menerima data tersebut, namun memberikan flag/tandai sebagai "Sengketa/Klaim Silang"**.
    - Admin dashboard menampilkan daftar NIK yang *conflict/disengketakan* antar calon.
 3. **Validasi Format NIK (KTP)**:
    - Cek format NIK (16 digit angka, validasi rumus checksum Disdukcapil: DD/MM/YY + wilayah).
@@ -1711,7 +1712,7 @@ Wajib update:
      - **Non-DPT (Unregistered)**: Berapa warga pendukung yang KTP-nya benar namun namanya tidak ada di DPT area pemilihan calon tersebut.
 
 **Acceptance Criteria (AC):**
-- [ ] AC-1: API pendaftaran (dari Webhook N8N/WA) me-reject input NIK ganda di kubu sendiri.
+- [ ] AC-1: API pendaftaran (dari Webhook N8N/WA) **tetap menerima** input NIK ganda di kubu sendiri, namun memberikan status flag/conflict.
 - [ ] AC-2: Format NIK yang bukan 16 digit angka valid langsung digeser ke status "Invalid".
 - [ ] AC-3: Relasi join antara tabel `voters` (dukungan KTP) dengan tabel `dpt` (data KPU).
 - [ ] AC-4: UI Dashboard Campaign menampilkan rasio: Valid, Invalid, Terdaftar Paslon Lain, dan Non-DPT.
