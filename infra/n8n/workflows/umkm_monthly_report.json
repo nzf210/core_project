@@ -1,0 +1,58 @@
+{
+  "name": "UMKM Monthly Financial Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [ { "field": "cronExpression", "cronExpression": "0 8 1 * *" } ]
+        }
+      },
+      "name": "Cron Trigger (1st of Month)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [ 250, 300 ]
+    },
+    {
+      "parameters": {
+        "url": "http://api-gateway:8000/api/umkm/reports/monthly",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "name": "Fetch Monthly Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [ 450, 300 ]
+    },
+    {
+      "parameters": {
+        "url": "http://notification-service:8005/webhook/n8n/whatsapp",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Webhook-Secret", "value": "={{$credentials.webhook_secret}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "tenant_id", "value": "={{$json.tenant_id}}" },
+            { "name": "phone", "value": "={{$json.owner_phone}}" },
+            { "name": "template", "value": "📊 *LAPORAN BULANAN {{month}} {{year}}* 📊\n\nHalo {{owner_name}},\nBerikut ringkasan bisnis bulan ini:\n\nOmzet: Rp {{revenue}}\nPengeluaran: Rp {{expenses}}\n*Net Profit: Rp {{profit}}*\n\nTetap semangat!" },
+            {
+              "name": "data",
+              "value": "={ \"month\": \"{{$json.month}}\", \"year\": \"{{$json.year}}\", \"owner_name\": \"{{$json.owner_name}}\", \"revenue\": \"{{$json.revenue}}\", \"expenses\": \"{{$json.expenses}}\", \"profit\": \"{{$json.profit}}\" }"
+            }
+          ]
+        }
+      },
+      "name": "Send WA Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [ 650, 300 ]
+    }
+  ],
+  "connections": {
+    "Cron Trigger (1st of Month)": { "main": [ [ { "node": "Fetch Monthly Report", "type": "main", "index": 0 } ] ] },
+    "Fetch Monthly Report": { "main": [ [ { "node": "Send WA Report", "type": "main", "index": 0 } ] ] }
+  }
+}

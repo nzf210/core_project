@@ -1,0 +1,58 @@
+{
+  "name": "UMKM Low Stock Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [ { "field": "hours", "hoursInterval": 24 } ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [ 250, 300 ]
+    },
+    {
+      "parameters": {
+        "url": "http://api-gateway:8000/api/umkm/reports/low-stock",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "name": "Fetch Low Stock Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [ 450, 300 ]
+    },
+    {
+      "parameters": {
+        "url": "http://notification-service:8005/webhook/n8n/whatsapp",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Webhook-Secret", "value": "={{$credentials.webhook_secret}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "tenant_id", "value": "={{$json.tenant_id}}" },
+            { "name": "phone", "value": "={{$json.owner_phone}}" },
+            { "name": "template", "value": "🚨 *ALERT STOK MENIPIS* 🚨\n\nHalo {{owner_name}}, barang berikut stoknya sudah di bawah batas minimum:\n\n{{items_list}}\n\nSegera restock ya!" },
+            {
+              "name": "data",
+              "value": "={ \"owner_name\": \"{{$json.owner_name}}\", \"items_list\": \"{{$json.items_list}}\" }"
+            }
+          ]
+        }
+      },
+      "name": "Send WA Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [ 650, 300 ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": { "main": [ [ { "node": "Fetch Low Stock Data", "type": "main", "index": 0 } ] ] },
+    "Fetch Low Stock Data": { "main": [ [ { "node": "Send WA Alert", "type": "main", "index": 0 } ] ] }
+  }
+}
