@@ -89,6 +89,26 @@ Format per feature:
 | F024 | Free Tier Removal (Hardening) | ✅ Approved | ✅ Done | 2026-06-14 |
 | F025 | Tier Restrictions Overhaul + AI Multimodal | ✅ Approved | ✅ Done (Phase 1+2) / ⏳ Pending (Phase 3) | 2026-06-14 |
 | F026 | N8N Notification Webhooks & Workflows | ✅ Approved | ✅ Done | 2026-06-14 |
+| F027 | Core Business Flow Fixes & Optimizations | ✅ Approved | ❌ Not Started | 2026-06-14 |
+
+---
+
+## F027: Core Business Flow Fixes & Optimizations
+
+**Spec Status:** ✅ Approved
+**Implementation:** ❌ Not Started
+
+**Deskripsi:** Perbaikan logika bisnis utama hasil audit keamanan dan flow transaksi untuk mencegah kerugian perusahaan dan tenant.
+
+### Sub-Tasks:
+1. **Accounting Hard-Delete Fix**:
+   - `DELETE /api/umkm/accounts/{id}` harus memblokir penghapusan jika akun masih memiliki `journal_entries` atau balance `!= 0`. Kembalikan HTTP 400.
+2. **Chatbot Instant Escalation**:
+   - Deteksi fallback response di `apps/umkm/chatbot/main.go`. Jika AI mengeluarkan pesan fallback, langsung *trigger* escalation ke *owner* secara instan, bypass `AutoEscalateAfterMinutes`.
+3. **AI Quota Race-Condition Fix**:
+   - Modifikasi `QuotaMiddlewareFeature` di `shared/sdk/auth/quota_mw.go`. Lakukan check/increment kuota **SEBELUM** meneruskan ke handler API. Jika kuota habis, kembalikan `402 Payment Required` tanpa memanggil handler (vendor API).
+4. **Billing Proration (Sisa Hari)**:
+   - Modifikasi `activateSubscription` di `services/billing-service/main.go`. Hitung sisa hari dari subscription sebelumnya yang masih aktif. Berikan kompensasi (tambahan waktu atau konversi) pada subscription yang baru, atau setidaknya tidak menghilangkan masa aktif paket lama jika tidak prorata (contoh: masa aktif paket baru = hari ini + 30 + sisa hari paket lama yang sepadan/di-scale down, atau cukup tambahkan secara kasar).
 
 ---
 

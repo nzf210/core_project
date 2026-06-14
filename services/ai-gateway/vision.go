@@ -29,7 +29,6 @@ func HandleVision(w http.ResponseWriter, r *http.Request) {
     respText := "[MOCK VISION] Gambar diterima: " + req.ImageURL + " | Prompt: " + req.Prompt
     
     if tenantID := r.Context().Value(auth.TenantIDKey).(string); tenantID != "" {
-        auth.IncrementQuota(r.Context(), tenantID, "ai_vision", 1)
     }
     writeJSON(w, http.StatusOK, APIResponse{
 		Success: true, 

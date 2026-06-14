@@ -28,7 +28,6 @@ func HandleTranscribe(w http.ResponseWriter, r *http.Request) {
     respText := "[MOCK STT] Audio ditranskripsi dari: " + req.AudioURL
     
     if tenantID := r.Context().Value(auth.TenantIDKey).(string); tenantID != "" {
-        auth.IncrementQuota(r.Context(), tenantID, "ai_audio_stt", 1) // 1 minute mock
     }
     writeJSON(w, http.StatusOK, APIResponse{
 		Success: true, 
@@ -58,7 +57,6 @@ func HandleSpeak(w http.ResponseWriter, r *http.Request) {
     audioURL := "https://example.com/mock-tts.ogg"
     
     if tenantID := r.Context().Value(auth.TenantIDKey).(string); tenantID != "" {
-        auth.IncrementQuota(r.Context(), tenantID, "ai_audio_tts", 1) // 1 minute mock
     }
     writeJSON(w, http.StatusOK, APIResponse{
 		Success: true, 

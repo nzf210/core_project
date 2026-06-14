@@ -18,18 +18,22 @@ func QuotaMiddlewareFeature(feature string) func(http.Handler) http.Handler {
 				response.Error(w, http.StatusUnauthorized, "Tenant context missing", nil)
 				return
 			}
-			allowed, used, limit := CheckQuotaCounter(r.Context(), tenantID, feature)
-			if !allowed {
+			
+			// Check AND Increment BEFORE routing
+			count, limit, err := IncrementQuota(r.Context(), tenantID, feature, 1)
+			
+			if err != nil || (limit != -1 && count > int64(limit)) {
 				w.Header().Set("X-Quota-Feature", feature)
-				w.Header().Set("X-Quota-Used", strconv.FormatInt(used, 10))
+				w.Header().Set("X-Quota-Used", strconv.FormatInt(count, 10))
 				w.Header().Set("X-Quota-Limit", strconv.FormatInt(int64(limit), 10))
 				response.JSON(w, http.StatusPaymentRequired, "Quota exceeded for feature: "+feature+". Upgrade your plan.", map[string]interface{}{
 					"feature": feature,
-					"used":    used,
+					"used":    count,
 					"limit":   limit,
 				})
 				return
 			}
+
 			next.ServeHTTP(w, r)
 		})
 	}

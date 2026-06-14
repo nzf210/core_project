@@ -28,7 +28,6 @@ func HandleGenerateImage(w http.ResponseWriter, r *http.Request) {
     imageURL := "https://placehold.co/1024x1024/png?text=MOCK+IMAGE+GEN"
     
     if tenantID := r.Context().Value(auth.TenantIDKey).(string); tenantID != "" {
-        auth.IncrementQuota(r.Context(), tenantID, "image_gen", 1)
     }
     writeJSON(w, http.StatusOK, APIResponse{
 		Success: true, 

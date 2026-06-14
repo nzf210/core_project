@@ -236,7 +236,6 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 			slog.Info("cache hit", "key", cacheKey[:16])
 			aiCacheHits.Add(1)
 			aiRequestsTotal.Add(1)
-			auth.IncrementQuota(r.Context(), req.TenantID, "ai_text", 1)
 			writeJSON(w, http.StatusOK, ChatResponse{
 				Success:  true,
 				Provider: req.Provider,
@@ -293,7 +292,6 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	auth.IncrementQuota(r.Context(), req.TenantID, "ai_text", 1)
 	writeJSON(w, http.StatusOK, ChatResponse{
 		Success:      true,
 		Provider:     provider,
@@ -376,7 +374,6 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 		content := chunk.Choices[0].Delta.Content
 		if content != "" {
 			if firstChunk {
-				auth.IncrementQuota(r.Context(), req.TenantID, "ai_text", 1)
 				firstChunk = false
 			}
 			data, _ := json.Marshal(map[string]string{"text": content})
@@ -519,7 +516,6 @@ func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auth.IncrementQuota(r.Context(), req.TenantID, "ai_text", 1)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"object": "list",
 		"data": []map[string]interface{}{
