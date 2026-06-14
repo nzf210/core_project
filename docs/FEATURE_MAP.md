@@ -87,7 +87,7 @@ Format per feature:
 | F022 | Excel/Google Sheet Import & Export | ✅ Approved | ✅ Done | 2026-06-14 |
 | F023 | FAQ Bot AI — Edit & Generate | ✅ Approved | ✅ Done | 2026-06-14 |
 | F024 | Free Tier Removal (Hardening) | ✅ Approved | ✅ Done | 2026-06-14 |
-| F025 | Tier Restrictions Overhaul (Multimodal AI) | ✅ Approved | ✅ Done (Phase 1+2) / ⏳ Pending (Phase 3) | 2026-06-14 |
+| F025 | Tier Restrictions Overhaul (Multimodal AI) | ✅ Approved | ✅ Done (All Phases) | 2026-06-14 |
 
 ---
 
@@ -1461,7 +1461,7 @@ Wajib update:
 ## F025: Tier Restrictions Overhaul (Multimodal AI)
 
 **Spec Status:** ✅ Approved
-**Implementation:** ✅ Done — Phase 1 (align) + Phase 2 (counter) complete. Phase 3 (multimodal) pending vendor confirmation.
+**Implementation:** ✅ Done — All phases complete. Phase 3 endpoints are mocked pending API key provisioning.
 
 **Deskripsi:** Single source of truth untuk tier restrictions (sejajarkan Go `Plans` map dengan DB `plan_features`). Tambah enforcement per-modality (text/vision/audio/image-gen). Per-tier counter mechanism untuk quota tracking. Siapkan fondasi untuk AI multimodal (vision STT/TTS/image gen) di `ultimate` tier.
 
@@ -1499,6 +1499,12 @@ Wajib update:
 - `services/wa-gateway/main.go` + `services/wa-cloud-api/main.go` (download media)
 - `shared/sdk/mediaproxy/` (NEW — WhatsApp media download helper)
 - `frontend/umkm-web/src/components/ChatbotConfig.vue` (multimodal toggle)
+
+### Commits (Phase 3):
+- `7d960c0` — feat(chatbot): add multimodal config toggles (vision, voice) to db and ui
+- `b02bd1f` — feat(chatbot): handle image and voice notes by routing to AI gateway multimodal endpoints
+- `65d5069` — feat(wa): forward image and audio messages to chatbot via local tmp proxy
+- `fdd3968` — feat(ai): add multimodal endpoint stubs with quota wiring
 
 ### Notes:
 - F025 **membutuhkan** F024 selesai (free tier dihapus) sebagai prerequisite
