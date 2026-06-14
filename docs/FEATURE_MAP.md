@@ -91,7 +91,7 @@ Format per feature:
 | F029 | Dynamic Multimodal Guardrails | ✅ Approved | ✅ Done | 2026-06-14 |
 | F030 | GetPlanFeatures DB Integration | ✅ Approved | ✅ Done | 2026-06-14 |
 | F031 | Campaign Anti-Double Validation | ✅ Approved | 🔨 In Progress | 2026-06-14 |
-| F032 | Modul Saksi & Real Count C1 | ⏳ Draft | ⏳ Pending | 2026-06-14 |
+| F032 | Modul Saksi & Real Count C1 | ✅ Approved | 🔨 In Progress | 2026-06-14 |
 
 ---
 
@@ -1722,8 +1722,8 @@ Wajib update:
 
 ## F032: Modul Saksi & Real Count C1 (Hari H)
 
-**Spec Status:** ⏳ Draft
-**Implementation:** ⏳ Pending
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
 
 **Deskripsi:** Sistem pengawalan suara di TPS pada hari pemilihan (Hari H). Saksi TPS bertugas memvalidasi kehadiran, memotret form C1 Plano, dan mengirimkannya ke sistem via WhatsApp. Data diproses untuk menayangkan Real Count internal secara real-time untuk mendahului dan mengawal rekapitulasi resmi KPU.
 
