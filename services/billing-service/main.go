@@ -342,6 +342,9 @@ func main() {
 	mux.Handle("/admin/n8n-executions", auth.Middleware(http.HandlerFunc(handleN8NExecutions)))
 	mux.Handle("/admin/health-status", auth.Middleware(http.HandlerFunc(handleHealthStatus)))
 
+	// Superadmin: per-tenant quota dashboard (Task 2.8 — F025)
+	mux.Handle("/admin/quota/", auth.Middleware(http.HandlerFunc(handleAdminQuotaUsage)))
+
 	server := &http.Server{
 		Addr:    ":8003",
 		Handler: mux,
@@ -2971,5 +2974,75 @@ func cleanupPendingTenants(ctx context.Context) {
 	if deleted > 0 {
 		slog.Info("Pending cleanup worker ran", "deleted", deleted)
 	}
+}
+
+// ─────────────────────────────────────────────
+// Superadmin: Per-Tenant Quota Dashboard (F025, Task 2.8)
+// GET /admin/quota/{tenant_id}
+// Returns current period quota usage + plan limits for a tenant.
+// Superadmin-only (caller responsible — API Gateway enforces).
+// ─────────────────────────────────────────────
+
+func handleAdminQuotaUsage(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+
+	tenantID := strings.TrimPrefix(r.URL.Path, "/admin/quota/")
+	if tenantID == "" || strings.Contains(tenantID, "/") {
+		response.Error(w, http.StatusBadRequest, "tenant_id required", nil)
+		return
+	}
+
+	ctx := r.Context()
+
+	// Get plan features (limits) for tenant
+	plan, _ := auth.GetPlanFeatures(ctx, tenantID)
+
+	// Get current period counters (YYYYMM, e.g. "202606")
+	period := time.Now().UTC().Format("200601")
+
+	rows, err := DB.Query(ctx,
+		`SELECT feature_key, count, reset_at
+		 FROM quota_counters
+		 WHERE tenant_id = $1 AND period_yyyymm = $2
+		 ORDER BY feature_key ASC`,
+		tenantID, period)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to query counters", err)
+		return
+	}
+	defer rows.Close()
+
+	type counter struct {
+		Feature string `json:"feature"`
+		Used    int64  `json:"used"`
+		ResetAt string `json:"reset_at"`
+	}
+	counters := []counter{}
+	for rows.Next() {
+		var c counter
+		var resetAt time.Time
+		if err := rows.Scan(&c.Feature, &c.Used, &resetAt); err != nil {
+			continue
+		}
+		c.ResetAt = resetAt.Format(time.RFC3339)
+		counters = append(counters, c)
+	}
+
+	response.JSON(w, http.StatusOK, "Quota usage retrieved", map[string]interface{}{
+		"tenant_id": tenantID,
+		"tier":      plan.Tier,
+		"plan_name": plan.PlanName,
+		"period":    period,
+		"limits":    plan, // full struct: max_users, max_ai_text, etc.
+		"usage":     counters,
+	})
 }
 
