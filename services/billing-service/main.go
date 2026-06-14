@@ -1058,13 +1058,13 @@ func activateSubscription(ctx context.Context, tenantID, planID, planName string
 	var ticketID string
 	err = DB.QueryRow(ctx, `
 		INSERT INTO subscription_tickets (tenant_id, plan_id, plan_name, ticket_number, expires_at, activated_by, notify_wa, notify_telegram, notify_email)
-		VALUES ($1, $2, $3, $4, NOW() + ($5 || ' days')::interval, $6, true, true, true)
+		VALUES ($1, $2, $3, $4, GREATEST(COALESCE((SELECT expires_at FROM subscription_tickets WHERE tenant_id = $1), NOW()), NOW()) + ($5 || ' days')::interval, $6, true, true, true)
 		ON CONFLICT (tenant_id) DO UPDATE SET
 			plan_id = EXCLUDED.plan_id,
 			plan_name = EXCLUDED.plan_name,
 			ticket_number = EXCLUDED.ticket_number,
 			status = 'active',
-			expires_at = EXCLUDED.expires_at,
+			expires_at = GREATEST(COALESCE(subscription_tickets.expires_at, NOW()), NOW()) + ($5 || ' days')::interval,
 			activated_at = NOW(),
 			updated_at = NOW()
 		RETURNING id
