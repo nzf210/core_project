@@ -1,0 +1,141 @@
+version: '3.8'
+
+# WCH Platform - Campaign Topology
+# Menjalankan core services + campaign specific services
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: wch-campaign-postgres
+    environment:
+      POSTGRES_USER: ${CAMPAIGN_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${CAMPAIGN_DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${CAMPAIGN_DB_NAME:-wch_campaign}
+    volumes:
+      - campaign_pgdata:/var/lib/postgresql/data
+    ports:
+      - 127.0.0.1:5434:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CAMPAIGN_DB_USER:-postgres} -d ${CAMPAIGN_DB_NAME:-wch_campaign}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    container_name: wch-campaign-redis
+    ports:
+      - 127.0.0.1:6382:6379
+    volumes:
+      - campaign_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wch-campaign-api-gateway
+    command:
+      - api-gateway
+    environment:
+      - APP_ENV=production
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_HOST=redis
+    ports:
+      - "8020:8000" # Port beda dari core
+    depends_on:
+      auth-service:
+        condition: service_started
+      campaign-api:
+        condition: service_started
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wch-campaign-auth
+    command:
+      - auth-service
+    environment:
+      - APP_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${CAMPAIGN_DB_USER:-postgres}
+      - DB_PASSWORD=${CAMPAIGN_DB_PASSWORD:-postgres}
+      - DB_NAME=${CAMPAIGN_DB_NAME:-wch_campaign}
+      - DB_SSLMODE=disable
+      - REDIS_HOST=redis
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  campaign-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wch-campaign-backend
+    command:
+      - campaign-api
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${CAMPAIGN_DB_USER:-postgres}
+      - DB_PASSWORD=${CAMPAIGN_DB_PASSWORD:-postgres}
+      - DB_NAME=${CAMPAIGN_DB_NAME:-wch_campaign}
+      - DB_SSLMODE=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  wa-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wch-campaign-wa
+    command:
+      - wa-gateway
+    environment:
+      - WA_SYSTEM_TENANT_ID=${WA_SYSTEM_TENANT_ID:-system}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${CAMPAIGN_DB_USER:-postgres}
+      - DB_PASSWORD=${CAMPAIGN_DB_PASSWORD:-postgres}
+      - DB_NAME=${CAMPAIGN_DB_NAME:-wch_campaign}
+      - DB_SSLMODE=disable
+      - REDIS_HOST=redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+    restart: unless-stopped
+
+  campaign-frontend:
+    build:
+      context: ./frontend/campaign-web
+      dockerfile: Dockerfile
+    container_name: wch-campaign-frontend
+    restart: unless-stopped
+    ports:
+      - "3204:80" # Port beda dari core
+    depends_on:
+      - api-gateway
+
+volumes:
+  campaign_pgdata:
+  campaign_redisdata:
