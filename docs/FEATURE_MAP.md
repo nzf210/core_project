@@ -87,7 +87,38 @@ Format per feature:
 | F022 | Excel/Google Sheet Import & Export | ✅ Approved | ✅ Done | 2026-06-14 |
 | F023 | FAQ Bot AI — Edit & Generate | ✅ Approved | ✅ Done | 2026-06-14 |
 | F024 | Free Tier Removal (Hardening) | ✅ Approved | ✅ Done | 2026-06-14 |
-| F025 | Tier Restrictions Overhaul (Multimodal AI) | ✅ Approved | ✅ Done (All Phases) | 2026-06-14 |
+| F025 | Tier Restrictions Overhaul + AI Multimodal | ✅ Approved | ✅ Done (Phase 1+2) / ⏳ Pending (Phase 3) | 2026-06-14 |
+| F026 | N8N Notification Webhooks & Workflows | ✅ Approved | 🔨 In Progress | 2026-06-14 |
+
+---
+
+## F026: N8N Notification Webhooks & Workflows
+
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
+
+**Deskripsi:** Integrasi `services/notification-service` dengan *N8N Workflow Automation* untuk pengiriman pesan asinkron (WA, Email, Telegram). Membuka jalan untuk scheduled reports (UMKM) dan real-time alerts.
+
+### Goals
+1. Bikin standard REST API webhook endpoint di `notification-service` agar bisa dipanggil N8N.
+2. Standardisasi format JSON payload untuk N8N ke WCH Platform.
+3. Template Engine basic: Parsing variabel (`{{customer_name}}`, `{{total}}`) dari payload N8N.
+4. Export N8N JSON workflow templates (contoh: Monthly Financial Report, Low Stock Alert) ke direktori `infra/n8n/workflows`.
+
+### Rules & Constraints
+- `notification-service` HANYA menerima HTTP request; eksekusi scheduling (cron) murni dari N8N.
+- Security: Gunakan Header `X-Webhook-Secret` atau JWT token (superadmin/system level) pada N8N webhook call.
+- Jangan hardcode provider (WA/Email) API. Hubungkan endpoint `/notify/whatsapp` ke `services/wa-gateway` (bukan external vendor Fonnte, since we have our own gateway).
+
+### Impacted Files
+- `services/notification-service/main.go`
+- `services/notification-service/templates.go` (NEW)
+- `shared/sdk/webhook/auth.go` (NEW/Update - Validate incoming N8N webhook signatures)
+- `infra/n8n/workflows/umkm_low_stock_alert.json` (NEW)
+- `infra/n8n/workflows/umkm_monthly_report.json` (NEW)
+
+### Deployment
+- Membutuhkan instance n8n berjalan di Docker network yang sama.
 
 ---
 

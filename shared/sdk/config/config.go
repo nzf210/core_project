@@ -102,6 +102,11 @@ type Config struct {
 	Telegram struct {
 		BotToken string // Telegram Bot Token dari @BotFather
 	}
+
+	// N8N Webhook Configuration
+	N8N struct {
+		WebhookSecret string
+	}
 }
 
 // Global Config instance
@@ -162,6 +167,9 @@ func LoadConfig(envPath string) *Config {
 
 	// Telegram Bot for auth
 	cfg.Telegram.BotToken = getEnv("TELEGRAM_BOT_TOKEN", "")
+
+	// N8N Webhook
+	cfg.N8N.WebhookSecret = getEnv("N8N_WEBHOOK_SECRET", "")
 
 	GlobalConfig = cfg
 	return cfg
