@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/config"
 	"net/url"
 
@@ -308,6 +309,10 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	// Save Assistant Message
 	if sessionID != "" && DB != nil {
 		DB.Exec(ctx, "INSERT INTO chat_messages (session_id, role, content) VALUES ($1, $2, $3)", sessionID, "assistant", aiAnswer)
+	}
+
+	if tenantID != "" {
+		auth.IncrementQuota(ctx, tenantID, "chatbot_messages", 1)
 	}
 
 	writeJSON(w, http.StatusOK, APIResponse{
@@ -678,6 +683,9 @@ func processChatJob(job ChatJob) {
 		reqWA.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		if respWA, errWA := http.DefaultClient.Do(reqWA); errWA == nil {
 			respWA.Body.Close()
+			if tenantID != "" {
+				auth.IncrementQuota(ctx, tenantID, "chatbot_messages", 1)
+			}
 		}
 		return
 	}
@@ -717,6 +725,9 @@ func processChatJob(job ChatJob) {
 			respWA, errWA := http.DefaultClient.Do(reqWA)
 			if errWA == nil {
 				respWA.Body.Close()
+				if tenantID != "" {
+					auth.IncrementQuota(ctx, tenantID, "chatbot_messages", 1)
+				}
 			} else {
 				slog.Error("Failed to send WA reply", "error", errWA)
 			}
