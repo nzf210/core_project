@@ -128,6 +128,27 @@
               <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Pesan di Luar Jam Operasional</span>
               <textarea v-model="form.outside_hours_message" class="form-control" rows="2" />
             </label>
+            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.5rem 0;" />
+            <div>
+              <span style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">AI Modality</span>
+              <label class="toggle-row" style="margin-bottom: 0.25rem;">
+                <input type="checkbox" v-model="form.enable_vision" />
+                <span><strong>Enable Vision</strong> (Process image messages)</span>
+              </label>
+              <label class="toggle-row" style="margin-bottom: 0.25rem;">
+                <input type="checkbox" v-model="form.enable_voice_reply" />
+                <span><strong>Enable Voice Reply</strong> (Reply with voice notes)</span>
+              </label>
+              <label v-if="form.enable_voice_reply" style="display: block; margin-top: 0.5rem;">
+                <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Voice Model</span>
+                <select v-model="form.voice_model" class="form-control">
+                  <option value="id-ID-ArdiNeural">id-ID-ArdiNeural (Laki-laki)</option>
+                  <option value="id-ID-GadisNeural">id-ID-GadisNeural (Perempuan)</option>
+                </select>
+              </label>
+            </div>
+            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.5rem 0;" />
+
             <div>
               <span style="display: block; font-size: 0.85rem; margin-bottom: 0.5rem;">Channel Aktif</span>
               <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
@@ -242,6 +263,9 @@ const form = reactive<any>({
   outside_hours_message: 'Terima kasih telah menghubungi kami. Saat ini di luar jam operasional. Pesan Anda akan dibalas saat jam kerja.',
   channels_enabled: ['whatsapp'],
   is_active: true,
+  enable_vision: false,
+  enable_voice_reply: false,
+  voice_model: 'id-ID-GadisNeural',
 })
 
 const dayList = [

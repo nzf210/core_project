@@ -1,0 +1,4 @@
+ALTER TABLE tenant_chatbot_configs
+  ADD COLUMN IF NOT EXISTS enable_vision BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS enable_voice_reply BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS voice_model VARCHAR(50) NOT NULL DEFAULT 'id-ID-ArdiNeural';

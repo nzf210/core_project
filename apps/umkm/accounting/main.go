@@ -18,10 +18,10 @@ import (
 	"core_project/shared/sdk/config"
 	"core_project/shared/sdk/webhook"
 	"github.com/jung-kurt/gofpdf"
-	"github.com/xuri/excelize/v2"
-	"golang.org/x/crypto/bcrypt"
 	xendit "github.com/xendit/xendit-go/v6"
 	invoice "github.com/xendit/xendit-go/v6/invoice"
+	"github.com/xuri/excelize/v2"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type APIResponse struct {
@@ -61,14 +61,14 @@ func main() {
 		os.Exit(1)
 	}
 
-mux := http.NewServeMux()
+	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handleHealth)
 	mux.HandleFunc("/accounts", handleAccounts)
 	mux.HandleFunc("/transactions", handleTransactions)
 	mux.HandleFunc("/reports/income-statement", handleIncomeStatement)
 	mux.HandleFunc("/reports/balance-sheet", handleBalanceSheet)
 	mux.HandleFunc("/reports/cash-flow", handleCashFlow)
-	mux.HandleFunc("/reports/cash-flow/pdf", handleCashFlowPDF) // F021
+	mux.HandleFunc("/reports/cash-flow/pdf", handleCashFlowPDF)               // F021
 	mux.HandleFunc("/reports/income-statement/pdf", handleIncomeStatementPDF) // B
 	mux.HandleFunc("/reports/balance-sheet/pdf", handleBalanceSheetPDF)       // B
 	mux.HandleFunc("/expenses", handleExpenses)
@@ -94,15 +94,15 @@ mux := http.NewServeMux()
 
 	// ── Chatbot / N8N Hybrid Endpoints ──────────────────────────────────
 	mux.HandleFunc("/internal/tenant/{tenant_id}/chatbot-config", handleInternalChatbotConfig)
-	mux.HandleFunc("/chatbot/config", handleChatbotConfig)         // F020: GET/PUT per-tenant chatbot config (X-Tenant-ID)
+	mux.HandleFunc("/chatbot/config", handleChatbotConfig)          // F020: GET/PUT per-tenant chatbot config (X-Tenant-ID)
 	mux.HandleFunc("/chatbot/config/test", handleChatbotConfigTest) // F020: POST preview with current config
-	mux.HandleFunc("/export/products", handleExportProducts)    // F022
-	mux.HandleFunc("/export/contacts", handleExportContacts)    // F022
-	mux.HandleFunc("/export/journal", handleExportJournal)      // F022
-	mux.HandleFunc("/import/products", handleImportProducts)    // F022
-	mux.HandleFunc("/import/contacts", handleImportContacts)    // F022
-	mux.HandleFunc("/import/journal", handleImportJournal)      // F022
-	mux.HandleFunc("/import/template", handleImportTemplate)    // F022: download CSV template
+	mux.HandleFunc("/export/products", handleExportProducts)        // F022
+	mux.HandleFunc("/export/contacts", handleExportContacts)        // F022
+	mux.HandleFunc("/export/journal", handleExportJournal)          // F022
+	mux.HandleFunc("/import/products", handleImportProducts)        // F022
+	mux.HandleFunc("/import/contacts", handleImportContacts)        // F022
+	mux.HandleFunc("/import/journal", handleImportJournal)          // F022
+	mux.HandleFunc("/import/template", handleImportTemplate)        // F022: download CSV template
 	mux.HandleFunc("/internal/tenant/{tenant_id}/rag/search", handleInternalRAGSearch)
 	mux.HandleFunc("/internal/conversation/log", handleInternalConversationLog)
 	mux.HandleFunc("/internal/escalation/log", handleInternalEscalationLog)
@@ -143,16 +143,16 @@ func generateDynamicQRIS(staticQRIS string, amount float64) string {
 	// Split at 6304
 	parts := strings.Split(staticQRIS, "6304")
 	base := parts[0]
-	
+
 	// Remove existing tag 54 if present (simplified: assume it's static and has no 54, but if we need, we could parse it)
 	// Add amount
 	amtStr := fmt.Sprintf("%.0f", amount)
 	amtTag := fmt.Sprintf("54%02d%s", len(amtStr), amtStr)
-	
+
 	// Tag 01 (Point of Initiation Method) might be 010211 (static). Change to 010212 (dynamic)
 	newBase := strings.Replace(base, "010211", "010212", 1)
 	newBase = newBase + amtTag + "6304"
-	
+
 	crc := CRC16CCITT([]byte(newBase))
 	return newBase + crc
 }
@@ -216,7 +216,7 @@ func handleSeed(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 	for _, acc := range accounts {
-		_, err := DB.Exec(ctx, 
+		_, err := DB.Exec(ctx,
 			"INSERT INTO chart_of_accounts (tenant_id, code, name, type) VALUES ($1, $2, $3, $4) ON CONFLICT (tenant_id, code) DO NOTHING",
 			tenantID, acc.Code, acc.Name, acc.Type,
 		)
@@ -279,7 +279,7 @@ func handleAccounts(w http.ResponseWriter, r *http.Request) {
 		err := DB.QueryRow(r.Context(),
 			"INSERT INTO chart_of_accounts (tenant_id, code, name, type, parent_id) VALUES ($1, $2, $3, $4, $5) RETURNING id",
 			tenantID, req.Code, req.Name, req.Type, parent).Scan(&id)
-		
+
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Insert failed"})
 			return
@@ -357,7 +357,7 @@ func handleTransactions(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRow(ctx,
 		"INSERT INTO journal_entries (tenant_id, date, description, reference) VALUES ($1, $2, $3, $4) RETURNING id",
 		tenantID, req.Date, req.Description, req.Reference).Scan(&entryID)
-	
+
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Insert entry failed"})
 		return
@@ -381,7 +381,7 @@ func handleIncomeStatement(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("X-Tenant-ID")
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
-	
+
 	if tenantID == "" || from == "" || to == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing parameters"})
 		return
@@ -427,12 +427,12 @@ func handleIncomeStatement(w http.ResponseWriter, r *http.Request) {
 
 	netIncome := totalRevenue - totalExpense
 	writeJSON(w, http.StatusOK, APIResponse{
-		Success: true, 
+		Success: true,
 		Data: map[string]interface{}{
 			"net_income": netIncome,
-			"revenue": totalRevenue,
-			"expense": totalExpense,
-			"details": details,
+			"revenue":    totalRevenue,
+			"expense":    totalExpense,
+			"details":    details,
 		},
 	})
 }
@@ -440,7 +440,7 @@ func handleIncomeStatement(w http.ResponseWriter, r *http.Request) {
 func handleBalanceSheet(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("X-Tenant-ID")
 	date := r.URL.Query().Get("date")
-	
+
 	if tenantID == "" || date == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing parameters"})
 		return
@@ -474,8 +474,12 @@ func handleBalanceSheet(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&typ, &name, &balance); err == nil {
 			if typ == "liability" || typ == "equity" {
 				balance = -balance // Natural balance is credit
-				if typ == "liability" { liabilities += balance }
-				if typ == "equity" { equity += balance }
+				if typ == "liability" {
+					liabilities += balance
+				}
+				if typ == "equity" {
+					equity += balance
+				}
 			} else {
 				assets += balance
 			}
@@ -484,12 +488,12 @@ func handleBalanceSheet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, APIResponse{
-		Success: true, 
+		Success: true,
 		Data: map[string]interface{}{
-			"assets": assets,
+			"assets":      assets,
 			"liabilities": liabilities,
-			"equity": equity,
-			"details": details,
+			"equity":      equity,
+			"details":     details,
 			"is_balanced": assets == (liabilities + equity),
 		},
 	})
@@ -499,7 +503,7 @@ func handleCashFlow(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("X-Tenant-ID")
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
-	
+
 	if tenantID == "" || from == "" || to == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing parameters"})
 		return
@@ -621,27 +625,27 @@ func handleCashFlow(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Data: map[string]interface{}{
-			"net_cash_flow":  netCashFlow,
-			"total_inflow":   totalInflow,
-			"total_outflow":  totalOutflow,
-			"opening_cash":   openingCash,
-			"closing_cash":   openingCash + netCashFlow,
-			"details":        details,
+			"net_cash_flow": netCashFlow,
+			"total_inflow":  totalInflow,
+			"total_outflow": totalOutflow,
+			"opening_cash":  openingCash,
+			"closing_cash":  openingCash + netCashFlow,
+			"details":       details,
 			"activities": map[string]interface{}{
 				"operating": map[string]interface{}{
 					"inflow": operating.Inflow, "outflow": operating.Outflow,
-					"net":    operating.Inflow - operating.Outflow,
-					"lines":  operating.Lines,
+					"net":   operating.Inflow - operating.Outflow,
+					"lines": operating.Lines,
 				},
 				"investing": map[string]interface{}{
 					"inflow": investing.Inflow, "outflow": investing.Outflow,
-					"net":    investing.Inflow - investing.Outflow,
-					"lines":  investing.Lines,
+					"net":   investing.Inflow - investing.Outflow,
+					"lines": investing.Lines,
 				},
 				"financing": map[string]interface{}{
 					"inflow": financing.Inflow, "outflow": financing.Outflow,
-					"net":    financing.Inflow - financing.Outflow,
-					"lines":  financing.Lines,
+					"net":   financing.Inflow - financing.Outflow,
+					"lines": financing.Lines,
 				},
 			},
 		},
@@ -671,7 +675,7 @@ func handleExpenses(w http.ResponseWriter, r *http.Request) {
 			args = append(args, from, to)
 		}
 		query += " ORDER BY e.date DESC"
-		
+
 		rows, err := DB.Query(r.Context(), query, args...)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
@@ -694,7 +698,7 @@ func handleExpenses(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: map[string]interface{}{
 			"total_expense": totalExpense,
-			"details": details,
+			"details":       details,
 		}})
 		return
 	}
@@ -742,7 +746,7 @@ func handleExpenses(w http.ResponseWriter, r *http.Request) {
 		}
 
 		metaBytes, _ := json.Marshal(map[string]interface{}{
-			"type": "expense",
+			"type":       "expense",
 			"line_items": req.LineItems,
 		})
 
@@ -750,7 +754,7 @@ func handleExpenses(w http.ResponseWriter, r *http.Request) {
 		err = tx.QueryRow(ctx,
 			"INSERT INTO journal_entries (tenant_id, date, description, metadata) VALUES ($1, $2, $3, $4) RETURNING id",
 			tenantID, req.Date, req.Description, string(metaBytes)).Scan(&entryID)
-		
+
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Insert entry failed"})
 			return
@@ -826,7 +830,7 @@ func handleGetTransactions(w http.ResponseWriter, r *http.Request) {
 		var metaRaw []byte
 		if err := rows.Scan(&id, &dateRaw, &desc, &ref, &metaRaw, &accID, &accName, &debit, &credit); err == nil {
 			date := dateRaw.Format("2006-01-02")
-			
+
 			var meta map[string]interface{}
 			if metaRaw != nil {
 				json.Unmarshal(metaRaw, &meta)
@@ -865,7 +869,7 @@ func handleAdminTenants(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request"})
 			return
 		}
-		
+
 		ctx := r.Context()
 		tx, err := DB.Begin(ctx)
 		if err != nil {
@@ -913,7 +917,7 @@ func handleAdminTenants(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
 			return
 		}
-		
+
 		ctx := r.Context()
 		tx, err := DB.Begin(ctx)
 		if err != nil {
@@ -927,13 +931,13 @@ func handleAdminTenants(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to update tenant"})
 			return
 		}
-		
+
 		_, err = tx.Exec(ctx, "UPDATE users SET username = $1, email = $2, phone_number = $3, updated_at = NOW() WHERE tenant_id = $4", req.Username, req.Email, req.PhoneNumber, req.ID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to update user"})
 			return
 		}
-		
+
 		tx.Commit(ctx)
 		writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Tenant updated"})
 		return
@@ -971,13 +975,13 @@ func handleAdminTenants(w http.ResponseWriter, r *http.Request) {
 		var createdAt time.Time
 		if err := rows.Scan(&id, &name, &plan, &createdAt, &username, &email, &phone); err == nil {
 			result = append(result, map[string]interface{}{
-				"id": id,
-				"name": name,
-				"plan": plan,
-				"username": username,
-				"email": email,
+				"id":           id,
+				"name":         name,
+				"plan":         plan,
+				"username":     username,
+				"email":        email,
 				"phone_number": phone,
-				"expiry": "2027-12-31", // Mock expiry for now
+				"expiry":       "2027-12-31", // Mock expiry for now
 			})
 		}
 	}
@@ -1045,7 +1049,7 @@ func createAdminTenant(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to hash password"})
 		return
 	}
-	
+
 	var userID string
 	err = tx.QueryRow(ctx, "INSERT INTO users (tenant_id, username, email, password_hash, phone_number) VALUES ($1, $2, $3, $4, $5) RETURNING id",
 		tenantID, req.Username, req.Email, passwordHash, req.PhoneNumber).Scan(&userID)
@@ -1101,22 +1105,34 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 
 		wNum, xApiKey, xWebToken, rTime := "", "", "", "07:00"
 		qEnabled, rEnabled := false, false
-		if waNumber != nil { wNum = *waNumber }
-		if xenditApiKey != nil { xApiKey = *xenditApiKey }
-		if xenditWebhookToken != nil { xWebToken = *xenditWebhookToken }
-		if qrisEnabled != nil { qEnabled = *qrisEnabled }
-		if reportEnabled != nil { rEnabled = *reportEnabled }
-		if reportTime != nil { rTime = *reportTime }
+		if waNumber != nil {
+			wNum = *waNumber
+		}
+		if xenditApiKey != nil {
+			xApiKey = *xenditApiKey
+		}
+		if xenditWebhookToken != nil {
+			xWebToken = *xenditWebhookToken
+		}
+		if qrisEnabled != nil {
+			qEnabled = *qrisEnabled
+		}
+		if reportEnabled != nil {
+			rEnabled = *reportEnabled
+		}
+		if reportTime != nil {
+			rTime = *reportTime
+		}
 
 		writeJSON(w, http.StatusOK, APIResponse{
 			Success: true,
 			Data: map[string]interface{}{
-				"wa_number": wNum,
-				"xendit_api_key": xApiKey,
+				"wa_number":            wNum,
+				"xendit_api_key":       xApiKey,
 				"xendit_webhook_token": xWebToken,
-				"qris_enabled": qEnabled,
-				"report_enabled": rEnabled,
-				"report_time": rTime,
+				"qris_enabled":         qEnabled,
+				"report_enabled":       rEnabled,
+				"report_time":          rTime,
 			},
 		})
 		return
@@ -1198,12 +1214,12 @@ func handleProducts(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		var req struct {
-			Name          string   `json:"name"`
-			Price         float64  `json:"price"`
-			Description   string   `json:"description"`
-			PhotoURL      string   `json:"photo_url"`
-			Category      string   `json:"category"`
-			StockQuantity int      `json:"stock_quantity"`
+			Name             string   `json:"name"`
+			Price            float64  `json:"price"`
+			Description      string   `json:"description"`
+			PhotoURL         string   `json:"photo_url"`
+			Category         string   `json:"category"`
+			StockQuantity    int      `json:"stock_quantity"`
 			AdditionalPhotos []string `json:"additional_photos"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1228,7 +1244,7 @@ func handleProducts(w http.ResponseWriter, r *http.Request) {
 		err := DB.QueryRow(r.Context(),
 			"INSERT INTO products (tenant_id, name, price, description, photo_url, category, stock_quantity, additional_photos) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
 			tenantID, req.Name, req.Price, req.Description, req.PhotoURL, req.Category, req.StockQuantity, addPhotosBytes).Scan(&id)
-		
+
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Insert failed"})
 			return
@@ -1254,13 +1270,13 @@ func handleProducts(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPut {
 		var req struct {
-			ID            string   `json:"id"`
-			Name          string   `json:"name"`
-			Price         float64  `json:"price"`
-			Description   string   `json:"description"`
-			PhotoURL      string   `json:"photo_url"`
-			Category      string   `json:"category"`
-			StockQuantity int      `json:"stock_quantity"`
+			ID               string   `json:"id"`
+			Name             string   `json:"name"`
+			Price            float64  `json:"price"`
+			Description      string   `json:"description"`
+			PhotoURL         string   `json:"photo_url"`
+			Category         string   `json:"category"`
+			StockQuantity    int      `json:"stock_quantity"`
 			AdditionalPhotos []string `json:"additional_photos"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1284,7 +1300,7 @@ func handleProducts(w http.ResponseWriter, r *http.Request) {
 		_, err := DB.Exec(r.Context(),
 			"UPDATE products SET name = $1, price = $2, description = $3, photo_url = $4, category = $5, stock_quantity = $6, additional_photos = $7 WHERE id = $8 AND tenant_id = $9",
 			req.Name, req.Price, req.Description, req.PhotoURL, req.Category, req.StockQuantity, addPhotosBytes, req.ID, tenantID)
-		
+
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Update failed"})
 			return
@@ -1304,7 +1320,7 @@ func handleProductsImport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Only POST allowed"})
 		return
 	}
-	
+
 	err := r.ParseMultipartForm(10 << 20) // 10MB limit
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Could not parse form"})
@@ -1352,7 +1368,7 @@ func handleProductsImport(w http.ResponseWriter, r *http.Request) {
 		if i == 0 {
 			continue // skip header
 		}
-		
+
 		var id, name, desc, category, photoURL, addPhotosStr string
 		var price float64
 		var stock int
@@ -1390,9 +1406,9 @@ func handleProductsImport(w http.ResponseWriter, r *http.Request) {
 				addPhotosStr = row[6]
 			}
 		}
-		
+
 		hasPhotoCol := (hasIDCol && len(row) >= 7) || (!hasIDCol && len(row) >= 6)
-		
+
 		if addPhotosStr != "" {
 			additionalPhotos = strings.Split(addPhotosStr, "|")
 		} else {
@@ -1419,7 +1435,7 @@ func handleProductsImport(w http.ResponseWriter, r *http.Request) {
 				skippedIDs = append(skippedIDs, id)
 				continue
 			}
-			
+
 			if hasPhotoCol {
 				_, err = tx.Exec(ctx,
 					"UPDATE products SET name = $1, price = $2, description = $3, category = $4, stock_quantity = $5, photo_url = $8, additional_photos = $9 WHERE id = $6 AND tenant_id = $7",
@@ -1429,7 +1445,7 @@ func handleProductsImport(w http.ResponseWriter, r *http.Request) {
 					"UPDATE products SET name = $1, price = $2, description = $3, category = $4, stock_quantity = $5 WHERE id = $6 AND tenant_id = $7",
 					name, price, desc, category, stock, id, tenantID)
 			}
-			
+
 			if err == nil {
 				successCount++
 			} else {
@@ -1438,11 +1454,11 @@ func handleProductsImport(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			if hasPhotoCol {
-				_, err = tx.Exec(ctx, 
+				_, err = tx.Exec(ctx,
 					"INSERT INTO products (tenant_id, name, price, description, category, stock_quantity, photo_url, additional_photos) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 					tenantID, name, price, desc, category, stock, photoURL, addPhotosBytes)
 			} else {
-				_, err = tx.Exec(ctx, 
+				_, err = tx.Exec(ctx,
 					"INSERT INTO products (tenant_id, name, price, description, category, stock_quantity) VALUES ($1, $2, $3, $4, $5, $6)",
 					tenantID, name, price, desc, category, stock)
 			}
@@ -1451,14 +1467,14 @@ func handleProductsImport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	
+
 	tx.Commit(ctx)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true, 
-		"message": fmt.Sprintf("Berhasil mengimpor %d produk. %d dilewati.", successCount, skipCount),
+		"success":      true,
+		"message":      fmt.Sprintf("Berhasil mengimpor %d produk. %d dilewati.", successCount, skipCount),
 		"successCount": successCount,
-		"skipCount": skipCount,
-		"skippedIDs": skippedIDs,
+		"skipCount":    skipCount,
+		"skippedIDs":   skippedIDs,
 	})
 }
 
@@ -1516,10 +1532,10 @@ func handleCheckout(w http.ResponseWriter, r *http.Request) {
 			PaymentMethod string  `json:"payment_method"` // "cash" or "qris"
 			TotalAmount   float64 `json:"total_amount"`
 			Items         []struct {
-				ID       string `json:"id"`
-				Name     string `json:"name"`
-				Quantity int    `json:"quantity"`
-				Price    float64`json:"price"`
+				ID       string  `json:"id"`
+				Name     string  `json:"name"`
+				Quantity int     `json:"quantity"`
+				Price    float64 `json:"price"`
 			} `json:"items"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1550,11 +1566,11 @@ func handleCheckout(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid amount"})
 			return
 		}
-		
+
 		// Determine accounts
 		var debitAccCode, creditAccCode string
 		creditAccCode = "400" // Pendapatan Usaha
-		
+
 		var xenditApiKey *string
 		var qrisEnabled *bool
 
@@ -1686,15 +1702,15 @@ func handleCheckout(w http.ResponseWriter, r *http.Request) {
 		})
 
 		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"success": true,
-			"message": "Transaksi berhasil dicatat",
-			"status": "paid",
-			"qris_url": "",
+			"success":   true,
+			"message":   "Transaksi berhasil dicatat",
+			"status":    "paid",
+			"qris_url":  "",
 			"reference": reference,
 		})
 		return
 	}
-	
+
 	writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
 }
 
@@ -1703,13 +1719,13 @@ func handleOCR(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
 		return
 	}
-	
+
 	err := r.ParseMultipartForm(10 << 20) // 10 MB limit
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Failed to parse form"})
 		return
 	}
-	
+
 	file, _, err := r.FormFile("image")
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "No image provided"})
@@ -1721,9 +1737,9 @@ func handleOCR(w http.ResponseWriter, r *http.Request) {
 	time.Sleep(1500 * time.Millisecond)
 
 	draft := map[string]interface{}{
-		"date": time.Now().Format("2006-01-02"),
+		"date":        time.Now().Format("2006-01-02"),
 		"description": "Pembelian Bahan Baku (Hasil Scan OCR)",
-		"reference": "OCR-" + time.Now().Format("150405"),
+		"reference":   "OCR-" + time.Now().Format("150405"),
 		"lines": []map[string]interface{}{
 			{"account_id": "beban_bahan_baku", "debit": 150000, "credit": 0},
 			{"account_id": "kas_kecil", "debit": 0, "credit": 150000},
@@ -1733,7 +1749,7 @@ func handleOCR(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Message: "Nota berhasil dipindai oleh AI",
-		Data: draft,
+		Data:    draft,
 	})
 }
 
@@ -1833,7 +1849,7 @@ func handleFaqsGenerate(w http.ResponseWriter, r *http.Request) {
 		"system_msg": "Anda adalah asisten pembuat FAQ.",
 		"tenant_id":  tenantID,
 	}
-	
+
 	payloadBytes, _ := json.Marshal(aiReqBody)
 	reqHTTP, err := http.NewRequestWithContext(r.Context(), http.MethodPost, "http://ai-gateway:8002/v1/chat", bytes.NewBuffer(payloadBytes))
 	if err != nil {
@@ -1841,7 +1857,7 @@ func handleFaqsGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	
+
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(reqHTTP)
 	if err != nil {
@@ -1849,7 +1865,7 @@ func handleFaqsGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	
+
 	var aiResp struct {
 		Success bool   `json:"success"`
 		Text    string `json:"text"`
@@ -1866,7 +1882,7 @@ func handleFaqsGenerate(w http.ResponseWriter, r *http.Request) {
 			{"question": "Berapa jam operasional toko?", "answer": "Kami buka dari jam 08:00 pagi hingga 20:00 malam."},
 		}
 	}
-	
+
 	for _, f := range generated {
 		DB.Exec(r.Context(), "INSERT INTO tenant_faqs (tenant_id, question, answer) VALUES ($1, $2, $3)", tenantID, f["question"], f["answer"])
 	}
@@ -1944,7 +1960,7 @@ func handleTransactionStatus(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
-		"status": status,
+		"status":  status,
 	})
 }
 
@@ -1963,11 +1979,11 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	
+
 	var tenantID, currentStatus, paymentMethod, itemsJSONStr string
 	var totalAmount float64
 	err := DB.QueryRow(ctx, "SELECT tenant_id, status, payment_method, total_amount, items_json::text FROM pos_transactions WHERE reference = $1 FOR UPDATE", req.Reference).Scan(&tenantID, &currentStatus, &paymentMethod, &totalAmount, &itemsJSONStr)
-	
+
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, APIResponse{Message: "Transaction not found"})
 		return
@@ -1995,7 +2011,7 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	err = DB.QueryRow(ctx,
 		"INSERT INTO journal_entries (tenant_id, date, description, reference, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING id",
 		tenantID, dateStr, "Pembayaran Webhook: "+req.Reference, req.Reference, itemsJSONStr).Scan(&entryID)
-	
+
 	if err == nil {
 		DB.Exec(ctx, "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0)", entryID, debitAccID, totalAmount)
 		DB.Exec(ctx, "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)", entryID, creditAccID, totalAmount)
@@ -2009,7 +2025,7 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		} `json:"items"`
 	}
 	json.Unmarshal([]byte(itemsJSONStr), &parsedItems)
-	
+
 	for _, item := range parsedItems.Items {
 		DB.Exec(ctx, "UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2 AND tenant_id = $3", item.Quantity, item.ID, tenantID)
 	}
@@ -2020,7 +2036,7 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	if waNumber != nil && *waNumber != "" {
 		go func(tenantID, phone, ref string, amount float64) {
 			msg := fmt.Sprintf("✅ *PEMBAYARAN DITERIMA* ✅\n\nRef: %s\nNominal: Rp %.0f\nMetode: QRIS\n\nTerima kasih, dana telah masuk ke rekening Anda dan sistem telah mencatat transaksi ini.", ref, amount)
-			
+
 			// Format phone to JID
 			target := phone
 			if strings.HasPrefix(target, "0") {
@@ -2069,11 +2085,11 @@ func handleStorePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	
+
 	var tenantID, currentStatus, paymentMethod, itemsJSONStr string
 	var totalAmount float64
 	err := DB.QueryRow(ctx, "SELECT tenant_id, status, payment_method, total_amount, items_json::text FROM pos_transactions WHERE reference = $1 FOR UPDATE", reference).Scan(&tenantID, &currentStatus, &paymentMethod, &totalAmount, &itemsJSONStr)
-	
+
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, APIResponse{Message: "Transaction not found"})
 		return
@@ -2116,7 +2132,7 @@ func handleStorePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	err = DB.QueryRow(ctx,
 		"INSERT INTO journal_entries (tenant_id, date, description, reference, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING id",
 		tenantID, dateStr, "Pembayaran Xendit: "+reference, reference, itemsJSONStr).Scan(&entryID)
-	
+
 	if err == nil {
 		DB.Exec(ctx, "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0)", entryID, debitAccID, totalAmount)
 		DB.Exec(ctx, "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)", entryID, creditAccID, totalAmount)
@@ -2130,7 +2146,7 @@ func handleStorePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		} `json:"items"`
 	}
 	json.Unmarshal([]byte(itemsJSONStr), &parsedItems)
-	
+
 	for _, item := range parsedItems.Items {
 		DB.Exec(ctx, "UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2 AND tenant_id = $3", item.Quantity, item.ID, tenantID)
 	}
@@ -2141,7 +2157,7 @@ func handleStorePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	if waNumber != nil && *waNumber != "" {
 		go func(tenantID, phone, ref string, amount float64) {
 			msg := fmt.Sprintf("✅ *PEMBAYARAN DITERIMA VIA XENDIT* ✅\n\nRef: %s\nNominal: Rp %.0f\nMetode: Xendit (QRIS/VA)\n\nTerima kasih, dana otomatis tercatat dalam sistem POS Anda.", ref, amount)
-			
+
 			target := phone
 			if strings.HasPrefix(target, "0") {
 				target = "62" + target[1:]
@@ -2575,12 +2591,12 @@ func handleInternalAutomationsDue(w http.ResponseWriter, r *http.Request) {
 				json.Unmarshal(configJSON, &cfg)
 				due = append(due, map[string]interface{}{
 					"automation_id": id,
-					"tenant_id":    tenantID,
-					"type":         typ,
-					"name":         name,
-					"wa_number":    waNumber,
-					"tenant_name":  tenantName,
-					"config":       cfg,
+					"tenant_id":     tenantID,
+					"type":          typ,
+					"name":          name,
+					"wa_number":     waNumber,
+					"tenant_name":   tenantName,
+					"config":        cfg,
 				})
 			}
 		}
@@ -2750,7 +2766,7 @@ func handleInternalChatbotConfig(w http.ResponseWriter, r *http.Request) {
 			outside_hours_message, business_hours_start, business_hours_end, business_days,
 			escalation_enabled, escalation_keywords, escalation_confidence_threshold,
 			auto_escalate_after_minutes, rag_enabled, rag_top_k, rag_similarity_threshold,
-			channels_enabled, is_active
+			channels_enabled, is_active, enable_vision, enable_voice_reply, voice_model
 		 FROM tenant_chatbot_configs WHERE tenant_id = $1`, tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
@@ -2772,8 +2788,9 @@ func handleInternalChatbotConfig(w http.ResponseWriter, r *http.Request) {
 		&welcome, &fallback, &outsideHrs,
 		&cfg.BusinessHoursStart, &cfg.BusinessHoursEnd, &cfg.BusinessDays,
 		&cfg.EscalationEnabled, &escalationKW, &cfg.EscalationConfidenceThreshold,
-		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
-		&cfg.ChannelsEnabled, &cfg.IsActive,
+		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
+		&cfg.ChannelsEnabled, &cfg.IsActive, &cfg.EnableVision, &cfg.EnableVoiceReply, &cfg.VoiceModel,
+		&cfg.ChannelsEnabled, &cfg.IsActive, &cfg.EnableVision, &cfg.EnableVoiceReply, &cfg.VoiceModel,
 	); err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Scan error"})
 		return
@@ -2797,29 +2814,32 @@ func handleInternalChatbotConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 type ChatbotConfig struct {
-	LLMProvider                  string   `json:"llm_provider"`
-	LLMModel                     string   `json:"llm_model"`
-	Temperature                  float64  `json:"temperature"`
-	MaxTokens                    int      `json:"max_tokens"`
-	SystemPrompt                 string   `json:"system_prompt"`
-	Tone                         string   `json:"tone"`
-	Language                     string   `json:"language"`
-	MaxContextMessages           int      `json:"max_context_messages"`
-	WelcomeMessage               string   `json:"welcome_message"`
-	FallbackMessage              string   `json:"fallback_message"`
-	OutsideHoursMessage          string   `json:"outside_hours_message"`
-	BusinessHoursStart           string   `json:"business_hours_start"`
-	BusinessHoursEnd             string   `json:"business_hours_end"`
-	BusinessDays                 []int    `json:"business_days"`
-	EscalationEnabled            bool     `json:"escalation_enabled"`
-	EscalationKeywords           []string `json:"escalation_keywords"`
-	EscalationConfidenceThreshold float64 `json:"escalation_confidence_threshold"`
-	AutoEscalateAfterMinutes     int      `json:"auto_escalate_after_minutes"`
-	RAGEnabled                   bool     `json:"rag_enabled"`
-	RAGTopK                      int      `json:"rag_top_k"`
-	RAGSimilarityThreshold       float64  `json:"rag_similarity_threshold"`
-	ChannelsEnabled              []string `json:"channels_enabled"`
-	IsActive                     bool     `json:"is_active"`
+	LLMProvider                   string   `json:"llm_provider"`
+	LLMModel                      string   `json:"llm_model"`
+	Temperature                   float64  `json:"temperature"`
+	MaxTokens                     int      `json:"max_tokens"`
+	SystemPrompt                  string   `json:"system_prompt"`
+	Tone                          string   `json:"tone"`
+	Language                      string   `json:"language"`
+	MaxContextMessages            int      `json:"max_context_messages"`
+	WelcomeMessage                string   `json:"welcome_message"`
+	FallbackMessage               string   `json:"fallback_message"`
+	OutsideHoursMessage           string   `json:"outside_hours_message"`
+	BusinessHoursStart            string   `json:"business_hours_start"`
+	BusinessHoursEnd              string   `json:"business_hours_end"`
+	BusinessDays                  []int    `json:"business_days"`
+	EscalationEnabled             bool     `json:"escalation_enabled"`
+	EnableVision                  bool     `json:"enable_vision"`
+	EnableVoiceReply              bool     `json:"enable_voice_reply"`
+	VoiceModel                    string   `json:"voice_model"`
+	EscalationKeywords            []string `json:"escalation_keywords"`
+	EscalationConfidenceThreshold float64  `json:"escalation_confidence_threshold"`
+	AutoEscalateAfterMinutes      int      `json:"auto_escalate_after_minutes"`
+	RAGEnabled                    bool     `json:"rag_enabled"`
+	RAGTopK                       int      `json:"rag_top_k"`
+	RAGSimilarityThreshold        float64  `json:"rag_similarity_threshold"`
+	ChannelsEnabled               []string `json:"channels_enabled"`
+	IsActive                      bool     `json:"is_active"`
 }
 
 // loadChatbotConfigByTenant reads the chatbot config for a tenant. If no row
@@ -2839,7 +2859,7 @@ func loadChatbotConfigByTenant(ctx context.Context, tenantID string) (*ChatbotCo
 			outside_hours_message, business_hours_start, business_hours_end, business_days,
 			escalation_enabled, escalation_keywords, escalation_confidence_threshold,
 			auto_escalate_after_minutes, rag_enabled, rag_top_k, rag_similarity_threshold,
-			channels_enabled, is_active
+			channels_enabled, is_active, enable_vision, enable_voice_reply, voice_model
 		 FROM tenant_chatbot_configs WHERE tenant_id = $1`, tenantID)
 	if err != nil {
 		return nil, err
@@ -2859,8 +2879,9 @@ func loadChatbotConfigByTenant(ctx context.Context, tenantID string) (*ChatbotCo
 		&welcome, &fallback, &outsideHrs,
 		&cfg.BusinessHoursStart, &cfg.BusinessHoursEnd, &cfg.BusinessDays,
 		&cfg.EscalationEnabled, &escalationKW, &cfg.EscalationConfidenceThreshold,
-		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
-		&cfg.ChannelsEnabled, &cfg.IsActive,
+		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
+		&cfg.ChannelsEnabled, &cfg.IsActive, &cfg.EnableVision, &cfg.EnableVoiceReply, &cfg.VoiceModel,
+		&cfg.ChannelsEnabled, &cfg.IsActive, &cfg.EnableVision, &cfg.EnableVoiceReply, &cfg.VoiceModel,
 	); err != nil {
 		return nil, err
 	}
@@ -3023,6 +3044,11 @@ func handleChatbotConfig(w http.ResponseWriter, r *http.Request) {
 		merged.EscalationEnabled = body.EscalationEnabled
 		merged.RAGEnabled = body.RAGEnabled
 		merged.IsActive = body.IsActive
+		merged.EnableVision = body.EnableVision
+		merged.EnableVoiceReply = body.EnableVoiceReply
+		if body.VoiceModel != "" {
+			merged.VoiceModel = body.VoiceModel
+		}
 
 		if msg := validateChatbotConfig(&merged); msg != "" {
 			writeJSON(w, http.StatusBadRequest, APIResponse{Message: msg})
@@ -3042,15 +3068,15 @@ func handleChatbotConfig(w http.ResponseWriter, r *http.Request) {
 				escalation_enabled = $15, escalation_keywords = $16,
 				escalation_confidence_threshold = $17, auto_escalate_after_minutes = $18,
 				rag_enabled = $19, rag_top_k = $20, rag_similarity_threshold = $21,
-				channels_enabled = $22, is_active = $23, updated_at = NOW()
-			WHERE tenant_id = $24
+				channels_enabled = $22, is_active = $23, enable_vision = $24, enable_voice_reply = $25, voice_model = $26, updated_at = NOW()
+			WHERE tenant_id = $27
 		`, merged.LLMProvider, merged.LLMModel, merged.Temperature, merged.MaxTokens,
 			nullString(merged.SystemPrompt), merged.Tone, merged.Language, merged.MaxContextMessages,
 			merged.WelcomeMessage, merged.FallbackMessage, merged.OutsideHoursMessage,
 			merged.BusinessHoursStart, merged.BusinessHoursEnd, daysJSON,
 			merged.EscalationEnabled, kwJSON, merged.EscalationConfidenceThreshold,
 			merged.AutoEscalateAfterMinutes, merged.RAGEnabled, merged.RAGTopK, merged.RAGSimilarityThreshold,
-			channelsJSON, merged.IsActive, tenantID)
+			channelsJSON, merged.IsActive, merged.EnableVision, merged.EnableVoiceReply, merged.VoiceModel, tenantID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal update: " + err.Error()})
 			return
@@ -3145,9 +3171,9 @@ func handleChatbotConfigTest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Data: map[string]interface{}{
-			"reply":           aiBody.Text,
-			"would_escalate":  wouldEscalate,
-			"system_prompt":   systemPrompt,
+			"reply":          aiBody.Text,
+			"would_escalate": wouldEscalate,
+			"system_prompt":  systemPrompt,
 		},
 	})
 }
@@ -3335,18 +3361,18 @@ func handleInternalConversationLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		TenantID        string  `json:"tenant_id"`
-		CustomerID      string  `json:"customer_id"`
-		Channel         string  `json:"channel"`
-		UserMessage     string  `json:"user_message"`
-		AssistantMsg    string  `json:"assistant_message"`
-		LLMProvider     string  `json:"llm_provider"`
-		LLMModel        string  `json:"llm_model"`
-		TokensUsed      int     `json:"tokens_used"`
-		SessionID       string  `json:"session_id,omitempty"`
-		Confidence      float64 `json:"confidence,omitempty"`
-		RAGSources      []map[string]interface{} `json:"rag_sources,omitempty"`
-		LatencyMs       int     `json:"latency_ms,omitempty"`
+		TenantID     string                   `json:"tenant_id"`
+		CustomerID   string                   `json:"customer_id"`
+		Channel      string                   `json:"channel"`
+		UserMessage  string                   `json:"user_message"`
+		AssistantMsg string                   `json:"assistant_message"`
+		LLMProvider  string                   `json:"llm_provider"`
+		LLMModel     string                   `json:"llm_model"`
+		TokensUsed   int                      `json:"tokens_used"`
+		SessionID    string                   `json:"session_id,omitempty"`
+		Confidence   float64                  `json:"confidence,omitempty"`
+		RAGSources   []map[string]interface{} `json:"rag_sources,omitempty"`
+		LatencyMs    int                      `json:"latency_ms,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
@@ -3427,11 +3453,11 @@ func handleInternalEscalationLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		SessionID               string `json:"session_id"`
-		TenantID                string `json:"tenant_id"`
-		Reason                  string `json:"reason"`
-		TriggerMessage          string `json:"trigger_message"`
-		ChatwootConversationID  string `json:"chatwoot_conversation_id"`
+		SessionID              string `json:"session_id"`
+		TenantID               string `json:"tenant_id"`
+		Reason                 string `json:"reason"`
+		TriggerMessage         string `json:"trigger_message"`
+		ChatwootConversationID string `json:"chatwoot_conversation_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
@@ -3560,10 +3586,10 @@ func handleInternalRAGSingle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		TenantID  string `json:"tenant_id"`
+		TenantID   string `json:"tenant_id"`
 		SourceType string `json:"source_type"`
-		SourceID  string `json:"source_id"`
-		Content   string `json:"content"`
+		SourceID   string `json:"source_id"`
+		Content    string `json:"content"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
@@ -3971,11 +3997,11 @@ func handleCashFlowPDF(w http.ResponseWriter, r *http.Request) {
 
 	// Per-counterpart breakdown
 	type cfLine struct {
-		Date         string
-		Description  string
-		Counterpart  string
-		Inflow       int64
-		Outflow      int64
+		Date        string
+		Description string
+		Counterpart string
+		Inflow      int64
+		Outflow     int64
 	}
 	var opIn, opOut, invIn, invOut, finIn, finOut int64
 	var opLines, invLines, finLines []cfLine
@@ -4723,4 +4749,3 @@ func derefStr(s *string) string {
 	}
 	return *s
 }
-
