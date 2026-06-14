@@ -90,7 +90,8 @@ Format per feature:
 | F025 | Tier Restrictions Overhaul + AI Multimodal | ✅ Approved | ✅ Done (Phase 1+2) / ⏳ Pending (Phase 3) | 2026-06-14 |
 | F029 | Dynamic Multimodal Guardrails | ✅ Approved | ✅ Done | 2026-06-14 |
 | F030 | GetPlanFeatures DB Integration | ✅ Approved | ✅ Done | 2026-06-14 |
-| F031 | Campaign Anti-Double Validation | ⏳ Draft | ⏳ Pending | 2026-06-14 |
+| F031 | Campaign Anti-Double Validation | ✅ Approved | 🔨 In Progress | 2026-06-14 |
+| F032 | Modul Saksi & Real Count C1 | ⏳ Draft | ⏳ Pending | 2026-06-14 |
 
 ---
 
@@ -1716,3 +1717,34 @@ Wajib update:
 - [ ] AC-2: Format NIK yang bukan 16 digit angka valid langsung digeser ke status "Invalid".
 - [ ] AC-3: Relasi join antara tabel `voters` (dukungan KTP) dengan tabel `dpt` (data KPU).
 - [ ] AC-4: UI Dashboard Campaign menampilkan rasio: Valid, Invalid, Terdaftar Paslon Lain, dan Non-DPT.
+
+---
+
+## F032: Modul Saksi & Real Count C1 (Hari H)
+
+**Spec Status:** ⏳ Draft
+**Implementation:** ⏳ Pending
+
+**Deskripsi:** Sistem pengawalan suara di TPS pada hari pemilihan (Hari H). Saksi TPS bertugas memvalidasi kehadiran, memotret form C1 Plano, dan mengirimkannya ke sistem via WhatsApp. Data diproses untuk menayangkan Real Count internal secara real-time untuk mendahului dan mengawal rekapitulasi resmi KPU.
+
+**Spec:**
+1. **Registrasi Saksi**:
+   - Tambahkan *flag* atau relasi khusus (`is_saksi`, `tps_id_assigned`) pada relawan (`volunteers`) untuk menandai bahwa orang tersebut adalah Saksi Mandat untuk TPS tertentu.
+2. **Absensi / Kehadiran Pagi (Fraud Prevention)**:
+   - Jam 07:00 pagi, saksi wajib mengirim *Live Location* dan *Selfie* di TPS ke WA Bot.
+   - Sistem mencocokkan koordinat *Live Location* dengan koordinat TPS (Geo-fencing).
+   - Dashboard pusat memunculkan indikator warna (Hijau = Saksi Hadir, Merah = Saksi Bolos/TPS Kosong) sehingga tim reaksi cepat bisa dikirim.
+3. **Setor C1 via WA Bot + AI Vision**:
+   - Setelah penghitungan, saksi memotret form C1 Plano (kertas hasil akhir) dan mengetik angka suara manual (misal: "Suara Paslon 1: 150, Paslon 2: 80, Batal: 5").
+   - Dikirim ke WA Bot. AI Gateway (Multimodal Vision) membaca foto C1 dan memverifikasi apakah angka yang diketik saksi *match* dengan angka tulisan tangan di kertas C1.
+   - Jika *Match*: Masuk tabel `real_count_records` (Status: `Auto-Verified`).
+   - Jika *Missmatch/Blur*: Masuk antrian (Status: `Needs Human Review`) untuk dicek admin pusat.
+4. **Dashboard Real Count**:
+   - Tayangan data real-time masuknya C1 (persentase data masuk, total suara per paslon).
+   - Agregasi otomatis tingkat Desa -> Kecamatan -> Kabupaten.
+
+**Acceptance Criteria (AC):**
+- [ ] AC-1: Relawan bisa di-assign sebagai saksi ke TPS spesifik.
+- [ ] AC-2: Endpoint API untuk menerima input suara (C1) dari Webhook N8N/WA.
+- [ ] AC-3: Foto C1 tersimpan aman di object storage / lokal dengan referensi TPS ID.
+- [ ] AC-4: UI Real Count ter-update otomatis seiring data C1 masuk.
