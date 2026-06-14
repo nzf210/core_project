@@ -736,6 +736,9 @@ func processChatJob(job ChatJob) {
 		json.NewDecoder(aiRespHTTP.Body).Decode(&aiGatewayResp)
 
 		if aiGatewayResp.Success && aiGatewayResp.Text != "" {
+			if chatCfg.FallbackMessage != "" && strings.Contains(aiGatewayResp.Text, chatCfg.FallbackMessage) {
+				aiGatewayResp.Text = "[FORWARD_TO_ADMIN] " + aiGatewayResp.Text
+			}
 			finalText := processAIAnswer(ctx, tenantID, aiGatewayResp.Text, sender, userRole)
 			// 3. Post reply back to WA Gateway API
 			waGatewayURL := waSendURL()

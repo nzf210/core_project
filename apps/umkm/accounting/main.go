@@ -287,6 +287,35 @@ func handleAccounts(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: map[string]string{"id": id}})
 		return
 	}
+
+	if r.Method == http.MethodDelete {
+		accID := r.URL.Query().Get("id")
+		if accID == "" {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing id parameter"})
+			return
+		}
+
+		var balance float64
+		err := DB.QueryRow(r.Context(), "SELECT balance FROM chart_of_accounts WHERE id = $1 AND tenant_id = $2", accID, tenantID).Scan(&balance)
+		if err == nil && balance != 0 {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Tidak dapat menghapus akun yang memiliki saldo"})
+			return
+		}
+		var count int
+		err = DB.QueryRow(r.Context(), "SELECT count(*) FROM journal_lines WHERE account_id = $1 AND tenant_id = $2", accID, tenantID).Scan(&count)
+		if err == nil && count > 0 {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Tidak dapat menghapus akun yang memiliki riwayat jurnal"})
+			return
+		}
+
+		_, err = DB.Exec(r.Context(), "DELETE FROM chart_of_accounts WHERE id = $1 AND tenant_id = $2", accID, tenantID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Delete failed"})
+			return
+		}
+		writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Account deleted"})
+		return
+	}
 }
 
 type TransactionReq struct {
