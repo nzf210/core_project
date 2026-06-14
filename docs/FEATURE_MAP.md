@@ -86,6 +86,8 @@ Format per feature:
 | F021 | Cash Flow PDF Export | ✅ Approved | ✅ Done | 2026-06-14 |
 | F022 | Excel/Google Sheet Import & Export | ✅ Approved | ✅ Done | 2026-06-14 |
 | F023 | FAQ Bot AI — Edit & Generate | ✅ Approved | ✅ Done | 2026-06-14 |
+| F024 | Free Tier Removal (Hardening) | ✅ Approved | ✅ Done | 2026-06-14 |
+| F025 | Tier Restrictions Overhaul (Multimodal AI) | ✅ Approved | ✅ Done (Phase 1+2) / ⏳ Pending (Phase 3) | 2026-06-14 |
 
 ---
 
@@ -257,7 +259,7 @@ Format per feature:
 | 2 | `GET /settings` → 500 | Query SELECT `wa_provider` — column not in `tenants` table | Remove all `wa_provider` references from query, variable, response | `apps/umkm/accounting/main.go` |
 | 3 | Frontend `/settings` → 401 | Nginx drops `Authorization` and `X-Tenant-ID` headers | Add `proxy_set_header` for both headers in nginx.conf | `frontend/umkm-web/nginx.conf` |
 | 4 | `POST /api/wa/status` → 404 | API Gateway `StripPrefix("/api/wa")` strips path before proxy to wa-gateway | Remove `http.StripPrefix` from wa-gateway proxy | `services/api-gateway/main.go` |
-| 5 | 403 "Fitur Chatbot memerlukan paket Lite" for lite/superadmin tenants | `GetTenantPlan()` reads Redis `tenant:plan:{id}` — never populated by login. Fallback to "free" → `HasChatbot: false` | Add `"superadmin"` to `Plans` map + populate Redis cache on login | `shared/sdk/auth/quota.go`, `services/auth-service/main.go` |
+| 5 | 403 "Fitur Chatbot memerlukan paket Lite" for lite/superadmin tenants | `GetTenantPlan()` reads Redis `tenant:plan:{id}` — never populated by login. Fallback ke tier tanpa akses → `HasChatbot: false` | Add `"superadmin"` to `Plans` map + populate Redis cache on login | `shared/sdk/auth/quota.go`, `services/auth-service/main.go` |
 | 6 | `ERR_CONNECTION_REFUSED` port 8202 | WA Gateway service not running | Start wa-gateway service | `services/wa-gateway` |
 | 7 | Port docs mismatch (8212 vs 8202) | CLAUDE.md port registry had wrong WA Gateway port | Update port registry in CLAUDE.md | `CLAUDE.md` |
 | 8 | `bin/` binaries tracked in git | Binaries committed before `.gitignore` rule added | `git rm --cached` binaries, `.gitignore` already correct | `.gitignore` |
@@ -1396,6 +1398,111 @@ Wajib update:
 4. **Update implementation status** — ubah ke "✅ Done" setelah selesai
 
 5. **Update Feature Registry table** di atas
+
+---
+
+## F024: Free Tier Removal (Hardening)
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Hapus tier `free` dari seluruh sistem. Migrasi semua tenant existing dari `free` ke `lite`. `GetTenantPlan()` fallback ke `'inactive'` (fail-safe lock) saat Redis miss. Tujuannya: hilangkan tier gratis yang bisa disalahgunakan dan pertegas positioning produk sebagai SaaS berbayar.
+
+**Spec:**
+
+### Database (migration 000038)
+- `UPDATE tenants SET plan = 'lite' WHERE plan = 'free'`
+- `UPDATE usage_quotas SET plan_tier = 'lite' WHERE plan_tier = 'free'`
+- `ALTER TABLE tenants ALTER COLUMN plan SET DEFAULT 'lite'`
+- `ALTER TABLE usage_quotas ALTER COLUMN plan_tier SET DEFAULT 'lite'`
+
+### Backend (`shared/sdk/auth/quota.go`)
+- Hapus entry `"free"` dari `Plans` map
+- `GetTenantPlan()` → return `"inactive"` saat Redis nil/miss
+- `GetPlan()` → fallback `Plans["inactive"]` (semua fitur off, locked)
+- Test `TestGetPlan_FreeFallback` → `TestGetPlan_InactiveFallback` (expect `"inactive"`, MaxTransactions 0)
+- Hapus 7 test case `"free"` dari `TestHasFeatureAccess`
+
+### Backend (rate limiter)
+- `services/api-gateway/main.go` — hapus `"free": 60` dari rate limit map; tier tak dikenal fallback ke default 60 req/min
+
+### Backend (accounting)
+- `apps/umkm/accounting/main.go` `getAutomationLimit(plan)` refactor: default = 0 (fail-safe), explicit case `"enterprise", "ultimate", "superadmin" → 999`
+
+### Docs
+- `docs/FEATURE_MAP.md` bug history (Fix #5): ganti "free" → "inactive" explanation
+- `docs/MIGRATION_REGISTRY.md`: tambah entry 2026-06-14, list 000033/000034/000038
+- `CLAUDE.md` Fix #5 + Architecture Note updated
+
+### Acceptance Criteria (AC):
+- [x] AC-1: `Plans` map tidak punya entry `"free"`
+- [x] AC-2: `go test ./shared/sdk/auth/...` pass (`TestGetPlan_InactiveFallback` green)
+- [x] AC-3: `go vet ./apps/umkm/accounting/...` clean
+- [x] AC-4: Migration `000038_remove_free_tier.up.sql` runnable (data + schema change)
+- [x] AC-5: Docs (FEATURE_MAP, MIGRATION_REGISTRY, CLAUDE.md) reflect new state
+
+### Files Changed:
+- `shared/sdk/auth/quota.go`
+- `shared/sdk/auth/auth_test.go`
+- `services/api-gateway/main.go`
+- `apps/umkm/accounting/main.go`
+- `apps/umkm/accounting/main_test.go`
+- `shared/migrations/000038_remove_free_tier.{up,down}.sql` (NEW)
+- `docs/FEATURE_MAP.md`
+- `docs/MIGRATION_REGISTRY.md`
+- `CLAUDE.md`
+
+### Notes:
+- Patches untuk `services/billing-service/main.go:1037` (`effectivePlanID = "free"`) **DITUNDA** — Claude agent sedang edit file yang sama. Apply setelah Claude commit/PR merge.
+- ⚠️ **Migration conflict**: Claude agent membuat `shared/migrations/000034_billing_cycle.*.sql` dengan prefix yang sama dengan `000034_tenant_faqs_updated_at.*.sql` yang sudah ada. **Salah satu harus rename ke `000035_*` sebelum deploy** untuk menghindari collision saat migrate run.
+
+---
+
+## F025: Tier Restrictions Overhaul (Multimodal AI)
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done — Phase 1 (align) + Phase 2 (counter) complete. Phase 3 (multimodal) pending vendor confirmation.
+
+**Deskripsi:** Single source of truth untuk tier restrictions (sejajarkan Go `Plans` map dengan DB `plan_features`). Tambah enforcement per-modality (text/vision/audio/image-gen). Per-tier counter mechanism untuk quota tracking. Siapkan fondasi untuk AI multimodal (vision STT/TTS/image gen) di `ultimate` tier.
+
+**Spec:** Lihat rancangan sebelumnya — quota counter table, per-tier AI capability matrix, middleware enforcement. Spesifikasi final menunggu approval owner.
+
+### Commits (Phase 1 — Align source of truth to DB)
+- `5ce4cee` feat(db): add numeric quota columns to plan_features
+- `a5e7486` feat(db): seed numeric quotas for lite/pro/ultimate
+- `037c7a7` feat(sdk): add PlanFeaturesRow struct + IsUnlimited helper
+- `30c2c59` refactor(sdk): GetPlan returns PlanFeaturesRow (DB-driven stub)
+- `c757cf8` test(sdk): migrate auth tests to PlanFeaturesRow fields + document CheckQuota TODO
+- `6bee66f` fix(sdk): set PlanName="inactive" in GetPlanFeatures stub for symmetry
+- `de16672` refactor(sdk): remove Plans map + fix umkm/business caller with tier allowlist
+
+### Commits (Phase 2 — Quota counter mechanism)
+- `fb4040d` feat(db): add quota_counters table for per-feature tracking
+- `b6f081f` feat(sdk): add quota counter helpers (Redis atomic, DB persist stub)
+- `60ab95e` feat(sdk): add QuotaMiddlewareFeature with 402 response
+- `d1f6e38` feat(ai): wire quota middleware to text endpoints (chat, stream, embeddings)
+- `4479fee` feat(chatbot): increment chatbot_messages counter per processed message
+- `2c813cd` feat(worker): cron job to archive old quota_counters monthly
+- `90e7d62` feat(notification): warn tenant at 80% quota usage (idempotent daily)
+- `47cf332` feat(billing): superadmin endpoint to view tenant quota usage
+- `ab1242c` feat(fe): display quota usage in Settings page
+
+### Files Planned:
+- `shared/migrations/000035_quota_counters.{up,down}.sql` (NEW)
+- `shared/migrations/000036_multimodal_features.{up,down}.sql` (NEW)
+- `shared/sdk/auth/quota.go` (extend `PlanTier` + add `MaxVisionRequests`, `MaxAudioMinutes`, `MaxImageGen`)
+- `shared/sdk/auth/quota_mw.go` (NEW — middleware)
+- `shared/sdk/auth/quota_counter.go` (NEW — atomic counter helpers)
+- `services/ai-gateway/main.go` (add `/v1/vision`, `/v1/audio/*`, `/v1/image/generate`)
+- `services/ai-gateway/handlers/{vision,audio,image}.go` (NEW)
+- `apps/umkm/chatbot/main.go` (detect WA message type, route ke vision/STT)
+- `services/wa-gateway/main.go` + `services/wa-cloud-api/main.go` (download media)
+- `shared/sdk/mediaproxy/` (NEW — WhatsApp media download helper)
+- `frontend/umkm-web/src/components/ChatbotConfig.vue` (multimodal toggle)
+
+### Notes:
+- F025 **membutuhkan** F024 selesai (free tier dihapus) sebagai prerequisite
+- Vendor/model asumsi: MiniMax-M3-Vision, Whisper large-v3 (STT), ElevenLabs/edge-tts (TTS), MiniMax-Image-1 — perlu konfirmasi owner
 
 ---
 
