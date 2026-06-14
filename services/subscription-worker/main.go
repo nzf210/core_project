@@ -70,12 +70,50 @@ func main() {
 
 	slog.Info("Subscription worker started", "interval", interval.String(), "grace_hours", graceHours)
 
+	// Monthly quota_counters cleanup — 1st of each month at 00:00 UTC.
+	// Stdlib timer (no cron dep), runs alongside the freeze ticker.
+	go scheduleMonthly(runQuotaCleanup)
+
 	// Run once at startup, then on ticker
 	runFreezePass(graceHours)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
 		runFreezePass(graceHours)
+	}
+}
+
+// runQuotaCleanup deletes quota_counters rows whose reset_at is older than 60 days.
+// 60 days = 2 months grace: a row whose reset_at is in the past by >60 days has been
+// superseded by at least one full reset cycle. Redis cache has its own TTL, so this
+// is safe to purge. Runs on the 1st of each month at 00:00 UTC via scheduleMonthly.
+func runQuotaCleanup() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	result, err := DB.Exec(ctx,
+		`DELETE FROM quota_counters WHERE reset_at < NOW() - INTERVAL '60 days'`)
+	if err != nil {
+		slog.Error("Quota cleanup failed", "error", err)
+		return
+	}
+	if rows := result.RowsAffected(); rows > 0 {
+		slog.Info("Quota cleanup: archived old quota_counters rows", "rows", rows)
+	} else {
+		slog.Info("Quota cleanup: no old quota_counters rows to archive")
+	}
+}
+
+// scheduleMonthly runs fn at 00:00 UTC on the 1st of every month, then re-arms itself.
+// No external cron lib — stdlib time only, matching the existing ticker style.
+func scheduleMonthly(fn func()) {
+	for {
+		now := time.Now().UTC()
+		next := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.UTC)
+		d := time.Until(next)
+		slog.Info("Next quota cleanup scheduled", "at", next.Format(time.RFC3339), "in", d.String())
+		time.Sleep(d)
+		fn()
 	}
 }
 
