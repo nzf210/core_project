@@ -329,6 +329,8 @@ type ChatJob struct {
 	Sender   string `json:"sender"`
 	Message  string `json:"message"`
 	TenantID string `json:"tenant_id"`
+	MsgType  string `json:"msg_type"`
+	MediaPath string `json:"media_path"`
 }
 
 const redisQueueKey = "chatbot:queue"
@@ -596,6 +598,28 @@ func handleWAWebhook(w http.ResponseWriter, r *http.Request) {
 // processChatJob handles the heavy logic asynchronously
 func processChatJob(job ChatJob) {
 	ctx := context.Background()
+
+	// Handle Multimedia First
+	if job.MsgType == "audio" && job.MediaPath != "" {
+		text, err := transcribeAudio(job.TenantID, job.MediaPath)
+		if err == nil {
+			job.Message = text // replace voice note with transcribed text
+		} else {
+			job.Message = "[Pesan Suara tidak dapat diproses]"
+		}
+	} else if job.MsgType == "image" && job.MediaPath != "" {
+		text, err := analyzeImage(job.TenantID, job.MediaPath, job.Message)
+		if err == nil {
+			if job.Message != "" {
+				job.Message = job.Message + "\n[Analisis Gambar: " + text + "]"
+			} else {
+				job.Message = "[Analisis Gambar: " + text + "]"
+			}
+		} else {
+			job.Message = job.Message + "\n[Gambar tidak dapat diproses]"
+		}
+	}
+
 	sender := job.Sender
 	message := job.Message
 	tenantID := job.TenantID
@@ -1039,4 +1063,98 @@ func processAIAnswer(ctx context.Context, tenantID, answer, sender, _ string) st
 		}
 	}
 	return answer
+}
+
+func transcribeAudio(tenantID, mediaPath string) (string, error) {
+	reqBody := map[string]interface{}{
+		"tenant_id": tenantID,
+		"audio_url": "file://" + mediaPath,
+		"language":  "id",
+	}
+	jsonBody, _ := json.Marshal(reqBody)
+
+	// Post to AI Gateway
+	// URL: http://localhost:8002/v1/audio/transcribe (or via AIGatewayURL parsing)
+	gatewayURL := strings.Replace(AIGatewayURL, "/v1/chat", "/v1/audio/transcribe", 1)
+	
+	req, err := http.NewRequest("POST", gatewayURL, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", tenantID)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("bad status: %d", resp.StatusCode)
+	}
+
+	var res struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Text string `json:"text"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", err
+	}
+	if !res.Success {
+		return "", fmt.Errorf("api returned success=false")
+	}
+
+	return res.Data.Text, nil
+}
+
+func analyzeImage(tenantID, mediaPath, prompt string) (string, error) {
+	if prompt == "" {
+		prompt = "Deskripsikan gambar ini untuk membantu pencatatan atau stok. Jika ini struk, baca total dan item."
+	}
+	reqBody := map[string]interface{}{
+		"tenant_id": tenantID,
+		"image_url": "file://" + mediaPath,
+		"prompt":    prompt,
+		"model":     "MiniMax-M3-Vision",
+	}
+	jsonBody, _ := json.Marshal(reqBody)
+
+	gatewayURL := strings.Replace(AIGatewayURL, "/v1/chat", "/v1/vision", 1)
+	
+	req, err := http.NewRequest("POST", gatewayURL, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", tenantID)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("bad status: %d", resp.StatusCode)
+	}
+
+	var res struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Text string `json:"text"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", err
+	}
+	if !res.Success {
+		return "", fmt.Errorf("api returned success=false")
+	}
+
+	return res.Data.Text, nil
 }
