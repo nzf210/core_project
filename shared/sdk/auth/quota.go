@@ -36,7 +36,6 @@ type PlanTier struct {
 
 var Plans = map[string]PlanTier{
 	"inactive": {Tier: "inactive", MaxUsers: 0, MaxTransactions: 0, MaxAIRequests: 0, MaxBots: 0, CanExport: false, HasAdvancedReport: false, HasMultiUser: false, Features: FeatureFlags{HasAccounting: false, HasPOS: false, HasChatbot: false, HasAI: false, HasInventory: false, HasReports: false, HasMultiUser: false, HasAPIAccess: false}},
-	"free":     {Tier: "free", MaxUsers: 1, MaxTransactions: 100, MaxAIRequests: 5, MaxBots: 0, CanExport: false, HasAdvancedReport: false, HasMultiUser: false, Features: FeatureFlags{HasAccounting: true, HasPOS: false, HasChatbot: false, HasAI: false, HasInventory: false, HasReports: false, HasMultiUser: false, HasAPIAccess: false}},
 	"lite":     {Tier: "lite", MaxUsers: 3, MaxTransactions: 1000, MaxAIRequests: 250, MaxBots: 0, CanExport: true, HasAdvancedReport: false, HasMultiUser: true, Features: FeatureFlags{HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: false}},
 	"pro":      {Tier: "pro", MaxUsers: 10, MaxTransactions: 10000, MaxAIRequests: 5000, MaxBots: 3, CanExport: true, HasAdvancedReport: true, HasMultiUser: true, Features: FeatureFlags{HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: true}},
 	"enterprise": {Tier: "enterprise", MaxUsers: -1, MaxTransactions: -1, MaxAIRequests: -1, MaxBots: -1, CanExport: true, HasAdvancedReport: true, HasMultiUser: true, Features: FeatureFlags{HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: true}},
@@ -46,11 +45,11 @@ var Plans = map[string]PlanTier{
 
 func GetTenantPlan(ctx context.Context, tenantID string) string {
 	if cache.Client == nil {
-		return "free"
+		return "inactive"
 	}
 	val, err := cache.Client.Get(ctx, "tenant:plan:"+tenantID).Result()
 	if err != nil || val == "" {
-		return "free"
+		return "inactive"
 	}
 	return val
 }
@@ -61,13 +60,12 @@ func SetTenantPlan(ctx context.Context, tenantID, tier string) {
 	}
 }
 
-func GetPlan(tenantID string) PlanTier {
-	plan := GetTenantPlan(context.Background(), tenantID)
-	if p, ok := Plans[plan]; ok {
-		return p
+func GetPlan(tenantID string) PlanFeaturesRow {
+	row, err := GetPlanFeatures(context.Background(), tenantID)
+	if err != nil {
+		return PlanFeaturesRow{Tier: "inactive"}
 	}
-	// Fallback to free plan if no valid plan found
-	return Plans["free"]
+	return row
 }
 
 func CheckQuota(tenantID string, resource string) (bool, int) {
@@ -84,10 +82,8 @@ func CheckQuota(tenantID string, resource string) (bool, int) {
 	switch resource {
 	case "transactions":
 		limit = plan.MaxTransactions
-	case "ai_requests":
-		limit = plan.MaxAIRequests
-	case "bots":
-		limit = plan.MaxBots
+	case "ai_text":
+		limit = plan.MaxAIText
 	default:
 		return true, -1
 	}
@@ -121,10 +117,8 @@ func QuotaMiddleware(next http.Handler) http.Handler {
 		quotaInfo := map[string]interface{}{
 			"tier": plan.Tier,
 			"limits": map[string]interface{}{
-				"users":         plan.MaxUsers,
-				"transactions":  plan.MaxTransactions,
-				"ai_requests":   plan.MaxAIRequests,
-				"export":        plan.CanExport,
+				"users":        plan.MaxUsers,
+				"transactions": plan.MaxTransactions,
 			},
 		}
 
@@ -143,31 +137,31 @@ func HasFeatureAccess(tenantID string, feature string) (bool, string) {
 
 	switch feature {
 	case "pos":
-		if !plan.Features.HasPOS {
+		if !plan.HasPOS {
 			return false, "Fitur POS memerlukan paket Lite atau lebih tinggi."
 		}
 	case "chatbot":
-		if !plan.Features.HasChatbot {
+		if !plan.HasChatbot {
 			return false, "Fitur Chatbot memerlukan paket Lite atau lebih tinggi."
 		}
 	case "ai":
-		if !plan.Features.HasAI {
+		if !plan.HasAI {
 			return false, "Fitur AI memerlukan paket Lite atau lebih tinggi."
 		}
 	case "inventory":
-		if !plan.Features.HasInventory {
+		if !plan.HasInventory {
 			return false, "Fitur Inventory memerlukan paket Lite atau lebih tinggi."
 		}
 	case "reports":
-		if !plan.Features.HasReports {
+		if !plan.HasReports {
 			return false, "Fitur Laporan memerlukan paket Lite atau lebih tinggi."
 		}
 	case "multi_user":
-		if !plan.Features.HasMultiUser {
+		if !plan.HasMultiUser {
 			return false, "Fitur Multi-User memerlukan paket Lite atau lebih tinggi."
 		}
 	case "api_access":
-		if !plan.Features.HasAPIAccess {
+		if !plan.HasAPIAccess {
 			return false, "API Access memerlukan paket Pro."
 		}
 	case "accounting":

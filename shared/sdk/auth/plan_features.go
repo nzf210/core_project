@@ -1,5 +1,7 @@
 package auth
 
+import "context"
+
 // PlanFeaturesRow represents a tenant's plan features loaded from DB.
 // Source of truth: `plan_features` table (DB), seeded by migration 000040.
 // Sentinel: -1 means unlimited for any max_* field. 0 means feature disabled.
@@ -56,4 +58,13 @@ func (p PlanFeaturesRow) IsUnlimited(field string) bool {
 		return p.MaxStorageMB == -1
 	}
 	return false
+}
+
+// GetPlanFeatures returns the plan features for a tenant.
+// STUB: always returns inactive (locked) for now. Real implementation (DB read + Redis cache)
+// will be added in a later task. The stub is fail-safe: unknown tenant = no access.
+func GetPlanFeatures(ctx context.Context, tenantID string) (PlanFeaturesRow, error) {
+	_ = ctx
+	_ = tenantID
+	return PlanFeaturesRow{Tier: "inactive"}, nil
 }

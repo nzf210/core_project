@@ -7,13 +7,13 @@ import (
 	"testing"
 )
 
-func TestGetPlan_FreeFallback(t *testing.T) {
+func TestGetPlan_InactiveFallback(t *testing.T) {
 	plan := GetPlan("nonexistent-tenant")
-	if plan.Tier != "free" {
-		t.Errorf("expected free tier, got %s", plan.Tier)
+	if plan.Tier != "inactive" {
+		t.Errorf("expected inactive tier (fail-safe), got %s", plan.Tier)
 	}
-	if plan.MaxTransactions != 100 {
-		t.Errorf("expected 100 max transactions for free, got %d", plan.MaxTransactions)
+	if plan.MaxTransactions != 0 {
+		t.Errorf("expected 0 max transactions for inactive, got %d", plan.MaxTransactions)
 	}
 }
 
@@ -24,7 +24,6 @@ func TestGetPlan_KnownTiers(t *testing.T) {
 		canExport  bool
 	}{
 		{"inactive", 0, false},
-		{"free", 1, false},
 		{"lite", 3, true},
 		{"pro", 10, true},
 		{"enterprise", -1, true},
@@ -52,18 +51,12 @@ func TestHasFeatureAccess(t *testing.T) {
 		tier     string
 		allowed  bool
 	}{
-		{"accounting", "free", true},  // all plans have accounting
-		{"pos", "free", false},
+		{"accounting", "lite", true},  // all paying plans have accounting
 		{"pos", "lite", true},
-		{"chatbot", "free", false},
 		{"chatbot", "lite", true},
-		{"ai", "free", false},
 		{"ai", "lite", true},
-		{"inventory", "free", false},
 		{"inventory", "lite", true},
-		{"reports", "free", false},
 		{"reports", "lite", true},
-		{"multi_user", "free", false},
 		{"multi_user", "lite", true},
 		{"api_access", "lite", false},
 		{"api_access", "pro", true},
@@ -167,8 +160,8 @@ func TestQuotaMiddleware_AddsHeaders(t *testing.T) {
 	if !called {
 		t.Error("handler should be called")
 	}
-	if tier := rr.Header().Get("X-Plan-Tier"); tier != "free" {
-		t.Errorf("expected X-Plan-Tier=free, got %q", tier)
+	if tier := rr.Header().Get("X-Plan-Tier"); tier != "inactive" {
+		t.Errorf("expected X-Plan-Tier=inactive (fail-safe), got %q", tier)
 	}
 }
 
