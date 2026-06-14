@@ -84,6 +84,9 @@ func CheckQuota(tenantID string, resource string) (bool, int) {
 		limit = plan.MaxTransactions
 	case "ai_text":
 		limit = plan.MaxAIText
+	// TODO(F025 Phase 2): add cases for ai_vision, ai_audio_stt, ai_audio_tts, image_gen, ocr_scans, chatbot_messages
+	// when quota middleware (Task 2.3) routes by modality. Current CheckQuota is only called for
+	// "transactions" resource; AI modality cases deferred to quota_counter.go in Phase 2.
 	default:
 		return true, -1
 	}
