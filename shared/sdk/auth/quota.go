@@ -10,39 +10,6 @@ import (
 	"core_project/shared/sdk/response"
 )
 
-// FeatureFlags represents per-feature access within a plan tier.
-type FeatureFlags struct {
-	HasAccounting  bool `json:"has_accounting"`
-	HasPOS         bool `json:"has_pos"`
-	HasChatbot     bool `json:"has_chatbot"`
-	HasAI          bool `json:"has_ai"`
-	HasInventory   bool `json:"has_inventory"`
-	HasReports     bool `json:"has_reports"`
-	HasMultiUser   bool `json:"has_multi_user"`
-	HasAPIAccess   bool `json:"has_api_access"`
-}
-
-type PlanTier struct {
-	Tier              string        `json:"tier"`
-	MaxUsers          int           `json:"max_users"`
-	MaxTransactions   int           `json:"max_transactions"`
-	MaxAIRequests     int           `json:"max_ai_requests"`
-	MaxBots           int           `json:"max_bots"`
-	CanExport         bool          `json:"can_export"`
-	HasAdvancedReport bool          `json:"has_advanced_report"`
-	HasMultiUser      bool          `json:"has_multi_user"`
-	Features          FeatureFlags  `json:"features"`
-}
-
-var Plans = map[string]PlanTier{
-	"inactive": {Tier: "inactive", MaxUsers: 0, MaxTransactions: 0, MaxAIRequests: 0, MaxBots: 0, CanExport: false, HasAdvancedReport: false, HasMultiUser: false, Features: FeatureFlags{HasAccounting: false, HasPOS: false, HasChatbot: false, HasAI: false, HasInventory: false, HasReports: false, HasMultiUser: false, HasAPIAccess: false}},
-	"lite":     {Tier: "lite", MaxUsers: 3, MaxTransactions: 1000, MaxAIRequests: 250, MaxBots: 0, CanExport: true, HasAdvancedReport: false, HasMultiUser: true, Features: FeatureFlags{HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: false}},
-	"pro":      {Tier: "pro", MaxUsers: 10, MaxTransactions: 10000, MaxAIRequests: 5000, MaxBots: 3, CanExport: true, HasAdvancedReport: true, HasMultiUser: true, Features: FeatureFlags{HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: true}},
-	"enterprise": {Tier: "enterprise", MaxUsers: -1, MaxTransactions: -1, MaxAIRequests: -1, MaxBots: -1, CanExport: true, HasAdvancedReport: true, HasMultiUser: true, Features: FeatureFlags{HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: true}},
-	"ultimate": {Tier: "ultimate", MaxUsers: -1, MaxTransactions: -1, MaxAIRequests: -1, MaxBots: -1, CanExport: true, HasAdvancedReport: true, HasMultiUser: true, Features: FeatureFlags{HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: true}},
-	"superadmin": {Tier: "superadmin", MaxUsers: -1, MaxTransactions: -1, MaxAIRequests: -1, MaxBots: -1, CanExport: true, HasAdvancedReport: true, HasMultiUser: true, Features: FeatureFlags{HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: true}},
-}
-
 func GetTenantPlan(ctx context.Context, tenantID string) string {
 	if cache.Client == nil {
 		return "inactive"

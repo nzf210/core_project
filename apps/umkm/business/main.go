@@ -19,6 +19,18 @@ import (
 var DB *pgxpool.Pool
 var isTest bool
 
+// validTierIDs is the allowlist of plan tier IDs accepted by the plan-upgrade
+// handler. Mirrors the tiers defined in shared/sdk/auth/quota.go's plan_features
+// table (the source of truth at runtime via GetTenantPlan/GetPlan).
+var validTierIDs = map[string]bool{
+	"inactive":   true,
+	"lite":       true,
+	"pro":        true,
+	"enterprise": true,
+	"ultimate":   true,
+	"superadmin": true,
+}
+
 func initDB(cfg *config.Config) error {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		cfg.DB.User, cfg.DB.Password, cfg.DB.Host, cfg.DB.Port, cfg.DB.Name, cfg.DB.SSLMode)
@@ -352,7 +364,7 @@ func handleUpgradePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, ok := auth.Plans[req.PlanID]; !ok {
+	if !validTierIDs[req.PlanID] {
 		response.Error(w, http.StatusBadRequest, "Invalid plan", nil)
 		return
 	}
