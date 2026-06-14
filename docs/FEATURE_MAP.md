@@ -88,14 +88,14 @@ Format per feature:
 | F023 | FAQ Bot AI — Edit & Generate | ✅ Approved | ✅ Done | 2026-06-14 |
 | F024 | Free Tier Removal (Hardening) | ✅ Approved | ✅ Done | 2026-06-14 |
 | F025 | Tier Restrictions Overhaul + AI Multimodal | ✅ Approved | ✅ Done (Phase 1+2) / ⏳ Pending (Phase 3) | 2026-06-14 |
-| F026 | N8N Notification Webhooks & Workflows | ✅ Approved | 🔨 In Progress | 2026-06-14 |
+| F026 | N8N Notification Webhooks & Workflows | ✅ Approved | ✅ Done | 2026-06-14 |
 
 ---
 
 ## F026: N8N Notification Webhooks & Workflows
 
 **Spec Status:** ✅ Approved
-**Implementation:** 🔨 In Progress
+**Implementation:** ✅ Done
 
 **Deskripsi:** Integrasi `services/notification-service` dengan *N8N Workflow Automation* untuk pengiriman pesan asinkron (WA, Email, Telegram). Membuka jalan untuk scheduled reports (UMKM) dan real-time alerts.
 
