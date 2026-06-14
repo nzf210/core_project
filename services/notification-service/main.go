@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
+
+	"core_project/shared/sdk/webhook"
 )
 
 // ─────────────────────────────────────────────
@@ -34,6 +36,9 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/notification/send", handleSendNotification)
 	mux.HandleFunc("/health", handleHealth)
+	
+	// N8N Webhooks
+	mux.Handle("/webhook/n8n/whatsapp", webhook.RequireN8NSecret(http.HandlerFunc(handleN8NWhatsApp)))
 
 	port := "8005"
 	slog.Info("Notification Service listening", "port", port)
