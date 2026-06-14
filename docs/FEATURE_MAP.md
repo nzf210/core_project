@@ -89,14 +89,14 @@ Format per feature:
 | F024 | Free Tier Removal (Hardening) | ✅ Approved | ✅ Done | 2026-06-14 |
 | F025 | Tier Restrictions Overhaul + AI Multimodal | ✅ Approved | ✅ Done (Phase 1+2) / ⏳ Pending (Phase 3) | 2026-06-14 |
 | F026 | N8N Notification Webhooks & Workflows | ✅ Approved | ✅ Done | 2026-06-14 |
-| F027 | Core Business Flow Fixes & Optimizations | ✅ Approved | ❌ Not Started | 2026-06-14 |
+| F027 | Core Business Flow Fixes & Optimizations | ✅ Approved | ✅ Done | 2026-06-14 |
 
 ---
 
 ## F027: Core Business Flow Fixes & Optimizations
 
 **Spec Status:** ✅ Approved
-**Implementation:** ❌ Not Started
+**Implementation:** ✅ Done
 
 **Deskripsi:** Perbaikan logika bisnis utama hasil audit keamanan dan flow transaksi untuk mencegah kerugian perusahaan dan tenant.
 
