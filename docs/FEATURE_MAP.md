@@ -129,7 +129,7 @@ Format per feature:
 
 ## F035: Auto-Scan KTP (AI OCR Vision)
 **Spec Status:** ✅ Approved
-**Implementation:** 🔨 In Progress
+**Implementation:** ✅ Done
 **Deskripsi:** Relawan kirim foto KTP via WA. N8N kirim ke AI Gateway `/v1/vision` -> Ekstrak NIK, Nama, Alamat jadi JSON -> Masuk otomatis ke tabel `citizens`.
 **Target:** Menghilangkan salah ketik NIK (Typo) oleh relawan.
 
