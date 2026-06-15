@@ -49,6 +49,8 @@ func main() {
 	mux.HandleFunc("/voters", handlers.HandleVoters)
 	mux.HandleFunc("/voters/stats", handlers.HandleVoterStats)
 	mux.HandleFunc("/endorsements", handlers.HandleEndorsements)
+	mux.HandleFunc("/endorsements/conflicts", handlers.HandleEndorsementConflicts)
+	mux.HandleFunc("/endorsements/cross-level", handlers.HandleCrossLevelEndorsements)
 
 	// Regions
 	mux.HandleFunc("/regions/provinces", handlers.HandleProvinces)
