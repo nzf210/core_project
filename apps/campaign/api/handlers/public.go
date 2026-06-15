@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"core_project/apps/campaign/api/repository"
@@ -9,26 +10,53 @@ import (
 
 // HandlePublicDashboard provides aggregated public data for the Guest Dashboard
 func HandlePublicDashboard(w http.ResponseWriter, r *http.Request) {
+	regionType := r.URL.Query().Get("region_type")
+	regionID := r.URL.Query().Get("region_id")
+
 	type CandidateStat struct {
-		ID                   string `json:"id"`
-		Name                 string `json:"name"`
-		Electability         int    `json:"electability_percentage"`
-		TotalVotes           int    `json:"total_votes"`
-		Color                string `json:"color"`
+		ID           string `json:"id"`
+		Name         string `json:"name"`
+		Electability int    `json:"electability_percentage"`
+		TotalVotes   int    `json:"total_votes"`
+		Color        string `json:"color"`
 	}
 
 	var topCandidates []CandidateStat
 
+	// Base query to calculate electability using the new endorsements model (High Potential citizens)
+	// We join with dpt_records to filter by region if requested
 	query := `
-		SELECT c.id, c.name, COUNT(v.id) as support_count
+		SELECT c.id, c.name, COUNT(e.id) as support_count
 		FROM candidates c
-		LEFT JOIN campaigns camp ON camp.candidate_id = c.id
-		LEFT JOIN voters v ON v.tenant_id = c.tenant_id AND v.potential_level = 'high'
+		JOIN campaigns camp ON camp.candidate_id = c.id
+		LEFT JOIN endorsements e ON e.tenant_id = c.tenant_id AND e.status = 'valid'
+		LEFT JOIN citizens cit ON e.citizen_id = cit.id
+		LEFT JOIN dpt_records dpt ON cit.nik = dpt.nik
+		WHERE 1=1
+	`
+	params := []interface{}{}
+	paramIdx := 1
+
+	if regionType != "" && regionID != "" {
+		switch regionType {
+		case "province":
+			query += fmt.Sprintf(" AND dpt.province_id = $%d", paramIdx)
+		case "regency":
+			query += fmt.Sprintf(" AND dpt.regency_id = $%d", paramIdx)
+		case "district":
+			query += fmt.Sprintf(" AND dpt.district_id = $%d", paramIdx)
+		}
+		params = append(params, regionID)
+		paramIdx++
+	}
+
+	query += `
 		GROUP BY c.id, c.name
 		ORDER BY support_count DESC
 		LIMIT 5
 	`
-	rows, err := repository.DB.Query(context.Background(), query)
+
+	rows, err := repository.DB.Query(context.Background(), query, params...)
 	if err == nil {
 		defer rows.Close()
 		colors := []string{"#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6"}
