@@ -66,6 +66,9 @@ func main() {
 	// Sentiment Issues (F036)
 	mux.HandleFunc("/issues", handlers.HandleSentimentIssues)
 
+	// Wargame Simulator (F037)
+	mux.HandleFunc("/wargame/simulate", handlers.HandleSimulationWargame)
+
 	// Regions
 	mux.HandleFunc("/regions/provinces", handlers.HandleProvinces)
 

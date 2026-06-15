@@ -140,7 +140,8 @@ Format per feature:
 **Target:** Bahan pidato spesifik per-desa untuk Kandidat.
 
 ## F037: Wargame & Simulasi Kemenangan (Predictive AI)
-**Spec Status:** ⏳ Draft
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
 **Deskripsi:** UI Slider di Dashboard. Kalkulasi algoritma menggabungkan data `campaign_expenses` (uang dibakar) dengan rasio konversi `endorsements`. 
 **Target:** Memprediksi probabilitas menang vs Cost-per-vote jika anggaran digeser ke daerah lain.
 
