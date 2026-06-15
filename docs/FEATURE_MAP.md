@@ -92,7 +92,8 @@ Format per feature:
 | F030 | GetPlanFeatures DB Integration | ✅ Approved | ✅ Done | 2026-06-14 |
 | F031 | Campaign Anti-Double Validation | ✅ Approved | 🔨 In Progress | 2026-06-14 |
 | F032 | Modul Saksi & Real Count C1 | ✅ Approved | 🔨 In Progress | 2026-06-14 |
-- [ ] AC-2: AI Vision mencocokkan foto plano dengan input ketik saksi. Jika beda, masuk status "Needs Human Review"
+| F034 | Add-on Wallet & Meta API Connector | ✅ Approved | ⏳ Pending | 2026-06-16 |
+|- [ ] AC-2: AI Vision mencocokkan foto plano dengan input ketik saksi. Jika beda, masuk status "Needs Human Review"
 - [ ] AC-3: Saksi yang bolos jam 07:00 pagi ditandai merah di dashboard (saksi_attendances).
 
 ## F033: Campaign Logistics Tracking
@@ -1830,3 +1831,41 @@ Wajib update:
 - [ ] AC-2: Endpoint API untuk menerima input suara (C1) dari Webhook N8N/WA.
 - [ ] AC-3: Foto C1 tersimpan aman di object storage / lokal dengan referensi TPS ID.
 - [ ] AC-4: UI Real Count ter-update otomatis seiring data C1 masuk.
+
+---
+
+## F034: Add-on Wallet & Meta API Connector
+
+**Spec Status:** ✅ Approved
+**Implementation:** ⏳ Pending
+
+**Deskripsi:** Sistem saldo (wallet) untuk tenant UMKM guna membayar fitur berbiaya tinggi (AI Multimodal & Meta API). Harga kredit dikelola Superadmin. Memaksa migrasi koneksi WA dari Whatsmeow (QR) ke Meta Official saat add-on Meta diaktifkan.
+
+**Spec:**
+1. **Wallet Tables (`wallet_credits`, `wallet_transactions`)**:
+   - `balance_cents` (BigInt) per tenant.
+   - History transaksi (Top-up vs Konsumsi).
+2. **Superadmin Pricing Config (`addon_prices`)**:
+   - Kolom: `addon_key` (string), `price_cents` (int), `unit` (string: per_request, per_minute, per_session).
+   - Keys: `ai_vision`, `ai_audio_stt`, `wa_blast_api`, `wa_session_meta`.
+3. **Consumption Logic (Middleware/Interceptor)**:
+   - **AI Text**: FREE (limit harian ikut tier bulanan).
+   - **AI Vision/Audio**: Potong saldo tiap request sukses.
+   - **WA API Meta**: Potong saldo tiap sesi chat dibuka.
+4. **Meta Connector Flow**:
+   - User beli add-on "WhatsApp Meta API".
+   - Sistem set `tenants.wa_provider = 'meta_cloud'`.
+   - **Trigger**: Dashboard UMKM memunculkan modal "Koneksi Ulang Diperlukan". User harus input Meta Phone ID & Token. Whatsmeow (QR) otomatis diputus/dinonaktifkan untuk tenant tersebut.
+
+**Acceptance Criteria (AC):**
+- [ ] AC-1: Superadmin bisa ubah harga AI Vision dari 5000 ke 6000 di UI.
+- [ ] AC-2: Tenant saldo 0 tidak bisa panggil `/v1/vision` (Error 402 Payment Required).
+- [ ] AC-3: Aktivasi add-on Meta memicu status "Disconnected" pada sesi QR lama dan memaksa setup Cloud API.
+- [ ] AC-4: AI Text (chatbot biasa) tetap jalan meski saldo wallet 0.
+
+**Files Changed:**
+- `shared/migrations/000055_wallet_and_pricing.up.sql` (NEW)
+- `shared/sdk/auth/quota.go` (Add Wallet check)
+- `services/billing-service/main.go` (Add Wallet & Pricing Handlers)
+- `services/wa-gateway/main.go` (Add Meta reconnection trigger)
+- `frontend/umkm-web/src/components/Wallet.vue` (NEW)
