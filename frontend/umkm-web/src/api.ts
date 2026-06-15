@@ -42,6 +42,32 @@ function headers(withAuth = true): Record<string, string> {
 }
 
 export const api = {
+  // Clinic Queue System (F045)
+  async getClinicSettings() {
+    const res = await fetch(`${API_BASE}/clinic/settings`, { headers: headers() })
+    return res.json()
+  },
+  async updateClinicSettings(settings: any) {
+    const res = await fetch(`${API_BASE}/clinic/settings`, { method: 'PUT', headers: headers(), body: JSON.stringify(settings) })
+    return res.json()
+  },
+  async bookClinicAppointment(appointment: any) {
+    const res = await fetch(`${API_BASE}/clinic/appointments/book`, { method: 'POST', headers: headers(), body: JSON.stringify(appointment) })
+    return res.json()
+  },
+  async cancelClinicAppointment(appointmentId: string, performedBy: string) {
+    const res = await fetch(`${API_BASE}/clinic/appointments/cancel`, { method: 'PUT', headers: headers(), body: JSON.stringify({ appointment_id: appointmentId, performed_by: performedBy }) })
+    return res.json()
+  },
+  async getClinicQueue() {
+    const res = await fetch(`${API_BASE}/clinic/appointments/queue`, { headers: headers() })
+    return res.json()
+  },
+  async callClinicAppointment(appointmentId: string) {
+    const res = await fetch(`${API_BASE}/clinic/appointments/call`, { method: 'PUT', headers: headers(), body: JSON.stringify({ appointment_id: appointmentId }) })
+    return res.json()
+  },
+
   // Auth (unauthenticated)
   async login(username: string, password: string) {
     const expectedTenantId = localStorage.getItem('active_domain_tenant_id') || ''

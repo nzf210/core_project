@@ -18,6 +18,8 @@ import Automations from '../components/Automations.vue'
 import ChatbotConfig from '../components/ChatbotConfig.vue'
 import DataTransfer from '../components/DataTransfer.vue'
 import Reports from '../components/Reports.vue'
+import ClinicQueue from '../components/ClinicQueue.vue'
+import ClinicFrontdesk from '../components/ClinicFrontdesk.vue'
 
 const routes = [
   { path: '/', component: DynamicDashboard, name: 'Dashboard' },
@@ -35,6 +37,8 @@ const routes = [
   { path: '/data-transfer', component: DataTransfer, name: 'DataTransfer' },
   { path: '/login', component: Login, name: 'Login', meta: { requiresGuest: true } },
   { path: '/register', component: Register, name: 'Register', meta: { requiresGuest: true } },
+  { path: '/clinic', component: ClinicQueue, name: 'ClinicQueue' },
+  { path: '/clinic/frontdesk', component: ClinicFrontdesk, name: 'ClinicFrontdesk' },
   { path: '/superadmin-login', component: SuperAdminLogin, name: 'SuperAdminLogin', meta: { requiresGuest: true } },
   { path: '/forgot-password', component: ForgotPassword, name: 'ForgotPassword', meta: { requiresGuest: true } },
   { path: '/reset-password', component: ResetPassword, name: 'ResetPassword', meta: { requiresGuest: true }, props: (route: any) => ({ initialEmail: route.query.email }) }

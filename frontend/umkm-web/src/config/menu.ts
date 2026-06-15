@@ -19,6 +19,7 @@ export const menuConfig: MenuGroup[] = [
       { label: 'Katalog Produk', to: '/catalog', icon: '📦' },
       // Impor/Ekspor: admin-only (risiko data besar; kasir tidak perlu)
       { label: 'Impor / Ekspor', to: '/data-transfer', icon: '📥', roles: ['owner', 'admin', 'superadmin'] },
+      { label: 'Antrean Klinik', to: '/clinic/frontdesk', icon: '🏥', roles: ['owner', 'admin', 'superadmin'] },
     ],
   },
   {
