@@ -63,6 +63,9 @@ func main() {
 	// Cost-per-Vote / Finance (F034)
 	mux.HandleFunc("/finance", handlers.HandleCampaignFinance)
 
+	// Sentiment Issues (F036)
+	mux.HandleFunc("/issues", handlers.HandleSentimentIssues)
+
 	// Regions
 	mux.HandleFunc("/regions/provinces", handlers.HandleProvinces)
 

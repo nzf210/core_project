@@ -134,7 +134,8 @@ Format per feature:
 **Target:** Menghilangkan salah ketik NIK (Typo) oleh relawan.
 
 ## F036: Dashboard Sentimen Isu Harian (AI NLP)
-**Spec Status:** ⏳ Draft
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
 **Deskripsi:** Chat relawan dari lapangan diproses AI untuk mengekstrak kata kunci keluhan warga. Diagregrasi ke tabel `village_issues` (Desa, Isu, Sentimen -1 s/d +1).
 **Target:** Bahan pidato spesifik per-desa untuk Kandidat.
 
