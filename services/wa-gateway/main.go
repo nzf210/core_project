@@ -814,6 +814,9 @@ func setupRoutes(_ context.Context, container *sqlstore.Container) {
 		target := r.FormValue("target")
 		message := r.FormValue("message")
 
+		mediaURL := r.FormValue("media_url")
+		mediaName := r.FormValue("media_name")
+
 		if tenantID == "" || target == "" || message == "" {
 			http.Error(w, `{"error":"Missing tenant_id, target, or message"}`, http.StatusBadRequest)
 			return
@@ -880,8 +883,58 @@ func setupRoutes(_ context.Context, container *sqlstore.Container) {
 			return
 		}
 
-		msg := &waE2E.Message{
-			Conversation: proto.String(message),
+		var msg *waE2E.Message
+		if mediaURL != "" {
+			// Download media file to buffer
+			resp, err := http.Get(mediaURL)
+			if err != nil {
+				log.Printf("[Tenant %s] Failed to download media %s: %v", tenantID, mediaURL, err)
+				http.Error(w, `{"error":"Failed to download media"}`, http.StatusInternalServerError)
+				return
+			}
+			defer resp.Body.Close()
+			mediaData, err := io.ReadAll(resp.Body)
+			if err != nil {
+				log.Printf("[Tenant %s] Failed to read media: %v", tenantID, err)
+				http.Error(w, `{"error":"Failed to read media"}`, http.StatusInternalServerError)
+				return
+			}
+			mimetype := resp.Header.Get("Content-Type")
+			if mimetype == "" {
+				mimetype = "application/octet-stream"
+			}
+			if mediaName == "" {
+				mediaName = "document"
+			}
+			
+			// Upload to Meta servers
+			uploadResp, err := client.Upload(context.Background(), mediaData, whatsmeow.MediaDocument)
+			if err != nil {
+				log.Printf("[Tenant %s] Failed to upload media to WA: %v", tenantID, err)
+				http.Error(w, `{"error":"Failed to upload media"}`, http.StatusInternalServerError)
+				return
+			}
+
+			// Construct Document Message
+			msg = &waE2E.Message{
+				DocumentMessage: &waE2E.DocumentMessage{
+					URL:           proto.String(uploadResp.URL),
+					DirectPath:    proto.String(uploadResp.DirectPath),
+					MediaKey:      uploadResp.MediaKey,
+					Mimetype:      proto.String(mimetype),
+					FileEncSHA256: uploadResp.FileEncSHA256,
+					FileSHA256:    uploadResp.FileSHA256,
+					FileLength:    proto.Uint64(uint64(len(mediaData))),
+					Title:         proto.String(mediaName),
+					FileName:      proto.String(mediaName),
+					Caption:       proto.String(message),
+				},
+			}
+		} else {
+			// Standard text message
+			msg = &waE2E.Message{
+				Conversation: proto.String(message),
+			}
 		}
 
 		_, err = client.SendMessage(context.Background(), jid, msg)

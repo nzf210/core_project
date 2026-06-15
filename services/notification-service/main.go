@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/smtp"
 	"net/url"
@@ -39,6 +41,7 @@ func main() {
 	
 	// N8N Webhooks
 	mux.Handle("/webhook/n8n/whatsapp", webhook.RequireN8NSecret(http.HandlerFunc(handleN8NWhatsApp)))
+	mux.Handle("/webhook/n8n/telegram", webhook.RequireN8NSecret(http.HandlerFunc(handleN8NTelegram)))
 
 	port := "8005"
 	slog.Info("Notification Service listening", "port", port)
@@ -114,29 +117,90 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 // ─────────────────────────────────────────────
 
 func sendTelegram(chatID, message string) error {
+	return sendTelegramMedia(chatID, message, "", "")
+}
+
+func sendTelegramMedia(chatID, message, mediaURL, mediaName string) error {
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if botToken == "" {
 		slog.Warn("TELEGRAM_BOT_TOKEN not set, skipping telegram")
 		return nil
 	}
 
-	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
-	payload := map[string]interface{}{
-		"chat_id":    chatID,
-		"text":       message,
-		"parse_mode": "Markdown",
+	if mediaURL == "" {
+		// Standard Text Message
+		apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
+		payload := map[string]interface{}{
+			"chat_id":    chatID,
+			"text":       message,
+			"parse_mode": "Markdown",
+		}
+		body, _ := json.Marshal(payload)
+	
+		resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+	
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("telegram returned %d", resp.StatusCode)
+		}
+		return nil
 	}
-	body, _ := json.Marshal(payload)
 
-	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
+	// Media Document Upload via Telegram sendDocument API
+	resp, err := http.Get(mediaURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to download media: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("telegram returned %d", resp.StatusCode)
+	if mediaName == "" {
+		mediaName = "document.file"
 	}
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Add chat_id and caption
+	_ = writer.WriteField("chat_id", chatID)
+	_ = writer.WriteField("caption", message)
+	_ = writer.WriteField("parse_mode", "Markdown")
+
+	// Add file
+	part, err := writer.CreateFormFile("document", mediaName)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(part, resp.Body)
+	if err != nil {
+		return err
+	}
+
+	err = writer.Close()
+	if err != nil {
+		return err
+	}
+
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendDocument", botToken)
+	req, err := http.NewRequest("POST", apiURL, body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{}
+	tgResp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer tgResp.Body.Close()
+
+	if tgResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("telegram sendDocument returned %d", tgResp.StatusCode)
+	}
+
 	return nil
 }
 
@@ -145,6 +209,10 @@ func sendTelegram(chatID, message string) error {
 // ─────────────────────────────────────────────
 
 func sendWA(tenantID, target, message string) error {
+	return sendWAMedia(tenantID, target, message, "", "")
+}
+
+func sendWAMedia(tenantID, target, message, mediaURL, mediaName string) error {
 	waGatewayURL := "http://localhost:8202/api/wa/send"
 	if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
 		waGatewayURL = "http://wa-gateway:8202/api/wa/send"
@@ -156,6 +224,12 @@ func sendWA(tenantID, target, message string) error {
 	data.Set("target", targetJID)
 	data.Set("message", message)
 	data.Set("tenant_id", tenantID)
+	if mediaURL != "" {
+		data.Set("media_url", mediaURL)
+	}
+	if mediaName != "" {
+		data.Set("media_name", mediaName)
+	}
 
 	req, err := http.NewRequest("POST", waGatewayURL, strings.NewReader(data.Encode()))
 	if err != nil {
@@ -165,7 +239,8 @@ func sendWA(tenantID, target, message string) error {
 	req.Header.Set("X-Message-Type", "system")
 	req.Header.Set("X-Source", "notification-service")
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

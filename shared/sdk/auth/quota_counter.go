@@ -79,28 +79,8 @@ func getFeatureLimit(p PlanFeaturesRow, feature string) int {
 		return p.MaxAIAudioMinutes
 	case "image_gen":
 		return p.MaxImageGen
-	case "ocr_scans":
-		if p.Tier == "ultimate" {
-			return -1
-		}
-		if p.Tier == "pro" {
-			return 500
-		}
-		if p.Tier == "lite" {
-			return 50
-		}
-		return 0
 	case "chatbot_messages":
-		if p.Tier == "ultimate" {
-			return -1
-		}
-		if p.Tier == "pro" {
-			return 1000
-		}
-		if p.Tier == "lite" {
-			return 250
-		}
-		return 0
+		return p.MaxAIText // Using MaxAIText from DB instead of hardcoded
 	}
 	return 0
 }

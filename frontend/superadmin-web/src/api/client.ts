@@ -84,6 +84,12 @@ export const api = {
   listPlans: () => request('/admin/plans'),
   listPlanFeatures: (planId?: string) =>
     request(`/admin/plan-features${planId ? `?plan_id=${planId}` : ''}`),
+  updatePlanFeatureNumeric: (planId: string, features: Record<string, number>) =>
+    request(`/admin/plan-features-matrix/${planId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(features),
+    }),
 
   // Frozen accounts
   getFrozenAccounts: () => request('/admin/dashboard').then((d: any) => d.data?.recent_frozen || []),
@@ -92,4 +98,4 @@ export const api = {
   getHealthStatus: () => request('/admin/health-status'),
 }
 
-export { isAuthed, getRole, logout, getToken }
+export { isAuthed, getRole, logout, getToken, request }

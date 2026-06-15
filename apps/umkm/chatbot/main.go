@@ -599,24 +599,41 @@ func handleWAWebhook(w http.ResponseWriter, r *http.Request) {
 func processChatJob(job ChatJob) {
 	ctx := context.Background()
 
+	// F029: Dynamic Multimodal Guardrails (Feature Toggles based on Plan limits)
+	plan := auth.GetPlan(job.TenantID)
+
 	// Handle Multimedia First
 	if job.MsgType == "audio" && job.MediaPath != "" {
-		text, err := transcribeAudio(job.TenantID, job.MediaPath)
-		if err == nil {
-			job.Message = text // replace voice note with transcribed text
+		if plan.MaxAIAudioMinutes == 0 {
+			// Feature disabled
+			job.Message = "[Sistem] Maaf, layanan pesan suara (Voice Note) belum diaktifkan oleh Toko ini. Harap ketik pesan Anda."
 		} else {
-			job.Message = "[Pesan Suara tidak dapat diproses]"
+			text, err := transcribeAudio(job.TenantID, job.MediaPath)
+			if err == nil {
+				job.Message = text // replace voice note with transcribed text
+			} else {
+				job.Message = "[Pesan Suara tidak dapat diproses]"
+			}
 		}
 	} else if job.MsgType == "image" && job.MediaPath != "" {
-		text, err := analyzeImage(job.TenantID, job.MediaPath, job.Message)
-		if err == nil {
+		if plan.MaxAIVision == 0 {
+			// Feature disabled
 			if job.Message != "" {
-				job.Message = job.Message + "\n[Analisis Gambar: " + text + "]"
+				job.Message = job.Message + "\n[Sistem] Maaf, layanan analisa gambar belum diaktifkan oleh Toko ini. Harap ketik pertanyaan Anda secara detail."
 			} else {
-				job.Message = "[Analisis Gambar: " + text + "]"
+				job.Message = "[Sistem] Maaf, layanan analisa gambar belum diaktifkan oleh Toko ini. Harap ketik pertanyaan Anda secara detail."
 			}
 		} else {
-			job.Message = job.Message + "\n[Gambar tidak dapat diproses]"
+			text, err := analyzeImage(job.TenantID, job.MediaPath, job.Message)
+			if err == nil {
+				if job.Message != "" {
+					job.Message = job.Message + "\n[Analisis Gambar: " + text + "]"
+				} else {
+					job.Message = "[Analisis Gambar: " + text + "]"
+				}
+			} else {
+				job.Message = job.Message + "\n[Gambar tidak dapat diproses]"
+			}
 		}
 	}
 

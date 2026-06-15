@@ -21,6 +21,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/config"
+	"core_project/shared/sdk/cache"
 	"core_project/shared/sdk/response"
 	xendit "github.com/xendit/xendit-go/v6"
 	invoice "github.com/xendit/xendit-go/v6/invoice"
@@ -320,6 +321,7 @@ func main() {
 	mux.Handle("/admin/plans/", auth.Middleware(http.HandlerFunc(handleAdminUpdatePlan)))
 	mux.Handle("/admin/plan-features", auth.Middleware(http.HandlerFunc(handleAdminPlanFeaturesCollection)))
 	mux.Handle("/admin/plan-features/", auth.Middleware(http.HandlerFunc(handleAdminPlanFeaturesItem)))
+	mux.Handle("/admin/plan-features-matrix/", auth.Middleware(http.HandlerFunc(handleAdminPlanFeaturesMatrixUpdate)))
 	mux.Handle("/admin/voucher-programs", auth.Middleware(http.HandlerFunc(handleAdminVoucherProgramsCollection)))
 	mux.Handle("/admin/voucher-analytics", auth.Middleware(http.HandlerFunc(handleAdminVoucherAnalytics)))
 
@@ -1527,6 +1529,67 @@ func handleAdminPlanFeaturesItem(w http.ResponseWriter, r *http.Request) {
 	default:
 		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
 	}
+}
+
+func handleAdminPlanFeaturesMatrixUpdate(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+	if r.Method != http.MethodPatch {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+
+	planID := strings.TrimPrefix(r.URL.Path, "/admin/plan-features-matrix/")
+	if planID == "" {
+		response.Error(w, http.StatusBadRequest, "Plan ID required", nil)
+		return
+	}
+
+	var req map[string]int
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	updates := []string{}
+	args := []any{}
+	idx := 1
+
+	// We map exact columns allowed to be updated to prevent SQL injection
+	allowedColumns := map[string]bool{
+		"max_users": true, "max_transactions": true, "max_ai_text": true,
+		"max_ai_vision": true, "max_ai_audio_minutes": true, "max_image_gen": true,
+		"max_products": true, "max_customers": true, "max_storage_mb": true,
+		"api_rate_limit_per_min": true, "data_retention_months": true,
+	}
+
+	for key, val := range req {
+		if allowedColumns[key] {
+			updates = append(updates, fmt.Sprintf("%s = $%d", key, idx))
+			args = append(args, val)
+			idx++
+		}
+	}
+
+	if len(updates) == 0 {
+		response.JSON(w, http.StatusOK, "No updates applied", nil)
+		return
+	}
+
+	args = append(args, planID)
+	query := fmt.Sprintf("UPDATE plan_features SET %s WHERE plan_id = $%d", strings.Join(updates, ", "), idx)
+	if _, err := DB.Exec(r.Context(), query, args...); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to update matrix", err)
+		return
+	}
+	// Invalidate the cache across all services so the new limits take effect immediately
+	if cache.Client != nil {
+		cache.Client.Del(r.Context(), "plan_features:"+planID)
+	}
+	response.JSON(w, http.StatusOK, "Matrix updated", nil)
 }
 
 func listPlanFeatures(w http.ResponseWriter, r *http.Request) {
