@@ -18,6 +18,28 @@
         <h2>Kawal Suara Rakyat Bersama Kami!</h2>
         <p>Lihat perkembangan dukungan secara transparan dan berikan kontribusi Anda sekarang.</p>
 
+        <!-- Dropdown Filter Daerah -->
+        <div class="region-filter-wrapper flex gap-2 items-center" style="margin-top: 1rem; margin-bottom: 2rem; justify-content: center;">
+          <label style="color: var(--text-secondary); font-weight: 500;">Tampilkan Data di:</label>
+          <select v-model="selectedRegionType" @change="fetchPublicStats" class="form-input" style="width: auto; display: inline-block; padding: 0.5rem 1rem;">
+            <option value="nasional">Nasional (Seluruh Indonesia)</option>
+            <option value="province">Tingkat Provinsi</option>
+            <option value="regency">Tingkat Kabupaten/Kota</option>
+          </select>
+
+          <select v-if="selectedRegionType === 'province'" v-model="selectedRegionId" @change="fetchPublicStats" class="form-input" style="width: auto; display: inline-block; padding: 0.5rem 1rem;">
+            <option value="">-- Pilih Provinsi --</option>
+            <option v-for="prov in provinces" :key="prov.id" :value="prov.id">{{ prov.name }}</option>
+          </select>
+
+          <select v-if="selectedRegionType === 'regency'" v-model="selectedRegionId" @change="fetchPublicStats" class="form-input" style="width: auto; display: inline-block; padding: 0.5rem 1rem;">
+            <option value="">-- Pilih Kabupaten --</option>
+            <!-- Mock data for regencies right now -->
+            <option value="1">Kota Jakarta Selatan</option>
+            <option value="2">Kabupaten Bogor</option>
+          </select>
+        </div>
+
         <div class="dashboard-grid">
           <div class="stats-card glass-card candidates-list">
             <h3 class="stats-title">Kandidat Teratas</h3>
@@ -87,13 +109,23 @@ import { publicApi } from '../api'
 
 const emit = defineEmits(['login', 'register'])
 
+const selectedRegionType = ref('nasional')
+const selectedRegionId = ref('')
+const provinces = ref<any[]>([
+  { id: '11', name: 'DKI Jakarta' },
+  { id: '12', name: 'Jawa Barat' },
+  { id: '13', name: 'Jawa Tengah' },
+  { id: '14', name: 'Jawa Timur' }
+])
+
 const topCandidates = ref<any[]>([])
 const mapData = ref<any>({})
 const isLoading = ref(true)
 
 const fetchPublicStats = async () => {
   try {
-    const res = await publicApi.getDashboard()
+    isLoading.value = true
+    const res = await publicApi.getDashboard(selectedRegionType.value, selectedRegionId.value)
     const data = await res.json()
     if (data.success && data.data) {
       if (data.data.top_candidates) {

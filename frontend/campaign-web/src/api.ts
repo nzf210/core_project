@@ -91,8 +91,13 @@ export const authApi = {
 };
 
 export const publicApi = {
-  async getDashboard() {
-    return fetch(`${API_GATEWAY_URL}/api/public/campaign/dashboard`);
+  async getDashboard(regionType: string = 'nasional', regionId: string = '') {
+    const url = new URL(`${API_GATEWAY_URL}/api/public/campaign/dashboard`);
+    if (regionType !== 'nasional') {
+      url.searchParams.append('region_type', regionType);
+      if (regionId) url.searchParams.append('region_id', regionId);
+    }
+    return fetch(url.toString());
   }
 };
 
