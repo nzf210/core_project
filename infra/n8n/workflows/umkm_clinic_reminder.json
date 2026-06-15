@@ -1,0 +1,142 @@
+{
+  "name": "UMKM Clinic Queue - Appointment Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/30 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "clinic-reminder-trigger-001",
+      "name": "Check Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [100, 250]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.UMKM_API_URL }}/clinic/appointments/queue",
+        "options": {
+          "header": {
+            "parameters": [
+              {
+                "name": "X-Tenant-ID",
+                "value": "={{ $env.UMKM_TENANT_ID }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "clinic-fetch-queue-001",
+      "name": "Fetch Active Queue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [320, 250]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "clinic-split-queue-001",
+      "name": "Split Queue Items",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [540, 250]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WA_GATEWAY_URL }}/api/wa/send",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "target",
+              "value": "={{ $json.patient_phone }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ 'Halo *' + $json.patient_name + '*!\\n\\nAntrian kamu *' + $json.queue_number + '* sudah dekat.\\nSilakan datang ke klinik. Terima kasih!' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "clinic-send-reminder-001",
+      "name": "Send WA Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [760, 250]
+    },
+    {
+      "parameters": {
+        "resume": "3",
+        "unit": "seconds"
+      },
+      "id": "clinic-wait-001",
+      "name": "Wait (Anti-Ban Delay)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [980, 250]
+    }
+  ],
+  "connections": {
+    "Check Every 30 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Fetch Active Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Active Queue": {
+      "main": [
+        [
+          {
+            "node": "Split Queue Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Queue Items": {
+      "main": [
+        [
+          {
+            "node": "Send WA Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WA Reminder": {
+      "main": [
+        [
+          {
+            "node": "Wait (Anti-Ban Delay)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateId": "wch-clinic-002"
+  }
+}

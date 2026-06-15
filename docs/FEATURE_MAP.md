@@ -186,6 +186,13 @@ Format per feature:
 **Implementation:** 🔨 In Progress
 **Deskripsi:** Monetisasi fitur Campaign via kombinasi Self-Service Payment Gateway (Xendit) untuk pembelian instan dan Manual License Key (Superadmin-generated) untuk transaksi B2B custom pricing.
 
+## F045: UMKM Healthcare Clinic Queue System
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+**Deskripsi:** Modul reservasi antrian buat klinik UMKM. Sistem memberikan nomor antrian otomatis dan melakukan reminder via N8N WA Gateway.
+**Fitur:** Backend (settings, book, cancel, queue, call) + N8N Workflows (booking_bot, reminder).
+
+
 ## F001: Webhook Subscription
 
 ## F027: Core Business Flow Fixes & Optimizations

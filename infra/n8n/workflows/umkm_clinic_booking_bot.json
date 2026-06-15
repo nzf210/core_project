@@ -1,0 +1,128 @@
+{
+  "name": "UMKM Clinic Queue - WA Booking Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "umkm/clinic/booking",
+        "options": {}
+      },
+      "id": "clinic-book-webhook-001",
+      "name": "WA Booking Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 250],
+      "webhookId": "umkm-clinic-booking"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse WA message to extract patient name & phone\nconst message = $('WA Booking Webhook').item.json.body.message.toLowerCase();\nconst phone = $('WA Booking Webhook').item.json.body.from || '';\n\n// Auto-detect: if message contains 'daftar' or 'booking'\nconst wantsBooking = message.includes('daftar') || message.includes('booking');\n\nif (!wantsBooking) {\n  return { reply: 'Silakan ketik: DAFTAR [Nama Lengkap]' };\n}\n\n// Extract name after keyword\nlet name = '';\nif (message.includes('daftar ')) {\n  name = message.split('daftar ')[1].trim();\n} else if (message.includes('booking ')) {\n  name = message.split('booking ')[1].trim();\n}\n\nif (name.length < 3) {\n  return { reply: 'Format salah. Contoh: DAFTAR Budi Santoso' };\n}\n\nreturn {\n  patient_name: name.charAt(0).toUpperCase() + name.slice(1),\n  patient_phone: phone,\n  action: 'book'\n};"
+      },
+      "id": "clinic-parse-001",
+      "name": "Parse Booking Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 250]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.UMKM_API_URL }}/clinic/appointments/book",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "patient_name",
+              "value": "={{ $json.patient_name }}"
+            },
+            {
+              "name": "patient_phone",
+              "value": "={{ $json.patient_phone }}"
+            }
+          ]
+        },
+        "options": {
+          "header": {
+            "parameters": [
+              {
+                "name": "X-Tenant-ID",
+                "value": "={{ $env.UMKM_TENANT_ID }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "clinic-book-api-001",
+      "name": "Book Appointment via API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [540, 250]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WA_GATEWAY_URL }}/api/wa/send",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "target",
+              "value": "={{ $('WA Booking Webhook').item.json.body.from }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.data.message + '\\n\\nNomor antrian kamu: *' + $('Book Appointment via API').item.json.data.queue_number + '*\\nPerkiraan dipanggil: ' + $('Book Appointment via API').item.json.data.estimated_minute + ' menit lagi.' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "clinic-confirm-wa-001",
+      "name": "Confirm Booking via WA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [760, 250]
+    }
+  ],
+  "connections": {
+    "WA Booking Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Booking Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Booking Intent": {
+      "main": [
+        [
+          {
+            "node": "Book Appointment via API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Book Appointment via API": {
+      "main": [
+        [
+          {
+            "node": "Confirm Booking via WA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateId": "wch-clinic-001"
+  }
+}
