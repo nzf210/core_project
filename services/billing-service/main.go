@@ -530,7 +530,7 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	// Check if voucher is provided — apply discount
 	var voucherApplied bool
 	if req.VoucherCode != "" {
-		voucherApplied, _ = applyVoucher(ctx, req.VoucherCode, req.PlanID, tenantID)
+		voucherApplied = validateVoucherOnly(ctx, req.VoucherCode, req.PlanID)
 		if voucherApplied {
 			slog.Info("Voucher applied", "tenant_id", tenantID, "code", req.VoucherCode)
 		}
@@ -565,9 +565,30 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	createReq.Description = &desc
 	createReq.PaymentMethods = []string{"BANK_TRANSFER", "EWALLET", "QRIS"}
 
+	var paymentURL string
+	if finalPrice == 0 {
+		slog.Info("FREE TRANSACTION DETECTED: Bypassing Xendit", "tenant_id", tenantID)
+		// 1. Direct activation
+		var codeValidityDays int
+		if req.VoucherCode != "" {
+			DB.QueryRow(ctx, "SELECT validity_days FROM voucher_codes WHERE code = $1", req.VoucherCode).Scan(&codeValidityDays)
+			applyVoucher(ctx, req.VoucherCode, req.PlanID, tenantID) // Actually redeem it since it is zero-rupiah
+		}
+		if codeValidityDays == 0 { codeValidityDays = 30 }
+		
+		activateSubscription(ctx, tenantID, req.PlanID, planName, codeValidityDays, "voucher_direct", nil, "")
+		
+		// 2. Mark invoice as paid instantly
+		extID := fmt.Sprintf("FREE-%s|%s", uuid.NewString()[:8], tenantID)
+		_, _ = DB.Exec(ctx, "INSERT INTO invoices (id, tenant_id, plan_id, amount, status, payment_url, voucher_code, paid_at) VALUES ($1, $2, $3, 0, 'paid', 'free_bypass', $4, NOW())", extID, tenantID, req.PlanID, req.VoucherCode)
+		
+		response.JSON(w, http.StatusOK, "Success: Free subscription activated", map[string]string{"status": "activated", "payment_url": ""})
+		return
+	}
+
 	resp, _, err := xenditClient.InvoiceApi.CreateInvoice(r.Context()).
 		CreateInvoiceRequest(*createReq).Execute()
-	paymentURL := ""
+	paymentURL = ""
 	if err != nil {
 		slog.Error("Failed to create xendit invoice", "error", err)
 
@@ -910,6 +931,8 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 
 	status, _ := payload["status"].(string)
 	externalID, _ := payload["external_id"].(string)
+	paidAmountFloat, _ := payload["paid_amount"].(float64)
+	paidAmountCents := int64(paidAmountFloat)
 
 	// --- HANDLE WALLET TOPUP INVOICE ---
 	if strings.Contains(externalID, "-wallet-topup-") {
@@ -983,10 +1006,28 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
+	// IDEMPOTENCY CHECK: Is this invoice already paid?
+	var currentStatus string
+	err := DB.QueryRow(ctx, "SELECT status FROM invoices WHERE id = $1", externalID).Scan(&currentStatus)
+	if err == nil && currentStatus == "paid" {
+		slog.Info("Invoice already paid, ignoring duplicate webhook", "external_id", externalID)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	// Get plan from invoice
 	var planID, voucherCode string
-	var amount int64
-	DB.QueryRow(ctx, "SELECT plan_id, amount, COALESCE(voucher_code,'') FROM invoices WHERE id = $1", externalID).Scan(&planID, &amount, &voucherCode)
+	var invoiceAmount int64
+	DB.QueryRow(ctx, "SELECT plan_id, amount, COALESCE(voucher_code,'') FROM invoices WHERE id = $1", externalID).Scan(&planID, &invoiceAmount, &voucherCode)
+	
+	if status == "PAID" || status == "SETTLED" {
+		if paidAmountCents < invoiceAmount {
+			slog.Warn("PAYMENT AMOUNT MISMATCH", "external_id", externalID, "expected", invoiceAmount, "paid", paidAmountCents)
+			// Still process but log as anomaly, or block activation. Let's block for safety.
+			w.WriteHeader(http.StatusOK) 
+			return
+		}
+	}
 	if planID == "" {
 		planID = "lite"
 	}
@@ -1019,6 +1060,24 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 
 	// Update invoice
 	_, _ = DB.Exec(ctx, "UPDATE invoices SET status = 'paid', paid_at = NOW() WHERE id = $1", externalID)
+
+	// HANDLE OVERPAYMENT: If paid > invoice, put difference in wallet
+	if paidAmountCents > invoiceAmount {
+		excess := paidAmountCents - invoiceAmount
+		slog.Info("Overpayment detected, crediting wallet", "tenant_id", tenantID, "excess_cents", excess)
+		_, errW := DB.Exec(ctx, `
+			INSERT INTO wallet_credits (tenant_id, balance_cents, updated_at) 
+			VALUES ($1, $2, NOW()) 
+			ON CONFLICT (tenant_id) 
+			DO UPDATE SET balance_cents = wallet_credits.balance_cents + $2, updated_at = NOW()
+		`, tenantID, excess)
+		if errW == nil {
+			_, _ = DB.Exec(ctx, `
+				INSERT INTO wallet_transactions (tenant_id, amount_cents, transaction_type, reference, description) 
+				VALUES ($1, $2, 'topup', $3, 'Excess payment from invoice')
+			`, tenantID, excess, externalID)
+		}
+	}
 
 	// Apply Voucher (Mark as REDEEMED permanently on actual payment)
 	if voucherCode != "" {
@@ -1111,7 +1170,7 @@ func activateSubscription(ctx context.Context, tenantID, planID, planName string
 		LIMIT 1
 	`, tenantID).Scan(&effectivePlanID, &maxPriority, new(int))
 	if err != nil || effectivePlanID == "" {
-		effectivePlanID = "free"
+		effectivePlanID = "inactive"
 		maxPriority = 0
 	}
 
@@ -1192,6 +1251,20 @@ func activateSubscription(ctx context.Context, tenantID, planID, planName string
 // ─────────────────────────────────────────────
 // Voucher Application
 // ─────────────────────────────────────────────
+
+// validateVoucherOnly checks if a voucher code is valid without redeeming it.
+func validateVoucherOnly(ctx context.Context, code, planID string) bool {
+	var id string
+	err := DB.QueryRow(ctx, `
+		SELECT vc.code FROM voucher_codes vc
+		JOIN voucher_programs vp ON vc.program_id = vp.id
+		WHERE vc.code = $1 AND vc.is_redeemed = false
+		  AND vp.is_active = true
+		  AND (vp.expires_at IS NULL OR vp.expires_at > NOW())
+		  AND (vp.target_plan_id IS NULL OR vp.target_plan_id = '' OR vp.target_plan_id = $2)
+	`, code, planID).Scan(&id)
+	return err == nil
+}
 
 func applyVoucher(ctx context.Context, code, planID, tenantID string) (bool, *string) {
 	// Atomically mark voucher as redeemed and fetch its program rules
