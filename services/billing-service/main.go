@@ -347,6 +347,12 @@ func main() {
 	// Superadmin: per-tenant quota dashboard (Task 2.8 — F025)
 	mux.Handle("/admin/quota/", auth.Middleware(http.HandlerFunc(handleAdminQuotaUsage)))
 
+	// F034: Add-on Wallet & Pricing
+	mux.Handle("/admin/addon-prices", auth.Middleware(http.HandlerFunc(handleAdminAddonPrices)))
+	mux.Handle("/admin/addon-prices/", auth.Middleware(http.HandlerFunc(handleAdminAddonPricesItem)))
+	mux.Handle("/wallet", auth.Middleware(http.HandlerFunc(handleWallet)))
+	mux.Handle("/wallet/topup", auth.Middleware(http.HandlerFunc(handleWalletTopup)))
+
 	server := &http.Server{
 		Addr:    ":8003",
 		Handler: mux,
@@ -904,6 +910,68 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 
 	status, _ := payload["status"].(string)
 	externalID, _ := payload["external_id"].(string)
+
+	// --- HANDLE WALLET TOPUP INVOICE ---
+	if strings.Contains(externalID, "-wallet-topup-") {
+		topupParts := strings.Split(externalID, "-wallet-topup-")
+		if len(topupParts) == 2 {
+			wTenantID := topupParts[1]
+			if status == "EXPIRED" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			if status != "PAID" && status != "SETTLED" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			
+			// Get topup amount from xendit payload
+			amtFloat, _ := payload["paid_amount"].(float64)
+			amountCents := int64(amtFloat)
+			
+			// Deduplication check: have we processed this topup externalID?
+			var existing int
+			DB.QueryRow(r.Context(), "SELECT count(id) FROM wallet_transactions WHERE reference = $1", externalID).Scan(&existing)
+			if existing > 0 {
+				w.WriteHeader(http.StatusOK) // Already processed
+				return
+			}
+
+			// Process topup transaction
+			tx, err := DB.Begin(r.Context())
+			if err != nil {
+				http.Error(w, "DB error", http.StatusInternalServerError)
+				return
+			}
+			defer tx.Rollback(r.Context())
+			
+			// Upsert wallet_credits
+			_, err = tx.Exec(r.Context(), `
+				INSERT INTO wallet_credits (tenant_id, balance_cents, updated_at) 
+				VALUES ($1, $2, NOW()) 
+				ON CONFLICT (tenant_id) 
+				DO UPDATE SET balance_cents = wallet_credits.balance_cents + $2, updated_at = NOW()
+			`, wTenantID, amountCents)
+			if err != nil {
+				slog.Error("Topup: Failed to update wallet_credits", "tenant", wTenantID, "err", err)
+				return
+			}
+			
+			// Insert transaction log
+			_, err = tx.Exec(r.Context(), `
+				INSERT INTO wallet_transactions (tenant_id, amount_cents, transaction_type, reference, description) 
+				VALUES ($1, $2, 'topup', $3, 'Top-up via Xendit invoice')
+			`, wTenantID, amountCents, externalID)
+			if err != nil {
+				return
+			}
+			
+			tx.Commit(r.Context())
+			slog.Info("Wallet topup successful", "tenant_id", wTenantID, "amount_cents", amountCents)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	}
 
 	parts := strings.Split(externalID, "|")
 	if len(parts) < 2 {
@@ -3028,6 +3096,158 @@ func startPendingCleanupWorker(ctx context.Context) {
 		}
 	}()
 	slog.Info("Pending cleanup worker started (every 15 min)")
+}
+
+// ─────────────────────────────────────────────
+// F034: Add-on Wallet & Pricing
+// ─────────────────────────────────────────────
+
+// GET /admin/addon-prices — list all addon price configs (superadmin)
+func handleAdminAddonPrices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+	ctx := r.Context()
+	rows, err := DB.Query(ctx, `SELECT addon_key, price_cents, unit FROM addon_prices ORDER BY addon_key`)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to query addon prices", err)
+		return
+	}
+	defer rows.Close()
+	type ap struct {
+		Key   string `json:"addon_key"`
+		Price int64  `json:"price_cents"`
+		Unit  string `json:"unit"`
+	}
+	var list []ap
+	for rows.Next() {
+		var a ap
+		if rows.Scan(&a.Key, &a.Price, &a.Unit) == nil {
+			list = append(list, a)
+		}
+	}
+	response.JSON(w, http.StatusOK, "Addon prices retrieved", list)
+}
+
+// PATCH /admin/addon-prices/{key} — update one addon price (superadmin)
+func handleAdminAddonPricesItem(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+	if r.Method != http.MethodPatch {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	key := strings.TrimPrefix(r.URL.Path, "/admin/addon-prices/")
+	if key == "" || strings.Contains(key, "/") {
+		response.Error(w, http.StatusBadRequest, "Missing addon_key", nil)
+		return
+	}
+	var req struct {
+		Price int64 `json:"price_cents"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid JSON", nil)
+		return
+	}
+	ctx := r.Context()
+	_, err := DB.Exec(ctx, `UPDATE addon_prices SET price_cents = $1, updated_at = NOW() WHERE addon_key = $2`, req.Price, key)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Update failed", err)
+		return
+	}
+	response.JSON(w, http.StatusOK, "Addon price updated", map[string]interface{}{"addon_key": key, "price_cents": req.Price})
+}
+
+// GET /wallet — get current tenant wallet balance + transactions
+func handleWallet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	tenantID := r.Header.Get("X-User-Id")
+	if tenantID == "" {
+		response.Error(w, http.StatusUnauthorized, "Missing tenant", nil)
+		return
+	}
+	ctx := r.Context()
+	var balance int64
+	err := DB.QueryRow(ctx, `SELECT balance_cents FROM wallet_credits WHERE tenant_id = $1`, tenantID).Scan(&balance)
+	if err != nil {
+		balance = 0
+	}
+	rows, err := DB.Query(ctx, `SELECT id, amount_cents, transaction_type, reference, description, created_at FROM wallet_transactions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 20`, tenantID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to query transactions", err)
+		return
+	}
+	defer rows.Close()
+	type tx struct {
+		ID       int    `json:"id"`
+		Amount   int64  `json:"amount_cents"`
+		Type     string `json:"transaction_type"`
+		Ref      string `json:"reference"`
+		Desc     string `json:"description,omitempty"`
+		Time     string `json:"created_at"`
+	}
+	var txs []tx
+	for rows.Next() {
+		var t tx
+		var t2 time.Time
+		if rows.Scan(&t.ID, &t.Amount, &t.Type, &t.Ref, &t.Desc, &t2) == nil {
+			t.Time = t2.Format(time.RFC3339)
+			txs = append(txs, t)
+		}
+	}
+	response.JSON(w, http.StatusOK, "Wallet retrieved", map[string]interface{}{
+		"balance_cents": balance,
+		"transactions":  txs,
+	})
+}
+
+// POST /wallet/topup — create Xendit invoice for wallet topup
+func handleWalletTopup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	tenantID := r.Header.Get("X-User-Id")
+	if tenantID == "" {
+		response.Error(w, http.StatusUnauthorized, "Missing tenant", nil)
+		return
+	}
+	var req struct {
+		AmountCents int64 `json:"amount_cents"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.AmountCents < 10000 {
+		response.Error(w, http.StatusBadRequest, "Invalid amount (min Rp 10.000)", nil)
+		return
+	}
+	desc := "Top-up Wallet Credit"
+	curr := "IDR"
+	invoiceReq := invoice.CreateInvoiceRequest{
+		ExternalId:     strconv.Itoa(int(time.Now().UnixNano())) + "-wallet-topup-" + tenantID,
+		Amount:         float64(req.AmountCents),
+		Description:    &desc,
+		Currency:       &curr,
+	}
+	invoiceResp, _, err := xenditClient.InvoiceApi.CreateInvoice(context.Background()).CreateInvoiceRequest(invoiceReq).Execute()
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to create invoice", err)
+		return
+	}
+	response.JSON(w, http.StatusOK, "Topup invoice created", map[string]interface{}{
+		"invoice_url": invoiceResp.InvoiceUrl,
+		"external_id": invoiceResp.ExternalId,
+	})
 }
 
 func cleanupPendingTenants(ctx context.Context) {

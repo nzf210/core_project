@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS wallet_transactions CASCADE;
+DROP TABLE IF EXISTS wallet_credits CASCADE;
+DROP TABLE IF EXISTS addon_prices CASCADE;

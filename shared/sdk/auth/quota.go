@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"core_project/shared/sdk/cache"
+	"core_project/shared/sdk/db"
 	"core_project/shared/sdk/response"
 )
 
@@ -103,6 +104,37 @@ func QuotaMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// CheckWalletBalance checks if the tenant has enough wallet credits (in cents).
+func CheckWalletBalance(ctx context.Context, tenantID string, amountCents int64) bool {
+	if db.Pool == nil {
+		return true // skip if db not wired (test/mock mode)
+	}
+	var balance int64
+	err := db.Pool.QueryRow(ctx, "SELECT balance_cents FROM wallet_credits WHERE tenant_id = $1", tenantID).Scan(&balance)
+	if err != nil {
+		return false // missing row or error means 0 balance
+	}
+	return balance >= amountCents
+}
+
+// DeductWalletBalance deducts credits and logs the transaction.
+func DeductWalletBalance(ctx context.Context, tenantID string, amountCents int64, ref string, desc string) error {
+	if db.Pool == nil {
+		return nil
+	}
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	
+	_, err = tx.Exec(ctx, "UPDATE wallet_credits SET balance_cents = balance_cents - $1, updated_at = NOW() WHERE tenant_id = $2 AND balance_cents >= $1", amountCents, tenantID)
+	if err != nil { return err }
+	_, err = tx.Exec(ctx, "INSERT INTO wallet_transactions (tenant_id, amount_cents, transaction_type, reference, description) VALUES ($1, $2, 'consume', $3, $4)", tenantID, -amountCents, ref, desc)
+	if err != nil { return err }
+	return tx.Commit(ctx)
 }
 
 // HasFeatureAccess checks if a tenant has access to a specific feature.
