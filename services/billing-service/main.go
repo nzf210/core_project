@@ -2710,11 +2710,13 @@ func calculateRate(total, redeemed int) float64 {
 // ─────────────────────────────────────────────
 
 type GenerateVouchersReq struct {
-	PlanID       string `json:"plan_id"`
-	ValidityDays int    `json:"validity_days"`
-	Quantity     int    `json:"quantity"`
-	ProgramName  string `json:"program_name"`
-	MaxUses      int    `json:"max_uses"`
+	PlanID        string `json:"plan_id"`
+	ValidityDays  int    `json:"validity_days"`
+	Quantity      int    `json:"quantity"`
+	ProgramName   string `json:"program_name"`
+	MaxUses       int    `json:"max_uses"`
+	VoucherType   string `json:"voucher_type"`   // e.g. "bonus_months", "discount_percent", "discount_fixed"
+	DiscountValue int    `json:"discount_value"`
 }
 
 func handleAdminGenerateVouchers(w http.ResponseWriter, r *http.Request) {
@@ -2747,13 +2749,18 @@ func handleAdminGenerateVouchers(w http.ResponseWriter, r *http.Request) {
 	if programName == "" {
 		programName = "Ad-hoc Voucher - " + req.PlanID
 	}
+	
+	vType := req.VoucherType
+	if vType == "" {
+		vType = "bonus_months" // Backward compatibility fallback
+	}
 
 	err := DB.QueryRow(ctx, `
-		INSERT INTO voucher_programs (name, voucher_type, target_plan_id, duration_months, max_uses, is_active)
-		VALUES ($1, 'free_months', $2, 0, $3, true)
+		INSERT INTO voucher_programs (name, voucher_type, discount_value, target_plan_id, duration_months, max_uses, is_active)
+		VALUES ($1, $2, $3, $4, 0, $5, true)
 		ON CONFLICT DO NOTHING
 		RETURNING id
-	`, programName, req.PlanID, req.MaxUses).Scan(&programID)
+	`, programName, vType, req.DiscountValue, req.PlanID, req.MaxUses).Scan(&programID)
 	if err != nil {
 		// Try to get existing
 		DB.QueryRow(ctx, `SELECT id FROM voucher_programs WHERE name = $1`, programName).Scan(&programID)

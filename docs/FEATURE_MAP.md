@@ -92,7 +92,8 @@ Format per feature:
 | F030 | GetPlanFeatures DB Integration | ✅ Approved | ✅ Done | 2026-06-14 |
 | F031 | Campaign Anti-Double Validation | ✅ Approved | 🔨 In Progress | 2026-06-14 |
 | F032 | Modul Saksi & Real Count C1 | ✅ Approved | 🔨 In Progress | 2026-06-14 |
-| F034 | Add-on Wallet & Meta API Connector | ✅ Approved | ⏳ Pending | 2026-06-16 |
+| F034 | Add-on Wallet & Meta API Connector | ✅ Approved | ✅ Done | 2026-06-16 |
+| F035 | Discount Vouchers (Percent & Fixed) | ✅ Approved | 🔨 In Progress | 2026-06-16 |
 |- [ ] AC-2: AI Vision mencocokkan foto plano dengan input ketik saksi. Jika beda, masuk status "Needs Human Review"
 - [ ] AC-3: Saksi yang bolos jam 07:00 pagi ditandai merah di dashboard (saksi_attendances).
 
@@ -1869,3 +1870,26 @@ Wajib update:
 - `services/billing-service/main.go` (Add Wallet & Pricing Handlers)
 - `services/wa-gateway/main.go` (Add Meta reconnection trigger)
 - `frontend/umkm-web/src/components/Wallet.vue` (NEW)
+
+
+---
+
+## F035: Discount Vouchers (Percent & Fixed)
+
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
+
+**Deskripsi:** Memberikan opsi kepada Superadmin untuk membuat voucher dengan tipe diskon uang (persentase / rupiah tetap), bukan hanya voucher akses gratis (bonus_months).
+
+**Spec:**
+1. **API Endpoint (`POST /admin/vouchers/generate`)**:
+   - Tambah parameter opsional di request body:
+     - `voucher_type` (string): `bonus_months` (default), `discount_percent`, `discount_fixed`.
+     - `discount_value` (int): Nominal diskon. Max 100 untuk persentase.
+2. **Database Insertion**:
+   - Modifikasi query `INSERT INTO voucher_programs` agar tidak melakukan hardcode parameter `voucher_type` dan `discount_value`.
+
+**Acceptance Criteria (AC):**
+- [ ] AC-1: Endpoint backend `/admin/vouchers/generate` dapat menerima `voucher_type` dan `discount_value`.
+- [ ] AC-2: Voucher dengan diskon 20% tersimpan benar di `voucher_programs` (voucher_type = 'discount_percent', discount_value = 20).
+- [ ] AC-3: Transaksi `POST /subscribe` menggunakan voucher diskon menghitung `finalPrice` secara akurat (sudah diimplementasi, tinggal trigger).

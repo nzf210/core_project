@@ -364,6 +364,20 @@
         </div>
 
         <div class="form-group">
+          <label>Tipe Voucher</label>
+          <select v-model="voucherForm.voucher_type" class="form-control">
+            <option value="bonus_months">Bonus Bulan (Akses Gratis)</option>
+            <option value="discount_percent">Diskon Persentase (%)</option>
+            <option value="discount_fixed">Potongan Harga Tetap (Rp)</option>
+          </select>
+        </div>
+
+        <div class="form-group" v-if="voucherForm.voucher_type !== 'bonus_months'">
+          <label>Nilai Diskon <span v-if="voucherForm.voucher_type === 'discount_percent'">(%)</span><span v-else>(Rp)</span></label>
+          <input v-model.number="voucherForm.discount_value" type="number" class="form-control" min="1" :max="voucherForm.voucher_type === 'discount_percent' ? 100 : undefined" placeholder="Nominal diskon" />
+        </div>
+
+        <div class="form-group">
           <label>Paket</label>
           <select v-model="voucherForm.plan_id" class="form-control">
             <option value="">-- Pilih Paket --</option>
@@ -957,6 +971,8 @@ const voucherForm = ref({
   plan_id: '',
   quantity: 10,
   validity_days: 30,
+  voucher_type: 'bonus_months',
+  discount_value: 0,
   max_uses: null as number | null,
 })
 const voucherList = ref<any[]>([])
@@ -968,7 +984,7 @@ const deletingVoucherId = ref<string | null>(null)
 const openGenerateVoucher = async () => {
   voucherError.value = ''
   generatedVoucherCodes.value = []
-  voucherForm.value = { program_name: '', plan_id: '', quantity: 10, validity_days: 30, max_uses: null }
+  voucherForm.value = { program_name: '', plan_id: '', quantity: 10, validity_days: 30, voucher_type: 'bonus_months', discount_value: 0, max_uses: null }
   showGenerateVoucherModal.value = true
   // Fetch latest plan prices from backend
   try {
@@ -1007,6 +1023,8 @@ const executeGenerateVoucher = async () => {
       plan_id: voucherForm.value.plan_id,
       validity_days: voucherForm.value.validity_days,
       quantity: voucherForm.value.quantity,
+      voucher_type: voucherForm.value.voucher_type,
+      discount_value: voucherForm.value.discount_value,
       program_name: voucherForm.value.program_name || undefined,
       max_uses: voucherForm.value.max_uses || undefined,
     })
