@@ -1692,31 +1692,30 @@ Wajib update:
 **Spec Status:** ✅ Approved
 **Implementation:** 🔨 In Progress
 
-**Deskripsi:** Sistem pencegahan data ganda, validasi NIK (Nomor Induk Kependudukan), dan pencegahan "pencaplokan" dukungan silang oleh timses/paslon yang berbeda pada modul Campaign. Fitur ini memastikan DPT (Daftar Pemilih Tetap) dan data KTP relawan 100% akurat, clean, dan tidak bisa disabotase.
+**Deskripsi:** Sistem pencegahan data ganda, validasi NIK (Nomor Induk Kependudukan), dan pencatatan dukungan silang oleh timses/paslon yang berbeda pada modul Campaign menggunakan arsitektur Citizen-Centric Normalized. Fitur ini memastikan DPT (Daftar Pemilih Tetap) dan data KTP relawan 100% akurat, clean, dan tidak bisa disabotase.
 
 **Spec:**
-1. **Cek Relawan Double (Intra-Campaign)**:
+1. **Pemisahan Data Warga (`citizens`)**:
+   - Master data identitas warga disimpan terpisah di tabel `citizens` dengan NIK sebagai Primary Key unik.
+   - Pendaftaran relasi dukungan masuk ke tabel `endorsements` yang mereferensikan `citizen_id` dan `tenant_id` (paslon).
+2. **Cek Relawan Double (Intra-Campaign)**:
    - Relawan/timses A mendaftarkan NIK `1234567890123456`.
-   - Jika timses B (masih satu kubu/paslon yang sama) mencoba mendaftarkan NIK yang sama, sistem **menerima data tersebut namun memberikan flag/tandai**.
-   - UI memunculkan indikator/warning bahwa NIK ini diinput ganda oleh timses internal, sehingga tim pemenangan bisa memverifikasi siapa yang sebenarnya merekrut pemilih tersebut.
-2. **Cek Pemilih Silang (Inter-Campaign/Paslon Lain)**:
-   - Jika sistem di-deploy multi-tenant (banyak paslon dalam 1 instance):
-   - NIK `1234567890123456` sudah terdaftar di Paslon X.
-   - Jika Paslon Y mencoba mendaftarkan, sistem **tetap menerima data tersebut, namun memberikan flag/tandai sebagai "Sengketa/Klaim Silang"**.
-   - Admin dashboard menampilkan daftar NIK yang *conflict/disengketakan* antar calon.
-3. **Validasi Format NIK (KTP)**:
-   - Cek format NIK (16 digit angka, validasi rumus checksum Disdukcapil: DD/MM/YY + wilayah).
-   - Jika tidak valid: Tolak/pisahkan ke tabel/kategori `Invalid NIK`.
-4. **Rekonsiliasi DPT (Data KPU)**:
-   - Dashboard menampilkan statistik:
-     - **Valid DPT**: Berapa orang yang sudah terdaftar di DPT KPU.
-     - **Non-DPT (Unregistered)**: Berapa warga pendukung yang KTP-nya benar namun namanya tidak ada di DPT area pemilihan calon tersebut.
+   - Jika timses B (masih satu kubu/paslon yang sama) mendaftarkan NIK yang sama, sistem **menerima data tersebut dan menambahkan relasi baru di `endorsements`**, namun memberikan status/flag `conflict_internal`.
+   - UI Dashboard memunculkan warning konflik agar admin pusat bisa verifikasi timses mana yang berhak mengklaim warga tersebut.
+3. **Cek Pemilih Silang (Inter-Campaign/Paslon Lain)**:
+   - Jika Paslon Y mendaftarkan NIK `1234567890123456` yang sudah diklaim Paslon X (multi-tenant), sistem **tetap menerima** input tersebut di DB, namun menambahkan record di `endorsements` Paslon Y dengan status/flag `conflict_external` (Sengketa Lintas Paslon).
+   - Dashboard memunculkan daftar NIK sengketa lintas paslon (indikasi swing voters atau data ganda).
+4. **Validasi Format NIK (KTP)**:
+   - Verifikasi NIK harus 16 digit angka valid. Jika tidak valid, status endorsement diset `invalid_nik`.
+5. **Rekonsiliasi DPT (Data KPU)**:
+   - Tabel `dpt_records` memuat data DPT resmi KPU.
+   - Saat warga didaftarkan ke `citizens`, lakukan pengecekan ke `dpt_records` secara otomatis. Jika NIK cocok, set `is_dpt_verified = true` dan `tps_id` sesuai DPT. Jika tidak cocok, set `is_dpt_verified = false` (kategori Unregistered/Non-DPT).
 
 **Acceptance Criteria (AC):**
-- [ ] AC-1: API pendaftaran (dari Webhook N8N/WA) **tetap menerima** input NIK ganda di kubu sendiri, namun memberikan status flag/conflict.
-- [ ] AC-2: Format NIK yang bukan 16 digit angka valid langsung digeser ke status "Invalid".
-- [ ] AC-3: Relasi join antara tabel `voters` (dukungan KTP) dengan tabel `dpt` (data KPU).
-- [ ] AC-4: UI Dashboard Campaign menampilkan rasio: Valid, Invalid, Terdaftar Paslon Lain, dan Non-DPT.
+- [ ] AC-1: API pendaftaran (Webhook N8N/WA) menerima NIK ganda di tenant yang sama atau berbeda, menyimpannya di DB, dan menandainya dengan status conflict yang sesuai.
+- [ ] AC-2: Format NIK yang tidak valid (bukan 16 digit) ditandai dengan status `invalid_nik`.
+- [ ] AC-3: Proses pendaftaran mencocokkan NIK ke tabel `dpt_records` dan mengeset flag `is_dpt_verified` & `tps_id` secara aktual.
+- [ ] AC-4: UI Dashboard menampilkan statistik rasio: Valid, Invalid, Terdaftar Paslon Lain, dan Non-DPT.
 
 ---
 
