@@ -52,6 +52,9 @@ func main() {
 	mux.HandleFunc("/endorsements/conflicts", handlers.HandleEndorsementConflicts)
 	mux.HandleFunc("/endorsements/cross-level", handlers.HandleCrossLevelEndorsements)
 
+	// Real Count C1 (F032)
+	mux.HandleFunc("/real-count", handlers.HandleRealCount)
+
 	// Regions
 	mux.HandleFunc("/regions/provinces", handlers.HandleProvinces)
 
