@@ -47,6 +47,9 @@ func HandleVision(w http.ResponseWriter, r *http.Request) {
 	if req.Prompt == "Extract C1 numbers" {
 		// Mock response mimicking OCR
 		respText = `{"candidate_votes": 125, "opponent_votes": 85, "invalid_votes": 2}`
+	} else if req.Prompt == "Extract KTP data" {
+		// Mock response mimicking KTP OCR
+		respText = `{"nik": "3171234567890123", "name": "BUDI SANTOSO", "address": "JL. MERDEKA NO 45", "gender": "LAKI-LAKI", "age": 35}`
 	} else {
 		// General fallback mock
 		respText = "[MOCK VISION] Gambar diterima: " + req.ImageURL + " | Prompt: " + req.Prompt
