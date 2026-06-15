@@ -45,9 +45,10 @@ func main() {
 	mux.HandleFunc("/volunteers", handlers.HandleVolunteers)
 	mux.HandleFunc("/volunteers/stats", handlers.HandleVolunteerStats)
 
-	// Voters
+	// Voters & Endorsements (F031)
 	mux.HandleFunc("/voters", handlers.HandleVoters)
 	mux.HandleFunc("/voters/stats", handlers.HandleVoterStats)
+	mux.HandleFunc("/endorsements", handlers.HandleEndorsements)
 
 	// Regions
 	mux.HandleFunc("/regions/provinces", handlers.HandleProvinces)
