@@ -3,56 +3,60 @@
   "nodes": [
     {
       "parameters": {
-        "rule": {
-          "interval": [ { "field": "hours", "hoursInterval": 24 } ]
-        }
+        "httpMethod": "POST",
+        "path": "umkm/alerts/low-stock",
+        "options": {}
       },
-      "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "position": [ 250, 300 ]
+      "id": "e1f1c7d3-98a2-4f1a-b6e5-4d5c6f7e8a9b",
+      "name": "Webhook Receiver",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "umkm-low-stock"
     },
     {
       "parameters": {
-        "url": "http://api-gateway:8000/api/umkm/reports/low-stock",
-        "method": "GET",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
-      },
-      "name": "Fetch Low Stock Data",
-      "type": "n8n-nodes-base.httpRequest",
-      "position": [ 450, 300 ]
-    },
-    {
-      "parameters": {
-        "url": "http://notification-service:8005/webhook/n8n/whatsapp",
         "method": "POST",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "X-Webhook-Secret", "value": "={{$credentials.webhook_secret}}" },
-            { "name": "Content-Type", "value": "application/json" }
-          ]
-        },
+        "url": "={{ $env.WA_GATEWAY_URL }}/api/wa/send",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "tenant_id", "value": "={{$json.tenant_id}}" },
-            { "name": "phone", "value": "={{$json.owner_phone}}" },
-            { "name": "template", "value": "🚨 *ALERT STOK MENIPIS* 🚨\n\nHalo {{owner_name}}, barang berikut stoknya sudah di bawah batas minimum:\n\n{{items_list}}\n\nSegera restock ya!" },
             {
-              "name": "data",
-              "value": "={ \"owner_name\": \"{{$json.owner_name}}\", \"items_list\": \"{{$json.items_list}}\" }"
+              "name": "target",
+              "value": "={{ $json.body.owner_phone }}"
+            },
+            {
+              "name": "message",
+              "value": "=⚠️ *LOW STOCK ALERT*\n\nBos, barang *{{ $json.body.product_name }}* sisa *{{ $json.body.current_stock }}* pcs.\n\nBuruan restock sebelum habis!"
             }
           ]
-        }
+        },
+        "options": {}
       },
-      "name": "Send WA Alert",
+      "id": "c3e5d7f1-28b4-4e1c-b5e5-4d5c6f7e8a9c",
+      "name": "WA Gateway Send",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [ 650, 300 ]
+      "typeVersion": 4,
+      "position": [500, 300]
     }
   ],
   "connections": {
-    "Schedule Trigger": { "main": [ [ { "node": "Fetch Low Stock Data", "type": "main", "index": 0 } ] ] },
-    "Fetch Low Stock Data": { "main": [ [ { "node": "Send WA Alert", "type": "main", "index": 0 } ] ] }
+    "Webhook Receiver": {
+      "main": [
+        [
+          {
+            "node": "WA Gateway Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateId": "wch-umkm-001"
   }
 }

@@ -1,0 +1,111 @@
+{
+  "name": "UMKM Daily Invoice Reminder",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "e987cba1-1234-5678-abcd-1234567890ab",
+      "name": "Daily Trigger (8 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.UMKM_API_URL }}/invoices/overdue",
+        "options": {}
+      },
+      "id": "b123cba1-1234-5678-abcd-1234567890cd",
+      "name": "Get Overdue Invoices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "c123cba1-1234-5678-abcd-1234567890ef",
+      "name": "Split Data Array",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WA_GATEWAY_URL }}/api/wa/send",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "target",
+              "value": "={{ $json.customer_phone }}"
+            },
+            {
+              "name": "message",
+              "value": "=Halo Kak *{{ $json.customer_name }}*!\n\nMengingatkan tagihan no *{{ $json.invoice_id }}* sejumlah *Rp {{ $json.amount }}* sudah jatuh tempo hari ini.\n\nMohon segera dilunasi ya kak. Terima kasih!"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d123cba1-1234-5678-abcd-1234567890gh",
+      "name": "Send WA Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [700, 300]
+    }
+  ],
+  "connections": {
+    "Daily Trigger (8 AM)": {
+      "main": [
+        [
+          {
+            "node": "Get Overdue Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Overdue Invoices": {
+      "main": [
+        [
+          {
+            "node": "Split Data Array",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Data Array": {
+      "main": [
+        [
+          {
+            "node": "Send WA Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateId": "wch-umkm-002"
+  }
+}

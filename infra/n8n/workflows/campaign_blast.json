@@ -1,0 +1,164 @@
+{
+  "name": "Campaign WA Blast Micro-targeting",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "campaign/blast/trigger",
+        "options": {}
+      },
+      "id": "blast-webhook-001",
+      "name": "Blast Trigger Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 250],
+      "webhookId": "campaign-blast-trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CAMPAIGN_API_URL }}/blast/target",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "village_id",
+              "value": "={{ $input.first().json.body.village_id }}"
+            },
+            {
+              "name": "gender",
+              "value": "={{ $input.first().json.body.gender }}"
+            },
+            {
+              "name": "age_range",
+              "value": "={{ $input.first().json.body.age_range }}"
+            },
+            {
+              "name": "template_id",
+              "value": "={{ $input.first().json.body.template_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "blast-fetch-targets-001",
+      "name": "Fetch Target Phones",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [420, 250]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "target_phones",
+        "options": {}
+      },
+      "id": "blast-split-001",
+      "name": "Split Phone List",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [640, 250]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WA_GATEWAY_URL }}/api/wa/send",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "target",
+              "value": "={{ $json }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ $('Blast Trigger Webhook').item.json.body.message }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "blast-send-wa-001",
+      "name": "Send WA to Each Target",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [860, 250]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CAMPAIGN_API_URL }}/blast/report",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "sent_count",
+              "value": "={{ $items().length }}"
+            },
+            {
+              "name": "campaign_id",
+              "value": "={{ $input.first().json.body.campaign_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "blast-report-001",
+      "name": "Send Completion Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1080, 250]
+    }
+  ],
+  "connections": {
+    "Blast Trigger Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch Target Phones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Target Phones": {
+      "main": [
+        [
+          {
+            "node": "Split Phone List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Phone List": {
+      "main": [
+        [
+          {
+            "node": "Send WA to Each Target",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WA to Each Target": {
+      "main": [
+        [
+          {
+            "node": "Send Completion Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateId": "wch-campaign-002"
+  }
+}

@@ -196,6 +196,11 @@ services:
       - N8N_CONCURRENCY_PRODUCTION_LIMIT=${N8N_CONCURRENCY_PRODUCTION_LIMIT:-20}
       # ── Telegram ──────────────────────────────────────────────────────
       - OWNER_TELEGRAM_CHAT_ID=${OWNER_TELEGRAM_CHAT_ID:-}
+      # ── Dynamic API Pointers ──────────────────────────────────────────
+      - UMKM_API_URL=${UMKM_API_URL:-http://api-gateway:8000/api/umkm}
+      - CAMPAIGN_API_URL=${CAMPAIGN_API_URL:-http://api-gateway:8000/api/campaign}
+      - WA_GATEWAY_URL=${WA_GATEWAY_URL:-http://wa-gateway:8202}
+      - AI_GATEWAY_URL=${AI_GATEWAY_URL:-http://ai-gateway:8002}
     entrypoint:
       - /bin/sh
       - /infra/n8n/init.sh
@@ -238,6 +243,11 @@ services:
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       # ── Performance ───────────────────────────────────────────────────
       - N8N_CONCURRENCY_PRODUCTION_LIMIT=${N8N_WORKER_CONCURRENCY:-10}
+      # ── Dynamic API Pointers ──────────────────────────────────────────
+      - UMKM_API_URL=${UMKM_API_URL:-http://api-gateway:8000/api/umkm}
+      - CAMPAIGN_API_URL=${CAMPAIGN_API_URL:-http://api-gateway:8000/api/campaign}
+      - WA_GATEWAY_URL=${WA_GATEWAY_URL:-http://wa-gateway:8202}
+      - AI_GATEWAY_URL=${AI_GATEWAY_URL:-http://ai-gateway:8002}
       - GENERIC_TIMEZONE=Asia/Jakarta
       - NODE_OPTIONS=--max-old-space-size=512
     volumes:

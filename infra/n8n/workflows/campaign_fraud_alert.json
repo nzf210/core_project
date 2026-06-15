@@ -1,0 +1,129 @@
+{
+  "name": "Campaign Fraud Alert (Peta Kerawanan)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "campaign/fraud-reports/webhook",
+        "options": {}
+      },
+      "id": "fraud-webhook-001",
+      "name": "Fraud Report Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 200],
+      "webhookId": "campaign-fraud-report"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Format lokasi + foto untuk dikirim ke grup WA\nconst payload = $input.first().json.body;\nconst violation = payload.violation_type || 'Tidak diketahui';\nconst lat = payload.latitude;\nconst lng = payload.longitude;\nconst mapUrl = `https://maps.google.com/?q=${lat},${lng}`;\nconst photoUrl = payload.photo_url || '-';\n\nreturn {\n  message: `🚨 *LAPORAN PELANGGARAN*\n\n📍 *Lokasi:* ${mapUrl}\n⚠️ *Jenis:* ${violation}\n👤 *Pelapor:* ${payload.reporter_name}\n📝 *Catatan:* ${payload.notes || '-'}\n\n📸 *Foto Bukti:* ${photoUrl}`,\n  groupId: $env.CAMPAIGN_LEGAL_GROUP_ID || '123456789@g.us'\n};"
+      },
+      "id": "fraud-format-001",
+      "name": "Format Alert Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WA_GATEWAY_URL }}/api/wa/send",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "target",
+              "value": "={{ $json.groupId }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fraud-wa-send-001",
+      "name": "Send to Tim Hukum WA Group",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CAMPAIGN_API_URL }}/fraud-reports",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "reporter_name",
+              "value": "={{ $input.first().json.body.reporter_name }}"
+            },
+            {
+              "name": "violation_type",
+              "value": "={{ $input.first().json.body.violation_type }}"
+            },
+            {
+              "name": "latitude",
+              "value": "={{ $input.first().json.body.latitude }}"
+            },
+            {
+              "name": "longitude",
+              "value": "={{ $input.first().json.body.longitude }}"
+            },
+            {
+              "name": "photo_url",
+              "value": "={{ $input.first().json.body.photo_url }}"
+            },
+            {
+              "name": "notes",
+              "value": "={{ $input.first().json.body.notes }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fraud-save-db-001",
+      "name": "Save to Campaign DB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 400]
+    }
+  ],
+  "connections": {
+    "Fraud Report Webhook": {
+      "main": [
+        [
+          {
+            "node": "Format Alert Message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save to Campaign DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Alert Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Tim Hukum WA Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateId": "wch-campaign-001"
+  }
+}
