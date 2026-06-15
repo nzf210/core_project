@@ -28,31 +28,36 @@ CREATE INDEX idx_campaigns_tenant_id ON campaigns(tenant_id);
 CREATE TABLE provinces (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL
+    , total_voters INT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE regencies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     province_id UUID NOT NULL REFERENCES provinces(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL
+    , total_voters INT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE districts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     regency_id UUID NOT NULL REFERENCES regencies(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL
+    , total_voters INT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE villages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     district_id UUID NOT NULL REFERENCES districts(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL
+    , total_voters INT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE tps (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     village_id UUID NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
-    target_voters INT NOT NULL DEFAULT 0
+    target_voters INT NOT NULL DEFAULT 0,
+    total_voters INT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE volunteers (
