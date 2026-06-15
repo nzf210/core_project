@@ -527,8 +527,47 @@ services:
     depends_on:
       - api-gateway
 
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: wch-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./infra/observability/loki/local-config.yaml:/etc/loki/local-config.yaml
+      - loki_data:/tmp/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.2
+    container_name: wch-promtail
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./infra/observability/promtail/local-config.yaml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    restart: unless-stopped
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: wch-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    depends_on:
+      - loki
+
 volumes:
   pgdata: null
   redisdata: null
   n8n_data: null
   chatwoot_redis_data: null
+  loki_data: null
+  grafana_data: null
