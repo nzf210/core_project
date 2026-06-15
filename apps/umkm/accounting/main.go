@@ -96,9 +96,16 @@ func main() {
 	mux.HandleFunc("/internal/tenant/{tenant_id}/chatbot-config", handleInternalChatbotConfig)
 	mux.HandleFunc("/chatbot/config", handleChatbotConfig)          // F020: GET/PUT per-tenant chatbot config (X-Tenant-ID)
 	mux.HandleFunc("/chatbot/config/test", handleChatbotConfigTest) // F020: POST preview with current config
+
+	// Clinic Queue System (F045)
+	mux.HandleFunc("/clinic/settings", handleClinicSettings)
+	mux.HandleFunc("/clinic/appointments/book", handleClinicBook)
+	mux.HandleFunc("/clinic/appointments/cancel", handleClinicCancel)
+	mux.HandleFunc("/clinic/appointments/queue", handleClinicQueue)
+	mux.HandleFunc("/clinic/appointments/call", handleClinicCall)
+
 	mux.HandleFunc("/export/products", handleExportProducts)        // F022
 	mux.HandleFunc("/export/contacts", handleExportContacts)        // F022
-	mux.HandleFunc("/export/journal", handleExportJournal)          // F022
 	mux.HandleFunc("/import/products", handleImportProducts)        // F022
 	mux.HandleFunc("/import/contacts", handleImportContacts)        // F022
 	mux.HandleFunc("/import/journal", handleImportJournal)          // F022
