@@ -65,7 +65,7 @@ Format per feature:
 |:---|:--------|:------------|:---------------|:-------------|
 | F001 | Multi-Store Quota | ✅ Approved | ✅ Done | 2026-06-12 |
 | F002 | Voucher Link Subscription | ✅ Approved | ✅ Done | 2026-06-12 |
-| F003 | Subscription Freeze Worker | ✅ Approved | ✅ Done | 2026-06-12 |
+| F003 | Subscription Hold Worker | ✅ Approved | ✅ Done | 2026-06-12 |
 | F004 | Read-only Enforcement (Frozen) | ✅ Approved | ✅ Done | 2026-06-12 |
 | F005 | Superadmin Dashboard | ✅ Approved | ✅ Done | 2026-06-12 |
 | F006 | Multi-Tenant WA Session Pool | ✅ Approved | ✅ Done | 2026-06-01 |
@@ -86,7 +86,7 @@ Format per feature:
 | F021 | Cash Flow PDF Export | ✅ Approved | ✅ Done | 2026-06-14 |
 | F022 | Excel/Google Sheet Import & Export | ✅ Approved | ✅ Done | 2026-06-14 |
 | F023 | FAQ Bot AI — Edit & Generate | ✅ Approved | ✅ Done | 2026-06-14 |
-| F024 | Free Tier Removal (Hardening) | ✅ Approved | ✅ Done | 2026-06-14 |
+| F024 | Paid-Only Enforcement (Hardening) | ✅ Approved | ✅ Done | 2026-06-14 |
 | F025 | Tier Restrictions Overhaul + AI Multimodal | ✅ Approved | ✅ Done (Phase 1+2) / ⏳ Pending (Phase 3) | 2026-06-14 |
 | F029 | Dynamic Multimodal Guardrails | ✅ Approved | ✅ Done | 2026-06-14 |
 | F030 | GetPlanFeatures DB Integration | ✅ Approved | ✅ Done | 2026-06-14 |
@@ -785,6 +785,7 @@ Superadmin buka SuperAdminDashboard.vue
            ▼
     POST /api/superadmin/billing/vouchers/generate
            │  billing-service/main.go: handleAdminGenerateVouchers()
+           │  1. Upsert voucher_programs (plan_id, program_name, bonus_months=0)
            │  2. INSERT N × voucher_codes (code, program_id, validity_days, is_redeemed=false)
            │  3. Return { codes: [{code, days}] }
            ▼
@@ -1183,7 +1184,7 @@ GET /v1/models
 **Spec:**
 - Superadmin generate bulk voucher links via `/admin/voucher-links/generate`
 - User klik link → redeem → subscription extend/created
-- Freeze = read-only + banner, user masih bisa login
+- Hold = read-only + banner, user masih bisa login
 
 **Voucher Lifecycle:**
 ```
@@ -1214,14 +1215,14 @@ GET /v1/models
 
 ---
 
-## F003: Subscription Freeze Worker
+## F003: Subscription Hold Worker
 
 **Spec Status:** ✅ Approved
 **Implementation:** ✅ Done
 
 
 **Spec:**
-- Cek `tenant_subscriptions` setiap `FREEZE_CHECK_INTERVAL` (default 1 jam)
+- Cek `tenant_subscriptions` setiap `EXPIRATION_CHECK_INTERVAL` (default 1 jam)
 - Batch update: `status='frozen'`, `tenants.is_frozen=true`
 - Liveness check: GET `/healthz`
 
@@ -1545,7 +1546,7 @@ Wajib update:
 
 ---
 
-## F024: Free Tier Removal (Hardening)
+## F024: Paid-Only Enforcement (Hardening)
 
 **Spec Status:** ✅ Approved
 **Implementation:** ✅ Done
@@ -1560,7 +1561,7 @@ Wajib update:
 ### Backend (`shared/sdk/auth/quota.go`)
 - `GetTenantPlan()` → return `"inactive"` saat Redis nil/miss
 - `GetPlan()` → fallback `Plans["inactive"]` (semua fitur off, locked)
-- Test `TestGetPlan_FreeFallback` → `TestGetPlan_InactiveFallback` (expect `"inactive"`, MaxTransactions 0)
+- Test `TestGetPlan_InactiveFallback` (expect `"inactive"`, MaxTransactions 0)
 
 ### Backend (rate limiter)
 

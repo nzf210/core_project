@@ -101,7 +101,7 @@ core_project/                   ← Root monorepo (satu go.mod)
 │   ├── wa-cloud-api/           ← WhatsApp Cloud API — Meta Official (Port 8210)
 │   │   ├── main.go
 │   │   └── migrations.go
-│   ├── subscription-worker/    ← Freeze expired tenants (Port 8006)
+│   ├── subscription-worker/    ← Hold expired tenants (Port 8006)
 │   │   └── main.go
 │   └── notification-service/   ← Telegram/Email notif (Port 8005)
 │       └── main.go
@@ -260,6 +260,7 @@ curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<domain
 | `escalation_handler.json` | Webhook POST | Escalation ke Chatwoot |
 | `master_automations.json` | Cron (setiap menit) | Execute due automations |
 | `daily_revenue_digest.json` | Cron (harian) | Revenue digest ke Telegram |
+| `expiration_reminder.json` | Cron | Reminder untuk expired subscriptions |
 | `campaign_voter_onboard.json` | Webhook | Campaign voter onboarding |
 | `voucher_wa_distribute.json` | Webhook | Distribusi voucher via WA |
 
@@ -516,6 +517,7 @@ Card "Voucher Billing" di `frontend/umkm-web/src/components/SuperAdminDashboard.
 
 **⚠️ Bug Fix — Voucher Redemption (v2):**
 - `handleAdminGenerateVouchers` menyimpan `validity_days` ke kolom `voucher_codes.validity_days` saat INSERT (sebelumnya hanya di-echo di response, tidak disimpan)
+- `handleRedeemVoucher` membaca `validity_days` langsung dari row `voucher_codes` via JOIN (sebelumnya membaca `duration_months` dari `voucher_programs` yang selalu 0 untuk `bonus_months` → menghasilkan 0 hari aktif)
 - `activateSubscription` menggunakan `validity_days` as-is (bukan `duration_months*30`)
 
 ---
