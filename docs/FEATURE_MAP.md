@@ -1705,9 +1705,12 @@ Wajib update:
 3. **Cek Pemilih Silang (Inter-Campaign/Paslon Lain)**:
    - Jika Paslon Y mendaftarkan NIK `1234567890123456` yang sudah diklaim Paslon X (multi-tenant), sistem **tetap menerima** input tersebut di DB, namun menambahkan record di `endorsements` Paslon Y dengan status/flag `conflict_external` (Sengketa Lintas Paslon).
    - Dashboard memunculkan daftar NIK sengketa lintas paslon (indikasi swing voters atau data ganda).
-4. **Validasi Format NIK (KTP)**:
+4. **Dukungan Lintas Tingkatan (Cross-Level Endorsements)**:
+   - Sistem dapat melacak apakah seorang warga mendukung paslon di tingkat yang berbeda (contoh: Mendukung Calon Gubernur A dan Calon Bupati B).
+   - Dashboard paslon memiliki menu filter khusus: **"Pemilih Irisan"**. Memungkinkan kandidat melihat: *"Siapa saja pendukung saya yang juga mendukung kandidat X di tingkat provinsi?"*. Ini sangat berguna untuk strategi kampanye tandem (paket) antar paslon.
+5. **Validasi Format NIK (KTP)**:
    - Verifikasi NIK harus 16 digit angka valid. Jika tidak valid, status endorsement diset `invalid_nik`.
-5. **Rekonsiliasi DPT (Data KPU)**:
+6. **Rekonsiliasi DPT (Data KPU)**:
    - Tabel `dpt_records` memuat data DPT resmi KPU.
    - Saat warga didaftarkan ke `citizens`, lakukan pengecekan ke `dpt_records` secara otomatis. Jika NIK cocok, set `is_dpt_verified = true` dan `tps_id` sesuai DPT. Jika tidak cocok, set `is_dpt_verified = false` (kategori Unregistered/Non-DPT).
 
