@@ -353,6 +353,13 @@ func main() {
 	mux.Handle("/wallet", auth.Middleware(http.HandlerFunc(handleWallet)))
 	mux.Handle("/wallet/topup", auth.Middleware(http.HandlerFunc(handleWalletTopup)))
 
+	// F036: Lifetime Affiliate
+	mux.HandleFunc("/api/public/affiliate-leaderboard", handleAffiliateLeaderboard)
+	mux.Handle("/affiliate/profile", auth.Middleware(http.HandlerFunc(handleAffiliateProfile)))
+	mux.Handle("/affiliate/register", auth.Middleware(http.HandlerFunc(handleAffiliateRegister)))
+	mux.Handle("/affiliate/withdraw", auth.Middleware(http.HandlerFunc(handleAffiliateWithdraw)))
+	mux.Handle("/affiliate/redeem-referral", auth.Middleware(http.HandlerFunc(handleAffiliateRedeemReferral)))
+
 	server := &http.Server{
 		Addr:    ":8003",
 		Handler: mux,
@@ -1084,6 +1091,33 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		ok, _ := applyVoucher(ctx, voucherCode, planID, tenantID)
 		if !ok {
 			slog.Warn("Failed to apply voucher on payment webhook", "code", voucherCode, "tenant_id", tenantID)
+		}
+	}
+
+	// ─────────────────────────────────────────────
+	// F036: LIFETIME AFFILIATE COMMISSION LOGIC
+	// ─────────────────────────────────────────────
+	var referredByID *int
+	DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&referredByID)
+	if referredByID != nil {
+		// Calculate 20% commission
+		commission := invoiceAmount * 20 / 100
+		if commission > 0 {
+			_, errAff := DB.Exec(ctx, `
+				UPDATE affiliates 
+				SET cash_balance_cents = cash_balance_cents + $1,
+					total_earnings_cents = total_earnings_cents + $1,
+					updated_at = NOW()
+				WHERE id = $2
+			`, commission, *referredByID)
+			
+			if errAff == nil {
+				DB.Exec(ctx, `
+					INSERT INTO affiliate_earnings (affiliate_id, tenant_id, invoice_id, amount_cents, commission_rate_percent)
+					VALUES ($1, $2, $3, $4, 20)
+				`, *referredByID, tenantID, externalID, commission)
+				slog.Info("Affiliate commission granted", "affiliate_id", *referredByID, "tenant_id", tenantID, "amount_cents", commission)
+			}
 		}
 	}
 
@@ -3427,3 +3461,181 @@ func handleAdminQuotaUsage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+
+
+// ─────────────────────────────────────────────
+// F036: Lifetime Affiliate & Leaderboard
+// ─────────────────────────────────────────────
+
+func handleAffiliateLeaderboard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+
+	rows, err := DB.Query(context.Background(), `
+		SELECT 
+			u.full_name, 
+			COUNT(DISTINCT ae.tenant_id) as total_closing, 
+			SUM(ae.amount_cents) as total_revenue
+		FROM affiliate_earnings ae
+		JOIN affiliates a ON ae.affiliate_id = a.id
+		JOIN users u ON a.user_id = u.id
+		GROUP BY a.id, u.full_name
+		ORDER BY total_revenue DESC
+		LIMIT 10
+	`)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to query leaderboard", err)
+		return
+	}
+	defer rows.Close()
+
+	type leader struct {
+		Name         string `json:"name"`
+		TotalClosing int    `json:"total_closing"`
+		TotalRevenue int64  `json:"total_revenue_cents"`
+	}
+	var leaders []leader
+	for rows.Next() {
+		var l leader
+		var rawName string
+		if err := rows.Scan(&rawName, &l.TotalClosing, &l.TotalRevenue); err == nil {
+			// Masking name (e.g. "Budi Santoso" -> "Budi S.")
+			parts := strings.Split(rawName, " ")
+			if len(parts) > 1 {
+				l.Name = parts[0] + " " + string(parts[1][0]) + "."
+			} else {
+				l.Name = parts[0]
+			}
+			leaders = append(leaders, l)
+		}
+	}
+
+	response.JSON(w, http.StatusOK, "Leaderboard retrieved", leaders)
+}
+
+func handleAffiliateProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	userID := r.Header.Get("X-User-Id")
+	
+	var affID int
+	var refCode string
+	var balance, earnings int64
+	err := DB.QueryRow(context.Background(), "SELECT id, referral_code, cash_balance_cents, total_earnings_cents FROM affiliates WHERE user_id = $1", userID).Scan(&affID, &refCode, &balance, &earnings)
+	if err != nil {
+		response.JSON(w, http.StatusOK, "Not an affiliate", map[string]interface{}{"is_affiliate": false})
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "Profile retrieved", map[string]interface{}{
+		"is_affiliate": true,
+		"affiliate_id": affID,
+		"referral_code": refCode,
+		"cash_balance_cents": balance,
+		"total_earnings_cents": earnings,
+	})
+}
+
+func handleAffiliateRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	userID := r.Header.Get("X-User-Id")
+
+	var existing int
+	DB.QueryRow(context.Background(), "SELECT id FROM affiliates WHERE user_id = $1", userID).Scan(&existing)
+	if existing > 0 {
+		response.Error(w, http.StatusBadRequest, "Already registered", nil)
+		return
+	}
+
+	refCode := "AGEN-" + strings.ToUpper(uuid.NewString()[:6])
+	_, err := DB.Exec(context.Background(), "INSERT INTO affiliates (user_id, referral_code) VALUES ($1, $2)", userID, refCode)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Registration failed", err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "Registered as affiliate", map[string]string{"referral_code": refCode})
+}
+
+func handleAffiliateWithdraw(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	userID := r.Header.Get("X-User-Id")
+
+	var req struct {
+		AmountCents int64 `json:"amount_cents"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.AmountCents < 10000000 { // min Rp 100.000
+		response.Error(w, http.StatusBadRequest, "Minimum withdraw Rp 100.000", nil)
+		return
+	}
+
+	ctx := r.Context()
+	tx, err := DB.Begin(ctx)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "DB error", err)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	var affID int
+	err = tx.QueryRow(ctx, "UPDATE affiliates SET cash_balance_cents = cash_balance_cents - $1 WHERE user_id = $2 AND cash_balance_cents >= $1 RETURNING id", req.AmountCents, userID).Scan(&affID)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "Insufficient balance", err)
+		return
+	}
+
+	_, err = tx.Exec(ctx, "INSERT INTO affiliate_withdrawals (affiliate_id, amount_cents, status) VALUES ($1, $2, 'pending')", affID, req.AmountCents)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to record withdrawal", err)
+		return
+	}
+
+	tx.Commit(ctx)
+	response.JSON(w, http.StatusOK, "Withdrawal requested", nil)
+}
+
+func handleAffiliateRedeemReferral(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	tenantID, ok := r.Context().Value(auth.TenantIDKey).(string)
+	if !ok || tenantID == "" {
+		response.Error(w, http.StatusUnauthorized, "Missing Tenant ID", nil)
+		return
+	}
+
+	var req struct {
+		ReferralCode string `json:"referral_code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ReferralCode == "" {
+		response.Error(w, http.StatusBadRequest, "Referral code required", nil)
+		return
+	}
+
+	var affID int
+	err := DB.QueryRow(r.Context(), "SELECT id FROM affiliates WHERE referral_code = $1", req.ReferralCode).Scan(&affID)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid referral code", nil)
+		return
+	}
+
+	// Update tenant
+	_, err = DB.Exec(r.Context(), "UPDATE tenants SET referred_by_affiliate_id = $1 WHERE id = $2 AND referred_by_affiliate_id IS NULL", affID, tenantID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to apply referral", err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "Referral applied successfully", nil)
+}

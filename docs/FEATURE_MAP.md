@@ -93,7 +93,8 @@ Format per feature:
 | F031 | Campaign Anti-Double Validation | ✅ Approved | 🔨 In Progress | 2026-06-14 |
 | F032 | Modul Saksi & Real Count C1 | ✅ Approved | 🔨 In Progress | 2026-06-14 |
 | F034 | Add-on Wallet & Meta API Connector | ✅ Approved | ✅ Done | 2026-06-16 |
-| F035 | Discount Vouchers (Percent & Fixed) | ✅ Approved | 🔨 In Progress | 2026-06-16 |
+| F035 | Discount Vouchers (Percent & Fixed) | ✅ Approved | ✅ Done | 2026-06-16 |
+| F036 | Lifetime Affiliate & Leaderboard | ✅ Approved | 🔨 In Progress | 2026-06-16 |
 |- [ ] AC-2: AI Vision mencocokkan foto plano dengan input ketik saksi. Jika beda, masuk status "Needs Human Review"
 - [ ] AC-3: Saksi yang bolos jam 07:00 pagi ditandai merah di dashboard (saksi_attendances).
 
@@ -1893,3 +1894,39 @@ Wajib update:
 - [ ] AC-1: Endpoint backend `/admin/vouchers/generate` dapat menerima `voucher_type` dan `discount_value`.
 - [ ] AC-2: Voucher dengan diskon 20% tersimpan benar di `voucher_programs` (voucher_type = 'discount_percent', discount_value = 20).
 - [ ] AC-3: Transaksi `POST /subscribe` menggunakan voucher diskon menghitung `finalPrice` secara akurat (sudah diimplementasi, tinggal trigger).
+
+
+---
+
+## F036: Lifetime Affiliate, External Agent & Public Leaderboard
+
+**Spec Status:** ✅ Approved
+**Implementation:** ⏳ Pending
+
+**Deskripsi:** Sistem komisi *Lifetime Recurring* untuk Agen/Afiliator eksternal (tidak harus menjadi subscriber). Dilengkapi dengan papan peringkat (Leaderboard) publik untuk memicu kompetisi antar agen, serta portal pencairan dana (withdrawal) komisi tunai.
+
+**Spec:**
+1. **Database & Tracking**:
+   - Tabel `affiliates` (user_id, referral_code unik, bank_info, cash_balance_cents, total_earnings_cents).
+   - Tabel `affiliate_earnings` (affiliate_id, tenant_id, invoice_id, amount_cents, created_at).
+   - Tabel `affiliate_withdrawals` (affiliate_id, amount_cents, status, admin_note).
+   - Modifikasi tabel `tenants`: tambah kolom `referred_by_affiliate_id` (kunci *lifetime lock*).
+
+2. **Skema Win-Win**:
+   - **Klien (Tenant Baru):** Input kode agen (misal `AGEN-BUDI`) saat pertama kali langganan → dapat diskon 10% (One-time).
+   - **Agen:** Saat *invoice* lunas (baik pertama kali maupun perpanjangan bulan ke-X), sistem mengecek `tenants.referred_by_affiliate_id`. Jika ada, Agen mendapat potongan komisi (misal 20% dari nilai *invoice*) selamanya.
+
+3. **Public Leaderboard API**:
+   - Endpoint `GET /api/public/affiliate-leaderboard`.
+   - Tidak butuh *Auth* (bisa diakses publik/landing page).
+   - Menampilkan TOP 10 Agen bulan ini & All-Time berdasarkan jumlah *closing* (tenant baru) dan *revenue* yang di-generate. Data di-masking (misal: "Budi S. - 150 Closing").
+
+4. **Portal Agen (Frontend)**:
+   - Dashboard agen: Link Referral, Saldo Tersedia, Riwayat Komisi, Tombol "Tarik Dana" (Withdraw).
+   - Syarat withdraw: Saldo minimal Rp 100.000. Status masuk ke `pending` untuk diproses manual oleh Superadmin (transfer mBanking).
+
+**Acceptance Criteria (AC):**
+- [ ] AC-1: Input kode referral saat pendaftaran/langganan pertama mengunci `referred_by` selamanya di tabel `tenants`.
+- [ ] AC-2: Perpanjangan otomatis (*renewal*) pada bulan kedua tetap memicu komisi ke Agen melalui mekanisme *payment webhook*.
+- [ ] AC-3: Endpoint Public Leaderboard mereturn agregasi agen teratas tanpa membocorkan data sensitif.
+- [ ] AC-4: Agen dapat melakukan Request Withdrawal, memotong saldo tunai sementara (`pending` state).
