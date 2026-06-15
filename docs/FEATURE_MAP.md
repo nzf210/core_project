@@ -127,6 +127,46 @@ Format per feature:
 - [ ] AC-2: Perhitungan *Cost-per-Vote* = (Total Pengeluaran Daerah X) / (Total Endorsement Valid Daerah X).
 - [ ] AC-3: Jika Cost-per-Vote di suatu desa melampaui batas wajar (misal Rp 200.000/suara), sistem mengirimkan alert notifikasi.
 
+## F035: Auto-Scan KTP (AI OCR Vision)
+**Spec Status:** ⏳ Draft
+**Deskripsi:** Relawan kirim foto KTP via WA. N8N kirim ke AI Gateway `/v1/vision` -> Ekstrak NIK, Nama, Alamat jadi JSON -> Masuk otomatis ke tabel `citizens`.
+**Target:** Menghilangkan salah ketik NIK (Typo) oleh relawan.
+
+## F036: Dashboard Sentimen Isu Harian (AI NLP)
+**Spec Status:** ⏳ Draft
+**Deskripsi:** Chat relawan dari lapangan diproses AI untuk mengekstrak kata kunci keluhan warga. Diagregrasi ke tabel `village_issues` (Desa, Isu, Sentimen -1 s/d +1).
+**Target:** Bahan pidato spesifik per-desa untuk Kandidat.
+
+## F037: Wargame & Simulasi Kemenangan (Predictive AI)
+**Spec Status:** ⏳ Draft
+**Deskripsi:** UI Slider di Dashboard. Kalkulasi algoritma menggabungkan data `campaign_expenses` (uang dibakar) dengan rasio konversi `endorsements`. 
+**Target:** Memprediksi probabilitas menang vs Cost-per-vote jika anggaran digeser ke daerah lain.
+
+## F038: Peta Kerawanan & Pelaporan Pelanggaran
+**Spec Status:** ⏳ Draft
+**Deskripsi:** Tabel `fraud_reports`. Relawan kirim "Share Loc" + Foto pelanggaran (Spanduk dirusak / serangan fajar lawan). Tampil sebagai titik MERAH di Heatmap UI.
+**Target:** Bukti hukum siap lapor Bawaslu.
+
+## F039: Pemilih Siluman & Anomali Detektor
+**Spec Status:** ⏳ Draft
+**Deskripsi:** Job otomatis yang mem-flag `endorsements`. Syarat siluman: Usia > 100 thn, 1 relawan setor 500 KTP dalam 1 jam (indikasi bot/joki), kode wilayah NIK tidak cocok dengan TPS.
+**Target:** Cleansing data agar kandidat tidak tertipu "Data Sampah" timses.
+
+## F040: WA Blast Bertarget (Micro-targeting)
+**Spec Status:** ⏳ Draft
+**Deskripsi:** Filter query di Frontend (misal: "Wanita, Desa A, Pekerjaan Petani") -> Lempar payload ke N8N / WA Gateway untuk *bulk send*.
+**Target:** Efisiensi kuota WA, pesan kampanye super personal.
+
+## F041: Gamification & Leaderboard Relawan
+**Spec Status:** ⏳ Draft
+**Deskripsi:** Query agregat `COUNT(endorsements) GROUP BY recruiter_id`. Tampil di UI. Bot WA otomatis kirim ranking ke relawan tiap minggu.
+**Target:** Memacu kompetisi antar relawan lapangan.
+
+## F042: WA Bot FAQ Panduan Kampanye (RAG)
+**Spec Status:** ⏳ Draft
+**Deskripsi:** Dokumen visi-misi paslon di-vectorize (pgvector `embeddings`). Jika warga/relawan tanya via WA, AI Gateway cari jawaban berbasis dokumen (RAG).
+**Target:** Relawan lapangan selalu punya contekan cerdas.
+
 ## F001: Webhook Subscription
 
 ## F027: Core Business Flow Fixes & Optimizations
