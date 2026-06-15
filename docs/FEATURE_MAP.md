@@ -147,7 +147,7 @@ Format per feature:
 
 ## F038: Peta Kerawanan & Pelaporan Pelanggaran
 **Spec Status:** ✅ Approved
-**Implementation:** 🔨 In Progress
+**Implementation:** ✅ Done
 **Deskripsi:** Tabel `fraud_reports`. Relawan kirim "Share Loc" + Foto pelanggaran (Spanduk dirusak / serangan fajar lawan). Tampil sebagai titik MERAH di Heatmap UI.
 **Target:** Bukti hukum siap lapor Bawaslu.
 

@@ -69,6 +69,9 @@ func main() {
 	// Wargame Simulator (F037)
 	mux.HandleFunc("/wargame/simulate", handlers.HandleSimulationWargame)
 
+	// Fraud Reports / Peta Kerawanan (F038)
+	mux.HandleFunc("/fraud-reports", handlers.HandleFraudReports)
+
 	// Regions
 	mux.HandleFunc("/regions/provinces", handlers.HandleProvinces)
 
