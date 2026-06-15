@@ -55,6 +55,10 @@ func main() {
 	// Real Count C1 (F032)
 	mux.HandleFunc("/real-count", handlers.HandleRealCount)
 
+	// Logistics Tracking (F033)
+	mux.HandleFunc("/logistics", handlers.HandleLogistics)
+	mux.HandleFunc("/logistics/distribute", handlers.HandleDistributeLogistics)
+
 	// Regions
 	mux.HandleFunc("/regions/provinces", handlers.HandleProvinces)
 
