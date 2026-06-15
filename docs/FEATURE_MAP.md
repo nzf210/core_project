@@ -152,24 +152,34 @@ Format per feature:
 **Target:** Bukti hukum siap lapor Bawaslu.
 
 ## F039: Pemilih Siluman & Anomali Detektor
-**Spec Status:** ⏳ Draft
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
 **Deskripsi:** Job otomatis yang mem-flag `endorsements`. Syarat siluman: Usia > 100 thn, 1 relawan setor 500 KTP dalam 1 jam (indikasi bot/joki), kode wilayah NIK tidak cocok dengan TPS.
 **Target:** Cleansing data agar kandidat tidak tertipu "Data Sampah" timses.
 
 ## F040: WA Blast Bertarget (Micro-targeting)
-**Spec Status:** ⏳ Draft
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
 **Deskripsi:** Filter query di Frontend (misal: "Wanita, Desa A, Pekerjaan Petani") -> Lempar payload ke N8N / WA Gateway untuk *bulk send*.
 **Target:** Efisiensi kuota WA, pesan kampanye super personal.
 
 ## F041: Gamification & Leaderboard Relawan
-**Spec Status:** ⏳ Draft
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
 **Deskripsi:** Query agregat `COUNT(endorsements) GROUP BY recruiter_id`. Tampil di UI. Bot WA otomatis kirim ranking ke relawan tiap minggu.
 **Target:** Memacu kompetisi antar relawan lapangan.
 
 ## F042: WA Bot FAQ Panduan Kampanye (RAG)
-**Spec Status:** ⏳ Draft
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
 **Deskripsi:** Dokumen visi-misi paslon di-vectorize (pgvector `embeddings`). Jika warga/relawan tanya via WA, AI Gateway cari jawaban berbasis dokumen (RAG).
 **Target:** Relawan lapangan selalu punya contekan cerdas.
+
+## F043: Multi-Level Election & Sainte-Laguë Simulator
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
+**Deskripsi:** Upgrade Campaign Engine agar mendukung pemilihan Legislatif (Pileg DPR/DPRD) dan DPD dengan kalkulasi perolehan kursi Sainte-Laguë yang realistik dan penanganan multi-dapil dalam satu dashboard.
+**Target:** Menghitung probabilitas perolehan kursi real-time berdasarkan sisa suara & divisor Sainte-Laguë.
 
 ## F001: Webhook Subscription
 

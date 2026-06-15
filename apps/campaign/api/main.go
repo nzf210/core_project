@@ -72,6 +72,21 @@ func main() {
 	// Fraud Reports / Peta Kerawanan (F038)
 	mux.HandleFunc("/fraud-reports", handlers.HandleFraudReports)
 
+	// Anomaly Detector / Pemilih Siluman (F039)
+	mux.HandleFunc("POST /anomalies/detect", handlers.HandleAnomalyDetection)
+
+	// WA Blast Micro-targeting (F040)
+	mux.HandleFunc("POST /blast/target", handlers.HandleBlastTarget)
+
+	// Gamification Leaderboard (F041)
+	mux.HandleFunc("GET /leaderboard", handlers.HandleGamificationLeaderboard)
+
+	// WA Bot FAQ RAG (F042)
+	mux.HandleFunc("POST /bot/faq", handlers.HandleBotFAQ)
+
+	// Sainte-Lague Simulator (F043)
+	mux.HandleFunc("GET /wargame/sainte-lague", handlers.HandleSainteLague)
+
 	// Regions
 	mux.HandleFunc("/regions/provinces", handlers.HandleProvinces)
 
