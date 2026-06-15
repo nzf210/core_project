@@ -12,6 +12,7 @@ import Users from './components/Users.vue'
 import Candidates from './components/Candidates.vue'
 import NotificationBell from './components/NotificationBell.vue'
 import DataVerification from './components/DataVerification.vue'
+import RealCount from './components/RealCount.vue'
 
 const isAuthenticated = ref(!!localStorage.getItem('accessToken'))
 const userName = ref(localStorage.getItem('userName') || 'Admin')
@@ -81,6 +82,7 @@ const setTab = (tab: string) => {
 const getTitle = () => {
   switch(currentTab.value) {
     case 'dashboard': return 'Dashboard Kampanye'
+    case 'real-count': return 'Saksi & Real Count'
     case 'volunteers': return 'Manajemen Relawan'
     case 'voters': return 'Data Pemilih'
     case 'users': return 'Manajemen Pengguna'
@@ -109,6 +111,7 @@ const getTitle = () => {
       </div>
       <ul class="nav-menu">
         <li @click="setTab('dashboard')" :class="{ active: currentTab === 'dashboard' }">Dashboard Utama</li>
+        <li @click="setTab('real-count')" :class="{ active: currentTab === 'real-count' }">Saksi & Real Count</li>
         <li @click="setTab('users')" :class="{ active: currentTab === 'users' }">Pengguna & Jenjang</li>
         <li @click="setTab('candidates')" :class="{ active: currentTab === 'candidates' }">Verifikasi Calon</li>
         <li @click="setTab('volunteers')" :class="{ active: currentTab === 'volunteers' }">Manajemen Relawan</li>
@@ -144,6 +147,7 @@ const getTitle = () => {
 
       <div class="main-body" v-else>
         <CampaignDashboard v-if="currentTab === 'dashboard'" />
+        <div v-else-if="currentTab === 'real-count'" class="card"><RealCount /></div>
         <div v-else-if="currentTab === 'users'" class="card"><Users /></div>
         <div v-else-if="currentTab === 'candidates'" class="card"><Candidates /></div>
         <div v-else-if="currentTab === 'volunteers'" class="card"><Volunteer /></div>
