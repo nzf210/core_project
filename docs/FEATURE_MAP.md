@@ -128,7 +128,8 @@ Format per feature:
 - [ ] AC-3: Jika Cost-per-Vote di suatu desa melampaui batas wajar (misal Rp 200.000/suara), sistem mengirimkan alert notifikasi.
 
 ## F035: Auto-Scan KTP (AI OCR Vision)
-**Spec Status:** ⏳ Draft
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
 **Deskripsi:** Relawan kirim foto KTP via WA. N8N kirim ke AI Gateway `/v1/vision` -> Ekstrak NIK, Nama, Alamat jadi JSON -> Masuk otomatis ke tabel `citizens`.
 **Target:** Menghilangkan salah ketik NIK (Typo) oleh relawan.
 
