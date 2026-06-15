@@ -92,8 +92,42 @@ Format per feature:
 | F030 | GetPlanFeatures DB Integration | ✅ Approved | ✅ Done | 2026-06-14 |
 | F031 | Campaign Anti-Double Validation | ✅ Approved | 🔨 In Progress | 2026-06-14 |
 | F032 | Modul Saksi & Real Count C1 | ✅ Approved | 🔨 In Progress | 2026-06-14 |
+- [ ] AC-2: AI Vision mencocokkan foto plano dengan input ketik saksi. Jika beda, masuk status "Needs Human Review"
+- [ ] AC-3: Saksi yang bolos jam 07:00 pagi ditandai merah di dashboard (saksi_attendances).
 
----
+## F033: Campaign Logistics Tracking
+
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
+
+**Deskripsi:** Sistem anti-bocor logistik kampanye (kaos, sembako, baliho) dari gudang pusat hingga ke rumah warga/TPS, dipantau via WhatsApp Bot dengan validasi lokasi.
+
+**Tujuan:**
+- Memastikan dana kampanye yang dibakar untuk barang fisik benar-benar sampai ke target.
+- Deteksi dini jika ada koordinator wilayah yang menahan logistik.
+
+**Acceptance Criteria (AC):**
+- [ ] AC-1: API mencatat distribusi logistik (Item, Jumlah, Penerima, Lokasi).
+- [ ] AC-2: Relawan yang menerima logistik wajib setor foto *selfie* + *share location* via WA Bot, sebelum status logistik berubah jadi "Diterima".
+- [ ] AC-3: Dashboard Logistik menampilkan peringatan jika distribusi terhenti di satu titik lebih dari 2 hari.
+
+## F034: Cost-per-Vote (Campaign Accounting)
+
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
+
+**Deskripsi:** Integrasi *Accounting Engine* (yang sudah ada di UMKM) ke modul *Campaign* untuk melacak setiap Rupiah yang keluar dan membaginya dengan jumlah dukungan valid.
+
+**Tujuan:**
+- Menghitung *Cost-per-Vote* di setiap desa/kecamatan secara real-time.
+- Mencegah pengeluaran kampanye di daerah yang sudah over-target (hijau).
+
+**Acceptance Criteria (AC):**
+- [ ] AC-1: Aplikasi Campaign dapat memanggil API Accounting internal untuk mencatat pengeluaran kampanye.
+- [ ] AC-2: Perhitungan *Cost-per-Vote* = (Total Pengeluaran Daerah X) / (Total Endorsement Valid Daerah X).
+- [ ] AC-3: Jika Cost-per-Vote di suatu desa melampaui batas wajar (misal Rp 200.000/suara), sistem mengirimkan alert notifikasi.
+
+## F001: Webhook Subscription
 
 ## F027: Core Business Flow Fixes & Optimizations
 
