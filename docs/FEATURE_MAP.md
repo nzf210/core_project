@@ -785,7 +785,6 @@ Superadmin buka SuperAdminDashboard.vue
            ▼
     POST /api/superadmin/billing/vouchers/generate
            │  billing-service/main.go: handleAdminGenerateVouchers()
-           │  1. Upsert voucher_programs (plan_id, program_name, free_months=0)
            │  2. INSERT N × voucher_codes (code, program_id, validity_days, is_redeemed=false)
            │  3. Return { codes: [{code, days}] }
            ▼
@@ -903,7 +902,6 @@ Tenant redeem voucher dengan validity_days = 30:
 - `frontend/umkm-web/src/components/SuperAdminDashboard.vue` — Generate Voucher modal + Voucher List modal (UI layer)
 - `frontend/umkm-web/src/superadminApi.ts` — `listVouchers()` + `generateVouchers()` API methods
 - `services/billing-service/main.go` — `pending` subscription status, auto-delete expired, generate system voucher, day-duration logic, `handleAdminGenerateVouchers`, `handleAdminListVouchers`
-  - ⚠️ Bug fix: `handleAdminGenerateVouchers` menyimpan `validity_days` ke kolom `voucher_codes.validity_days` saat INSERT; `handleRedeemVoucher` baca `validity_days` dari row `voucher_codes` (JOIN), bukan `voucher_programs.duration_months` (yang selalu 0 untuk `free_months`)
 - `services/auth-service/main.go` — sync `is_frozen` dan plan cache saat activate
 - `shared/migrations/` — add `validity_days` / `remaining_days` columns, `pending_timeout` di `tenant_subscriptions`
 - `services/subscription-worker/main.go` — cron job auto-delete expired pending tenants
@@ -1185,7 +1183,6 @@ GET /v1/models
 **Spec:**
 - Superadmin generate bulk voucher links via `/admin/voucher-links/generate`
 - User klik link → redeem → subscription extend/created
-- Grace period 0 hari (langsung freeze saat expired)
 - Freeze = read-only + banner, user masih bisa login
 
 **Voucher Lifecycle:**
@@ -1201,7 +1198,6 @@ GET /v1/models
     4. Check max_uses_per_tenant
     5. Mark link redeemed
     6. Extend or create subscription
-    7. Un-freeze if was frozen
 ```
 
 **Acceptance Criteria:**
@@ -1223,11 +1219,9 @@ GET /v1/models
 **Spec Status:** ✅ Approved
 **Implementation:** ✅ Done
 
-**Deskripsi:** Background worker yang freeze tenant expired.
 
 **Spec:**
 - Cek `tenant_subscriptions` setiap `FREEZE_CHECK_INTERVAL` (default 1 jam)
-- Subscription dengan `current_period_end < NOW()` → freeze
 - Batch update: `status='frozen'`, `tenants.is_frozen=true`
 - Liveness check: GET `/healthz`
 
@@ -1237,10 +1231,8 @@ GET /v1/models
 - [x] AC-3: `is_frozen` denormalized flag updated
 
 **Files:**
-- `services/subscription-worker/main.go` — freeze worker
 - `docker-compose.yml` — worker service definition
 
-**Notes:** GRACE_PERIOD_HOURS=0 (0-day freeze).
 
 ---
 
@@ -1400,7 +1392,6 @@ GET /v1/models
 | `escalation_handler.json` | Webhook | Escalation to Chatwoot |
 | `master_automations.json` | Cron (1m) | Execute due automations |
 | `daily_revenue_digest.json` | Cron | Revenue digest to Telegram |
-| `freeze_reminder.json` | Cron | Expired subscription reminder |
 | `campaign_voter_onboard.json` | Webhook | Voter onboarding |
 | `voucher_wa_distribute.json` | Webhook | Voucher WA distribution |
 
@@ -1559,39 +1550,30 @@ Wajib update:
 **Spec Status:** ✅ Approved
 **Implementation:** ✅ Done
 
-**Deskripsi:** Hapus tier `free` dari seluruh sistem. Migrasi semua tenant existing dari `free` ke `lite`. `GetTenantPlan()` fallback ke `'inactive'` (fail-safe lock) saat Redis miss. Tujuannya: hilangkan tier gratis yang bisa disalahgunakan dan pertegas positioning produk sebagai SaaS berbayar.
 
 **Spec:**
 
 ### Database (migration 000038)
-- `UPDATE tenants SET plan = 'lite' WHERE plan = 'free'`
-- `UPDATE usage_quotas SET plan_tier = 'lite' WHERE plan_tier = 'free'`
 - `ALTER TABLE tenants ALTER COLUMN plan SET DEFAULT 'lite'`
 - `ALTER TABLE usage_quotas ALTER COLUMN plan_tier SET DEFAULT 'lite'`
 
 ### Backend (`shared/sdk/auth/quota.go`)
-- Hapus entry `"free"` dari `Plans` map
 - `GetTenantPlan()` → return `"inactive"` saat Redis nil/miss
 - `GetPlan()` → fallback `Plans["inactive"]` (semua fitur off, locked)
 - Test `TestGetPlan_FreeFallback` → `TestGetPlan_InactiveFallback` (expect `"inactive"`, MaxTransactions 0)
-- Hapus 7 test case `"free"` dari `TestHasFeatureAccess`
 
 ### Backend (rate limiter)
-- `services/api-gateway/main.go` — hapus `"free": 60` dari rate limit map; tier tak dikenal fallback ke default 60 req/min
 
 ### Backend (accounting)
 - `apps/umkm/accounting/main.go` `getAutomationLimit(plan)` refactor: default = 0 (fail-safe), explicit case `"enterprise", "ultimate", "superadmin" → 999`
 
 ### Docs
-- `docs/FEATURE_MAP.md` bug history (Fix #5): ganti "free" → "inactive" explanation
 - `docs/MIGRATION_REGISTRY.md`: tambah entry 2026-06-14, list 000033/000034/000038
 - `CLAUDE.md` Fix #5 + Architecture Note updated
 
 ### Acceptance Criteria (AC):
-- [x] AC-1: `Plans` map tidak punya entry `"free"`
 - [x] AC-2: `go test ./shared/sdk/auth/...` pass (`TestGetPlan_InactiveFallback` green)
 - [x] AC-3: `go vet ./apps/umkm/accounting/...` clean
-- [x] AC-4: Migration `000038_remove_free_tier.up.sql` runnable (data + schema change)
 - [x] AC-5: Docs (FEATURE_MAP, MIGRATION_REGISTRY, CLAUDE.md) reflect new state
 
 ### Files Changed:
@@ -1600,13 +1582,11 @@ Wajib update:
 - `services/api-gateway/main.go`
 - `apps/umkm/accounting/main.go`
 - `apps/umkm/accounting/main_test.go`
-- `shared/migrations/000038_remove_free_tier.{up,down}.sql` (NEW)
 - `docs/FEATURE_MAP.md`
 - `docs/MIGRATION_REGISTRY.md`
 - `CLAUDE.md`
 
 ### Notes:
-- Patches untuk `services/billing-service/main.go:1037` (`effectivePlanID = "free"`) **DITUNDA** — Claude agent sedang edit file yang sama. Apply setelah Claude commit/PR merge.
 - ⚠️ **Migration conflict**: Claude agent membuat `shared/migrations/000034_billing_cycle.*.sql` dengan prefix yang sama dengan `000034_tenant_faqs_updated_at.*.sql` yang sudah ada. **Salah satu harus rename ke `000035_*` sebelum deploy** untuk menghindari collision saat migrate run.
 
 ---
@@ -1660,7 +1640,6 @@ Wajib update:
 - `fdd3968` — feat(ai): add multimodal endpoint stubs with quota wiring
 
 ### Notes:
-- F025 **membutuhkan** F024 selesai (free tier dihapus) sebagai prerequisite
 - Vendor/model asumsi: MiniMax-M3-Vision, Whisper large-v3 (STT), ElevenLabs/edge-tts (TTS), MiniMax-Image-1 — perlu konfirmasi owner
 
 ---

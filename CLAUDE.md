@@ -260,7 +260,6 @@ curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<domain
 | `escalation_handler.json` | Webhook POST | Escalation ke Chatwoot |
 | `master_automations.json` | Cron (setiap menit) | Execute due automations |
 | `daily_revenue_digest.json` | Cron (harian) | Revenue digest ke Telegram |
-| `freeze_reminder.json` | Cron | Reminder untuk expired subscriptions |
 | `campaign_voter_onboard.json` | Webhook | Campaign voter onboarding |
 | `voucher_wa_distribute.json` | Webhook | Distribusi voucher via WA |
 
@@ -517,7 +516,6 @@ Card "Voucher Billing" di `frontend/umkm-web/src/components/SuperAdminDashboard.
 
 **⚠️ Bug Fix — Voucher Redemption (v2):**
 - `handleAdminGenerateVouchers` menyimpan `validity_days` ke kolom `voucher_codes.validity_days` saat INSERT (sebelumnya hanya di-echo di response, tidak disimpan)
-- `handleRedeemVoucher` membaca `validity_days` langsung dari row `voucher_codes` via JOIN (sebelumnya membaca `duration_months` dari `voucher_programs` yang selalu 0 untuk `free_months` → menghasilkan 0 hari aktif)
 - `activateSubscription` menggunakan `validity_days` as-is (bukan `duration_months*30`)
 
 ---
@@ -639,6 +637,5 @@ cd frontend/umkm-web && npm run dev
 - **Files:** `frontend/umkm-web/src/components/Settings.vue`, `apps/umkm/accounting/main.go` (`handleFaqs` PUT)
 
 ### Architecture Note: Plan Redis Cache Dependency
-- Key `tenant:plan:{id}` HARUS ada di Redis atau `GetTenantPlan()` fallback ke `'inactive'` (fail-safe lock, semua fitur off). Setelah 2026-06-14, tier `free` sudah dihapus.
 - Auth-service login populate cache. Untuk existing tenant sebelum fix ini, set manual: `docker exec wch-redis redis-cli SET "tenant:plan:{id}" "{plan}"`
 - `GetTenantPlan()` akan refactored untuk fallback ke DB di versi berikutnya
