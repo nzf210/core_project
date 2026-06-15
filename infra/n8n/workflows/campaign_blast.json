@@ -11,7 +11,7 @@
       "name": "Blast Trigger Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [200, 250],
+      "position": [100, 250],
       "webhookId": "campaign-blast-trigger"
     },
     {
@@ -45,7 +45,7 @@
       "name": "Fetch Target Phones",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [420, 250]
+      "position": [300, 250]
     },
     {
       "parameters": {
@@ -56,7 +56,18 @@
       "name": "Split Phone List",
       "type": "n8n-nodes-base.itemLists",
       "typeVersion": 3,
-      "position": [640, 250]
+      "position": [500, 250]
+    },
+    {
+      "parameters": {
+        "resume": "={{ Math.floor(Math.random() * (5 - 2 + 1) + 2) }}",
+        "unit": "seconds"
+      },
+      "id": "blast-wait-001",
+      "name": "Wait (Anti-Ban Delay)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [700, 250]
     },
     {
       "parameters": {
@@ -81,7 +92,7 @@
       "name": "Send WA to Each Target",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [860, 250]
+      "position": [900, 250]
     },
     {
       "parameters": {
@@ -106,7 +117,7 @@
       "name": "Send Completion Report",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1080, 250]
+      "position": [1100, 250]
     }
   ],
   "connections": {
@@ -133,6 +144,17 @@
       ]
     },
     "Split Phone List": {
+      "main": [
+        [
+          {
+            "node": "Wait (Anti-Ban Delay)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait (Anti-Ban Delay)": {
       "main": [
         [
           {
