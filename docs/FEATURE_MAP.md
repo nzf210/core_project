@@ -146,7 +146,8 @@ Format per feature:
 **Target:** Memprediksi probabilitas menang vs Cost-per-vote jika anggaran digeser ke daerah lain.
 
 ## F038: Peta Kerawanan & Pelaporan Pelanggaran
-**Spec Status:** ⏳ Draft
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
 **Deskripsi:** Tabel `fraud_reports`. Relawan kirim "Share Loc" + Foto pelanggaran (Spanduk dirusak / serangan fajar lawan). Tampil sebagai titik MERAH di Heatmap UI.
 **Target:** Bukti hukum siap lapor Bawaslu.
 
