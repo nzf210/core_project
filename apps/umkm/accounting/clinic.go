@@ -117,9 +117,20 @@ func handleClinicBook(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
+	// 0. Anti-Double Booking (1 Nomor WA = 1 Antrian Aktif max)
+	var existingQueue string
+	err := DB.QueryRow(ctx, `
+		SELECT queue_number FROM appointments 
+		WHERE tenant_id = $1 AND patient_phone = $2 AND status = 'waiting'
+	`, tenantID, req.PatientPhone).Scan(&existingQueue)
+	if err == nil && existingQueue != "" {
+		response.Error(w, http.StatusConflict, "Anda sudah memiliki antrean aktif: "+existingQueue, nil)
+		return
+	}
+
 	var queueType string
 	var slotDuration int
-	err := DB.QueryRow(ctx, `
+	err = DB.QueryRow(ctx, `
 		SELECT queue_type, slot_duration_minutes FROM clinic_settings WHERE tenant_id = $1 AND is_active = true
 	`, tenantID).Scan(&queueType, &slotDuration)
 

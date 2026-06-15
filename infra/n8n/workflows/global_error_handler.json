@@ -1,0 +1,57 @@
+{
+  "name": "Global Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "global-error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WA_GATEWAY_URL }}/api/wa/send",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "target",
+              "value": "={{ $json.execution.error.node.parameters.url ? $('Error Trigger').item.json.execution.data.headers['x-forwarded-for'] || $env.OWNER_TELEGRAM_CHAT_ID : '' }}"
+            },
+            {
+              "name": "message",
+              "value": "=⚠️ *SISTEM SIBUK*\n\nMohon maaf, layanan sedang penuh. Mohon ulangi 5 menit lagi.\n(Error: {{ $json.execution.error.message }})"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "global-error-wa",
+      "name": "Send Fallback WA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [320, 300]
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send Fallback WA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateId": "wch-error-handler-001"
+  }
+}

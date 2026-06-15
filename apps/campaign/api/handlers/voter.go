@@ -232,7 +232,9 @@ func HandleEndorsements(w http.ResponseWriter, r *http.Request) {
 	var endorsementID string
 	err = tx.QueryRow(ctx, `
 		INSERT INTO endorsements (citizen_id, tenant_id, campaign_id, recruiter_id, status)
-		VALUES ($1, $2, $3, $4, $5) RETURNING id
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (citizen_id, campaign_id) DO NOTHING
+		RETURNING id
 	`, citizenID, tenantID, req.CampaignID, recruiterArg, endorsementStatus).Scan(&endorsementID)
 	
 	if err != nil {
