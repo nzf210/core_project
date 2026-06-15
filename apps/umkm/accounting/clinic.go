@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"log/slog"
 	"core_project/shared/sdk/response"
 )
 
@@ -124,6 +125,7 @@ func handleClinicBook(w http.ResponseWriter, r *http.Request) {
 		WHERE tenant_id = $1 AND patient_phone = $2 AND status = 'waiting'
 	`, tenantID, req.PatientPhone).Scan(&existingQueue)
 	if err == nil && existingQueue != "" {
+		slog.Warn("Double booking attempt blocked", "tenant_id", tenantID, "phone", req.PatientPhone, "existing_queue", existingQueue)
 		response.Error(w, http.StatusConflict, "Anda sudah memiliki antrean aktif: "+existingQueue, nil)
 		return
 	}
@@ -184,6 +186,7 @@ func handleClinicBook(w http.ResponseWriter, r *http.Request) {
 	`, appointmentID, tenantID, queueNum, req.PatientName, req.PatientPhone, scheduledTime)
 
 	if err != nil {
+		slog.Error("Failed to book appointment", "tenant_id", tenantID, "error", err)
 		response.Error(w, http.StatusInternalServerError, "Failed to book appointment: "+err.Error(), nil)
 		return
 	}
@@ -195,6 +198,7 @@ func handleClinicBook(w http.ResponseWriter, r *http.Request) {
 
 	tx.Commit(ctx)
 
+	slog.Info("Clinic booking successful", "tenant_id", tenantID, "queue_num", queueNum, "phone", req.PatientPhone)
 	response.JSON(w, http.StatusOK, "Booking success", map[string]interface{}{
 		"appointment_id":   appointmentID,
 		"queue_number":     queueNum,

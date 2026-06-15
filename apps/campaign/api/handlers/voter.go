@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"log/slog"
 	"regexp"
 	"bytes"
 
@@ -238,6 +239,7 @@ func HandleEndorsements(w http.ResponseWriter, r *http.Request) {
 	`, citizenID, tenantID, req.CampaignID, recruiterArg, endorsementStatus).Scan(&endorsementID)
 	
 	if err != nil {
+		slog.Error("Failed to record endorsement", "tenant_id", tenantID, "citizen_id", citizenID)
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to record endorsement"})
 		return
 	}

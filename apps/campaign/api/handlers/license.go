@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -10,7 +11,6 @@ import (
 )
 
 // HandleSuperadminGenerateLicense generates a manual B2B license key.
-// Protected by Superadmin JWT claims middleware upstream.
 func HandleSuperadminGenerateLicense(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
@@ -22,7 +22,7 @@ func HandleSuperadminGenerateLicense(w http.ResponseWriter, r *http.Request) {
 		ElectionType string   `json:"election_type"`
 		BaseQuota    int      `json:"base_quota"`
 		Addons       []string `json:"addons"`
-		Tokens       int      `json:"wargame_tokens"`
+		Tokens       int      `json:"tokens"`
 		PriceCents   int64    `json:"price_cents"`
 	}
 
@@ -43,10 +43,12 @@ func HandleSuperadminGenerateLicense(w http.ResponseWriter, r *http.Request) {
 		strings.ToUpper(req.LicenseKey), req.ElectionType, req.BaseQuota, string(addonsJSON), req.Tokens, req.PriceCents)
 	
 	if err != nil {
+		slog.Error("Failed to create license", "key", req.LicenseKey, "error", err)
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create license: " + err.Error()})
 		return
 	}
 
+	slog.Info("License generated", "key", req.LicenseKey, "price_cents", req.PriceCents, "addons", req.Addons)
 	WriteJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Message: "License generated successfully",
@@ -77,30 +79,28 @@ func HandleRedeemLicense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := strings.ToUpper(req.LicenseKey)
 	ctx := context.Background()
-
-	// 1. Check if license is valid & unused
-	var isUsed bool
+	var electionType, addons string
 	var baseQuota, tokens int
-	var addons []byte
-	
+	var isUsed bool
+
 	err := repository.DB.QueryRow(ctx, `
-		SELECT is_used, base_quota, wargame_tokens, addons 
-		FROM campaign_licenses 
-		WHERE license_key = $1
-	`, key).Scan(&isUsed, &baseQuota, &tokens, &addons)
+		SELECT election_type, base_quota, addons, wargame_tokens, is_used 
+		FROM campaign_licenses WHERE license_key = $1
+	`, strings.ToUpper(req.LicenseKey)).Scan(&electionType, &baseQuota, &addons, &tokens, &isUsed)
 
 	if err != nil {
+		slog.Warn("Invalid license key attempt", "tenant_id", tenantID, "key", req.LicenseKey)
 		WriteJSON(w, http.StatusNotFound, APIResponse{Message: "Invalid license key"})
 		return
 	}
+
 	if isUsed {
-		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "License key has already been used"})
+		slog.Warn("Expired/Used license key attempt", "tenant_id", tenantID, "key", req.LicenseKey)
+		WriteJSON(w, http.StatusGone, APIResponse{Message: "License already used"})
 		return
 	}
 
-	// 2. Transaction to redeem and inject to campaign
 	tx, err := repository.DB.Begin(ctx)
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Transaction failed"})
@@ -108,44 +108,39 @@ func HandleRedeemLicense(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 
-	// Mark used
+	// 1. Update Campaign Features
 	_, err = tx.Exec(ctx, `
-		UPDATE campaign_licenses 
-		SET is_used = TRUE, used_by_tenant = $1, used_at = NOW() 
-		WHERE license_key = $2
-	`, tenantID, key)
+		UPDATE campaigns SET 
+			election_type = $1,
+			max_voters = GREATEST(max_voters, $2),
+			active_addons = active_addons || $3::jsonb,
+			wargame_tokens = wargame_tokens + $4,
+			updated_at = NOW()
+		WHERE id = $5 AND tenant_id = $6
+	`, electionType, baseQuota, addons, tokens, req.CampaignID, tenantID)
+
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to update license"})
+		slog.Error("Failed to update campaign via license", "tenant_id", tenantID, "error", err)
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to unlock features"})
 		return
 	}
 
-	// Inject to campaign
-	// In PostgreSQL, to append JSONB array we can use the || operator.
-	// For simplicity, here we just overwrite or merge. We'll overwrite max_voters if greater.
+	// 2. Mark License as Used
 	_, err = tx.Exec(ctx, `
-		UPDATE campaigns 
-		SET wargame_tokens = wargame_tokens + $1,
-		    max_voters = GREATEST(max_voters, $2),
-		    active_addons = (
-				SELECT jsonb_agg(DISTINCT e) 
-				FROM (
-					SELECT jsonb_array_elements_text(COALESCE(active_addons, '[]'::jsonb)) as e
-					UNION
-					SELECT jsonb_array_elements_text($3::jsonb) as e
-				) sub
-			)
-		WHERE id = $4 AND tenant_id = $5
-	`, tokens, baseQuota, string(addons), req.CampaignID, tenantID)
+		UPDATE campaign_licenses SET is_used = true, used_by_tenant = $1, used_at = NOW()
+		WHERE license_key = $2
+	`, tenantID, strings.ToUpper(req.LicenseKey))
 
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to update campaign: " + err.Error()})
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to burn license"})
 		return
 	}
 
 	tx.Commit(ctx)
+	slog.Info("License redeemed successfully", "tenant_id", tenantID, "key", req.LicenseKey, "campaign_id", req.CampaignID)
 
 	WriteJSON(w, http.StatusOK, APIResponse{
 		Success: true,
-		Message: "License redeemed successfully! Features unlocked.",
+		Message: "License redeemed, features unlocked!",
 	})
 }
