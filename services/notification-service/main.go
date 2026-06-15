@@ -39,6 +39,9 @@ func main() {
 	mux.HandleFunc("/api/notification/send", handleSendNotification)
 	mux.HandleFunc("/health", handleHealth)
 	
+	// Campaign Internal Alerts
+	mux.HandleFunc("/api/notification/campaign/conflict", handleConflictAlertTrigger)
+
 	// N8N Webhooks
 	mux.Handle("/webhook/n8n/whatsapp", webhook.RequireN8NSecret(http.HandlerFunc(handleN8NWhatsApp)))
 	mux.Handle("/webhook/n8n/telegram", webhook.RequireN8NSecret(http.HandlerFunc(handleN8NTelegram)))
