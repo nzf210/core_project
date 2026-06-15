@@ -87,6 +87,13 @@ func main() {
 	// Sainte-Lague Simulator (F043)
 	mux.HandleFunc("GET /wargame/sainte-lague", handlers.HandleSainteLague)
 
+	// Payment & Licensing (F044)
+	mux.HandleFunc("POST /billing/checkout", handlers.HandleBillingCheckout)
+	mux.HandleFunc("POST /billing/webhook", handlers.HandleBillingWebhook)
+	mux.HandleFunc("POST /licenses/redeem", handlers.HandleRedeemLicense)
+	// In production, this should be under a different superadmin mux/port, mapped here for simplicity
+	mux.HandleFunc("POST /superadmin/licenses/generate", handlers.HandleSuperadminGenerateLicense)
+
 	// Regions
 	mux.HandleFunc("/regions/provinces", handlers.HandleProvinces)
 

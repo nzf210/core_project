@@ -181,6 +181,11 @@ Format per feature:
 **Deskripsi:** Upgrade Campaign Engine agar mendukung pemilihan Legislatif (Pileg DPR/DPRD) dan DPD dengan kalkulasi perolehan kursi Sainte-Laguë yang realistik dan penanganan multi-dapil dalam satu dashboard.
 **Target:** Menghitung probabilitas perolehan kursi real-time berdasarkan sisa suara & divisor Sainte-Laguë.
 
+## F044: Campaign Modular License & Payment System
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
+**Deskripsi:** Monetisasi fitur Campaign via kombinasi Self-Service Payment Gateway (Xendit) untuk pembelian instan dan Manual License Key (Superadmin-generated) untuk transaksi B2B custom pricing.
+
 ## F001: Webhook Subscription
 
 ## F027: Core Business Flow Fixes & Optimizations
