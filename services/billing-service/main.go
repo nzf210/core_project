@@ -905,11 +905,6 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	status, _ := payload["status"].(string)
 	externalID, _ := payload["external_id"].(string)
 
-	if status != "PAID" && status != "SETTLED" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	parts := strings.Split(externalID, "|")
 	if len(parts) < 2 {
 		slog.Warn("Malformed external_id", "external_id", externalID)
@@ -928,12 +923,42 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		planID = "lite"
 	}
 
+	if status == "EXPIRED" {
+		// Refund voucher so it can be reused
+		if voucherCode != "" {
+			_, err := DB.Exec(ctx, `
+				UPDATE voucher_codes 
+				SET is_redeemed = false, used_by = NULL, used_at = NULL 
+				WHERE code = $1
+			`, voucherCode)
+			if err == nil {
+				slog.Info("Voucher refunded due to expired invoice", "code", voucherCode, "tenant_id", tenantID)
+			}
+		}
+		_, _ = DB.Exec(ctx, "UPDATE invoices SET status = 'expired' WHERE id = $1", externalID)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if status != "PAID" && status != "SETTLED" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	// Get plan name
 	var planName string
 	DB.QueryRow(ctx, "SELECT name FROM saas_plans WHERE id = $1", planID).Scan(&planName)
 
 	// Update invoice
 	_, _ = DB.Exec(ctx, "UPDATE invoices SET status = 'paid', paid_at = NOW() WHERE id = $1", externalID)
+
+	// Apply Voucher (Mark as REDEEMED permanently on actual payment)
+	if voucherCode != "" {
+		ok, _ := applyVoucher(ctx, voucherCode, planID, tenantID)
+		if !ok {
+			slog.Warn("Failed to apply voucher on payment webhook", "code", voucherCode, "tenant_id", tenantID)
+		}
+	}
 
 	// Activate subscription
 	periodDays := 30
@@ -1101,43 +1126,36 @@ func activateSubscription(ctx context.Context, tenantID, planID, planName string
 // ─────────────────────────────────────────────
 
 func applyVoucher(ctx context.Context, code, planID, tenantID string) (bool, *string) {
-	// Check voucher validity
+	// Atomically mark voucher as redeemed and fetch its program rules
 	var programID string
-	var voucherType string
-	var discountValue, durationMonths int
 	var targetPlanID *string
 
 	err := DB.QueryRow(ctx, `
-		SELECT vp.id, vp.voucher_type, vp.discount_value, vp.duration_months, vp.target_plan_id
-		FROM voucher_programs vp
-		JOIN voucher_codes vc ON vc.program_id = vp.id
-		WHERE vc.code = $1 AND vc.is_redeemed = false
-		  AND vp.is_active = true
-		  AND (vp.expires_at IS NULL OR vp.expires_at > NOW())
-	`, code).Scan(&programID, &voucherType, &discountValue, &durationMonths, &targetPlanID)
+		WITH valid_voucher AS (
+			SELECT vc.code, vp.id as program_id, vp.target_plan_id
+			FROM voucher_codes vc
+			JOIN voucher_programs vp ON vc.program_id = vp.id
+			WHERE vc.code = $1 AND vc.is_redeemed = false
+			  AND vp.is_active = true
+			  AND (vp.expires_at IS NULL OR vp.expires_at > NOW())
+			  AND (vp.target_plan_id IS NULL OR vp.target_plan_id = '' OR vp.target_plan_id = $3)
+		),
+		updated_voucher AS (
+			UPDATE voucher_codes
+			SET is_redeemed = true, used_by = $2, used_at = NOW()
+			FROM valid_voucher
+			WHERE voucher_codes.code = valid_voucher.code
+			RETURNING valid_voucher.program_id, valid_voucher.target_plan_id
+		)
+		SELECT program_id, target_plan_id FROM updated_voucher
+	`, code, tenantID, planID).Scan(&programID, &targetPlanID)
 
-	if err != nil {
+	if err != nil { // No rows = invalid, expired, or already used (Race Condition prevented)
 		return false, nil
 	}
 
-	// Check if plan matches
-	if targetPlanID != nil && *targetPlanID != "" && *targetPlanID != planID {
-		return false, nil
-	}
-
-	// Mark as redeemed
-	result, _ := DB.Exec(ctx, `
-		UPDATE voucher_codes SET is_redeemed = true, used_by = $1, used_at = NOW()
-		WHERE code = $2 AND is_redeemed = false
-	`, tenantID, code)
-
-	rowsAffected := result.RowsAffected()
-	if rowsAffected == 0 {
-		return false, nil
-	}
-
-	// Increment usage
-	_, _ = DB.Exec(ctx, `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`, programID)
+	// Increment usage count
+	DB.Exec(ctx, `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`, programID)
 
 	return true, nil
 }
