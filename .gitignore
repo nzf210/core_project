@@ -50,12 +50,17 @@ run/*
 
 # =============================================================================
 # Frontend
-# =============================================================================
+# Frontend
 node_modules/
 .next/
 dist/
 .nuxt/
 .vite/
+*.tsbuildinfo
+frontend/*/dist/
+frontend/*/node_modules/
+frontend/*/.vite/
+frontend/*/.nuxt/
 
 # =============================================================================
 # Python (tools/scripts)
@@ -94,8 +99,19 @@ chatbot
 subscription-worker
 temp.md
 business
-automation
+api
 auto-bin
 bin/auth-service.*
 bin/accounting.*
 bin/wa-gateway.*
+bin/wa-cloud-api.*
+bin/ai-gateway.*
+bin/api-gateway.*
+bin/notification-service.*
+bin/subscription-worker.*
+bin/campaign-api.*
+bin/umkm-*
+/api
+/wa-cloud-api
+/subscription-worker
+api
