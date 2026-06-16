@@ -45,6 +45,11 @@ func main() {
 	mux.HandleFunc("/volunteers", handlers.HandleVolunteers)
 	mux.HandleFunc("/volunteers/stats", handlers.HandleVolunteerStats)
 
+	// Coordinator Hierarchy (F046)
+	mux.HandleFunc("/coordinator/assign", handlers.HandleAssignCoordinator)
+	mux.HandleFunc("/coordinator/list", handlers.HandleListCoordinators)
+	mux.HandleFunc("/coordinator/hierarchy", handlers.HandleCoordinatorHierarchy)
+
 	// Voters & Endorsements (F031)
 	mux.HandleFunc("/voters", handlers.HandleVoters)
 	mux.HandleFunc("/voters/stats", handlers.HandleVoterStats)
