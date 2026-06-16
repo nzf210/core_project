@@ -21,14 +21,16 @@ func HandleAnomalyDetection(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Logic 1: Umur > 100 Tahun siluman. NIK digits index 6-11 is date of birth.
+	// Logic 1: Umur > 100 Tahun siluman. NIK digits 7-12 is date of birth (DDMMYY).
+	// Position 7-8 = day (01-31), 9-10 = month (01-12), 11-12 = year (00-99).
+	// If month is 20-25 → indicates "siluman" (ktp element造假).
 	ageAnomalyQuery := `
 		UPDATE endorsements e
 		SET is_anomaly = TRUE, anomaly_reason = 'Usia Terindikasi > 100 Tahun (Siluman)'
 		FROM citizens c
 		WHERE e.citizen_id = c.id AND e.tenant_id = $1 AND e.is_anomaly = FALSE
-		AND CAST(SUBSTRING(c.nik FROM 11 FOR 2) AS INTEGER) < 26 
-		AND CAST(SUBSTRING(c.nik FROM 11 FOR 2) AS INTEGER) > 20
+		AND CAST(SUBSTRING(c.nik FROM 9 FOR 2) AS INTEGER) >= 20
+		AND CAST(SUBSTRING(c.nik FROM 9 FOR 2) AS INTEGER) <= 25
 	`
 	_, err := repository.DB.Exec(ctx, ageAnomalyQuery, tenantID)
 	if err != nil && err != sql.ErrNoRows {

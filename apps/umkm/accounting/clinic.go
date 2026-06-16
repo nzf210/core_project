@@ -157,10 +157,15 @@ func handleClinicBook(w http.ResponseWriter, r *http.Request) {
 	if queueType == "sequential" {
 		var nextNum int
 		err = tx.QueryRow(ctx, `
-			INSERT INTO clinic_settings (tenant_id, current_queue_number)
-			VALUES ($1, 1)
+			INSERT INTO clinic_settings (tenant_id, current_queue_number, queue_date)
+			VALUES ($1, 1, CURRENT_DATE)
 			ON CONFLICT (tenant_id) DO UPDATE SET
-				current_queue_number = clinic_settings.current_queue_number + 1
+				current_queue_number = CASE
+					WHEN clinic_settings.queue_date = CURRENT_DATE
+					THEN clinic_settings.current_queue_number + 1
+					ELSE 1
+				END,
+				queue_date = CURRENT_DATE
 			RETURNING current_queue_number
 		`, tenantID).Scan(&nextNum)
 

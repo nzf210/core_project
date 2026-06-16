@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/google/uuid"
 	"core_project/apps/campaign/api/repository"
 )
 
@@ -24,8 +25,8 @@ func HandleBillingCheckout(w http.ResponseWriter, r *http.Request) {
 
 	type Request struct {
 		CampaignID string `json:"campaign_id"`
-		OrderType  string `json:"order_type"` // 'wargame_token', 'intelligence_pack'
-		Quantity   int    `json:"quantity"`
+		OrderType string `json:"order_type"` // 'wargame_token', 'intelligence_pack'
+		Quantity  int    `json:"quantity"`
 	}
 
 	var req Request
@@ -44,16 +45,26 @@ func HandleBillingCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mock Xendit integration
-	mockInvoiceID := "inv_" + req.CampaignID[:8]
+	// FIX #5: Tenant Leak — validate campaign belongs to this tenant
+	ctx := context.Background()
+	var campaignExists bool
+	err := repository.DB.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM campaigns WHERE id = $1 AND tenant_id = $2)
+	`, req.CampaignID, tenantID).Scan(&campaignExists)
+	if err != nil || !campaignExists {
+		WriteJSON(w, http.StatusForbidden, APIResponse{Message: "Campaign not found or not owned by tenant"})
+		return
+	}
+
+	// FIX #5: Fraud Vector — use UUID for invoice ID (unpredictable)
+	mockInvoiceID := "inv_" + uuid.NewString()[:13]
 	mockInvoiceURL := "https://checkout.xendit.co/web/" + mockInvoiceID
 
-	ctx := context.Background()
 	query := `
 		INSERT INTO campaign_billing_orders (tenant_id, campaign_id, order_type, amount_cents, quantity, invoice_url, xendit_invoice_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
-	_, err := repository.DB.Exec(ctx, query, tenantID, req.CampaignID, req.OrderType, priceCents, req.Quantity, mockInvoiceURL, mockInvoiceID)
+	_, err = repository.DB.Exec(ctx, query, tenantID, req.CampaignID, req.OrderType, priceCents, req.Quantity, mockInvoiceURL, mockInvoiceID)
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create order"})
 		return
@@ -76,7 +87,7 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Normally we validate X-CALLBACK-TOKEN here
-	
+
 	type XenditPayload struct {
 		ID     string `json:"id"`
 		Status string `json:"status"` // "PAID", "EXPIRED"
@@ -89,14 +100,23 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	
-	// Check order
+
+	// FIX #1: Race Condition — use SELECT FOR UPDATE inside a transaction so Xendit
+	// retransmission cannot grant tokens twice. The row lock is held until commit.
+	tx, err := repository.DB.Begin(ctx)
+	if err != nil {
+		w.WriteHeader(http.StatusOK) // Acknowledge to avoid retry storm
+		return
+	}
+	defer tx.Rollback(ctx)
+
 	var orderID, tenantID, campaignID, orderType string
 	var quantity int
-	err := repository.DB.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT id::text, tenant_id::text, campaign_id::text, order_type, quantity
 		FROM campaign_billing_orders
 		WHERE xendit_invoice_id = $1 AND status = 'PENDING'
+		FOR UPDATE
 	`, payload.ID).Scan(&orderID, &tenantID, &campaignID, &orderType, &quantity)
 
 	if err != nil {
@@ -106,9 +126,6 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if payload.Status == "PAID" {
-		tx, _ := repository.DB.Begin(ctx)
-		defer tx.Rollback(ctx)
-
 		tx.Exec(ctx, "UPDATE campaign_billing_orders SET status = 'PAID', paid_at = NOW() WHERE id = $1", orderID)
 
 		if orderType == "wargame_token" {
@@ -116,7 +133,7 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 			tx.Exec(ctx, "UPDATE campaigns SET wargame_tokens = wargame_tokens + $1 WHERE id = $2", tokensToAdd, campaignID)
 		} else if orderType == "intelligence_pack" {
 			tx.Exec(ctx, `
-				UPDATE campaigns 
+				UPDATE campaigns
 				SET active_addons = (
 					SELECT jsonb_agg(DISTINCT e) FROM (
 						SELECT jsonb_array_elements_text(COALESCE(active_addons, '[]'::jsonb)) as e
@@ -129,11 +146,11 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 
 		// F037: Campaign Affiliate Commission — share to referrer
 		var referredByID *int
-		repository.DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&referredByID)
+		tx.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&referredByID)
 		if referredByID != nil {
 			// Read dynamic config from referral_config (shared with billing-service)
 			var commissionPct float64
-			err := repository.DB.QueryRow(ctx, `
+			err := tx.QueryRow(ctx, `
 				SELECT COALESCE(commission_percent, 10) FROM referral_config WHERE id = 1
 			`).Scan(&commissionPct)
 			if err != nil {
@@ -141,11 +158,11 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 			}
 
 			var fullAmount int64
-			repository.DB.QueryRow(ctx, "SELECT amount_cents FROM campaign_billing_orders WHERE id = $1", orderID).Scan(&fullAmount)
+			tx.QueryRow(ctx, "SELECT amount_cents FROM campaign_billing_orders WHERE id = $1", orderID).Scan(&fullAmount)
 			commission := fullAmount * int64(commissionPct) / 100
 			if commission > 0 {
 				tx.Exec(ctx, `
-					UPDATE affiliates 
+					UPDATE affiliates
 					SET cash_balance_cents = cash_balance_cents + $1,
 						total_earnings_cents = total_earnings_cents + $1,
 						updated_at = NOW()
@@ -161,7 +178,10 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 
 		tx.Commit(ctx)
 	} else if payload.Status == "EXPIRED" {
-		repository.DB.Exec(ctx, "UPDATE campaign_billing_orders SET status = 'EXPIRED' WHERE id = $1", orderID)
+		tx.Exec(ctx, "UPDATE campaign_billing_orders SET status = 'EXPIRED' WHERE id = $1", orderID)
+		tx.Commit(ctx)
+	} else {
+		tx.Commit(ctx)
 	}
 
 	w.WriteHeader(http.StatusOK)

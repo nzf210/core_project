@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -21,7 +22,14 @@ func main() {
 	}
 	defer pool.Close()
 
-	bUp, err := os.ReadFile("shared/migrations/000055_wallet_and_pricing.up.sql")
+	exe, err := os.Executable()
+	if err != nil {
+		log.Fatalf("Failed to get executable path: %v", err)
+	}
+	migrationsDir := filepath.Join(filepath.Dir(exe), "..", "..", "shared", "migrations")
+	sqlPath := filepath.Join(migrationsDir, "000055_wallet_and_pricing.up.sql")
+
+	bUp, err := os.ReadFile(sqlPath)
 	if err != nil {
 		log.Fatalf("Failed to read up.sql: %v", err)
 	}

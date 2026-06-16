@@ -1016,19 +1016,26 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// IDEMPOTENCY CHECK: Is this invoice already paid?
+	// IDEMPOTENCY CHECK + ROW LOCK: SELECT FOR UPDATE prevents concurrent webhooks
+	// from both passing the PAID check and double-granting subscription.
 	var currentStatus string
-	err := DB.QueryRow(ctx, "SELECT status FROM invoices WHERE id = $1", externalID).Scan(&currentStatus)
-	if err == nil && currentStatus == "paid" {
+	var planID, voucherCode string
+	var invoiceAmount int64
+	err := DB.QueryRow(ctx, `
+		SELECT status, COALESCE(plan_id,''), COALESCE(voucher_code,''), amount
+		FROM invoices WHERE id = $1
+		FOR UPDATE
+	`, externalID).Scan(&currentStatus, &planID, &voucherCode, &invoiceAmount)
+	if err != nil {
+		slog.Warn("Invoice not found", "external_id", externalID)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if currentStatus == "paid" {
 		slog.Info("Invoice already paid, ignoring duplicate webhook", "external_id", externalID)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-
-	// Get plan from invoice
-	var planID, voucherCode string
-	var invoiceAmount int64
-	DB.QueryRow(ctx, "SELECT plan_id, amount, COALESCE(voucher_code,'') FROM invoices WHERE id = $1", externalID).Scan(&planID, &invoiceAmount, &voucherCode)
 	
 	if status == "PAID" || status == "SETTLED" {
 		if paidAmountCents < invoiceAmount {
@@ -1103,23 +1110,30 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	var referredByID *int
 	DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&referredByID)
 	if referredByID != nil {
-		// Calculate 20% commission
-		commission := invoiceAmount * 20 / 100
+		// FIX #2: Read dynamic commission from referral_config (not hardcoded 20%)
+		var commissionPct float64
+		errCfg := DB.QueryRow(ctx, `
+			SELECT COALESCE(commission_percent, 10) FROM referral_config WHERE id = 1
+		`).Scan(&commissionPct)
+		if errCfg != nil {
+			commissionPct = 10 // safe default
+		}
+		commission := invoiceAmount * int64(commissionPct) / 100
 		if commission > 0 {
 			_, errAff := DB.Exec(ctx, `
-				UPDATE affiliates 
+				UPDATE affiliates
 				SET cash_balance_cents = cash_balance_cents + $1,
 					total_earnings_cents = total_earnings_cents + $1,
 					updated_at = NOW()
 				WHERE id = $2
 			`, commission, *referredByID)
-			
+
 			if errAff == nil {
 				DB.Exec(ctx, `
 					INSERT INTO affiliate_earnings (affiliate_id, tenant_id, invoice_id, amount_cents, commission_rate_percent)
-					VALUES ($1, $2, $3, $4, 20)
-				`, *referredByID, tenantID, externalID, commission)
-				slog.Info("Affiliate commission granted", "affiliate_id", *referredByID, "tenant_id", tenantID, "amount_cents", commission)
+					VALUES ($1, $2, $3, $4, $5)
+				`, *referredByID, tenantID, externalID, commission, int(commissionPct))
+				slog.Info("Affiliate commission granted", "affiliate_id", *referredByID, "tenant_id", tenantID, "amount_cents", commission, "rate", commissionPct)
 			}
 		}
 	}
@@ -3336,7 +3350,8 @@ func handleWalletTopup(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
 		return
 	}
-	tenantID := r.Header.Get("X-User-Id")
+	// FIX #3: Use X-Tenant-ID (consistent with all other handlers), not X-User-Id
+	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
 		response.Error(w, http.StatusUnauthorized, "Missing tenant", nil)
 		return
@@ -3350,8 +3365,9 @@ func handleWalletTopup(w http.ResponseWriter, r *http.Request) {
 	}
 	desc := "Top-up Wallet Credit"
 	curr := "IDR"
+	// FIX #4: Use UUID for external_id (unpredictable, not UnixNano)
 	invoiceReq := invoice.CreateInvoiceRequest{
-		ExternalId:     strconv.Itoa(int(time.Now().UnixNano())) + "-wallet-topup-" + tenantID,
+		ExternalId:     uuid.NewString() + "-wallet-topup-" + tenantID,
 		Amount:         float64(req.AmountCents),
 		Description:    &desc,
 		Currency:       &curr,

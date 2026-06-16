@@ -324,19 +324,26 @@ func HandleKTPScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Auto-Register the citizen and endorsement
+	// Auto-Register the citizen and endorsement — wrap in transaction to prevent orphan records
 	ctx := context.Background()
+	tx, err := repository.DB.Begin(ctx)
+	if err != nil {
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Transaction start failed"})
+		return
+	}
+	defer tx.Rollback(ctx)
+
 	var citizenID string
 	queryCitizen := `
 		INSERT INTO citizens (nik, name, address, gender, age)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (nik) DO UPDATE SET 
-			name = EXCLUDED.name, 
+		ON CONFLICT (nik) DO UPDATE SET
+			name = EXCLUDED.name,
 			address = EXCLUDED.address,
 			updated_at = NOW()
 		RETURNING id
 	`
-	err = repository.DB.QueryRow(ctx, queryCitizen, ktpData.NIK, ktpData.Name, ktpData.Address, ktpData.Gender, ktpData.Age).Scan(&citizenID)
+	err = tx.QueryRow(ctx, queryCitizen, ktpData.NIK, ktpData.Name, ktpData.Address, ktpData.Gender, ktpData.Age).Scan(&citizenID)
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to save citizen data"})
 		return
@@ -347,7 +354,16 @@ func HandleKTPScan(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO endorsements (citizen_id, tenant_id, campaign_id, proof_image_url, status)
 		VALUES ($1, $2, $3, $4, 'valid')
 	`
-	_, _ = repository.DB.Exec(ctx, queryEndorsement, citizenID, tenantID, req.CampaignID, req.ImageURL)
+	_, err = tx.Exec(ctx, queryEndorsement, citizenID, tenantID, req.CampaignID, req.ImageURL)
+	if err != nil {
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to record endorsement"})
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Transaction commit failed"})
+		return
+	}
 
 	WriteJSON(w, http.StatusOK, APIResponse{
 		Success: true,

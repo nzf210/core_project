@@ -82,6 +82,7 @@ func TestHandleCandidateVerify_NoTenantID(t *testing.T) {
 func TestHandleCandidateVerify_NoID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/candidates//verify", nil)
 	req.Header.Set("X-Tenant-ID", "tenant-1")
+	req.Header.Set("X-User-Role", "admin")
 	rr := httptest.NewRecorder()
 	HandleCandidateVerify(rr, req)
 	if rr.Code != http.StatusBadRequest {

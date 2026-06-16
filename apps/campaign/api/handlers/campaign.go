@@ -91,6 +91,13 @@ func HandleCandidateVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// FIX #2: Auth Bypass — only admin/owner may verify candidates
+	userRole := ExtractUserRole(r)
+	if userRole != "admin" && userRole != "owner" {
+		WriteJSON(w, http.StatusForbidden, APIResponse{Message: "Only admin or owner can verify candidates"})
+		return
+	}
+
 	id := r.PathValue("id")
 	if id == "" {
 		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing candidate ID"})
