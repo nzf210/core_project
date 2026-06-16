@@ -169,6 +169,19 @@ func resetReconnectBackoff(tenantID string) {
 // Cloud API Routing
 // ─────────────────────────────────────────────
 
+// getTenantWAProviderPreference fetches preference from DB
+func getTenantWAProviderPreference(tenantID string) string {
+	if db == nil {
+		return "auto"
+	}
+	var preference string
+	err := db.QueryRow("SELECT wa_provider_preference FROM tenant_chatbot_configs WHERE tenant_id = $1", tenantID).Scan(&preference)
+	if err != nil {
+		return "auto" // Default
+	}
+	return preference
+}
+
 // isTransactional determines if a message should go via Meta Cloud API
 func isTransactional(r *http.Request) bool {
 	msgType := r.Header.Get("X-Message-Type")
@@ -822,8 +835,17 @@ func setupRoutes(_ context.Context, container *sqlstore.Container) {
 			return
 		}
 
+		// ── Preference-based routing: tenant can override default hybrid logic ──
+		preference := getTenantWAProviderPreference(tenantID)
+
+		// If preference is cloud_api, FORCE Cloud API (no fallback to whatsmeow)
+		forceCloud := preference == "cloud_api"
+
+		// If preference is whatsmeow, SKIP Cloud API entirely (even for transactional)
+		forceWhatsmeow := preference == "whatsmeow"
+
 		// ── Hybrid routing: transactional messages via Cloud API ──
-		if isTransactional(r) {
+		if (forceCloud || (!forceWhatsmeow && isTransactional(r))) {
 			msgType := r.Header.Get("X-Message-Type")
 			if msgType == "" {
 				msgType = "text"
@@ -836,6 +858,12 @@ func setupRoutes(_ context.Context, container *sqlstore.Container) {
 					"routed":        "cloud_api",
 					"wa_message_id": waMsgID,
 				})
+				return
+			}
+			if forceCloud {
+				// If force cloud_api, do not fallback
+				log.Printf("Cloud API failed (forced) for tenant %s: %v", tenantID, err)
+				http.Error(w, fmt.Sprintf(`{"error":"Cloud API failed: %v"}`, err), http.StatusBadGateway)
 				return
 			}
 			log.Printf("Cloud API failed, falling back to whatsmeow for tenant %s: %v", tenantID, err)
