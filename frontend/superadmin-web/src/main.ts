@@ -7,6 +7,7 @@ import GenerateVouchers from './views/GenerateVouchers.vue'
 import FrozenAccounts from './views/FrozenAccounts.vue'
 import PlanFeatures from './views/PlanFeatures.vue'
 import ReferralConfig from './views/ReferralConfig.vue'
+import CoordinatorAssignment from './components/CoordinatorAssignment.vue'
 import './style.css'
 
 const router = createRouter({
@@ -18,6 +19,7 @@ const router = createRouter({
     { path: '/frozen-accounts', component: FrozenAccounts, name: 'frozen-accounts' },
     { path: '/plan-features', component: PlanFeatures, name: 'plan-features' },
     { path: '/referral-config', component: ReferralConfig, name: 'referral-config' },
+    { path: '/coordinator-assignment', component: CoordinatorAssignment, name: 'coordinator-assignment' },
   ],
 })
 
