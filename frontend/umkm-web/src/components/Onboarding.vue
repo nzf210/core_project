@@ -127,7 +127,7 @@
               <input
                 v-model="voucherCode"
                 type="text"
-                placeholder="Masukkan kode voucher"
+                placeholder="Kode voucher / referral agen (AGEN-XXX)"
                 class="input-field"
                 @keyup.enter="redeemVoucher"
               />
@@ -136,7 +136,7 @@
                 <span v-else>Aktivasi</span>
               </button>
             </div>
-            <p class="voucher-hint">Kode voucher dari admin atau yang dibeli</p>
+            <p class="voucher-hint">Voucher admin atau kode referral agen (AGEN-XXXXXX)</p>
           </div>
 
           <p v-if="activationError" class="error-text">{{ activationError }}</p>
@@ -312,15 +312,25 @@ const redeemVoucher = async () => {
   isActivating.value = true
   activationError.value = ''
   activationSuccess.value = ''
+  const code = voucherCode.value.trim().toUpperCase()
   try {
-    const data = await api.post('/voucher/redeem', { code: voucherCode.value.trim() })
-    if (data.status >= 400) {
-      activationError.value = data.message || 'Kode voucher tidak valid'
-      return
+    if (code.startsWith('AGEN-')) {
+      const data = await api.redeemReferral(code)
+      if (data.status >= 400 || !data.success) {
+        activationError.value = data.message || 'Kode referral tidak valid'
+        return
+      }
+      activationSuccess.value = 'Kode referral berhasil diterapkan! Akun Anda kini terhubung dengan agen.'
+    } else {
+      const data = await api.post('/voucher/redeem', { code })
+      if (data.status >= 400) {
+        activationError.value = data.message || 'Kode voucher tidak valid'
+        return
+      }
+      activationSuccess.value = 'Voucher berhasil diaktifkan! Selamat menikmati WCH Platform.'
+      isActivated.value = true
+      sessionStorage.setItem('chatbot_wizard_pending', '1')
     }
-    activationSuccess.value = 'Voucher berhasil diaktifkan! Selamat menikmati WCH Platform.'
-    isActivated.value = true
-    sessionStorage.setItem('chatbot_wizard_pending', '1')
     voucherCode.value = ''
   } catch (e: any) {
     activationError.value = e?.message || 'Kode voucher tidak valid atau sudah digunakan'
