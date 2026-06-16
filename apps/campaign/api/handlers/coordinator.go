@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"core_project/apps/campaign/api/repository"
+	"core_project/shared/sdk/auth"
 )
 
 // CoordinatorLevel enum: korprov, korKab, korKec, korKades, saksi_tps
@@ -153,7 +154,7 @@ func HandleCoordinatorHierarchy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Premium tier check
-	hasPremiumCoord := checkPlanFeature(tenantID, "premium_coordination_view")
+	hasPremiumCoord := checkPlanFeature(ctx, tenantID, "premium_coordination_view")
 	if !hasPremiumCoord {
 		WriteJSON(w, http.StatusForbidden, APIResponse{Message: "Premium feature - upgrade to view full coordinator hierarchy"})
 		return
@@ -254,8 +255,14 @@ func validateAreaScope(ctx context.Context, level, regionID string) error {
 }
 
 // checkPlanFeature checks if tenant has a specific plan feature enabled
-func checkPlanFeature(tenantID string, feature string) bool {
-	// TODO: Integrate with GetPlanFeatures from shared/sdk/auth/quota.go
-	// Placeholder returns false - will require premium feature activation
-	return false 
+func checkPlanFeature(ctx context.Context, tenantID string, feature string) bool {
+	var exists bool
+	err := repository.DB.QueryRow(ctx, 
+		`SELECT pf.premium_coordination_view FROM plan_features pf 
+		 JOIN tenant_subscriptions ts ON ts.plan_id = pf.plan_id 
+		 WHERE ts.tenant_id = $1`, tenantID).Scan(&exists)
+	if err != nil {
+		return false
+	}
+	return exists
 }
