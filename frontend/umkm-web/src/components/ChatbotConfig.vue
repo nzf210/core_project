@@ -167,6 +167,22 @@
               </p>
             </div>
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.5rem 0;" />
+
+            <div>
+              <span style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">📡 WA Provider</span>
+              <select v-model="form.wa_provider_preference" class="form-control">
+                <option value="auto">⚡ Auto (Rekomendasi)</option>
+                <option value="whatsmeow">📱 Whatsmeow Only</option>
+                <option value="cloud_api" :disabled="!hasWaPremium">☁️ Cloud API (Meta) — butuh add-on</option>
+              </select>
+              <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                <template v-if="form.wa_provider_preference === 'auto'">Sistem otomatis pilih provider terbaik untuk setiap pesan.</template>
+                <template v-else-if="form.wa_provider_preference === 'whatsmeow'">Semua pesan dipaksa lewat whatsmeow. Cloud API tidak dipakai.</template>
+                <template v-else-if="form.wa_provider_preference === 'cloud_api'">Semua pesan dipaksa lewat Cloud API Meta. Jika gagal, pesan tidak akan terkirim.</template>
+              </p>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.5rem 0;" />
             <label class="toggle-row">
               <input type="checkbox" v-model="form.is_active" />
               <span><strong>Aktifkan AI CS</strong> (jika nonaktif, customer akan dapat pesan di luar jam)</span>
@@ -239,6 +255,7 @@ const loading = ref(true)
 const saving = ref(false)
 const testing = ref(false)
 const errorMsg = ref('')
+const hasWaPremium = computed(() => false) // TODO: fetch from /api/me or /admin/addon-check
 
 const testOpen = ref(false)
 const testInput = ref('')
@@ -262,6 +279,7 @@ const form = reactive<any>({
   fallback_message: 'Maaf, saya belum bisa menjawab pertanyaan tersebut. Apakah Anda ingin dihubungkan dengan CS kami?',
   outside_hours_message: 'Terima kasih telah menghubungi kami. Saat ini di luar jam operasional. Pesan Anda akan dibalas saat jam kerja.',
   channels_enabled: ['whatsapp'],
+  wa_provider_preference: 'auto',
   is_active: true,
   enable_vision: false,
   enable_voice_reply: false,
@@ -315,6 +333,7 @@ async function loadConfig() {
       if (d.escalation_keywords) form.escalation_keywords = d.escalation_keywords
       if (d.auto_escalate_after_minutes) form.auto_escalate_after_minutes = d.auto_escalate_after_minutes
       if (d.channels_enabled) form.channels_enabled = d.channels_enabled
+      if (d.wa_provider_preference) form.wa_provider_preference = d.wa_provider_preference
       form.is_active = d.is_active !== false
     }
   } catch (e: any) {

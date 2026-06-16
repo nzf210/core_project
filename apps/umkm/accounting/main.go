@@ -2802,7 +2802,7 @@ func handleInternalChatbotConfig(w http.ResponseWriter, r *http.Request) {
 			outside_hours_message, business_hours_start, business_hours_end, business_days,
 			escalation_enabled, escalation_keywords, escalation_confidence_threshold,
 			auto_escalate_after_minutes, rag_enabled, rag_top_k, rag_similarity_threshold,
-			channels_enabled, is_active, enable_vision, enable_voice_reply, voice_model
+			channels_enabled, is_active, enable_vision, enable_voice_reply, voice_model, wa_provider_preference
 		 FROM tenant_chatbot_configs WHERE tenant_id = $1`, tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
@@ -2824,9 +2824,9 @@ func handleInternalChatbotConfig(w http.ResponseWriter, r *http.Request) {
 		&welcome, &fallback, &outsideHrs,
 		&cfg.BusinessHoursStart, &cfg.BusinessHoursEnd, &cfg.BusinessDays,
 		&cfg.EscalationEnabled, &escalationKW, &cfg.EscalationConfidenceThreshold,
-		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
+		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
 		&cfg.ChannelsEnabled, &cfg.IsActive, &cfg.EnableVision, &cfg.EnableVoiceReply, &cfg.VoiceModel,
-		&cfg.ChannelsEnabled, &cfg.IsActive, &cfg.EnableVision, &cfg.EnableVoiceReply, &cfg.VoiceModel,
+		&cfg.WAProviderPreference,
 	); err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Scan error"})
 		return
@@ -2876,6 +2876,7 @@ type ChatbotConfig struct {
 	RAGSimilarityThreshold        float64  `json:"rag_similarity_threshold"`
 	ChannelsEnabled               []string `json:"channels_enabled"`
 	IsActive                      bool     `json:"is_active"`
+	WAProviderPreference          string   `json:"wa_provider_preference"`
 }
 
 // loadChatbotConfigByTenant reads the chatbot config for a tenant. If no row
@@ -2895,7 +2896,7 @@ func loadChatbotConfigByTenant(ctx context.Context, tenantID string) (*ChatbotCo
 			outside_hours_message, business_hours_start, business_hours_end, business_days,
 			escalation_enabled, escalation_keywords, escalation_confidence_threshold,
 			auto_escalate_after_minutes, rag_enabled, rag_top_k, rag_similarity_threshold,
-			channels_enabled, is_active, enable_vision, enable_voice_reply, voice_model
+			channels_enabled, is_active, enable_vision, enable_voice_reply, voice_model, wa_provider_preference
 		 FROM tenant_chatbot_configs WHERE tenant_id = $1`, tenantID)
 	if err != nil {
 		return nil, err
@@ -2915,9 +2916,9 @@ func loadChatbotConfigByTenant(ctx context.Context, tenantID string) (*ChatbotCo
 		&welcome, &fallback, &outsideHrs,
 		&cfg.BusinessHoursStart, &cfg.BusinessHoursEnd, &cfg.BusinessDays,
 		&cfg.EscalationEnabled, &escalationKW, &cfg.EscalationConfidenceThreshold,
-		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
+		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
 		&cfg.ChannelsEnabled, &cfg.IsActive, &cfg.EnableVision, &cfg.EnableVoiceReply, &cfg.VoiceModel,
-		&cfg.ChannelsEnabled, &cfg.IsActive, &cfg.EnableVision, &cfg.EnableVoiceReply, &cfg.VoiceModel,
+		&cfg.WAProviderPreference,
 	); err != nil {
 		return nil, err
 	}
@@ -2940,6 +2941,13 @@ func loadChatbotConfigByTenant(ctx context.Context, tenantID string) (*ChatbotCo
 // validateChatbotConfig checks all constraints from F020 spec. Returns first
 // error message or empty string if valid.
 func validateChatbotConfig(c *ChatbotConfig) string {
+	if c.WAProviderPreference != "" {
+		switch c.WAProviderPreference {
+		case "auto", "whatsmeow", "cloud_api":
+		default:
+			return "wa_provider_preference harus 'auto', 'whatsmeow', atau 'cloud_api'"
+		}
+	}
 	switch c.Language {
 	case "id", "en":
 	default:
@@ -3076,6 +3084,9 @@ func handleChatbotConfig(w http.ResponseWriter, r *http.Request) {
 		if body.ChannelsEnabled != nil {
 			merged.ChannelsEnabled = body.ChannelsEnabled
 		}
+		if body.WAProviderPreference != "" {
+			merged.WAProviderPreference = body.WAProviderPreference
+		}
 		// Bools selalu di-set (false = explicit turn-off)
 		merged.EscalationEnabled = body.EscalationEnabled
 		merged.RAGEnabled = body.RAGEnabled
@@ -3104,15 +3115,17 @@ func handleChatbotConfig(w http.ResponseWriter, r *http.Request) {
 				escalation_enabled = $15, escalation_keywords = $16,
 				escalation_confidence_threshold = $17, auto_escalate_after_minutes = $18,
 				rag_enabled = $19, rag_top_k = $20, rag_similarity_threshold = $21,
-				channels_enabled = $22, is_active = $23, enable_vision = $24, enable_voice_reply = $25, voice_model = $26, updated_at = NOW()
-			WHERE tenant_id = $27
+				channels_enabled = $22, is_active = $23, enable_vision = $24, enable_voice_reply = $25, voice_model = $26, 
+				wa_provider_preference = $27, updated_at = NOW()
+			WHERE tenant_id = $28
 		`, merged.LLMProvider, merged.LLMModel, merged.Temperature, merged.MaxTokens,
 			nullString(merged.SystemPrompt), merged.Tone, merged.Language, merged.MaxContextMessages,
 			merged.WelcomeMessage, merged.FallbackMessage, merged.OutsideHoursMessage,
 			merged.BusinessHoursStart, merged.BusinessHoursEnd, daysJSON,
 			merged.EscalationEnabled, kwJSON, merged.EscalationConfidenceThreshold,
 			merged.AutoEscalateAfterMinutes, merged.RAGEnabled, merged.RAGTopK, merged.RAGSimilarityThreshold,
-			channelsJSON, merged.IsActive, merged.EnableVision, merged.EnableVoiceReply, merged.VoiceModel, tenantID)
+			channelsJSON, merged.IsActive, merged.EnableVision, merged.EnableVoiceReply, merged.VoiceModel,
+			merged.WAProviderPreference, tenantID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal update: " + err.Error()})
 			return
