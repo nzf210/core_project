@@ -13,14 +13,14 @@ INSERT INTO addon_prices (addon_key, price_cents, unit) VALUES
     ('wa_session_meta', 1500000, 'per_session'); -- Rp 15.000
 
 CREATE TABLE wallet_credits (
-    tenant_id VARCHAR(50) PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
     balance_cents BIGINT NOT NULL DEFAULT 0,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE wallet_transactions (
     id SERIAL PRIMARY KEY,
-    tenant_id VARCHAR(50) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     amount_cents BIGINT NOT NULL, -- positive for topup, negative for consumption
     transaction_type VARCHAR(20) NOT NULL, -- 'topup', 'consume'
     reference VARCHAR(100) NOT NULL, -- e.g., 'ai_vision', 'invoice_123', 'wa_session_meta'

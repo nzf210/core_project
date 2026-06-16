@@ -1,6 +1,6 @@
 CREATE TABLE affiliates (
     id SERIAL PRIMARY KEY,
-    user_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     referral_code VARCHAR(30) UNIQUE NOT NULL,
     bank_info JSONB,
     cash_balance_cents BIGINT NOT NULL DEFAULT 0,
@@ -15,7 +15,7 @@ CREATE INDEX idx_affiliates_refcode ON affiliates(referral_code);
 CREATE TABLE affiliate_earnings (
     id SERIAL PRIMARY KEY,
     affiliate_id INT NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
-    tenant_id VARCHAR(50) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     invoice_id VARCHAR(100) NOT NULL,
     amount_cents BIGINT NOT NULL,
     commission_rate_percent INT NOT NULL,

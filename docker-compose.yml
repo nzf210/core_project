@@ -534,8 +534,8 @@ services:
       - "3100:3100"
     volumes:
       - ./infra/observability/loki/local-config.yaml:/etc/loki/local-config.yaml
-      - loki_data:/tmp/loki
-    command: -config.file=/etc/loki/local-config.yaml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml -ingester.wal-dir=/loki/wal
     restart: unless-stopped
 
   promtail:
