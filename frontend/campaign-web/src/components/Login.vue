@@ -21,6 +21,11 @@
           <input v-model="form.password" type="password" class="input-field" placeholder="Masukkan password" required />
         </div>
 
+        <div v-if="initialRole">
+          <label>Kode Referral (opsional)</label>
+          <input v-model="referralCode" type="text" class="input-field" placeholder="AGEN-XXXXXX" style="text-transform: uppercase;" />
+        </div>
+
         <button type="submit" class="btn-primary mt-2" :disabled="isLoading">
           {{ isLoading ? 'Loading...' : (initialRole ? 'Kirim OTP Pendaftaran' : 'Login') }}
         </button>
@@ -64,6 +69,7 @@ const otpCode = ref('')
 const showOTP = ref(false)
 const errorMsg = ref('')
 const isLoading = ref(false)
+const referralCode = ref('')
 
 const handleLogin = async () => {
   errorMsg.value = ''
@@ -140,6 +146,13 @@ const processLoginData = (data: any) => {
     localStorage.setItem('isDataVerified', payload.isDataVerified ? 'true' : 'false')
   } catch (e) {
     console.error("JWT Decode error", e)
+  }
+
+  // F037: Redeem referral code after successful login (Campaign)
+  const rfCode = referralCode.value.trim().toUpperCase()
+  if (rfCode) {
+    // Store pending code in localStorage, redeem after full auth setup
+    localStorage.setItem('pending_referral_code', rfCode)
   }
 
   emit('login-success')

@@ -94,6 +94,10 @@ func main() {
 	// In production, this should be under a different superadmin mux/port, mapped here for simplicity
 	mux.HandleFunc("POST /superadmin/licenses/generate", handlers.HandleSuperadminGenerateLicense)
 
+	// F037 (Campaign): Affiliate Referral — extends global UMKM affiliate to Campaign
+	mux.HandleFunc("POST /affiliate/redeem-referral", handlers.HandleCampaignAffiliateRedeemReferral)
+	mux.HandleFunc("GET /affiliate/leaderboard", handlers.HandleCampaignAffiliateLeaderboard)
+
 	// Regions
 	mux.HandleFunc("/regions/provinces", handlers.HandleProvinces)
 

@@ -98,6 +98,21 @@ export const publicApi = {
       if (regionId) url.searchParams.append('region_id', regionId);
     }
     return fetch(url.toString());
+  },
+
+  // F037: Affiliate leaderboard (public)
+  async getAffiliateLeaderboard() {
+    return apiClient('/affiliate/leaderboard');
+  }
+};
+
+// F037: Affiliate referral API
+export const affiliateApi = {
+  async redeemReferral(referralCode: string) {
+    return apiClient('/affiliate/redeem-referral', {
+      method: 'POST',
+      body: JSON.stringify({ referral_code: referralCode })
+    });
   }
 };
 

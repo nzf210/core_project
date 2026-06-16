@@ -35,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { apiClient } from '../api'
+import { apiClient, affiliateApi } from '../api'
 import { ref, onMounted, computed } from 'vue'
 
 const stats = ref<any>({})
@@ -46,7 +46,25 @@ const totalCompetitors = computed(() => {
   return Object.values(voterStats.value.competitors).reduce((a: any, b: any) => a + b, 0);
 })
 
+async function redeemPendingReferral() {
+  const code = localStorage.getItem('pending_referral_code')
+  if (!code) return
+  try {
+    const res = await affiliateApi.redeemReferral(code)
+    const data = await res.json()
+    if (data.success) {
+      console.log('Campaign referral redeemed:', code)
+      localStorage.removeItem('pending_referral_code')
+    }
+  } catch {
+    localStorage.removeItem('pending_referral_code')
+  }
+}
+
 onMounted(async () => {
+  // Redeem pending referral code
+  await redeemPendingReferral()
+
   try {
     const res = await apiClient('/volunteers/stats')
     const data = await res.json()

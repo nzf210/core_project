@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"core_project/apps/campaign/api/repository"
@@ -124,6 +125,38 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 				)
 				WHERE id = $1
 			`, campaignID)
+		}
+
+		// F037: Campaign Affiliate Commission — share to referrer
+		var referredByID *int
+		repository.DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&referredByID)
+		if referredByID != nil {
+			// Read dynamic config from referral_config (shared with billing-service)
+			var commissionPct float64
+			err := repository.DB.QueryRow(ctx, `
+				SELECT COALESCE(commission_percent, 10) FROM referral_config WHERE id = 1
+			`).Scan(&commissionPct)
+			if err != nil {
+				commissionPct = 10
+			}
+
+			var fullAmount int64
+			repository.DB.QueryRow(ctx, "SELECT amount_cents FROM campaign_billing_orders WHERE id = $1", orderID).Scan(&fullAmount)
+			commission := fullAmount * int64(commissionPct) / 100
+			if commission > 0 {
+				tx.Exec(ctx, `
+					UPDATE affiliates 
+					SET cash_balance_cents = cash_balance_cents + $1,
+						total_earnings_cents = total_earnings_cents + $1,
+						updated_at = NOW()
+					WHERE id = $2
+				`, commission, *referredByID)
+				tx.Exec(ctx, `
+					INSERT INTO affiliate_earnings (affiliate_id, tenant_id, invoice_id, amount_cents, commission_rate_percent)
+					VALUES ($1, $2, $3, $4, $5)
+				`, *referredByID, tenantID, payload.ID, commission, int(commissionPct))
+				slog.Info("Campaign: Affiliate commission granted", "affiliate_id", *referredByID, "tenant_id", tenantID, "amount_cents", commission, "rate", commissionPct)
+			}
 		}
 
 		tx.Commit(ctx)
