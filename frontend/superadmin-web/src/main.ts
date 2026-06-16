@@ -6,6 +6,7 @@ import VoucherPrograms from './views/VoucherPrograms.vue'
 import GenerateVouchers from './views/GenerateVouchers.vue'
 import FrozenAccounts from './views/FrozenAccounts.vue'
 import PlanFeatures from './views/PlanFeatures.vue'
+import ReferralConfig from './views/ReferralConfig.vue'
 import './style.css'
 
 const router = createRouter({
@@ -16,6 +17,7 @@ const router = createRouter({
     { path: '/vouchers/generate', component: GenerateVouchers, name: 'generate-vouchers' },
     { path: '/frozen-accounts', component: FrozenAccounts, name: 'frozen-accounts' },
     { path: '/plan-features', component: PlanFeatures, name: 'plan-features' },
+    { path: '/referral-config', component: ReferralConfig, name: 'referral-config' },
   ],
 })
 

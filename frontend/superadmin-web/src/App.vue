@@ -29,6 +29,7 @@ function doLogout() {
         <RouterLink to="/vouchers/analytics">Analytics</RouterLink>
         <RouterLink to="/frozen-accounts">Frozen Accounts</RouterLink>
         <RouterLink to="/plan-features">Plan Matrix</RouterLink>
+        <RouterLink to="/referral-config">Referral</RouterLink>
       </nav>
       <div class="user-info">
         <span class="role">{{ role }}</span>

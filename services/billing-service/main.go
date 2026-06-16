@@ -360,6 +360,9 @@ func main() {
 	mux.Handle("/affiliate/withdraw", auth.Middleware(http.HandlerFunc(handleAffiliateWithdraw)))
 	mux.Handle("/affiliate/redeem-referral", auth.Middleware(http.HandlerFunc(handleAffiliateRedeemReferral)))
 
+	// F037: Referral Config (Superadmin)
+	mux.Handle("/admin/referral-config", auth.Middleware(http.HandlerFunc(handleAdminReferralConfig)))
+
 	server := &http.Server{
 		Addr:    ":8003",
 		Handler: mux,
@@ -3638,4 +3641,65 @@ func handleAffiliateRedeemReferral(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusOK, "Referral applied successfully", nil)
+}
+func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-Role")
+	if role != "superadmin" && role != "admin" {
+		response.Error(w, http.StatusForbidden, "Admin only", nil)
+		return
+	}
+
+	ctx := r.Context()
+
+	switch r.Method {
+	case http.MethodGet:
+		var discountPct, commissionPct float64
+		err := DB.QueryRow(ctx, `
+			SELECT COALESCE(discount_percent, 10), COALESCE(commission_percent, 10)
+			FROM referral_config WHERE id = 1
+		`).Scan(&discountPct, &commissionPct)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to load config", err)
+			return
+		}
+		response.JSON(w, http.StatusOK, "Referral config loaded", map[string]interface{}{
+			"discount_percent":   discountPct,
+			"commission_percent": commissionPct,
+		})
+
+	case http.MethodPut, http.MethodPost:
+		var req struct {
+			DiscountPercent   float64 `json:"discount_percent"`
+			CommissionPercent float64 `json:"commission_percent"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			response.Error(w, http.StatusBadRequest, "Invalid body", err)
+			return
+		}
+		if req.DiscountPercent < 0 || req.DiscountPercent > 100 || req.CommissionPercent < 0 || req.CommissionPercent > 100 {
+			response.Error(w, http.StatusBadRequest, "Percentage must be 0-100", nil)
+			return
+		}
+
+		_, err := DB.Exec(ctx, `
+			INSERT INTO referral_config (id, discount_percent, commission_percent, updated_at)
+			VALUES (1, $1, $2, NOW())
+			ON CONFLICT (id) 
+			DO UPDATE SET discount_percent = EXCLUDED.discount_percent, 
+			              commission_percent = EXCLUDED.commission_percent,
+			              updated_at = NOW()
+		`, req.DiscountPercent, req.CommissionPercent)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to update config", err)
+			return
+		}
+		slog.Info("Referral config updated", "discount", req.DiscountPercent, "commission", req.CommissionPercent)
+		response.JSON(w, http.StatusOK, "Referral config updated", map[string]interface{}{
+			"discount_percent":   req.DiscountPercent,
+			"commission_percent": req.CommissionPercent,
+		})
+
+	default:
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	}
 }
