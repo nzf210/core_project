@@ -80,6 +80,12 @@
                 placeholder="cth: owner@kopisenja.com" />
             </div>
 
+            <div class="form-group">
+              <label>Kode Referral <span style="color: var(--text-secondary); font-size: 0.8rem;">(opsional, dari agen)</span></label>
+              <input v-model="referralCode" type="text" class="form-control"
+                placeholder="cth: AGEN-ABC123" style="text-transform: uppercase;" />
+            </div>
+
             <div class="form-group" style="margin-bottom: 2rem;">
               <label>Password</label>
               <div style="position: relative;">
@@ -171,6 +177,7 @@ const showPassword = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 const otpCode = ref('')
+const referralCode = ref('')
 
 const formData = ref({
   name: '',
@@ -238,6 +245,10 @@ const handleVerifyOTP = async () => {
   try {
     const data = await api.verifyOTP(formData.value.phone_number, otpCode.value)
     if (data.success) {
+      // Save pending referral code if provided
+      if (referralCode.value.trim()) {
+        localStorage.setItem('pending_referral_code', referralCode.value.trim().toUpperCase())
+      }
       router.push('/login')
     } else {
       errorMsg.value = data.message || 'OTP tidak valid.'

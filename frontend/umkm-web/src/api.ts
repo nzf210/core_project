@@ -317,6 +317,36 @@ export const api = {
     })
     return res.json()
   },
+
+  // F036: Affiliate & Referral
+  async getAffiliateLeaderboard() {
+    const res = await fetch(`${API_BASE}/api/public/affiliate-leaderboard`)
+    return res.json()
+  },
+  async getAffiliateProfile() {
+    const res = await fetch(`${API_BASE}/affiliate/profile`, { headers: headers() })
+    return res.json()
+  },
+  async registerAffiliate() {
+    const res = await fetch(`${API_BASE}/affiliate/register`, { method: 'POST', headers: headers() })
+    return res.json()
+  },
+  async withdrawAffiliate(amountCents: number) {
+    const res = await fetch(`${API_BASE}/affiliate/withdraw`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ amount_cents: amountCents })
+    })
+    return res.json()
+  },
+  async redeemReferral(referralCode: string) {
+    const res = await fetch(`${API_BASE}/affiliate/redeem-referral`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ referral_code: referralCode })
+    })
+    return res.json()
+  },
 }
 
 // ─── Quota usage types (F025, Task 2.9) ─────────────────────────

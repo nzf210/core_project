@@ -192,6 +192,24 @@ const loading = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 
+async function redeemPendingReferral() {
+  const code = localStorage.getItem('pending_referral_code')
+  if (!code) return
+
+  try {
+    const res = await api.redeemReferral(code)
+    if (res && res.success) {
+      successMsg.value = 'Kode referral berhasil diterapkan!'
+      localStorage.removeItem('pending_referral_code')
+    } else {
+      // Jangan blokir login — kode bisa saja sudah terpakai
+      localStorage.removeItem('pending_referral_code')
+    }
+  } catch (e) {
+    localStorage.removeItem('pending_referral_code')
+  }
+}
+
 const handlePhoneLogin = async () => {
   loading.value = true
   errorMsg.value = ''
@@ -242,6 +260,7 @@ const handleVerifyPhoneLogin = async () => {
         console.error('Failed to check profile for onboarding status')
       }
 
+      await redeemPendingReferral()
       router.push('/')
     } else {
       errorMsg.value = data.message || 'OTP tidak valid.'
@@ -303,6 +322,7 @@ const handleTelegramVerifyLogin = async () => {
         console.error('Failed to check profile for onboarding status')
       }
 
+      await redeemPendingReferral()
       router.push('/')
     } else {
       errorMsg.value = data.message || 'OTP tidak valid.'
@@ -345,6 +365,7 @@ const handleLogin = async () => {
         console.error('Failed to check profile for onboarding status')
       }
 
+      await redeemPendingReferral()
       router.push('/')
     } else {
       errorMsg.value = data.message || 'Login gagal, periksa kredensial Anda.'

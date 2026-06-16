@@ -20,6 +20,8 @@ import DataTransfer from '../components/DataTransfer.vue'
 import Reports from '../components/Reports.vue'
 import ClinicQueue from '../components/ClinicQueue.vue'
 import ClinicFrontdesk from '../components/ClinicFrontdesk.vue'
+import AffiliateDashboard from '../components/AffiliateDashboard.vue'
+import AffiliateLeaderboard from '../components/AffiliateLeaderboard.vue'
 
 const routes = [
   { path: '/', component: DynamicDashboard, name: 'Dashboard' },
@@ -41,7 +43,10 @@ const routes = [
   { path: '/clinic/frontdesk', component: ClinicFrontdesk, name: 'ClinicFrontdesk' },
   { path: '/superadmin-login', component: SuperAdminLogin, name: 'SuperAdminLogin', meta: { requiresGuest: true } },
   { path: '/forgot-password', component: ForgotPassword, name: 'ForgotPassword', meta: { requiresGuest: true } },
-  { path: '/reset-password', component: ResetPassword, name: 'ResetPassword', meta: { requiresGuest: true }, props: (route: any) => ({ initialEmail: route.query.email }) }
+  { path: '/reset-password', component: ResetPassword, name: 'ResetPassword', meta: { requiresGuest: true }, props: (route: any) => ({ initialEmail: route.query.email }) },
+  // F036: Affiliate
+  { path: '/affiliate', component: AffiliateDashboard, name: 'AffiliateDashboard' },
+  { path: '/leaderboard', component: AffiliateLeaderboard, name: 'AffiliateLeaderboard', meta: { public: true } },
 ]
 
 const router = createRouter({
@@ -84,6 +89,12 @@ async function fetchAndSyncMe(): Promise<any | null> {
 }
 
 router.beforeEach(async (to, _from, next) => {
+  // Public routes — no auth required
+  if (to.meta.public) {
+    next()
+    return
+  }
+
   const token = localStorage.getItem('access_token')
   const tenantId = localStorage.getItem('tenant_id')
   const role = localStorage.getItem('role')
