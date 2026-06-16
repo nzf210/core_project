@@ -115,3 +115,12 @@ bin/umkm-*
 /wa-cloud-api
 /subscription-worker
 api
+# Auto-generated / unwanted files
+automation
+apps/umkm/automation/main_test.go
+frontend/*/src/env.d.ts
+
+# Auto-generated / unwanted files
+automation
+apps/umkm/automation/main_test.go
+frontend/*/src/env.d.ts

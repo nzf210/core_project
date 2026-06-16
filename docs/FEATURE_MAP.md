@@ -1930,3 +1930,40 @@ Wajib update:
 - [ ] AC-2: Perpanjangan otomatis (*renewal*) pada bulan kedua tetap memicu komisi ke Agen melalui mekanisme *payment webhook*.
 - [ ] AC-3: Endpoint Public Leaderboard mereturn agregasi agen teratas tanpa membocorkan data sensitif.
 - [ ] AC-4: Agen dapat melakukan Request Withdrawal, memotong saldo tunai sementara (`pending` state).
+
+## F046: Hierarchical Coordinator Assignment
+
+**Spec Status:** ⏳ Draft
+**Implementation:** ⏳ Pending
+
+**Deskripsi:** Sistem penunjukan koordinator kampanye berlapis (Gubernur → Kabupaten → Kecamatan → Desa → TPS) dengan validasi area scope otomatis dan tier access untuk melihat hierarki.
+
+**Tujuan:**
+- Memungkinkan kandidat membuat koordinator per level wilayah sesuai tingkat pemilihan
+- Mencegah cross-area assignment (korcam kec A gak bisa nunjuk kordes kec B)
+- Menyediakan API untuk premium kandidat melihat seluruh relawan di hierarki wilayahnya
+
+**Spec:**
+- **Mandatory NIK First**: Koordinator yang ditunjuk harus sudah terdaftar di `citizens` (via KTP scan atau manual entry)
+- **Dynamic Hierarchy**: Setiap campaign punya level hirarki terbatas sesuai `campaign_type`:
+  - Pilgub/Pilpres/Pileg Prov: 5 level (Prov → Kab → Kec → Desa → TPS)
+  - Pilkada/Pileg Kab: 4 level (Kab → Kec → Desa → TPS)
+- **Area Scope Validation**: Assignment hanya boleh dalam satu cabang wilayah yang sama
+- **Cross-Election Allowed**: Satu NIK bisa jadi koordinator di 3 paslon berbeda sekaligus (no dedup)
+- **Premium Tier**: Hanya kandidat yang punya fitur `premium_coordination_view` yang bisa lihat seluruh relawannya di dashboard
+- **Unlimited Witnesses**: Satu TPS bisa punya 1-N saksi, tidak terbatas
+
+**Acceptance Criteria (AC):**
+- [ ] AC-1: Endpoint `POST /coordinator/assign` menerima NIK + level + wilayah_id, validasi area scope
+- [ ] AC-2: Endpoint `GET /coordinator/list?level=kordes&region_id=xxx` mengembalikan daftar koordinator di wilayah tersebut
+- [ ] AC-3: Endpoint `GET /coordinator/hierarchy` hanya tampil untuk premium tier, menampilkan semua relawan di bawahnya
+- [ ] AC-4: Error "Area mismatch" jika korcam kec X mencoba assign kordes kec B
+
+**Files yang perlu diubah:**
+- `apps/campaign/api/handlers/coordinator.go` — handler baru untuk assignment & hierarchy
+- `shared/migrations/000059_coordinator_hierarchy.up.sql` — tabel `campaign_coordinators`
+- `apps/campaign/api/handlers/volunteer.go` — patch untuk validasi area scope
+
+**Notes:**
+- Koordinator di-link ke `user_id` di tabel `users`, bukan buat account baru
+- Level enum: `korprov`, `korKab`, `korKec`, `korKades`, `saksi_tps`
