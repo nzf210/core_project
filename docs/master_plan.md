@@ -234,7 +234,7 @@ Kami merekomendasikan pembagian jadwal pengerjaan selama **6 Bulan** dengan pend
     1.  Menghubungkan `services/workflow-service` (n8n self-hosted) untuk mengirim email massal promosi, blast pengingat piutang UMKM, dan pemberitahuan transaksi trading sukses ke Telegram.
     2.  Melakukan enkripsi end-to-end data sensitif pemilih dan data API trading bot.
     3.  Stress testing websocket ticker crypto dan database transaksi real-time.
-    4.  Konfigurasi reverse proxy Nginx dengan sertifikat SSL/TLS gratis Let's Encrypt.
+    4.  Konfigurasi reverse proxy Nginx dengan sertifikat SSL/TLS Let's Encrypt (tanpa biaya).
     5.  Deployment multi-kontainer menggunakan Docker Compose atau Kubernetes ke VPS Linux (seperti DigitalOcean, AWS, atau Alibaba Cloud).
 
 ---

@@ -185,7 +185,7 @@ Jika ada penambahan/pengurangan fitur di masa depan, PRD ini akan diperbarui den
 *(Fitur yang melayani ketiga produk di atas)*
 
 - **Auth & Tenant Service**: SSO terpusat, RBAC, Isolasi data (UMKM A tidak bisa lihat data UMKM B).
-- **Billing Service**: SaaS tiering (Lite, Pro, Enterprise), Kuota Usage, Integrasi Gateway, Buatkan Kupon untuk gratis 3 bulan untuk Lite. jaadi untuk promosi di berikan kupon 
+- **Billing Service**: SaaS tiering (Lite, Pro, Enterprise), Kuota Usage, Integrasi Gateway, Buatkan Kupon untuk bonus 3 bulan untuk Lite. jaadi untuk promosi di berikan kupon 
 - **AI Gateway**: Proksi sentral untuk LLM (MiniMax M2.7), Semantic Cache (Redis), Rate limiting agar biaya token terkontrol.
 - **Workflow & Notifications**: Email transaksional, Blast WA, Telegram notification, n8n automation engine.
 

@@ -81,7 +81,7 @@ Format per feature:
 | F016 | Hybrid WhatsApp (Cloud API + whatsmeow) | ✅ Approved | ✅ Done | 2026-06-13 |
 | F017 | OTP 1-Hour Reuse Window | ✅ Approved | ✅ Done | 2026-06-13 |
 | F018 | Telegram Auth (Register & Login) | ✅ Approved | ✅ Done | 2026-06-13 |
-| F019 | Onboarding Sync via /me (Fix Tier 1) | ✅ Approved | ✅ Done | 2026-06-14 |
+| F019 | Onboarding Sync via /me (Fix Lite Tier) | ✅ Approved | ✅ Done | 2026-06-14 |
 | F020 | AI CS Setup Wizard (Per-Tenant Config UI) | ✅ Approved | ✅ Done | 2026-06-14 |
 | F021 | Cash Flow PDF Export | ✅ Approved | ✅ Done | 2026-06-14 |
 | F022 | Excel/Google Sheet Import & Export | ✅ Approved | ✅ Done | 2026-06-14 |
@@ -665,7 +665,7 @@ Component baru: `src/components/ChatbotConfig.vue` (~400 baris).
 
 ---
 
-## F019: Onboarding Sync via `/me` Endpoint (Fix Tier 1)
+## F019: Onboarding Sync via `/me` Endpoint (Fix Lite Tier)
 
 **Spec Status:** ✅ Approved
 **Implementation:** ✅ Done
@@ -705,7 +705,7 @@ Component baru: `src/components/ChatbotConfig.vue` (~400 baris).
 - `apps/umkm/chatbot/main.go` — `WAGatewayURL` var, `waSendURL()` helper, 3 call site refactored
 
 **Notes:**
-- Tier 1 fix — menyentuh 2 service + 1 app + 2 frontend file, semua test pass.
+- Lite Tier fix — menyentuh 2 service + 1 app + 2 frontend file, semua test pass.
 - Branch: `fix/tier1-onboarding-loop`
 - Cache 30s dipilih untuk keseimbangan antara freshness dan hemat backend call. Bisa di-tune via env nanti.
 - Sinkronisasi hanya terjadi jika flag missing — happy path (user sudah onboarded + localStorage ada) tidak menambah request.
@@ -966,7 +966,7 @@ Tenant redeem voucher dengan validity_days = 30:
 - `Dockerfile` + `docker-compose.yml` + `Makefile` + `.env.example` — Infrastructure
 
 **Notes:**
-- WhatsApp Cloud API pricing ~$0.005-0.08/message tergantung tipe. Lebih mahal dari whatsmeow (gratis) tapi zero ban risk.
+- WhatsApp Cloud API pricing ~$0.005-0.08/message tergantung tipe. Lebih mahal dari whatsmeow (tanpa biaya tambahan) tapi zero ban risk.
 - Perlu Meta Business App + phone_number_id + permanent access token per tenant
 - whatsmeow tetap dipakai untuk chatbot karena conversational messages via Cloud API akan mahal
 - Nomor whatsmeow sebaiknya nomor "tumbal" khusus, bukan nomor bisnis utama
@@ -1851,7 +1851,7 @@ Wajib update:
    - Kolom: `addon_key` (string), `price_cents` (int), `unit` (string: per_request, per_minute, per_session).
    - Keys: `ai_vision`, `ai_audio_stt`, `wa_blast_api`, `wa_session_meta`.
 3. **Consumption Logic (Middleware/Interceptor)**:
-   - **AI Text**: FREE (limit harian ikut tier bulanan).
+   - **AI Text**: INCLUDED (limit harian ikut tier bulanan).
    - **AI Vision/Audio**: Potong saldo tiap request sukses.
    - **WA API Meta**: Potong saldo tiap sesi chat dibuka.
 4. **Meta Connector Flow**:
@@ -1880,7 +1880,7 @@ Wajib update:
 **Spec Status:** ✅ Approved
 **Implementation:** 🔨 In Progress
 
-**Deskripsi:** Memberikan opsi kepada Superadmin untuk membuat voucher dengan tipe diskon uang (persentase / rupiah tetap), bukan hanya voucher akses gratis (bonus_months).
+**Deskripsi:** Memberikan opsi kepada Superadmin untuk membuat voucher dengan tipe diskon uang (persentase / rupiah tetap), bukan hanya voucher akses tambahan (bonus_months).
 
 **Spec:**
 1. **API Endpoint (`POST /admin/vouchers/generate`)**:
@@ -1967,3 +1967,42 @@ Wajib update:
 **Notes:**
 - Koordinator di-link ke `user_id` di tabel `users`, bukan buat account baru
 - Level enum: `korprov`, `korKab`, `korKec`, `korKades`, `saksi_tps`
+
+## F047: Business Type-Based Module System (Klinik Focus)
+
+**Spec Status:** ⏳ Draft
+**Implementation:** ⏳ Pending
+
+**Deskripsi:** Pilihan jenis usaha saat registrasi UMKM. Hanya klinik yang dapat akses "Antrean Klinik". Sidebar dinamis berdasarkan business type.
+
+**Tujuan:**
+- Menu sidebar UMKM menampilkan hanya modul yang relevan dengan jenis usaha
+- Klinik memiliki modul khusus: Antrean, Rekam Medis, Jadwal Dokter, Notifikasi WA
+- Mencegah modul klinik muncul di tenant yang bukan klinik
+
+**Spec:**
+- **Registrasi Flow:** Tambah dropdown "Jenis Usaha" di form pendaftaran
+  - `clinic`, `restaurant`, `retail`, `workshop`, `general`
+- **Database:** Kolom `business_type` (VARCHAR) + `clinic_doctors` (text array) di tabel `tenants`
+- **Frontend Menu:** Render beda per business_type
+  - Clinic: `/clinic/frontdesk`, `/clinic/medical-record`, `/clinic/schedule`, `/clinic/notifications`
+  - Restaurant/Retail: POS, Katalog, Inventori
+- **Medical Record:** Pasien bisa input keluhan + riwayat datang (text only, no PDF)
+- **Doctor Schedule:** CRUD jadwal praktek dokter (hari, jam mulai, jam selesai)
+- **WA Notification:** Auto-kirim reminder 1 jam sebelum jadwal (timezone WIB)
+
+**Acceptance Criteria (AC):**
+- [ ] AC-1: Tenant baru bisa pilih business_type saat registrasi
+- [ ] AC-2: Menu sidebar UMKM menyesuaikan business_type
+- [ ] AC-3: Endpoint `/clinic/*` gagal untuk tenant non-clinic
+- [ ] AC-4: Dokter bisa di-add di `/clinic/schedule` dengan nama + spesialisasi
+
+**Files yang perlu diubah:**
+- `shared/migrations/000061_business_type.up.sql` — tambah kolom business_type + clinic_doctors
+- `apps/umkm/accounting/main.go` — middleware cek business_type
+- `frontend/umkm-web/src/config/menu.ts` — dynamic menu rendering
+- `apps/umkm/accounting/clinic.go` — endpoint baru untuk medical record + schedule
+
+**Notes:**
+- Clinics bisa punya multiple dokter (array text di DB)
+- Fitur ini akan menjadi dasar pricing tier beda per business type

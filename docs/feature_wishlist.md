@@ -112,7 +112,7 @@ Gunakan dokumen ini untuk mencatat daftar fitur (*features*) yang ingin Anda tam
 - [x] Rekap per wilayah
 
 #### Subscription (Future Paid)
-- [ ] Paket Free
+- [x] ~~Paket Free~~ (Dihapus, lihat F024)
 - [ ] Paket Pro
 - [ ] Paket Enterprise
 - [ ] Billing

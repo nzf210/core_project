@@ -8,13 +8,13 @@
 # Atau pakai GitHub CLI langsung:
 #   gh auth login
 #   gh pr create --base main --head fix/tier1-onboarding-loop \
-#                --title "Tier 1+2: onboarding sync, AI CS wizard, cash flow PDF, Excel I/O" \
+#                --title "Priority 1+2: onboarding sync, AI CS wizard, cash flow PDF, Excel I/O" \
 #                --body-file PR_DESCRIPTION.md
 
 set -e
 
 BRANCH="fix/tier1-onboarding-loop"
-TITLE="Tier 1+2 (F019, F020, F021, F022): onboarding sync, AI CS wizard, cash flow PDF, Excel/Sheet I/O"
+TITLE="Priority 1+2 (F019, F020, F021, F022): onboarding sync, AI CS wizard, cash flow PDF, Excel/Sheet I/O"
 
 echo "==> Cek working tree"
 cd "$(dirname "$0")/.."

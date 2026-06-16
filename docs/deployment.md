@@ -191,7 +191,7 @@ echo "🎉 Platform WCH berhasil diperbarui!"
 1.  **Log Management**:
     Semua log kontainer dikirim ke file log host lokal `/var/log/docker/` dan diputar menggunakan `logrotate` untuk mencegah kehabisan ruang disk.
 2.  **Uptime Monitoring**:
-    Menggunakan tools pihak ketiga gratis seperti **UptimeRobot** atau **Better Uptime** untuk memantau status kesehatan endpoint `/health` pada masing-masing domain/aplikasi.
+    Menggunakan tools pihak ketiga (free tier / UptimeRobot) seperti **UptimeRobot** atau **Better Uptime** untuk memantau status kesehatan endpoint `/health` pada masing-masing domain/aplikasi.
 3.  **Database Backup**:
     Menjadwalkan cron job harian di server untuk mencadangkan database PostgreSQL ke cloud storage terpisah (misalnya AWS S3) secara otomatis:
     ```bash

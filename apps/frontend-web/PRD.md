@@ -18,7 +18,7 @@ Repositori `apps/frontend-web` difungsikan sebagai rumah untuk Landing Page WCH 
 
 ### Feature 1: Landing Page & Pricing
 - **Description:** Halaman marketing yang memamerkan tiga lini produk (Crypto, UMKM, Campaign).
-- **Acceptance Criteria:** Terdapat halaman Pricing, Features, Testimonial, dan tombol "Start Free Trial".
+- **Acceptance Criteria:** Terdapat halaman Pricing, Features, Testimonial, dan tombol "Start Trial".
 - **Priority:** P1 (High)
 
 ### Feature 2: Unified Login & Registration Portal

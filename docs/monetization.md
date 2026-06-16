@@ -16,7 +16,7 @@ Monetisasi menggabungkan model **Freemium SaaS** untuk pembukuan dengan biaya be
 
 | Fitur | **Starter (UMKM Mikro)** | **Grow (UMKM Berkembang)** | **Scale (UMKM Skala Menengah)** |
 | :--- | :--- | :--- | :--- |
-| **Harga Bulanan** | Rp 0 (Gratis Selamanya) | Rp 99.000 / bln | Rp 299.000 / bln |
+| **Harga Bulanan** | Rp 0 (Tidak ada — sudah dihapus) | Rp 99.000 / bln | Rp 299.000 / bln |
 | **Pengguna (Staff/Admin)** | 1 Pengguna | Maks. 5 Pengguna | Unlimited |
 | **Fitur Pembukuan** | Pencatatan manual dasar & Laba Rugi | Akuntansi Lengkap (Neraca, Arus Kas) | Multi-cabang & Konsolidasi Keuangan |
 | **AI OCR Receipt Scanner** | 5 scan / bulan | 50 scan / bulan | Unlimited (Fair Use) |

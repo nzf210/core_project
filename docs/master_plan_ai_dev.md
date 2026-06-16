@@ -303,7 +303,7 @@ Komponen:
 claude "Bangun services/billing-service/ untuk monetisasi platform.
 Integrasi payment gateway: Xendit API (https://api.xendit.co)
 Fitur:
-1. POST /subscriptions - buat langganan baru (pilih plan: free/basic/pro/enterprise)
+1. POST /subscriptions - buat langganan baru (pilih plan: lite/pro/ultimate)
 2. POST /invoices/create - generate invoice bulanan otomatis
 3. POST /webhook/xendit - terima notifikasi pembayaran dari Xendit
 4. PATCH /subscriptions/{id}/upgrade - upgrade plan

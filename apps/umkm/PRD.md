@@ -50,7 +50,7 @@ Sistem dideploy dalam 3 layanan mikro (*microservices*) utama di bawah namespace
   - **Jasa** (Fokus pada: Daftar janji hari ini, pendapatan layanan, layanan terpopuler, retensi pelanggan, utilisasi staff).
   - **Industri Kreatif** (Fokus pada: Kanban proyek aktif, margin proyek, spend bahan, status invoice).
   - **Umum** (Laba rugi bulanan, ringkasan pengeluaran, aktivitas transaksi terbaru).
-- **Sistem Langganan:** Tiering akun (Free, Starter, Pro, Enterprise) yang dikontrol ketat melalui `QuotaMiddleware` untuk membatasi jumlah transaksi, produk, atau akses asisten AI.
+- **Sistem Langganan:** Tiering akun (Lite, Pro, Ultimate) yang dikontrol ketat melalui `QuotaMiddleware` untuk membatasi jumlah transaksi, produk, atau akses asisten AI.
 
 ### Feature 2: Double-Entry Accounting (SAK-EMKM)
 - **Deskripsi:** Mesin akuntansi dasar otomatis yang mematuhi standar SAK-EMKM.

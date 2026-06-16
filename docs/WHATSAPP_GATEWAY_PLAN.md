@@ -9,7 +9,7 @@ Saat ini, modul `apps/umkm/chatbot` menggunakan pihak ketiga (**Fonnte**) untuk 
 - **Keterbatasan API (Rate Limits):** Pihak ketiga memiliki *rate limit* yang bisa menghambat performa di jam sibuk.
 - **Privasi Data:** Seluruh pesan transaksi keuangan pelanggan melewati server pihak ketiga.
 
-**Tujuan:** Membangun *Internal WhatsApp Gateway* mandiri yang bisa di-*host* di server sendiri, memungkinkan setiap tenant UMKM menyambungkan nomor WhatsApp mereka secara gratis (tanpa biaya per pesan), serta memiliki kontrol penuh atas infrastruktur.
+**Tujuan:** Membangun *Internal WhatsApp Gateway* mandiri yang bisa di-*host* di server sendiri, memungkinkan setiap tenant UMKM menyambungkan nomor WhatsApp mereka tanpa biaya per pesan (self-hosted), serta memiliki kontrol penuh atas infrastruktur.
 
 **✅ HASIL:** Tujuan tercapai. `services/wa-gateway` (port 8202) sudah production-ready dengan whatsmeow.
 
@@ -107,5 +107,5 @@ Untuk menghindari gangguan pada pengguna *existing*, migrasi dilakukan bertahap:
 ## 7. Pertimbangan Infrastruktur & Keamanan
 *   **RAM & CPU:** Setiap sesi `whatsmeow` cukup ringan, namun jika terdapat 1.000 tenant UMKM online bersamaan, Gateway ini membutuhkan RAM sekitar 2-4GB khusus untuk *service*-nya.
 *   **Auto-Reconnect:** Sistem harus memiliki mekanisme *re-connect* otomatis jika koneksi WebSocket ke Meta terputus.
-*   **Rate Limiting Internal:** Meskipun gratis, `wa-gateway` harus memiliki rate limiter agar AI Chatbot tidak melakukan "spam" ke nomor pelanggan (mencegah nomor UMKM diblokir/banned oleh WhatsApp akibat perilaku mencurigakan).
+*   **Rate Limiting Internal:** Meskipun tanpa biaya per pesan, `wa-gateway` harus memiliki rate limiter agar AI Chatbot tidak melakukan "spam" ke nomor pelanggan (mencegah nomor UMKM diblokir/banned oleh WhatsApp akibat perilaku mencurigakan).
 *   **Anti-Ban Guidelines:** UMKM harus diedukasi agar tidak mengirim *blast message* promosi secara brutal menggunakan nomor biasa. *Blast message* massal tetap disarankan menggunakan WhatsApp Business API Resmi. Mode QR Code (*whatsmeow*) difokuskan untuk membalas obrolan interaktif (CS/Chatbot).

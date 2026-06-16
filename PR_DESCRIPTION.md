@@ -1,4 +1,4 @@
-# PR: Tier 1 + Tier 2 (F019, F020, F021, F022) — Onboarding sync, AI CS Wizard, Cash Flow PDF, Excel/Sheet I/O
+# PR: Priority 1 + Priority 2 (F019, F020, F021, F022) — Onboarding sync, AI CS Wizard, Cash Flow PDF, Excel/Sheet I/O
 
 ## 📋 Summary
 
@@ -48,7 +48,7 @@ Bundle 4 fitur (1 quick win + 3 enhancements) yang semuanya sudah di-spec dan di
 
 ### Docs
 - `docs/FEATURE_MAP.md` — F019, F020, F021, F022 specs (all ✅ Approved + Done)
-- `audit_report.md` — initial project audit (scope of Tier 1 + 2)
+- `audit_report.md` — initial project audit (scope of Priority 1 + 2)
 
 ## 📊 Stats
 
@@ -88,7 +88,7 @@ Bundle 4 fitur (1 quick win + 3 enhancements) yang semuanya sudah di-spec dan di
 
 ## 🔗 Related
 - Issue/docs: `docs/FEATURE_MAP.md` → F019, F020, F021, F022
-- Audit: `audit_report.md` (Tier 1 + 2 scope)
+- Audit: `audit_report.md` (Priority 1 + 2 scope)
 
 ## ⚠️ Migration notes
 - **0 SQL migrations required** — semua schema sudah ada (sebelumnya di F006/F007/migration 000029)

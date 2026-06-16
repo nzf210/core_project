@@ -69,7 +69,7 @@ Setiap request melalui pipeline ini **top-down**:
 1. corsMiddleware           ← set CORS headers, handle OPTIONS preflight
 2. ipRateLimitMiddleware    ← 200 req/min/IP, key: rate_limit:ip:<addr>
 3. auth.Middleware          ← parse JWT, populate context (TenantID, UserID, Role)
-4. tenantRateLimit          ← per plan (free=60, lite=300, pro=1000)
+4. tenantRateLimit          ← per plan (lite=60, lite=300, pro=1000)
 5. quotaMiddleware          ← lite: transactions quota check
 6. (rate limit public)      ← /auth, /api/public/* (10-30 req/min/IP)
 7. handler / reverse proxy  ← forward to backend with X-* headers

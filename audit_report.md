@@ -32,7 +32,7 @@
 - Laporan: Income Statement, Balance Sheet, Cash Flow
 - POS + Dynamic QRIS (CRC16-CCITT) + Xendit webhook
 - Product catalog + CSV import/export
-- Subscription tiering (Free/Starter/Pro/Enterprise) + QuotaMiddleware
+- Subscription tiering (Lite/Pro/Ultimate) + QuotaMiddleware
 
 ### UMKM AI & Chatbot (Fase 2 ✅)
 - AI Gateway dengan MiniMax M2.7 (port 8002) + capability-based routing (F014)
@@ -120,7 +120,7 @@ User minta: "lanjutkan pengembangan SaaS UMKM agar UMKM bisa membuat CS AI merek
 
 Interpretasi saya: **enable setiap tenant UMKM untuk punya AI CS otomatis** — ini sudah jadi (F006, F007, F016) tapi bisa di-enhance.
 
-### Rekomendasi Tier 1 — Quick Wins (1-2 hari kerja)
+### Rekomendasi Priority 1 — Quick Wins (1-2 hari kerja)
 1. **Fix onboarding loop** (sudah di-instruksikan CLAUDE.md, tinggal eksekusi)
    - Tambah `GET /me` endpoint di auth-service
    - Update router guard untuk refetch dari BE
@@ -157,7 +157,7 @@ Sebelum coding, biasanya saya verify:
 **Project ini production-ready dan aktif dikembangkan.** Bukan project kosong.
 
 **Yang paling realistis untuk "dilanjutkan":**
-- Fix onboarding loop (SUDAH ada instruksi, tinggal eksekusi) — Tier 1
+- Fix onboarding loop (SUDAH ada instruksi, tinggal eksekusi) — Priority 1
 - Enable per-tenant AI CS wizard — Tier 2
 - Selesaikan Fase 5 (Cash Flow PDF) — Tier 2
 

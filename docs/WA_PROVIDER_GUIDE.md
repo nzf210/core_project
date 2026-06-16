@@ -11,7 +11,7 @@ WCH Platform memiliki dua WA provider yang bekerja bersama:
 
 | Provider | Library | Port | Use Case | Biaya |
 |:---------|:--------|:-----|:---------|:------|
-| **wa-gateway** | whatsmeow (Web-based) | 8202 | Chatbot interaktif, broadcast, voucher | Gratis (Gratis) |
+| **wa-gateway** | whatsmeow (Web-based) | 8202 | Chatbot interaktif, broadcast, voucher | Tanpa biaya per pesan (sesuai Meta Cloud API) |
 | **wa-cloud-api** | Meta Graph API (Official) | 8210 | OTP, invoice, notifikasi transaksional | Per-pesan |
 
 **Alur routing default** (`services/wa-gateway/main.go`):
