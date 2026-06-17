@@ -68,6 +68,34 @@ export const api = {
     return res.json()
   },
 
+  // F047: Medical Records
+  async getClinicMedicalRecords() {
+    const res = await fetch(`${API_BASE}/clinic/medical-records`, { headers: headers() })
+    return res.json()
+  },
+  async createClinicMedicalRecord(record: Record<string, any>) {
+    const res = await fetch(`${API_BASE}/clinic/medical-records`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(record),
+    })
+    return res.json()
+  },
+
+  // F047: Doctor Schedules
+  async getClinicDoctors() {
+    const res = await fetch(`${API_BASE}/clinic/doctors`, { headers: headers() })
+    return res.json()
+  },
+  async createClinicDoctor(doctor: Record<string, any>) {
+    const res = await fetch(`${API_BASE}/clinic/doctors`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(doctor),
+    })
+    return res.json()
+  },
+
   // Auth (unauthenticated)
   async login(username: string, password: string) {
     const expectedTenantId = localStorage.getItem('active_domain_tenant_id') || ''
@@ -108,12 +136,13 @@ export const api = {
         username: body.username,
         email: body.email || '',
         businessName: body.businessName || '',
+        businessType: body.businessType || 'umum',
       }),
     })
     return res.json()
   },
 
-  async telegramRegister(body: { telegramChatId: string; phoneNumber: string; password: string; username: string; email?: string; businessName?: string }) {
+  async telegramRegister(body: { telegramChatId: string; phoneNumber: string; password: string; username: string; email?: string; businessName?: string; businessType?: string }) {
     const res = await fetch(`${API_BASE}/auth/telegram/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -124,6 +153,7 @@ export const api = {
         username: body.username,
         email: body.email || '',
         businessName: body.businessName || '',
+        businessType: body.businessType || 'umum',
       }),
     })
     return res.json()

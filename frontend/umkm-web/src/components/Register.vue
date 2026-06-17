@@ -48,6 +48,24 @@
             </div>
 
             <div class="form-group">
+              <label>Jenis Usaha</label>
+              <select v-model="formData.businessType" class="form-control" required>
+                <option value="" disabled>Pilih jenis usaha...</option>
+                <option value="umum">🏪 Umum (Toko / Jasa)</option>
+                <option value="warung">🛒 Warung / Toko Kelontong</option>
+                <option value="toko_online">🌐 Toko Online / E-Commerce</option>
+                <option value="restoran">🍽️ Restoran / Kuliner</option>
+                <option value="jasa">🔧 Jasa / Bengkel / Salon</option>
+                <option value="industri_kreatif">🎨 Industri Kreatif</option>
+                <option value="laundry">👕 Laundry</option>
+                <option value="clinic">🏥 Klinik / Praktik Dokter</option>
+              </select>
+              <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                Klinik mendapat modul tambahan: Antrean, Rekam Medis, Jadwal Dokter, Notifikasi WA.
+              </p>
+            </div>
+
+            <div class="form-group">
               <label>Username Pemilik</label>
               <input v-model="formData.username"
                 @input="formData.username = formData.username.replace(/ /g, '_').toLowerCase()" type="text"
@@ -186,7 +204,8 @@ const formData = ref({
   phone_number: '',
   telegramChatId: '',
   password: '',
-  plan: 'lite'
+  plan: 'lite',
+  businessType: '',
 })
 
 const handleRegister = async () => {
@@ -202,6 +221,7 @@ const handleRegister = async () => {
         phoneNumber: formData.value.phone_number,
         username: formData.value.username,
         businessName: formData.value.name,
+        businessType: formData.value.businessType,
       })
       data = await api.telegramRegister({
         telegramChatId: formData.value.telegramChatId,
@@ -210,6 +230,7 @@ const handleRegister = async () => {
         username: formData.value.username,
         email: formData.value.email || formData.value.phone_number + '@wa.user',
         businessName: formData.value.name,
+        businessType: formData.value.businessType,
       })
       console.log('[REGISTER:TELEGRAM] Response:', data)
     } else {
@@ -219,6 +240,7 @@ const handleRegister = async () => {
         username: formData.value.username,
         email: formData.value.email || formData.value.phone_number + '@wa.user',
         businessName: formData.value.name,
+        businessType: formData.value.businessType,
       })
     }
     if (data.success) {

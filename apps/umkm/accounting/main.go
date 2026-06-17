@@ -98,15 +98,15 @@ func main() {
 	mux.HandleFunc("/chatbot/config/test", handleChatbotConfigTest) // F020: POST preview with current config
 	mux.HandleFunc("/chatbot/permissions", handleChatbotPermissions) // F048: GET addon permissions
 
-	// Clinic Queue System (F045)
-	mux.HandleFunc("/clinic/settings", handleClinicSettings)
-	mux.HandleFunc("/clinic/appointments/book", handleClinicBook)
-	mux.HandleFunc("/clinic/appointments/cancel", handleClinicCancel)
-	mux.HandleFunc("/clinic/appointments/queue", handleClinicQueue)
-	mux.HandleFunc("/clinic/appointments/call", handleClinicCall)
-	// F047: Medical Records + Doctor Schedules
-	mux.HandleFunc("/clinic/medical-records", handleClinicMedicalRecords)
-	mux.HandleFunc("/clinic/doctors", handleClinicDoctors)
+	// Clinic Queue System (F045) + Medical Records + Doctor Schedules (F047)
+	// All /clinic/* routes require business_type = 'clinic' (middleware enforced)
+	mux.HandleFunc("/clinic/settings", requireClinicType(handleClinicSettings))
+	mux.HandleFunc("/clinic/appointments/book", requireClinicType(handleClinicBook))
+	mux.HandleFunc("/clinic/appointments/cancel", requireClinicType(handleClinicCancel))
+	mux.HandleFunc("/clinic/appointments/queue", requireClinicType(handleClinicQueue))
+	mux.HandleFunc("/clinic/appointments/call", requireClinicType(handleClinicCall))
+	mux.HandleFunc("/clinic/medical-records", requireClinicType(handleClinicMedicalRecords))
+	mux.HandleFunc("/clinic/doctors", requireClinicType(handleClinicDoctors))
 
 	mux.HandleFunc("/export/products", handleExportProducts)        // F022
 	mux.HandleFunc("/export/contacts", handleExportContacts)        // F022

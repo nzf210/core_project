@@ -1984,8 +1984,8 @@ Wajib update:
 
 ## F047: Business Type-Based Module System (Klinik Focus)
 
-**Spec Status:** ⏳ Draft
-**Implementation:** ⏳ Pending
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
 
 **Deskripsi:** Pilihan jenis usaha saat registrasi UMKM. Hanya klinik yang dapat akses "Antrean Klinik". Sidebar dinamis berdasarkan business type.
 
@@ -2006,16 +2006,25 @@ Wajib update:
 - **WA Notification:** Auto-kirim reminder 1 jam sebelum jadwal (timezone WIB)
 
 **Acceptance Criteria (AC):**
-- [ ] AC-1: Tenant baru bisa pilih business_type saat registrasi
-- [ ] AC-2: Menu sidebar UMKM menyesuaikan business_type
-- [ ] AC-3: Endpoint `/clinic/*` gagal untuk tenant non-clinic
-- [ ] AC-4: Dokter bisa di-add di `/clinic/schedule` dengan nama + spesialisasi
+- [x] AC-1: Tenant baru bisa pilih business_type saat registrasi (Register.vue dropdown 8 opsi, default `umum`, FK ke `business_types.id`)
+- [x] AC-2: Menu sidebar UMKM menyesuaikan business_type (AppSidebar filter by `businessTypes[]`)
+- [x] AC-3: Endpoint `/clinic/*` gagal untuk tenant non-clinic (requireClinicType middleware → 403)
+- [x] AC-4: Dokter bisa di-add di `/clinic/schedule` dengan nama + spesialisasi (ClinicFrontdesk tab "Jadwal Dokter", form lengkap)
+- [x] AC-5: Rekam Medis CRUD (tab "Rekam Medis", form + list, POST/GET `/clinic/medical-records`)
+- [x] AC-6: Migrasi `business_type` FK ke `business_types(id)` via migration 000061 (idempotent INSERT 'clinic' row)
 
 **Files yang perlu diubah:**
-- `shared/migrations/000061_business_type.up.sql` — tambah kolom business_type + clinic_doctors
-- `apps/umkm/accounting/main.go` — middleware cek business_type
-- `frontend/umkm-web/src/config/menu.ts` — dynamic menu rendering
-- `apps/umkm/accounting/clinic.go` — endpoint baru untuk medical record + schedule
+- `shared/migrations/000061_business_type.up.sql` — INSERT `business_type = 'clinic'` ke business_types + add clinic_doctors + clinic_services
+- `apps/umkm/accounting/clinic_middleware.go` — middleware `requireClinicType` cek business_type
+- `apps/umkm/accounting/main.go` — wrap semua `/clinic/*` route dengan middleware
+- `frontend/umkm-web/src/components/Register.vue` — tambah dropdown business_type (8 opsi)
+- `frontend/umkm-web/src/api.ts` — registerWA/telegramRegister kirim `businessType`
+- `frontend/umkm-web/src/config/menu.ts` — 3 menu klinik baru dengan `businessTypes: ['clinic']` filter
+- `frontend/umkm-web/src/components/AppSidebar.vue` — filter items by businessTypes
+- `frontend/umkm-web/src/App.vue` — fetch & pass `businessType` prop ke sidebar
+- `frontend/umkm-web/src/components/ClinicFrontdesk.vue` — 3 tab (Antrean / Rekam Medis / Jadwal Dokter)
+- `frontend/umkm-web/src/router/index.ts` — 3 route alias redirect ke `/clinic/frontdesk?tab=...`
+- `services/auth-service/main.go` — struct RegisterRequest + INSERT ke tenants dengan business_type
 
 **Notes:**
 - Clinics bisa punya multiple dokter (array text di DB)

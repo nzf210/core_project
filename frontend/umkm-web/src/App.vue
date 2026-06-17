@@ -26,6 +26,7 @@
       :user-role="userRole"
       :business-name="businessName"
       :plan="plan"
+      :business-type="businessType"
       :is-frozen="isFrozen"
       @close="isMobileMenuOpen = false"
     />
@@ -53,6 +54,7 @@ const isLoggedIn = ref(false)
 const userRole = ref('user')
 const isMobileMenuOpen = ref(false)
 const businessName = ref('')
+const businessType = ref('umum')
 const plan = ref('lite')
 const isFrozen = ref(false)
 
@@ -82,6 +84,10 @@ const checkAuth = async () => {
           if (data.data.plan) {
             plan.value = data.data.plan
             localStorage.setItem('plan', data.data.plan)
+          }
+          if (data.data.business_type) {
+            businessType.value = data.data.business_type
+            localStorage.setItem('business_type', data.data.business_type)
           }
         }
         if (data.data && typeof data.data.is_frozen === 'boolean') {

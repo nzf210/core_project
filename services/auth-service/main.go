@@ -31,6 +31,7 @@ type RegisterRequest struct {
 	Role         string `json:"role"`
 	TenantID     string `json:"tenantId"`
 	BusinessName string `json:"businessName"`
+	BusinessType string `json:"businessType"`
 }
 
 type VerifyOTPRequest struct {
@@ -65,6 +66,7 @@ type TelegramRegisterRequest struct {
 	Role           string `json:"role"`
 	TenantID       string `json:"tenantId"`
 	BusinessName   string `json:"businessName"`
+	BusinessType   string `json:"businessType"`
 }
 
 type TelegramLoginRequest struct {
@@ -464,6 +466,7 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 			regReq.Role, _ = regMap["role"].(string)
 			regReq.TenantID, _ = regMap["tenantId"].(string)
 			regReq.BusinessName, _ = regMap["businessName"].(string)
+			regReq.BusinessType, _ = regMap["businessType"].(string)
 			telegramChatID, _ = regMap["telegramChatId"].(string)
 		}
 	}
@@ -479,7 +482,11 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 		if tenantName == "" {
 			tenantName = regReq.Username + "'s Tenant"
 		}
-		tx.QueryRow(ctx, "INSERT INTO tenants (name, plan, is_frozen) VALUES ($1, 'inactive', true) RETURNING id", tenantName).Scan(&tenantID)
+		businessType := regReq.BusinessType
+		if businessType == "" {
+			businessType = "umum"
+		}
+		tx.QueryRow(ctx, "INSERT INTO tenants (name, plan, is_frozen, business_type) VALUES ($1, 'inactive', true, $2) RETURNING id", tenantName, businessType).Scan(&tenantID)
 	}
 
 	role := regReq.Role

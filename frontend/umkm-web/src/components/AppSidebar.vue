@@ -84,6 +84,7 @@ const props = defineProps<{
   userRole: string
   businessName: string
   plan: string
+  businessType?: string
   isFrozen?: boolean
 }>()
 
@@ -100,8 +101,18 @@ const filteredGroups = computed(() => {
     .map(group => ({
       ...group,
       items: group.items.filter(item => {
-        if (!item.roles) return true
-        return item.roles.includes(props.userRole)
+        // Role check
+        if (item.roles && !item.roles.includes(props.userRole)) {
+          return false
+        }
+        // Business type check (F047): kalau menu punya businessTypes filter,
+        // tampil hanya jika tenant businessType termasuk di list
+        if (item.businessTypes && item.businessTypes.length > 0) {
+          if (!props.businessType || !item.businessTypes.includes(props.businessType)) {
+            return false
+          }
+        }
+        return true
       }),
     }))
     .filter(group => group.items.length > 0)

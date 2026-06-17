@@ -3,6 +3,13 @@ export interface MenuItem {
   to: string
   icon: string
   roles?: string[]
+  /**
+   * businessTypes: jika di-set, menu HANYA tampil untuk business_type tertentu.
+   * - undefined / kosong = tampil untuk semua jenis usaha
+   * - ['clinic'] = tampil hanya untuk klinik
+   * - ['clinic', 'restoran'] = tampil untuk klinik & restoran
+   */
+  businessTypes?: string[]
 }
 
 export interface MenuGroup {
@@ -19,7 +26,11 @@ export const menuConfig: MenuGroup[] = [
       { label: 'Katalog Produk', to: '/catalog', icon: '📦' },
       // Impor/Ekspor: admin-only (risiko data besar; kasir tidak perlu)
       { label: 'Impor / Ekspor', to: '/data-transfer', icon: '📥', roles: ['owner', 'admin', 'superadmin'] },
-      { label: 'Antrean Klinik', to: '/clinic/frontdesk', icon: '🏥', roles: ['owner', 'admin', 'superadmin'] },
+      // ===== Klinik-only modules (F047) =====
+      { label: 'Antrean Klinik', to: '/clinic/frontdesk', icon: '🏥', businessTypes: ['clinic'], roles: ['owner', 'admin', 'superadmin'] },
+      { label: 'Rekam Medis', to: '/clinic/medical-record', icon: '📋', businessTypes: ['clinic'], roles: ['owner', 'admin', 'superadmin'] },
+      { label: 'Jadwal Dokter', to: '/clinic/schedule', icon: '📅', businessTypes: ['clinic'], roles: ['owner', 'admin', 'superadmin'] },
+      { label: 'Notifikasi WA Klinik', to: '/clinic/notifications', icon: '📲', businessTypes: ['clinic'], roles: ['owner', 'admin', 'superadmin'] },
     ],
   },
   {

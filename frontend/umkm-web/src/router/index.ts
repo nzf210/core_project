@@ -41,6 +41,10 @@ const routes = [
   { path: '/register', component: Register, name: 'Register', meta: { requiresGuest: true } },
   { path: '/clinic', component: ClinicQueue, name: 'ClinicQueue' },
   { path: '/clinic/frontdesk', component: ClinicFrontdesk, name: 'ClinicFrontdesk' },
+  // F047: Rekam Medis + Jadwal Dokter + Notifikasi WA Klinik — all use the same component with tabs
+  { path: '/clinic/medical-record', redirect: '/clinic/frontdesk?tab=records' },
+  { path: '/clinic/schedule', redirect: '/clinic/frontdesk?tab=doctors' },
+  { path: '/clinic/notifications', redirect: '/clinic/frontdesk?tab=notifications' },
   { path: '/superadmin-login', component: SuperAdminLogin, name: 'SuperAdminLogin', meta: { requiresGuest: true } },
   { path: '/forgot-password', component: ForgotPassword, name: 'ForgotPassword', meta: { requiresGuest: true } },
   { path: '/reset-password', component: ResetPassword, name: 'ResetPassword', meta: { requiresGuest: true }, props: (route: any) => ({ initialEmail: route.query.email }) },
