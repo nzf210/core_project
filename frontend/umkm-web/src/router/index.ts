@@ -84,6 +84,9 @@ async function fetchAndSyncMe(): Promise<any | null> {
     if (res.data.is_frozen !== undefined) {
       sessionStorage.setItem('subscription_status', res.data.is_frozen ? 'frozen' : 'active')
     }
+    if (res.data.addons !== undefined) {
+      localStorage.setItem('tenant_addons', JSON.stringify(res.data.addons))
+    }
   }
   return res && res.success ? res.data : null
 }

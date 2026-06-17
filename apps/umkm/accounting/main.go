@@ -103,6 +103,9 @@ func main() {
 	mux.HandleFunc("/clinic/appointments/cancel", handleClinicCancel)
 	mux.HandleFunc("/clinic/appointments/queue", handleClinicQueue)
 	mux.HandleFunc("/clinic/appointments/call", handleClinicCall)
+	// F047: Medical Records + Doctor Schedules
+	mux.HandleFunc("/clinic/medical-records", handleClinicMedicalRecords)
+	mux.HandleFunc("/clinic/doctors", handleClinicDoctors)
 
 	mux.HandleFunc("/export/products", handleExportProducts)        // F022
 	mux.HandleFunc("/export/contacts", handleExportContacts)        // F022

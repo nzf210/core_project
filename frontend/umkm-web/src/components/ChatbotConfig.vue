@@ -255,7 +255,18 @@ const loading = ref(true)
 const saving = ref(false)
 const testing = ref(false)
 const errorMsg = ref('')
-const hasWaPremium = computed(() => false) // TODO: fetch from /api/me or /admin/addon-check
+const hasWaPremium = computed(() => {
+  // Check if tenant has wa_session_meta addon from wallet_credits balance or explicit addon flag
+  // For now, check localStorage for addon info loaded at login
+  const addons = localStorage.getItem('tenant_addons')
+  if (!addons) return false
+  try {
+    const addonList = JSON.parse(addons)
+    return addonList.includes('wa_session_meta')
+  } catch {
+    return false
+  }
+})
 
 const testOpen = ref(false)
 const testInput = ref('')

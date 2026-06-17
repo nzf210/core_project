@@ -88,13 +88,27 @@ Format per feature:
 | F023 | FAQ Bot AI — Edit & Generate | ✅ Approved | ✅ Done | 2026-06-14 |
 | F024 | Paid-Only Enforcement (Hardening) | ✅ Approved | ✅ Done | 2026-06-14 |
 | F025 | Tier Restrictions Overhaul + AI Multimodal | ✅ Approved | ✅ Done (Phase 1+2) / ⏳ Pending (Phase 3) | 2026-06-14 |
+| F026 | N8N Notification Webhooks & Workflows | ✅ Approved | ✅ Done | 2026-06-14 |
+| F027 | Core Business Flow Fixes & Optimizations | ✅ Approved | ✅ Done | 2026-06-14 |
 | F029 | Dynamic Multimodal Guardrails | ✅ Approved | ✅ Done | 2026-06-14 |
 | F030 | GetPlanFeatures DB Integration | ✅ Approved | ✅ Done | 2026-06-14 |
 | F031 | Campaign Anti-Double Validation | ✅ Approved | 🔨 In Progress | 2026-06-14 |
 | F032 | Modul Saksi & Real Count C1 | ✅ Approved | 🔨 In Progress | 2026-06-14 |
+| F033 | Campaign Logistics Tracking | ✅ Approved | 🔨 In Progress | 2026-06-17 |
 | F034 | Add-on Wallet & Meta API Connector | ✅ Approved | ✅ Done | 2026-06-16 |
 | F035 | Discount Vouchers (Percent & Fixed) | ✅ Approved | ✅ Done | 2026-06-16 |
-| F036 | Lifetime Affiliate & Leaderboard | ✅ Approved | 🔨 In Progress | 2026-06-16 |
+| F036 | Lifetime Affiliate & Leaderboard | ✅ Approved | ✅ Done | 2026-06-17 |
+| F037 | Dashboard Sentimen Isu Harian (AI NLP) | ✅ Approved | ✅ Done | 2026-06-17 |
+| F038 | Wargame & Simulasi Kemenangan | ✅ Approved | ✅ Done | 2026-06-17 |
+| F039 | Peta Kerawanan & Pelaporan Pelanggaran | ✅ Approved | ✅ Done | 2026-06-17 |
+| F040 | WA Bot FAQ Panduan Kampanye (RAG) | ✅ Approved | 🔨 In Progress | 2026-06-17 |
+| F041 | Gamification & Leaderboard Relawan | ✅ Approved | ✅ Done | 2026-06-17 |
+| F042 | Auto-Scan KTP (AI OCR Vision) | ✅ Approved | ✅ Done | 2026-06-17 |
+| F043 | Multi-Level Election & Sainte-Laguë Simulator | ✅ Approved | 🔨 In Progress | 2026-06-17 |
+| F044 | Campaign Modular License & Payment System | ✅ Approved | 🔨 In Progress | 2026-06-17 |
+| F045 | UMKM Healthcare Clinic Queue System | ✅ Approved | ✅ Done | 2026-06-17 |
+| F047 | Hardening Migration (F024 cleanup) | ✅ Approved | ✅ Done | 2026-06-17 |
+| F048 | WA Provider Preferences (Auto/Cloud/Whatsmeow) | ✅ Approved | ✅ Done | 2026-06-17 |
 |- [ ] AC-2: AI Vision mencocokkan foto plano dengan input ketik saksi. Jika beda, masuk status "Needs Human Review"
 - [ ] AC-3: Saksi yang bolos jam 07:00 pagi ditandai merah di dashboard (saksi_attendances).
 
@@ -2006,3 +2020,43 @@ Wajib update:
 **Notes:**
 - Clinics bisa punya multiple dokter (array text di DB)
 - Fitur ini akan menjadi dasar pricing tier beda per business type
+## F048: WA Provider Preferences (Auto, Cloud API, Whatsmeow)
+
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
+
+**Deskripsi:** Memberikan fleksibilitas bagi tenant untuk memilih provider WhatsApp untuk layanan Chatbot/CS mereka. Opsi default adalah `auto` (hybrid routing), tapi tenant dengan addon `wa_session_meta` bisa memaksa (force) ke `cloud_api`, atau tenant biasa bisa memaksa ke `whatsmeow` murni.
+
+**Spec:**
+1. Database: Tambah enum `wa_provider_enum` (auto, whatsmeow, cloud_api) via migration 000063.
+2. `tenant_chatbot_configs` ditambahkan kolom `wa_provider_preference`.
+3. `tenants` ditambahkan kolom `auth_wa_provider_preference`.
+4. Backend `wa-gateway`: Routing pesan `isTransactional` di-override jika tenant menyetel preferensi eksplisit.
+5. Backend `auth-service`: Memilih provider WA berdasarkan preferensi tenant saat kirim OTP (fallback ke whatsmeow jika kosong).
+6. Frontend UMKM (`ChatbotConfig.vue`): Tambah toggle "WA Provider" di UI (dropdown/radio). Cloud API dilock jika tidak ada add-on.
+
+**Acceptance Criteria (AC):**
+- [x] AC-1: Migration 000063 terbuat dan teraplikasi.
+- [x] AC-2: `wa-gateway` membaca `wa_provider_preference` dan override routing (force whatsmeow → skip cloud, force cloud_api → no fallback).
+- [x] AC-3: UI `ChatbotConfig.vue` menampilkan toggle WA Provider dan menyimpan ke DB.
+- [x] AC-4: `wa_session_meta` addon mengeksekusi lock/unlock opsi Cloud API.
+- [x] AC-5: `auth-service` membaca `auth_wa_provider_preference` untuk routing OTP.
+- [ ] AC-6: Test integrasi: pesan chatbot bisa dipaksa ke cloud_api atau whatsmeow.
+
+**Files yang perlu diubah:**
+- `shared/migrations/000063_wa_provider_preferences.up.sql` — Migration enum + kolom.
+- `services/wa-gateway/main.go` — Dynamic routing dengan preferensi.
+- `apps/umkm/accounting/main.go` — Handler ChatbotConfig GET/PUT WA provider.
+- `frontend/umkm-web/src/components/ChatbotConfig.vue` — UI toggle provider.
+- `frontend/umkm-web/nginx.conf` — Affiliate routes fix.
+- `frontend/umkm-web/src/components/ClinicFrontdesk.vue` — UI cleanup.
+
+**Notes:**
+- Backend wa-gateway sudah diimplementasi: `getTenantWAProviderPreference` + override routing + header `X-WA-Provider-Override`.
+- Backend handler ChatbotConfig (UMKM Accounting) sudah diimplementasi (GET/PUT wa_provider_preference).
+- Frontend ChatbotConfig.vue (UI toggle) sudah diimplementasi dengan dropdown + help text.
+- Add-on enforcement via `/api/me` endpoint: `auth-service` return `addons` array, frontend check `wa_session_meta` presence.
+- Cloud API option di-disable jika tenant tidak punya add-on `wa_session_meta`.
+- Auth-service OTP routing: `handleRegister` + `handlePhoneLogin` read `auth_wa_provider_preference` dan kirim via header `X-WA-Provider-Override`.
+- Affiliate endpoint `/affiliate/*` routing di nginx sudah difix (sebelumnya error JSON parsing).
+- ClinicFrontdesk.vue styling sudah diupgrade ke glass-card + btn class standar.

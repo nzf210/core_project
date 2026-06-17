@@ -242,7 +242,7 @@ func ensureSuperadmin() error {
 	}
 
 	var tenantID string
-	err = DB.QueryRow(ctx, `INSERT INTO tenants (name, plan) VALUES ('Superadmin', 'superadmin') RETURNING id`).Scan(&tenantID)
+	err = DB.QueryRow(ctx, `INSERT INTO tenants (name, plan, business_type) VALUES ('Superadmin', 'superadmin', 'umum') RETURNING id`).Scan(&tenantID)
 	if err != nil {
 		return fmt.Errorf("create superadmin tenant: %w", err)
 	}
@@ -350,15 +350,21 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Read auth_wa_provider_preference for system tenant (if exists)
+	var authWAProvider string
+	if err := DB.QueryRow(ctx, "SELECT COALESCE(auth_wa_provider_preference::text, 'auto') FROM tenants WHERE id = $1", senderTenant).Scan(&authWAProvider); err != nil {
+		authWAProvider = "auto" // default fallback
+	}
+
 	// Send via WA Gateway
 	go func() {
 		target := formatPhoneToWAJID(req.PhoneNumber)
-		
+
 		formData := url.Values{}
 		formData.Set("tenant_id", senderTenant)
 		formData.Set("target", target)
 		formData.Set("message", "Kode OTP registrasi WCH Anda: " + otp)
-		
+
 		waURL := os.Getenv("WA_GATEWAY_URL")
 		if waURL == "" {
 			waURL = "http://wa-gateway:8202"
@@ -372,6 +378,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				req.Header.Set("X-Message-Type", "otp")
 				req.Header.Set("X-Source", "auth-service")
+				req.Header.Set("X-WA-Provider-Override", authWAProvider)
 				resp, err = http.DefaultClient.Do(req)
 			if err != nil {
 				slog.Error("Failed to send OTP via WA Gateway", "error", err)
@@ -1116,13 +1123,13 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 
 	err := DB.QueryRow(ctx, `
 		SELECT u.id, u.username, COALESCE(u.email, ''), u.phone_number, u.role, u.telegram_chat_id,
-		       t.plan, t.business_type, COALESCE(t.is_frozen, false), COALESCE(t.onboarding_completed, false)
+		       t.id, t.plan, t.business_type, COALESCE(t.is_frozen, false), COALESCE(t.onboarding_completed, false)
 		FROM users u
 		JOIN tenants t ON t.id = u.tenant_id
 		WHERE u.id = $1 AND u.tenant_id = $2
 	`, claims.UserID, claims.TenantID).Scan(
 		&userID, &username, &email, &phoneNumber, &role, &telegramChatID,
-		&plan, &businessType, &isFrozen, &onboardingCompleted,
+		&tenantID, &plan, &businessType, &isFrozen, &onboardingCompleted,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -1132,6 +1139,20 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 		slog.Error("handleMe query failed", "error", err, "user_id", claims.UserID)
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
 		return
+	}
+
+	// Check tenant addons (wallet_credits balance > 0 for wa_session_meta)
+	var addons []string
+	rows, err := DB.Query(ctx, `
+		SELECT DISTINCT reference FROM wallet_transactions
+		WHERE tenant_id = $1 AND reference LIKE 'wa_session_meta%' AND amount_cents < 0
+		LIMIT 1
+	`, tenantID)
+	if err == nil {
+		defer rows.Close()
+		if rows.Next() {
+			addons = append(addons, "wa_session_meta")
+		}
 	}
 
 	writeJSON(w, http.StatusOK, Response{
@@ -1148,6 +1169,7 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 			"business_type":        derefStr(businessType),
 			"is_frozen":            isFrozen,
 			"onboarding_completed": onboardingCompleted,
+			"addons":               addons,
 		},
 	})
 }
@@ -1338,9 +1360,20 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read auth_wa_provider_preference from user's tenant (if registered)
+	var authWAProvider string
+	var tenantIDForPref string
+	if err := DB.QueryRow(ctx, "SELECT tenant_id FROM users WHERE phone_number = $1", req.PhoneNumber).Scan(&tenantIDForPref); err == nil {
+		if err := DB.QueryRow(ctx, "SELECT COALESCE(auth_wa_provider_preference::text, 'auto') FROM tenants WHERE id = $1", tenantIDForPref).Scan(&authWAProvider); err != nil {
+			authWAProvider = "auto"
+		}
+	} else {
+		authWAProvider = "auto"
+	}
+
 	go func() {
 		target := formatPhoneToWAJID(req.PhoneNumber)
-		
+
 		formData := url.Values{}
 		verifierTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
 		if verifierTenant == "" {
@@ -1349,12 +1382,12 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 		formData.Set("tenant_id", verifierTenant)
 		formData.Set("target", target)
 		formData.Set("message", "Kode OTP login WCH Anda: "+otp)
-		
+
 		waURL := os.Getenv("WA_GATEWAY_URL")
 		if waURL == "" {
 			waURL = "http://wa-gateway:8202"
 		}
-		
+
 		var resp *http.Response
 		var err error
 		for i := 0; i < 3; i++ {
@@ -1363,6 +1396,7 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				req.Header.Set("X-Message-Type", "otp")
 				req.Header.Set("X-Source", "auth-service")
+				req.Header.Set("X-WA-Provider-Override", authWAProvider)
 				resp, err = http.DefaultClient.Do(req)
 			if err != nil {
 				slog.Error("Failed to send login OTP via WA Gateway", "error", err)

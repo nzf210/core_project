@@ -68,7 +68,7 @@ core_project/                   ← Root monorepo (satu go.mod)
 │   │   ├── chatbot/            ← AI Chatbot via WhatsApp (Port 8202)
 │   │   │   ├── main.go
 │   │   │   └── db.go
-│   │   ├── business/           ← Business management API (Port 9001)
+│   │   ├── business/           ← Business management API (Port 9005)
 │   │   │   └── main.go
 │   │   └── automation/         ← Background worker (tanpa HTTP server)
 │   │       └── main.go
@@ -115,7 +115,7 @@ core_project/                   ← Root monorepo (satu go.mod)
 │   │   ├── response/           ← Standard JSON response helper
 │   │   ├── migrate/            ← Auto-migration runner (shared/sdk/migrate)
 │   │   └── webhook/            ← Webhook utilities
-│   └── migrations/             ← Database SQL migrations (000001 — 000033)
+│   └── migrations/             ← Database SQL migrations (000001 — 000063)
 │
 ├── frontend/
 │   ├── umkm-web/               ← Vue 3 + Vite (Port 3201, Docker scaled: 3201-3203)
@@ -163,14 +163,12 @@ core_project/                   ← Root monorepo (satu go.mod)
 | `8210` | WA Cloud API | `services/wa-cloud-api` (Docker mapped: `8210:8210`) |
 | `8202` | UMKM Chatbot | `apps/umkm/chatbot` (native, shared port with WA Gateway) |
 | `8213` | UMKM Automation | `apps/umkm/automation` (Docker mapped: `8213:8203`) |
-| `9001` | UMKM Business | `apps/umkm/business` |
+| `9005` | UMKM Business | `apps/umkm/business` |
 | `9002` | Campaign API | `apps/campaign/api` |
 | `3000` | Chatwoot (Self-hosted) | docker-compose (`3000:3000`) |
 | `3201` | Frontend UMKM | `frontend/umkm-web` (Docker `3201:80`, scaled 3x → 3201-3203) |
-| `3202` | Frontend UMKM (replica) | `frontend/umkm-web` (Docker scaled) |
-| `3203` | Frontend UMKM (replica) | `frontend/umkm-web` (Docker scaled) |
-| `3301` | Frontend Campaign | `frontend/campaign-web` |
-| `3401` | Frontend Superadmin | `frontend/superadmin-web` |
+| `3202` | Frontend Superadmin | `frontend/superadmin-web` |
+| `3203` | Frontend Campaign | `frontend/campaign-web` |
 | `5433` | PostgreSQL + pgvector (Docker) | docker-compose (`5433:5432`) |
 | `5678` | N8N Main (Queue Mode) | docker-compose (`5678:5678`) |
 | `6381` | Redis (Docker) | docker-compose (`6381:6379`) |

@@ -838,6 +838,11 @@ func setupRoutes(_ context.Context, container *sqlstore.Container) {
 		// ── Preference-based routing: tenant can override default hybrid logic ──
 		preference := getTenantWAProviderPreference(tenantID)
 
+		// Allow auth-service to override preference via header (for OTP routing)
+		if override := r.Header.Get("X-WA-Provider-Override"); override != "" {
+			preference = override
+		}
+
 		// If preference is cloud_api, FORCE Cloud API (no fallback to whatsmeow)
 		forceCloud := preference == "cloud_api"
 

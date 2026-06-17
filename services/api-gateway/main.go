@@ -89,6 +89,9 @@ func main() {
 	mux.Handle("/subscribe", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("", newTenantProxy(getTarget("billing-service", "8003"))))))
 	mux.Handle("/subscription", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("", newTenantProxy(getTarget("billing-service", "8003"))))))
 	mux.Handle("/voucher/redeem", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("", newTenantProxy(getTarget("billing-service", "8003"))))))
+	// F036: Affiliate — all /affiliate/* routes proxy to billing-service (some are public, some require auth)
+	mux.Handle("/api/public/affiliate-leaderboard", rateLimitMiddleware(rateLimitPublic)(newProxy(getTarget("billing-service", "8003"))))
+	mux.Handle("/affiliate/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/affiliate", newTenantProxy(getTarget("billing-service", "8003"))))))
 	mux.Handle("/api/wa/", auth.Middleware(tenantRateLimitMiddleware(auth.RequireFeature("chatbot")(newTenantProxy(getTarget("wa-gateway", "8202"))))))
 	mux.Handle("/api/notifications/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/notifications", newTenantProxy(getTarget("notification-service", "8005"))))))
 
