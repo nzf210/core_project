@@ -41,15 +41,24 @@ async function loadData() {
     if (!isAuthed()) return
     const res = await api.listPlans()
     plans.value = res.data || []
-    
-    // Initialize form states
-    plans.value.forEach(p => {
-      formStates.value[p.id] = {}
-      featureKeys.forEach(k => {
-        // Fallback to 0 if not present in response
-        formStates.value[p.id][k] = p[k] ?? 0
-      })
-    })
+
+    // Fetch current numeric limits per plan from the matrix endpoint
+    await Promise.all(plans.value.map(async (p: any) => {
+      try {
+        const matrix = await api.fetchPlanFeatureMatrix(p.id)
+        formStates.value[p.id] = {}
+        featureKeys.forEach(k => {
+          // Fallback to 0 if not present
+          formStates.value[p.id][k] = (matrix.data as any)?.[k] ?? 0
+        })
+      } catch {
+        // Fallback to plan object's own keys (all zero if not present)
+        formStates.value[p.id] = {}
+        featureKeys.forEach(k => {
+          formStates.value[p.id][k] = (p as any)[k] ?? 0
+        })
+      }
+    }))
   } catch (err) {
     alert("Failed to load plans")
   } finally {

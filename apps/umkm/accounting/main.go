@@ -17,6 +17,7 @@ import (
 
 	"core_project/shared/sdk/config"
 	"core_project/shared/sdk/webhook"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jung-kurt/gofpdf"
 	xendit "github.com/xendit/xendit-go/v6"
 	invoice "github.com/xendit/xendit-go/v6/invoice"
@@ -94,8 +95,8 @@ func main() {
 
 	// ── Chatbot / N8N Hybrid Endpoints ──────────────────────────────────
 	mux.HandleFunc("/internal/tenant/{tenant_id}/chatbot-config", handleInternalChatbotConfig)
-	mux.HandleFunc("/chatbot/config", handleChatbotConfig)          // F020: GET/PUT per-tenant chatbot config (X-Tenant-ID)
-	mux.HandleFunc("/chatbot/config/test", handleChatbotConfigTest) // F020: POST preview with current config
+	mux.HandleFunc("/chatbot/config", handleChatbotConfig)           // F020: GET/PUT per-tenant chatbot config (X-Tenant-ID)
+	mux.HandleFunc("/chatbot/config/test", handleChatbotConfigTest)  // F020: POST preview with current config
 	mux.HandleFunc("/chatbot/permissions", handleChatbotPermissions) // F048: GET addon permissions
 
 	// Clinic Queue System (F045) + Medical Records + Doctor Schedules (F047)
@@ -108,12 +109,12 @@ func main() {
 	mux.HandleFunc("/clinic/medical-records", requireClinicType(handleClinicMedicalRecords))
 	mux.HandleFunc("/clinic/doctors", requireClinicType(handleClinicDoctors))
 
-	mux.HandleFunc("/export/products", handleExportProducts)        // F022
-	mux.HandleFunc("/export/contacts", handleExportContacts)        // F022
-	mux.HandleFunc("/import/products", handleImportProducts)        // F022
-	mux.HandleFunc("/import/contacts", handleImportContacts)        // F022
-	mux.HandleFunc("/import/journal", handleImportJournal)          // F022
-	mux.HandleFunc("/import/template", handleImportTemplate)        // F022: download CSV template
+	mux.HandleFunc("/export/products", handleExportProducts) // F022
+	mux.HandleFunc("/export/contacts", handleExportContacts) // F022
+	mux.HandleFunc("/import/products", handleImportProducts) // F022
+	mux.HandleFunc("/import/contacts", handleImportContacts) // F022
+	mux.HandleFunc("/import/journal", handleImportJournal)   // F022
+	mux.HandleFunc("/import/template", handleImportTemplate) // F022: download CSV template
 	mux.HandleFunc("/internal/tenant/{tenant_id}/rag/search", handleInternalRAGSearch)
 	mux.HandleFunc("/internal/conversation/log", handleInternalConversationLog)
 	mux.HandleFunc("/internal/escalation/log", handleInternalEscalationLog)
@@ -3106,6 +3107,14 @@ func handleChatbotConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// F048 AC-8: Cek WA connection sebelum aktivasi chatbot
+		if merged.IsActive {
+			if err := validateWAConnectionForChatbot(r.Context(), DB, tenantID); err != nil {
+				writeJSON(w, http.StatusBadRequest, APIResponse{Message: err.Error()})
+				return
+			}
+		}
+
 		kwJSON, _ := json.Marshal(merged.EscalationKeywords)
 		daysJSON, _ := json.Marshal(merged.BusinessDays)
 		channelsJSON, _ := json.Marshal(merged.ChannelsEnabled)
@@ -3181,8 +3190,8 @@ func handleChatbotPermissions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Data: map[string]interface{}{
-			"plan":            plan,
-			"has_wa_cloud_api": hasWaCloudAPI,
+			"plan":                plan,
+			"has_wa_cloud_api":    hasWaCloudAPI,
 			"available_providers": []string{"auto", "whatsmeow", "cloud_api"},
 		},
 	})
@@ -4843,4 +4852,40 @@ func derefStr(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// F048 AC-8: Guard Activation
+// validateWAConnectionForChatbot checks if tenant has active WA connection
+func validateWAConnectionForChatbot(ctx context.Context, pool *pgxpool.Pool, tenantID string) error {
+	var exists bool
+
+	// Check whatsmeow
+	var whatsmeowExists bool
+	err := pool.QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM wa_sessions 
+		WHERE tenant_id = $1 AND status = 'connected'
+	)`, tenantID).Scan(&whatsmeowExists)
+	if err != nil {
+		return fmt.Errorf("DB error wa_sessions: %v", err)
+	}
+
+	// Check cloud_api
+	var cloudAPIExists bool
+	err = pool.QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM wa_cloud_api_credentials 
+		WHERE tenant_id = $1 AND is_active = true
+	)`, tenantID).Scan(&cloudAPIExists)
+
+	// Table wa_cloud_api_credentials might not exist if migration failed, but we assume it does based on schema
+	if err != nil {
+		return fmt.Errorf("DB error wa_cloud_api_credentials: %v", err)
+	}
+
+	exists = whatsmeowExists || cloudAPIExists
+
+	if !exists {
+		return fmt.Errorf("Nomor WhatsApp (CS) belum terhubung. Silakan hubungkan WhatsApp terlebih dahulu sebelum mengaktifkan Chatbot.")
+	}
+
+	return nil
 }

@@ -84,6 +84,8 @@ export const api = {
   listPlans: () => request('/admin/plans'),
   listPlanFeatures: (planId?: string) =>
     request(`/admin/plan-features${planId ? `?plan_id=${planId}` : ''}`),
+  fetchPlanFeatureMatrix: (planId: string) =>
+    request(`/admin/plan-features-matrix/${planId}`),
   updatePlanFeatureNumeric: (planId: string, features: Record<string, number>) =>
     request(`/admin/plan-features-matrix/${planId}`, {
       method: 'PATCH',

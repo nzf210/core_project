@@ -588,6 +588,11 @@ Card "Voucher Billing" di `frontend/umkm-web/src/components/SuperAdminDashboard.
 - F048 Chatbot config: `apps/umkm/accounting/chatbot_config_test.go`
 - F048 WA Provider routing: `services/wa-gateway/wa_gateway_test.go`
 
+**F048 AC-8 — Chatbot Activation Guard (integration-style):**
+- `apps/umkm/accounting/chatbot_config_test.go` (TestValidateWAConnectionForChatbot_*)
+- Skip otomatis jika `DB == nil` (tidak ada DB pool di test env)
+- Untuk CI lengkap: jalankan dengan `DATABASE_URL` env pointing ke test DB
+
 **Contoh mock data real-schema:**
 ```go
 const mockTenantID = "11111111-1111-1111-1111-111111111111" // UUID
@@ -595,6 +600,49 @@ const mockCampaignID = "22222222-2222-2222-2222-222222222222"
 // business_types.id VARCHAR(50): "umum", "warung", "clinic", ...
 // coordinator_level: "korprov", "korKab", "korKec", "korKades", "saksi_tps"
 // wa_provider_preference: "auto", "whatsmeow", "cloud_api"
+```
+
+---
+
+## 🛡️ Chatbot Activation Guard (F048 AC-8)
+
+Saat user klik tombol **"Simpan & Aktifkan"** di `/chatbot-config`, BE WAJIB cek apakah toko sudah punya koneksi WA aktif **sebelum** `is_active = true` disimpan.
+
+**Lokasi kode:** `apps/umkm/accounting/main.go` → `validateWAConnectionForChatbot()`
+
+**Logika validasi (OR, dua-duanya harus return true):**
+1. Whatsmeow device connected:
+   ```sql
+   SELECT 1 FROM wa_sessions 
+   WHERE tenant_id = $1 AND status = 'connected'
+   ```
+2. Meta Cloud API active:
+   ```sql
+   SELECT 1 FROM wa_cloud_api_credentials
+   WHERE tenant_id = $1 AND is_active = true
+   ```
+
+**Response jika tidak ada koneksi:**
+```http
+HTTP/1.1 400 Bad Request
+{
+  "success": false,
+  "message": "Nomor WhatsApp (CS) belum terhubung. Silakan hubungkan WhatsApp terlebih dahulu sebelum mengaktifkan Chatbot."
+}
+```
+
+**Flow UI:**
+```
+User tekan "Simpan & Aktifkan"
+   ↓
+Frontend PUT /chatbot/config { is_active: true, ... }
+   ↓
+BE validateChatbotConfig(&merged)   ← cek schema fields
+   ↓
+BE validateWAConnectionForChatbot() ← cek WA connected?
+   ↓
+   ├─ Ya (salah satu) → UPDATE tenant_chatbot_configs SET is_active = true
+   └─ Tidak → 400 "Nomor WhatsApp (CS) belum terhubung..."
 ```
 
 **Run test pattern:**

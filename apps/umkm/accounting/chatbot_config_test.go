@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -11,12 +12,12 @@ import (
 func validDefaultChatbotConfig() *ChatbotConfig {
 	return &ChatbotConfig{
 		Language:                 "id",
-		MaxTokens:                500,                       // 64-4096
-		MaxContextMessages:       10,                        // 1-50
-		RAGTopK:                  3,                         // 1-20
-		RAGSimilarityThreshold:   0.7,                       // 0-1
-		AutoEscalateAfterMinutes: 5,                         // > 0
-		ChannelsEnabled:          []string{"whatsapp"},      // ≥1 channel
+		MaxTokens:                500,                  // 64-4096
+		MaxContextMessages:       10,                   // 1-50
+		RAGTopK:                  3,                    // 1-20
+		RAGSimilarityThreshold:   0.7,                  // 0-1
+		AutoEscalateAfterMinutes: 5,                    // > 0
+		ChannelsEnabled:          []string{"whatsapp"}, // ≥1 channel
 	}
 }
 
@@ -71,7 +72,7 @@ func TestValidateChatbotConfig_Language(t *testing.T) {
 		{"en", true},
 		{"jv", false}, // Javanese not supported yet
 		{"su", false}, // Sundanese not supported yet
-		{"", false}, // empty
+		{"", false},   // empty
 		{"ID", false}, // case-sensitive
 	}
 
@@ -96,20 +97,20 @@ func TestValidateChatbotConfig_Language(t *testing.T) {
 // TestValidateChatbotConfig_Default verifies default config is valid
 func TestValidateChatbotConfig_Default(t *testing.T) {
 	cfg := &ChatbotConfig{
-		LLMProvider:           "gemini",
-		LLMModel:              "gemini-2.5-flash",
-		Language:              "id",
-		Tone:                  "friendly",
-		WAProviderPreference:  "auto",
-		MaxTokens:             500,
-		Temperature:           0.7,
-		MaxContextMessages:    10,
-		RAGTopK:               3,
+		LLMProvider:            "gemini",
+		LLMModel:               "gemini-2.5-flash",
+		Language:               "id",
+		Tone:                   "friendly",
+		WAProviderPreference:   "auto",
+		MaxTokens:              500,
+		Temperature:            0.7,
+		MaxContextMessages:     10,
+		RAGTopK:                3,
 		RAGSimilarityThreshold: 0.7,
-		ChannelsEnabled:       []string{"whatsapp"},
-		BusinessDays:          []int{1, 2, 3, 4, 5}, // ISO weekdays Mon-Fri
-		BusinessHoursStart:    "08:00",
-		BusinessHoursEnd:      "17:00",
+		ChannelsEnabled:        []string{"whatsapp"},
+		BusinessDays:           []int{1, 2, 3, 4, 5}, // ISO weekdays Mon-Fri
+		BusinessHoursStart:     "08:00",
+		BusinessHoursEnd:       "17:00",
 	}
 	if err := validateChatbotConfig(cfg); err != "" {
 		t.Errorf("default config should be valid, got error: %s", err)
@@ -136,15 +137,15 @@ func TestValidateChatbotConfig_WAProviderPreferencePriority(t *testing.T) {
 // TestChatbotConfig_JSONTags verifies JSON serialization round-trip
 func TestChatbotConfig_JSONTags(t *testing.T) {
 	cfg := ChatbotConfig{
-		LLMProvider:           "openai",
-		Language:              "id",
-		WAProviderPreference:  "cloud_api",
-		MaxTokens:             1000,
-		Temperature:           0.5,
-		ChannelsEnabled:       []string{"whatsapp", "telegram"},
-		BusinessDays:          []int{1, 2, 3, 4, 5}, // ISO weekdays
-		BusinessHoursStart:    "09:00",
-		BusinessHoursEnd:      "18:00",
+		LLMProvider:          "openai",
+		Language:             "id",
+		WAProviderPreference: "cloud_api",
+		MaxTokens:            1000,
+		Temperature:          0.5,
+		ChannelsEnabled:      []string{"whatsapp", "telegram"},
+		BusinessDays:         []int{1, 2, 3, 4, 5}, // ISO weekdays
+		BusinessHoursStart:   "09:00",
+		BusinessHoursEnd:     "18:00",
 	}
 	// Just verify the field names exist with proper tags
 	if cfg.WAProviderPreference != "cloud_api" {
@@ -227,5 +228,70 @@ func TestPlanFeatures_WACloudAPI_FreePlanRemoved(t *testing.T) {
 		if validPlans[plan] {
 			t.Errorf("plan %q should not be in validPlans", plan)
 		}
+	}
+}
+
+// F048 AC-8: WA Connection Guard Tests
+// Note: These tests are integration-style; they expect a live DB connection.
+// Skip with t.Skip if DB is unavailable.
+
+func TestValidateWAConnectionForChatbot_MissingBoth(t *testing.T) {
+	ctx := context.Background()
+	if DB == nil {
+		t.Skip("DB connection required for integration test")
+	}
+	// Use a tenant ID that does NOT exist
+	err := validateWAConnectionForChatbot(ctx, DB, "00000000-0000-0000-0000-000000000000")
+	if err == nil {
+		t.Error("expected error for tenant with no WA connection")
+	}
+	if !strings.Contains(err.Error(), "belum terhubung") {
+		t.Errorf("expected 'belum terhubung' error, got: %v", err)
+	}
+}
+
+func TestValidateWAConnectionForChatbot_WhatsappMeowConnected(t *testing.T) {
+	ctx := context.Background()
+	if DB == nil {
+		t.Skip("DB connection required for integration test")
+	}
+	// This test requires a tenant with a connected wa_sessions row
+	// For unit test purposes, we mock by inserting a temporary row
+	mockTenantID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	_, err := DB.Exec(ctx, `
+		INSERT INTO wa_sessions (tenant_id, session_name, status, wa_number)
+		VALUES ($1, 'test-session', 'connected', '628123456789')
+		ON CONFLICT (tenant_id, session_name) DO UPDATE SET status = 'connected'
+	`, mockTenantID)
+	if err != nil {
+		t.Skipf("could not setup test data: %v", err)
+	}
+	defer DB.Exec(ctx, `DELETE FROM wa_sessions WHERE tenant_id = $1`, mockTenantID)
+
+	err = validateWAConnectionForChatbot(ctx, DB, mockTenantID)
+	if err != nil {
+		t.Errorf("expected no error when whatsmeow connected, got: %v", err)
+	}
+}
+
+func TestValidateWAConnectionForChatbot_CloudAPIActive(t *testing.T) {
+	ctx := context.Background()
+	if DB == nil {
+		t.Skip("DB connection required for integration test")
+	}
+	mockTenantID := "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+	_, err := DB.Exec(ctx, `
+		INSERT INTO wa_cloud_api_credentials (tenant_id, phone_number_id, access_token, is_active)
+		VALUES ($1, 'test-phone-id', 'test-token', true)
+		ON CONFLICT (phone_number_id) DO UPDATE SET is_active = true
+	`, mockTenantID)
+	if err != nil {
+		t.Skipf("could not setup test data: %v", err)
+	}
+	defer DB.Exec(ctx, `DELETE FROM wa_cloud_api_credentials WHERE tenant_id = $1`, mockTenantID)
+
+	err = validateWAConnectionForChatbot(ctx, DB, mockTenantID)
+	if err != nil {
+		t.Errorf("expected no error when cloud_api active, got: %v", err)
 	}
 }

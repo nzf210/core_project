@@ -321,7 +321,7 @@ func main() {
 	mux.Handle("/admin/plans/", auth.Middleware(http.HandlerFunc(handleAdminUpdatePlan)))
 	mux.Handle("/admin/plan-features", auth.Middleware(http.HandlerFunc(handleAdminPlanFeaturesCollection)))
 	mux.Handle("/admin/plan-features/", auth.Middleware(http.HandlerFunc(handleAdminPlanFeaturesItem)))
-	mux.Handle("/admin/plan-features-matrix/", auth.Middleware(http.HandlerFunc(handleAdminPlanFeaturesMatrixUpdate)))
+	mux.Handle("/admin/plan-features-matrix/", auth.Middleware(http.HandlerFunc(handleAdminPlanFeaturesMatrix)))
 	mux.Handle("/admin/voucher-programs", auth.Middleware(http.HandlerFunc(handleAdminVoucherProgramsCollection)))
 	mux.Handle("/admin/voucher-analytics", auth.Middleware(http.HandlerFunc(handleAdminVoucherAnalytics)))
 
@@ -1185,6 +1185,20 @@ func activateSubscription(ctx context.Context, tenantID, planID, planName string
 	now := time.Now()
 	ticketNumber := generateTicketNumber()
 
+	// F027 AC-4: Proration — preserve remaining days from previous active subscription
+	var proratedDays int
+	row := DB.QueryRow(ctx, `
+		SELECT GREATEST(0,
+			EXTRACT(EPOCH FROM (current_plan_expires_at - NOW())) / 86400
+		)::INTEGER
+		FROM tenant_subscriptions
+		WHERE tenant_id = $1 AND status = 'active'
+	`, tenantID)
+	if err := row.Scan(&proratedDays); err == nil && proratedDays > 0 {
+		validityDays += proratedDays
+		slog.Info("prorated subscription", "tenant_id", tenantID, "prorated_days", proratedDays, "new_validity", validityDays)
+	}
+
 	// 1. Day-duration accumulator logic via voucher_subscriptions
 	// If same plan already exists → accumulate remaining_days
 	// If different plan → create new row (both co-exist; priority decides which is active)
@@ -1741,20 +1755,53 @@ func handleAdminPlanFeaturesItem(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleAdminPlanFeaturesMatrixUpdate(w http.ResponseWriter, r *http.Request) {
+func handleAdminPlanFeaturesMatrix(w http.ResponseWriter, r *http.Request) {
 	role := r.Header.Get("X-User-Role")
 	if role != "superadmin" {
 		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
-		return
-	}
-	if r.Method != http.MethodPatch {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
 		return
 	}
 
 	planID := strings.TrimPrefix(r.URL.Path, "/admin/plan-features-matrix/")
 	if planID == "" {
 		response.Error(w, http.StatusBadRequest, "Plan ID required", nil)
+		return
+	}
+
+	// GET — return current numeric limits for this plan
+	if r.Method == http.MethodGet {
+		row := DB.QueryRow(r.Context(), `
+			SELECT max_users, max_transactions, max_ai_text, max_ai_vision,
+				   max_ai_audio_minutes, max_image_gen, max_products, max_customers,
+				   max_storage_mb, api_rate_limit_per_min, data_retention_months
+			FROM saas_plans WHERE id = $1
+		`, planID)
+		var m struct {
+			MaxUsers            int `json:"max_users"`
+			MaxTransactions     int `json:"max_transactions"`
+			MaxAIText           int `json:"max_ai_text"`
+			MaxAIVision         int `json:"max_ai_vision"`
+			MaxAIAudioMinutes   int `json:"max_ai_audio_minutes"`
+			MaxImageGen         int `json:"max_image_gen"`
+			MaxProducts         int `json:"max_products"`
+			MaxCustomers        int `json:"max_customers"`
+			MaxStorageMB        int `json:"max_storage_mb"`
+			APIRateLimitPerMin  int `json:"api_rate_limit_per_min"`
+			DataRetentionMonths int `json:"data_retention_months"`
+		}
+		if err := row.Scan(&m.MaxUsers, &m.MaxTransactions, &m.MaxAIText, &m.MaxAIVision,
+			&m.MaxAIAudioMinutes, &m.MaxImageGen, &m.MaxProducts, &m.MaxCustomers,
+			&m.MaxStorageMB, &m.APIRateLimitPerMin, &m.DataRetentionMonths); err != nil {
+			response.Error(w, http.StatusNotFound, "Plan not found", err)
+			return
+		}
+		response.JSON(w, http.StatusOK, "ok", m)
+		return
+	}
+
+	// PATCH — update numeric limits (columns are in saas_plans table)
+	if r.Method != http.MethodPatch {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
 		return
 	}
 
@@ -1790,7 +1837,7 @@ func handleAdminPlanFeaturesMatrixUpdate(w http.ResponseWriter, r *http.Request)
 	}
 
 	args = append(args, planID)
-	query := fmt.Sprintf("UPDATE plan_features SET %s WHERE plan_id = $%d", strings.Join(updates, ", "), idx)
+	query := fmt.Sprintf("UPDATE saas_plans SET %s WHERE id = $%d", strings.Join(updates, ", "), idx)
 	if _, err := DB.Exec(r.Context(), query, args...); err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to update matrix", err)
 		return

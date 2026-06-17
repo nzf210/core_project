@@ -124,3 +124,4 @@ frontend/*/src/env.d.ts
 automation
 apps/umkm/automation/main_test.go
 frontend/*/src/env.d.ts
+apps/umkm/accounting/accounting

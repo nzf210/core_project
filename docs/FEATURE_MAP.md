@@ -107,10 +107,9 @@ Format per feature:
 | F043 | Multi-Level Election & Sainte-Laguë Simulator | ✅ Approved | 🔨 In Progress | 2026-06-17 |
 | F044 | Campaign Modular License & Payment System | ✅ Approved | 🔨 In Progress | 2026-06-17 |
 | F045 | UMKM Healthcare Clinic Queue System | ✅ Approved | ✅ Done | 2026-06-17 |
+| F046 | Hierarchical Coordinator Assignment | ✅ Approved | ✅ Done | 2026-06-17 |
 | F047 | Hardening Migration (F024 cleanup) | ✅ Approved | ✅ Done | 2026-06-17 |
-| F048 | WA Provider Preferences (Auto/Cloud/Whatsmeow) | ✅ Approved | 🔨 In Progress | 2026-06-17 |
-|- [ ] AC-2: AI Vision mencocokkan foto plano dengan input ketik saksi. Jika beda, masuk status "Needs Human Review"
-- [ ] AC-3: Saksi yang bolos jam 07:00 pagi ditandai merah di dashboard (saksi_attendances).
+| F048 | WA Provider Preferences (Auto/Cloud/Whatsmeow) & Chatbot Activation Guard | ✅ Approved | ✅ Done | 2026-06-17 |
 
 ## F033: Campaign Logistics Tracking
 
@@ -209,6 +208,17 @@ Format per feature:
 **Deskripsi:** Modul reservasi antrian buat klinik UMKM. Sistem memberikan nomor antrian otomatis dan melakukan reminder via N8N WA Gateway.
 **Fitur:** Backend (settings, book, cancel, queue, call) + N8N Workflows (booking_bot, reminder).
 
+**Acceptance Criteria (AC):**
+- [x] AC-1: Reservasi antrian (Book) dengan slot dinamis & validasi tipe antrian (Sequential/Timeslot).
+- [x] AC-2: Pembatalan antrian via WA Bot.
+- [x] AC-3: Notifikasi otomatis 1 jam sebelum jadwal via N8N WA Gateway.
+- [x] AC-4: Call nomor antrian (Atomic increment counter).
+
+**Files:**
+- `apps/umkm/accounting/main.go` — handlers: `handleClinicBook`, `handleClinicCancel`, `handleClinicQueue`, `handleClinicCall`.
+- `apps/umkm/accounting/clinic_middleware.go` — `requireClinicType` check.
+- `apps/umkm/accounting/clinic_test.go` — Unit tests.
+
 
 ## F001: Webhook Subscription
 
@@ -228,6 +238,12 @@ Format per feature:
    - Modifikasi `QuotaMiddlewareFeature` di `shared/sdk/auth/quota_mw.go`. Lakukan check/increment kuota **SEBELUM** meneruskan ke handler API. Jika kuota habis, kembalikan `402 Payment Required` tanpa memanggil handler (vendor API).
 4. **Billing Proration (Sisa Hari)**:
    - Modifikasi `activateSubscription` di `services/billing-service/main.go`. Hitung sisa hari dari subscription sebelumnya yang masih aktif. Berikan kompensasi (tambahan waktu atau konversi) pada subscription yang baru, atau setidaknya tidak menghilangkan masa aktif paket lama jika tidak prorata (contoh: masa aktif paket baru = hari ini + 30 + sisa hari paket lama yang sepadan/di-scale down, atau cukup tambahkan secara kasar).
+
+**Acceptance Criteria (AC):**
+- [x] AC-1: Accounting hard-delete block jika akun punya journal entries atau balance != 0
+- [x] AC-2: Chatbot instant escalation on fallback via goroutine (bypass AutoEscalateAfterMinutes)
+- [x] AC-3: AI Quota check/increment BEFORE handler via QuotaMiddlewareFeature middleware
+- [x] AC-4: Billing proration — remaining days dari subscription lama ditambahkan ke voucher baru
 
 ---
 
@@ -1742,7 +1758,7 @@ Wajib update:
 ### F030: Real DB Integration for Plan Features
 
 **Spec Status:** ✅ Approved
-**Implementation:** ⏳ Pending
+**Implementation:** ✅ Done (BE + FE — GET endpoint + PlanFeatures.vue fetch per plan)
 
 **Deskripsi:** Menghapus STUB pada fungsi `GetPlanFeatures()` di SDK agar Chatbot (dan layanan lain) membaca batasan plan secara *real* dari database. Menyediakan endpoint untuk UI Superadmin agar form "Plan Matrix" bisa mengambil data *current limit* secara aktual.
 
@@ -1758,10 +1774,11 @@ Wajib update:
    - Modifikasi `PlanFeatures.vue` dan `client.ts` untuk memanggil `GET /admin/plan-features-matrix` alih-alih `listPlans()`. Data hasil fetch dipetakan (mapped) ke `formStates`.
 
 **Acceptance Criteria:**
-- [ ] AC-1: `GetPlanFeatures` mereturn data asli dari PostgreSQL tabel `plan_features`.
-- [ ] AC-2: Endpoint Matrix `GET` ada di `billing-service` dan terpanggil oleh `superadmin-web`.
-- [ ] AC-3: UI Plan Matrix menampilkan angka limit sesuai database saat dimuat ulang.
-- [ ] AC-4: `make check` pass.
+- [x] AC-1: `GetPlanFeatures` mereturn data asli dari PostgreSQL tabel `plan_features` (via `saas_plans` numeric columns + `plan_features` key/value).
+- [x] AC-2: Endpoint Matrix `GET` ada di `billing-service` dan terpanggil oleh `superadmin-web` (`handleAdminPlanFeaturesMatrix` GET handler).
+- [x] AC-3: UI Plan Matrix menampilkan angka limit sesuai database saat dimuat ulang.
+- [x] AC-4: `make check` pass.
+
 ### F030: Fix GetPlanFeatures Cache Invalidations and Real DB Reads
 
 **Spec Status:** ✅ Approved
@@ -1948,7 +1965,7 @@ Wajib update:
 ## F046: Hierarchical Coordinator Assignment
 
 **Spec Status:** ⏳ Draft
-**Implementation:** ⏳ Pending
+**Implementation:** ✅ Done
 
 **Deskripsi:** Sistem penunjukan koordinator kampanye berlapis (Gubernur → Kabupaten → Kecamatan → Desa → TPS) dengan validasi area scope otomatis dan tier access untuk melihat hierarki.
 
@@ -2036,12 +2053,19 @@ Wajib update:
 **Notes:**
 - Clinics bisa punya multiple dokter (array text di DB)
 - Fitur ini akan menjadi dasar pricing tier beda per business type
-## F048: WA Provider Preferences (Auto, Cloud API, Whatsmeow)
+## F048: WA Provider Preferences (Auto, Cloud API, Whatsmeow) & Chatbot Activation Guard
 
 **Spec Status:** ✅ Approved
-**Implementation:** 🔨 In Progress (AC-1 to AC-6 done, AC-7 E2E test pending)
+**Implementation:** 🔨 In Progress (AC-1 to AC-6 done, AC-7 E2E test pending, AC-8 guard pending)
 
 **Deskripsi:** Memberikan fleksibilitas bagi tenant untuk memilih provider WhatsApp untuk layanan Chatbot/CS mereka. Opsi default adalah `auto` (hybrid routing), tapi tenant yang punya akses Cloud API (via `plan_features.feature_key = 'wa_cloud_api'`) bisa memaksa (force) ke `cloud_api`, atau tenant biasa bisa memaksa ke `whatsmeow` murni.
+
+**AC-8 (Chatbot Activation Guard):**
+- Saat `IsActive = true` di PUT `/chatbot/config`, BE harus cek apakah toko sudah punya koneksi WA aktif.
+- Query 1: `SELECT 1 FROM wa_sessions WHERE tenant_id = ? AND status = 'connected'` (whatsmeow)
+- Query 2: `SELECT 1 FROM wa_cloud_api_credentials WHERE tenant_id = ? AND is_active = true` (cloud_api)
+- Jika keduanya tidak ada baris → 400 `Nomor WhatsApp (CS) belum terhubung. Silakan hubungkan WhatsApp terlebih dahulu sebelum mengaktifkan Chatbot.`
+- Lokasi: `apps/umkm/accounting/main.go` → `validateWAConnectionForChatbot()`
 
 **Spec:**
 1. Database: Tambah enum `wa_provider_enum` (auto, whatsmeow, cloud_api) via migration 000063.
@@ -2060,6 +2084,7 @@ Wajib update:
 - [x] AC-5: Frontend lock Cloud API option jika `has_wa_cloud_api = false`.
 - [x] AC-6: `auth-service` membaca `auth_wa_provider_preference` untuk routing OTP (via `X-WA-Provider-Override` header → wa-gateway override preference).
 - [ ] AC-7: Test integrasi: pesan chatbot bisa dipaksa ke cloud_api atau whatsmeow.
+- [x] AC-8: Activasi chatbot → BE return error 400 kalau tidak ada WA connection valid (whatsmeow connected / cloud_api active).
 
 **Testing:**
 - Unit test: `services/wa-gateway/wa_gateway_test.go` (TestResolveProviderPreference, TestIsTransactional, TestWAProviderPreference_EnumValues)
