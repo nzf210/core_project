@@ -857,6 +857,19 @@ func setupRoutes(_ context.Context, container *sqlstore.Container) {
 		// If preference is whatsmeow, SKIP Cloud API entirely (even for transactional)
 		forceWhatsmeow := preference == "whatsmeow"
 
+		// ── Auto-disconnect whatsmeow when switching to Cloud API ──
+		if forceCloud {
+			clientMu.Lock()
+			if client, exists := clientMap[tenantID]; exists {
+				client.Disconnect()
+				delete(clientMap, tenantID)
+			}
+			clientMu.Unlock()
+			_, _ = db.Exec(`DELETE FROM wa_tenant_sessions WHERE tenant_id = $1`, tenantID)
+			ReleaseSessionLock(context.Background(), tenantID)
+		}
+		// ── End auto-disconnect ──
+
 		// ── Hybrid routing: transactional messages via Cloud API ──
 		if (forceCloud || (!forceWhatsmeow && isTransactional(r))) {
 			msgType := r.Header.Get("X-Message-Type")
@@ -874,7 +887,6 @@ func setupRoutes(_ context.Context, container *sqlstore.Container) {
 				return
 			}
 			if forceCloud {
-				// If force cloud_api, do not fallback
 				log.Printf("Cloud API failed (forced) for tenant %s: %v", tenantID, err)
 				http.Error(w, fmt.Sprintf(`{"error":"Cloud API failed: %v"}`, err), http.StatusBadGateway)
 				return

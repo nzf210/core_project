@@ -2822,12 +2822,13 @@ func handleInternalChatbotConfig(w http.ResponseWriter, r *http.Request) {
 
 	var cfg ChatbotConfig
 	var sysPrompt, welcome, fallback, outsideHrs *string
-	var escalationKW []byte
+	var escalationKW []string
+	var bizHoursStart, bizHoursEnd time.Time
 	if err := rows.Scan(
 		&cfg.LLMProvider, &cfg.LLMModel, &cfg.Temperature, &cfg.MaxTokens,
 		&sysPrompt, &cfg.Tone, &cfg.Language, &cfg.MaxContextMessages,
 		&welcome, &fallback, &outsideHrs,
-		&cfg.BusinessHoursStart, &cfg.BusinessHoursEnd, &cfg.BusinessDays,
+		&bizHoursStart, &bizHoursEnd, &cfg.BusinessDays,
 		&cfg.EscalationEnabled, &escalationKW, &cfg.EscalationConfidenceThreshold,
 		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
 		&cfg.ChannelsEnabled, &cfg.IsActive, &cfg.EnableVision, &cfg.EnableVoiceReply, &cfg.VoiceModel,
@@ -2836,6 +2837,8 @@ func handleInternalChatbotConfig(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Scan error"})
 		return
 	}
+	cfg.BusinessHoursStart = bizHoursStart.Format("15:04:05")
+	cfg.BusinessHoursEnd = bizHoursEnd.Format("15:04:05")
 
 	if sysPrompt != nil {
 		cfg.SystemPrompt = *sysPrompt
@@ -2849,7 +2852,7 @@ func handleInternalChatbotConfig(w http.ResponseWriter, r *http.Request) {
 	if outsideHrs != nil {
 		cfg.OutsideHoursMessage = *outsideHrs
 	}
-	json.Unmarshal(escalationKW, &cfg.EscalationKeywords)
+	cfg.EscalationKeywords = escalationKW
 
 	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: cfg})
 }
@@ -2914,12 +2917,13 @@ func loadChatbotConfigByTenant(ctx context.Context, tenantID string) (*ChatbotCo
 
 	var cfg ChatbotConfig
 	var sysPrompt, welcome, fallback, outsideHrs *string
-	var escalationKW []byte
+	var escalationKW []string
+	var bizHoursStart, bizHoursEnd time.Time
 	if err := rows.Scan(
 		&cfg.LLMProvider, &cfg.LLMModel, &cfg.Temperature, &cfg.MaxTokens,
 		&sysPrompt, &cfg.Tone, &cfg.Language, &cfg.MaxContextMessages,
 		&welcome, &fallback, &outsideHrs,
-		&cfg.BusinessHoursStart, &cfg.BusinessHoursEnd, &cfg.BusinessDays,
+		&bizHoursStart, &bizHoursEnd, &cfg.BusinessDays,
 		&cfg.EscalationEnabled, &escalationKW, &cfg.EscalationConfidenceThreshold,
 		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
 		&cfg.ChannelsEnabled, &cfg.IsActive, &cfg.EnableVision, &cfg.EnableVoiceReply, &cfg.VoiceModel,
@@ -2927,6 +2931,8 @@ func loadChatbotConfigByTenant(ctx context.Context, tenantID string) (*ChatbotCo
 	); err != nil {
 		return nil, err
 	}
+	cfg.BusinessHoursStart = bizHoursStart.Format("15:04:05")
+	cfg.BusinessHoursEnd = bizHoursEnd.Format("15:04:05")
 	if sysPrompt != nil {
 		cfg.SystemPrompt = *sysPrompt
 	}
@@ -2939,7 +2945,7 @@ func loadChatbotConfigByTenant(ctx context.Context, tenantID string) (*ChatbotCo
 	if outsideHrs != nil {
 		cfg.OutsideHoursMessage = *outsideHrs
 	}
-	json.Unmarshal(escalationKW, &cfg.EscalationKeywords)
+	cfg.EscalationKeywords = escalationKW
 	return &cfg, nil
 }
 
@@ -3143,6 +3149,17 @@ func handleChatbotConfig(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal update: " + err.Error()})
 			return
 		}
+
+		// ── Auto-cleanup old provider connection on preference switch ──
+		if merged.WAProviderPreference == "whatsmeow" {
+			// Switching to whatsmeow-only → disconnect Cloud API credentials
+			_, _ = DB.Exec(r.Context(), `DELETE FROM wa_cloud_api_credentials WHERE tenant_id = $1`, tenantID)
+		} else if merged.WAProviderPreference == "cloud_api" {
+			// Switching to cloud_api-only → disconnect whatsmeow session (DB)
+			_, _ = DB.Exec(r.Context(), `DELETE FROM wa_sessions WHERE tenant_id = $1`, tenantID)
+		}
+		// Note: "auto" = hybrid (both providers active), no cleanup needed
+		// ── End auto-cleanup ──
 
 		writeJSON(w, http.StatusOK, APIResponse{
 			Success: true,
