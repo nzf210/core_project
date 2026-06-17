@@ -96,6 +96,7 @@ func main() {
 	mux.HandleFunc("/internal/tenant/{tenant_id}/chatbot-config", handleInternalChatbotConfig)
 	mux.HandleFunc("/chatbot/config", handleChatbotConfig)          // F020: GET/PUT per-tenant chatbot config (X-Tenant-ID)
 	mux.HandleFunc("/chatbot/config/test", handleChatbotConfigTest) // F020: POST preview with current config
+	mux.HandleFunc("/chatbot/permissions", handleChatbotPermissions) // F048: GET addon permissions
 
 	// Clinic Queue System (F045)
 	mux.HandleFunc("/clinic/settings", handleClinicSettings)
@@ -3143,6 +3144,48 @@ func handleChatbotConfig(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
 	}
+}
+
+// handleChatbotPermissions — F048 addon permissions.
+// GET /chatbot/permissions
+// Returns which WA provider options the tenant can use, based on plan_features JOIN saas_plans.
+// Frontend uses this to lock/unlock Cloud API option in ChatbotConfig UI.
+func handleChatbotPermissions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		return
+	}
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		return
+	}
+
+	// Get tenant's plan, then JOIN plan_features
+	var plan string
+	err := DB.QueryRow(r.Context(), `SELECT plan FROM tenants WHERE id = $1`, tenantID).Scan(&plan)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to read tenant plan: " + err.Error()})
+		return
+	}
+
+	// Check wa_cloud_api feature for this plan
+	var enabled bool
+	err = DB.QueryRow(r.Context(), `
+		SELECT is_enabled FROM plan_features
+		WHERE plan_id = $1 AND feature_key = 'wa_cloud_api'
+	`, plan).Scan(&enabled)
+
+	hasWaCloudAPI := err == nil && enabled
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"plan":            plan,
+			"has_wa_cloud_api": hasWaCloudAPI,
+			"available_providers": []string{"auto", "whatsmeow", "cloud_api"},
+		},
+	})
 }
 
 // handleChatbotConfigTest — F020 preview endpoint.

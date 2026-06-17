@@ -108,7 +108,7 @@ Format per feature:
 | F044 | Campaign Modular License & Payment System | ✅ Approved | 🔨 In Progress | 2026-06-17 |
 | F045 | UMKM Healthcare Clinic Queue System | ✅ Approved | ✅ Done | 2026-06-17 |
 | F047 | Hardening Migration (F024 cleanup) | ✅ Approved | ✅ Done | 2026-06-17 |
-| F048 | WA Provider Preferences (Auto/Cloud/Whatsmeow) | ✅ Approved | ✅ Done | 2026-06-17 |
+| F048 | WA Provider Preferences (Auto/Cloud/Whatsmeow) | ✅ Approved | 🔨 In Progress | 2026-06-17 |
 |- [ ] AC-2: AI Vision mencocokkan foto plano dengan input ketik saksi. Jika beda, masuk status "Needs Human Review"
 - [ ] AC-3: Saksi yang bolos jam 07:00 pagi ditandai merah di dashboard (saksi_attendances).
 
@@ -2025,38 +2025,40 @@ Wajib update:
 **Spec Status:** ✅ Approved
 **Implementation:** 🔨 In Progress
 
-**Deskripsi:** Memberikan fleksibilitas bagi tenant untuk memilih provider WhatsApp untuk layanan Chatbot/CS mereka. Opsi default adalah `auto` (hybrid routing), tapi tenant dengan addon `wa_session_meta` bisa memaksa (force) ke `cloud_api`, atau tenant biasa bisa memaksa ke `whatsmeow` murni.
+**Deskripsi:** Memberikan fleksibilitas bagi tenant untuk memilih provider WhatsApp untuk layanan Chatbot/CS mereka. Opsi default adalah `auto` (hybrid routing), tapi tenant yang punya akses Cloud API (via `plan_features.feature_key = 'wa_cloud_api'`) bisa memaksa (force) ke `cloud_api`, atau tenant biasa bisa memaksa ke `whatsmeow` murni.
 
 **Spec:**
 1. Database: Tambah enum `wa_provider_enum` (auto, whatsmeow, cloud_api) via migration 000063.
 2. `tenant_chatbot_configs` ditambahkan kolom `wa_provider_preference`.
 3. `tenants` ditambahkan kolom `auth_wa_provider_preference`.
 4. Backend `wa-gateway`: Routing pesan `isTransactional` di-override jika tenant menyetel preferensi eksplisit.
-5. Backend `auth-service`: Memilih provider WA berdasarkan preferensi tenant saat kirim OTP (fallback ke whatsmeow jika kosong).
-6. Frontend UMKM (`ChatbotConfig.vue`): Tambah toggle "WA Provider" di UI (dropdown/radio). Cloud API dilock jika tidak ada add-on.
+5. Backend `auth-service`: (TBD) Pilih provider WA berdasarkan `auth_wa_provider_preference` saat kirim OTP.
+6. Frontend UMKM (`ChatbotConfig.vue`): Tambah toggle "WA Provider" di UI (dropdown/radio). Cloud API dilock jika tidak punya `plan_features.wa_cloud_api`.
+7. Addon Gate: Cek `plan_features` JOIN `saas_plans` untuk fitur `wa_cloud_api`.
 
 **Acceptance Criteria (AC):**
-- [x] AC-1: Migration 000063 terbuat dan teraplikasi.
+- [x] AC-1: Migration 000063 terbuat dan diaplikasikan.
 - [x] AC-2: `wa-gateway` membaca `wa_provider_preference` dan override routing (force whatsmeow → skip cloud, force cloud_api → no fallback).
 - [x] AC-3: UI `ChatbotConfig.vue` menampilkan toggle WA Provider dan menyimpan ke DB.
-- [x] AC-4: `wa_session_meta` addon mengeksekusi lock/unlock opsi Cloud API.
-- [x] AC-5: `auth-service` membaca `auth_wa_provider_preference` untuk routing OTP.
-- [ ] AC-6: Test integrasi: pesan chatbot bisa dipaksa ke cloud_api atau whatsmeow.
+- [ ] AC-4: Backend endpoint `/api/chatbot/permissions` mengembalikan `has_wa_cloud_api` berdasarkan `plan_features`.
+- [ ] AC-5: Frontend lock Cloud API option jika `has_wa_cloud_api = false`.
+- [ ] AC-6: `auth-service` membaca `auth_wa_provider_preference` untuk routing OTP (optional).
+- [ ] AC-7: Test integrasi: pesan chatbot bisa dipaksa ke cloud_api atau whatsmeow.
 
 **Files yang perlu diubah:**
 - `shared/migrations/000063_wa_provider_preferences.up.sql` — Migration enum + kolom.
+- `shared/migrations/000064_wa_cloud_api_plan_feature.up.sql` — Seed `plan_features` untuk `wa_cloud_api`.
 - `services/wa-gateway/main.go` — Dynamic routing dengan preferensi.
 - `apps/umkm/accounting/main.go` — Handler ChatbotConfig GET/PUT WA provider.
-- `frontend/umkm-web/src/components/ChatbotConfig.vue` — UI toggle provider.
+- `apps/umkm/accounting/main.go` — Handler `GET /chatbot/permissions` untuk cek addon.
+- `frontend/umkm-web/src/components/ChatbotConfig.vue` — UI toggle provider + addon check.
 - `frontend/umkm-web/nginx.conf` — Affiliate routes fix.
 - `frontend/umkm-web/src/components/ClinicFrontdesk.vue` — UI cleanup.
 
 **Notes:**
-- Backend wa-gateway sudah diimplementasi: `getTenantWAProviderPreference` + override routing + header `X-WA-Provider-Override`.
-- Backend handler ChatbotConfig (UMKM Accounting) sudah diimplementasi (GET/PUT wa_provider_preference).
-- Frontend ChatbotConfig.vue (UI toggle) sudah diimplementasi dengan dropdown + help text.
-- Add-on enforcement via `/api/me` endpoint: `auth-service` return `addons` array, frontend check `wa_session_meta` presence.
-- Cloud API option di-disable jika tenant tidak punya add-on `wa_session_meta`.
-- Auth-service OTP routing: `handleRegister` + `handlePhoneLogin` read `auth_wa_provider_preference` dan kirim via header `X-WA-Provider-Override`.
+- Backend wa-gateway: `getTenantWAProviderPreference()` + override routing (`forceCloud`/`forceWhatsmeow`).
+- Backend handler ChatbotConfig (UMKM Accounting): GET/PUT `wa_provider_preference` di struct + handler.
+- Frontend ChatbotConfig.vue: dropdown "📡 WA Provider" dengan 3 opsi (auto/whatsmeow/cloud_api).
+- Frontend `hasWaPremium`: saat ini hardcode `false` — perlu fetch dari endpoint permission.
 - Affiliate endpoint `/affiliate/*` routing di nginx sudah difix (sebelumnya error JSON parsing).
 - ClinicFrontdesk.vue styling sudah diupgrade ke glass-card + btn class standar.

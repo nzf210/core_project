@@ -201,7 +201,26 @@ WCH Platform menggunakan **arsitektur hybrid** untuk WhatsApp:
 
 **Credential per-tenant:** Tabel `wa_cloud_api_credentials` — setiap tenant bisa punya nomor WA bisnis sendiri di Meta.
 
-**OTP 1-Hour Reuse Window:** OTP (registrasi & login via WA) berlaku 1 jam penuh.
+### 🔀 WA Provider Preference (F048)
+
+Tenant dapat meng-override hybrid routing dengan preferensi eksplisit di `tenant_chatbot_configs.wa_provider_preference`:
+
+| Value | Behavior |
+|:------|:---------|
+| `auto` (default) | Hybrid: transactional→Cloud, conversational→whatsmeow |
+| `whatsmeow` | Force ke whatsmeow, skip Cloud API total |
+| `cloud_api` | Force Cloud API, NO fallback (jika gagal → error 502) |
+
+**Addon Gate untuk Cloud API:** Cloud API option di-lock di UI kecuali tenant punya `plan_features.feature_key = 'wa_cloud_api' AND is_enabled = true` untuk plan-nya. Cek via endpoint `GET /api/umkm/chatbot/permissions`.
+
+**Files involved:**
+- `services/wa-gateway/main.go` → `getTenantWAProviderPreference()` (line ~172), override routing (line ~835)
+- `apps/umkm/accounting/main.go` → `ChatbotConfig.WAProviderPreference`, handler `GET/PUT /chatbot/config`
+- `shared/migrations/000063_wa_provider_preferences.up.sql` → enum + kolom
+- `shared/migrations/000064_wa_cloud_api_plan_feature.up.sql` → seed plan_features
+- `frontend/umkm-web/src/components/ChatbotConfig.vue` → dropdown "📡 WA Provider"
+
+---
 - Sebelum kirim OTP baru → cek Redis apakah OTP aktif masih ada (`otp:{phone}` / `phone-login-otp:{phone}`)
 - Jika masih aktif → return "OTP sudah dikirim" (TIDAK kirim ulang), mengurangi volume pesan WA
 - OTP tidak dihapus setelah verifikasi sukses — tetap berlaku selama 1 jam

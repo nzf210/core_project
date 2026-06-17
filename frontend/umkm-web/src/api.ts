@@ -192,6 +192,14 @@ export const api = {
     })
     return res.json()
   },
+  async getChatbotPermissions() {
+    // F048: WA provider addon permissions
+    const res = await fetch(`${API_BASE}/api/umkm/chatbot/permissions`, {
+      method: 'GET',
+      headers: headers(),
+    })
+    return res.json()
+  },
 
   // Cash Flow PDF (F021) — trigger browser download via window.location
   cashFlowPDFUrl(from: string, to: string) {

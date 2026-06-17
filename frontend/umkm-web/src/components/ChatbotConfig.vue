@@ -255,18 +255,19 @@ const loading = ref(true)
 const saving = ref(false)
 const testing = ref(false)
 const errorMsg = ref('')
-const hasWaPremium = computed(() => {
-  // Check if tenant has wa_session_meta addon from wallet_credits balance or explicit addon flag
-  // For now, check localStorage for addon info loaded at login
-  const addons = localStorage.getItem('tenant_addons')
-  if (!addons) return false
+const hasWaPremium = ref(false) // F048: fetched from /chatbot/permissions
+
+async function loadPermissions() {
   try {
-    const addonList = JSON.parse(addons)
-    return addonList.includes('wa_session_meta')
-  } catch {
-    return false
+    const res = await api.getChatbotPermissions()
+    if (res && res.success && res.data) {
+      hasWaPremium.value = !!res.data.has_wa_cloud_api
+    }
+  } catch (e: any) {
+    console.warn('Failed to fetch chatbot permissions', e)
+    hasWaPremium.value = false
   }
-})
+}
 
 const testOpen = ref(false)
 const testInput = ref('')
@@ -470,6 +471,7 @@ async function runTest() {
 onMounted(() => {
   loadDraft()
   loadConfig()
+  loadPermissions()
 })
 </script>
 
