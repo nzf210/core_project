@@ -169,6 +169,19 @@ func resetReconnectBackoff(tenantID string) {
 // Cloud API Routing
 // ─────────────────────────────────────────────
 
+// resolveProviderPreference determines the final WA provider preference for a request.
+// Priority: X-WA-Provider-Override header > DB lookup (tenant_chatbot_configs.wa_provider_preference) > "auto"
+// Used by F048 AC-6 to allow auth-service to force a specific provider for OTP routing
+// without persisting it to the DB.
+func resolveProviderPreference(r *http.Request, tenantID string) string {
+	// Header override wins (used by auth-service for OTP routing per tenants.auth_wa_provider_preference)
+	if override := r.Header.Get("X-WA-Provider-Override"); override != "" {
+		return override
+	}
+	// Fallback: DB lookup (returns "auto" if tenant not found or DB unavailable)
+	return getTenantWAProviderPreference(tenantID)
+}
+
 // getTenantWAProviderPreference fetches preference from DB
 func getTenantWAProviderPreference(tenantID string) string {
 	if db == nil {
@@ -836,12 +849,7 @@ func setupRoutes(_ context.Context, container *sqlstore.Container) {
 		}
 
 		// ── Preference-based routing: tenant can override default hybrid logic ──
-		preference := getTenantWAProviderPreference(tenantID)
-
-		// Allow auth-service to override preference via header (for OTP routing)
-		if override := r.Header.Get("X-WA-Provider-Override"); override != "" {
-			preference = override
-		}
+		preference := resolveProviderPreference(r, tenantID)
 
 		// If preference is cloud_api, FORCE Cloud API (no fallback to whatsmeow)
 		forceCloud := preference == "cloud_api"

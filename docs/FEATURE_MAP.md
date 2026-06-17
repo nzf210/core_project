@@ -1978,6 +1978,9 @@ Wajib update:
 - `shared/migrations/000059_coordinator_hierarchy.up.sql` — tabel `campaign_coordinators`
 - `apps/campaign/api/handlers/volunteer.go` — patch untuk validasi area scope
 
+**Testing:**
+- Unit test: `apps/campaign/api/handlers/coordinator_test.go` (8 test cases: tenant validation, JSON binding, missing fields, enum validation, query param parsing)
+
 **Notes:**
 - Koordinator di-link ke `user_id` di tabel `users`, bukan buat account baru
 - Level enum: `korprov`, `korKab`, `korKec`, `korKades`, `saksi_tps`
@@ -2026,6 +2029,10 @@ Wajib update:
 - `frontend/umkm-web/src/router/index.ts` — 3 route alias redirect ke `/clinic/frontdesk?tab=...`
 - `services/auth-service/main.go` — struct RegisterRequest + INSERT ke tenants dengan business_type
 
+**Testing:**
+- Unit test: `apps/umkm/accounting/clinic_test.go` (10+ test cases: middleware, missing tenant, JSON binding, enum validation, time validation)
+- Mock data sesuai real schema: `tenants.id` UUID, `business_types.id` VARCHAR(50), `patient_medical_records`, `clinic_doctor_schedules`
+
 **Notes:**
 - Clinics bisa punya multiple dokter (array text di DB)
 - Fitur ini akan menjadi dasar pricing tier beda per business type
@@ -2053,6 +2060,10 @@ Wajib update:
 - [x] AC-5: Frontend lock Cloud API option jika `has_wa_cloud_api = false`.
 - [x] AC-6: `auth-service` membaca `auth_wa_provider_preference` untuk routing OTP (via `X-WA-Provider-Override` header → wa-gateway override preference).
 - [ ] AC-7: Test integrasi: pesan chatbot bisa dipaksa ke cloud_api atau whatsmeow.
+
+**Testing:**
+- Unit test: `services/wa-gateway/wa_gateway_test.go` (TestResolveProviderPreference, TestIsTransactional, TestWAProviderPreference_EnumValues)
+- Unit test: `apps/umkm/accounting/chatbot_config_test.go` (TestValidateChatbotConfig_WAProviderPreference_Valid, TestPlanFeatures_WACloudAPI_SeedValues)
 
 **Files yang perlu diubah:**
 - `shared/migrations/000063_wa_provider_preferences.up.sql` — Migration enum + kolom.

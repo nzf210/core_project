@@ -569,6 +569,47 @@ Card "Voucher Billing" di `frontend/umkm-web/src/components/SuperAdminDashboard.
 
 ---
 
+## 🧪 Testing Convention
+
+**Setiap perubahan kode WAJIB disertai unit test minimal:**
+
+1. **Validation tests** (pure functions, no DB) — cek error message & status code
+2. **JSON binding tests** — verifikasi field mapping benar
+3. **Enum tests** — verifikasi valid + invalid values dari schema real
+
+**Pattern test yang dipakai project:**
+- `httptest.NewRecorder()` + `http.HandlerFunc(handler)` untuk handler test
+- Pure function test (validation, parsing) tanpa DB stub
+- Mock data sesuai real schema (UUIDs, VARCHAR limits, enum values dari migration)
+
+**Test files per-fitur:**
+- F046 Coordinator: `apps/campaign/api/handlers/coordinator_test.go`
+- F047 Clinic modules: `apps/umkm/accounting/clinic_test.go`
+- F048 Chatbot config: `apps/umkm/accounting/chatbot_config_test.go`
+- F048 WA Provider routing: `services/wa-gateway/wa_gateway_test.go`
+
+**Contoh mock data real-schema:**
+```go
+const mockTenantID = "11111111-1111-1111-1111-111111111111" // UUID
+const mockCampaignID = "22222222-2222-2222-2222-222222222222"
+// business_types.id VARCHAR(50): "umum", "warung", "clinic", ...
+// coordinator_level: "korprov", "korKab", "korKec", "korKades", "saksi_tps"
+// wa_provider_preference: "auto", "whatsmeow", "cloud_api"
+```
+
+**Run test pattern:**
+```bash
+# Quick single test
+go test ./apps/umkm/accounting/ -run "TestValidateChatbotConfig_WAProviderPreference" -v
+
+# All tests in package
+go test ./apps/umkm/accounting/ -v
+
+# Full check (lint + build + test) - same as `make check`
+export PATH=/usr/local/go/bin:$PATH
+go vet ./... && go test ./... -count=1
+```
+
 ## 📋 Perintah Cepat
 
 ```bash
@@ -581,6 +622,15 @@ make stop-all
 
 # Cek status semua port
 make status
+
+# Jalankan test per-service
+export PATH=/usr/local/go/bin:$PATH
+go test ./services/wa-gateway/ -v -run "TestResolveProviderPreference|TestIsTransactional"
+go test ./apps/umkm/accounting/ -v -run "TestValidateChatbotConfig|TestRequireClinicType"
+go test ./apps/campaign/api/handlers/ -v -run "TestHandleAssignCoordinator|TestCoordinatorLevel"
+
+# Full check (lint + build + test)
+make check
 
 # Jalankan service individual
 make run-auth          # Auth Service (port 8001)
