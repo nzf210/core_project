@@ -2032,7 +2032,7 @@ Wajib update:
 ## F048: WA Provider Preferences (Auto, Cloud API, Whatsmeow)
 
 **Spec Status:** ✅ Approved
-**Implementation:** 🔨 In Progress
+**Implementation:** 🔨 In Progress (AC-1 to AC-6 done, AC-7 E2E test pending)
 
 **Deskripsi:** Memberikan fleksibilitas bagi tenant untuk memilih provider WhatsApp untuk layanan Chatbot/CS mereka. Opsi default adalah `auto` (hybrid routing), tapi tenant yang punya akses Cloud API (via `plan_features.feature_key = 'wa_cloud_api'`) bisa memaksa (force) ke `cloud_api`, atau tenant biasa bisa memaksa ke `whatsmeow` murni.
 
@@ -2049,9 +2049,9 @@ Wajib update:
 - [x] AC-1: Migration 000063 terbuat dan diaplikasikan.
 - [x] AC-2: `wa-gateway` membaca `wa_provider_preference` dan override routing (force whatsmeow → skip cloud, force cloud_api → no fallback).
 - [x] AC-3: UI `ChatbotConfig.vue` menampilkan toggle WA Provider dan menyimpan ke DB.
-- [ ] AC-4: Backend endpoint `/api/chatbot/permissions` mengembalikan `has_wa_cloud_api` berdasarkan `plan_features`.
-- [ ] AC-5: Frontend lock Cloud API option jika `has_wa_cloud_api = false`.
-- [ ] AC-6: `auth-service` membaca `auth_wa_provider_preference` untuk routing OTP (optional).
+- [x] AC-4: Backend endpoint `/api/chatbot/permissions` mengembalikan `has_wa_cloud_api` berdasarkan `plan_features`.
+- [x] AC-5: Frontend lock Cloud API option jika `has_wa_cloud_api = false`.
+- [x] AC-6: `auth-service` membaca `auth_wa_provider_preference` untuk routing OTP (via `X-WA-Provider-Override` header → wa-gateway override preference).
 - [ ] AC-7: Test integrasi: pesan chatbot bisa dipaksa ke cloud_api atau whatsmeow.
 
 **Files yang perlu diubah:**

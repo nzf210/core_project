@@ -220,6 +220,22 @@ Tenant dapat meng-override hybrid routing dengan preferensi eksplisit di `tenant
 - `shared/migrations/000064_wa_cloud_api_plan_feature.up.sql` → seed plan_features
 - `frontend/umkm-web/src/components/ChatbotConfig.vue` → dropdown "📡 WA Provider"
 
+### 📨 OTP Routing via Header Override (F048 AC-6)
+
+Untuk OTP (auth-service → wa-gateway), auth-service membaca `tenants.auth_wa_provider_preference` dan forward ke wa-gateway via HTTP header `X-WA-Provider-Override`. wa-gateway override preference dari header (lebih tinggi prioritas dari DB lookup).
+
+**Flow:**
+1. `auth-service` saat generate OTP → query `SELECT auth_wa_provider_preference FROM tenants WHERE id = $1`
+2. Set header `X-WA-Provider-Override: auto|whatsmeow|cloud_api`
+3. `wa-gateway` baca header → override preference sebelum routing logic
+4. Untuk **register baru** (tenant belum ada) → `senderTenant = "system"` → fallback `auto` → no override
+
+**Files involved:**
+- `services/auth-service/main.go` → line ~356 (handleRegister), line ~1371 (handlePhoneLogin) — baca `auth_wa_provider_preference`, set `X-WA-Provider-Override` header
+- `services/wa-gateway/main.go` → line ~842 — `if override := r.Header.Get("X-WA-Provider-Override"); override != "" { preference = override }`
+
+**Backward compatible:** Header optional. Jika tidak ada → wa-gateway pakai DB lookup (`getTenantWAProviderPreference`) seperti biasa.
+
 ---
 - Sebelum kirim OTP baru → cek Redis apakah OTP aktif masih ada (`otp:{phone}` / `phone-login-otp:{phone}`)
 - Jika masih aktif → return "OTP sudah dikirim" (TIDAK kirim ulang), mengurangi volume pesan WA
