@@ -22,11 +22,16 @@ USER menulis SPEC      →       AI review & clarify      →       USER approve
 2. Kalau ada feature baru/wubah, tanya USER dulu:
    - "Ada SPEC untuk fitur ini?" → kalau belum, buat draft SPEC
    - "SPEC ini sudah diapprove?" → kalau belum, jangan implement
-3. Kalau ada ambiguitas di SPEC, tanya clarification
-4. Setelah implement, update kolom `Implementation` di tabel
-n5. **Testing Wajib** — Setiap kali ada *perubahan*, *tambah fungsi*, atau *hapus fungsi*, JALANKAN TEST sebelum menyelesaikan task:
+3. Ambiguitas? → Tanya clarification dulu
+4. **Setiap feature baru WAJIB punya plan dulu**:
+   - Buat file plan di `docs/plans/<YYYY-MM-DD>-<feature-name>.md`
+   - Plan harus bite-sized, copy-pasteable, dan siap dieksekusi oleh subagent
+   - Jangan coding sebelum plan selesai di-review/approve
+5. Implementasi selesai? → Update kolom `Implementation` di tabel
+6. **Testing Wajib** — Setiap kali ada *perubahan*, *tambah fungsi*, atau *hapus fungsi*, JALANKAN TEST sebelum menyelesaikan task:
    - `make check` (untuk menjalankan linter, build, dan semua test)
    - Atau `go test ./apps/umkm/... -v` (untuk test spesifik)
+7. Setelah selesai → Update kembali `FEATURE_MAP.md` (status + testing result)
 
 ---
 
@@ -92,12 +97,12 @@ Format per feature:
 | F027 | Core Business Flow Fixes & Optimizations | ✅ Approved | ✅ Done | 2026-06-14 |
 | F029 | Dynamic Multimodal Guardrails | ✅ Approved | ✅ Done | 2026-06-14 |
 | F030 | GetPlanFeatures DB Integration | ✅ Approved | ✅ Done | 2026-06-14 |
-| F031 | Campaign Anti-Double Validation | ✅ Approved | 🔨 In Progress | 2026-06-14 |
-| F032 | Modul Saksi & Real Count C1 | ✅ Approved | 🔨 In Progress | 2026-06-14 |
-| F033 | Campaign Logistics Tracking | ✅ Approved | 🔨 In Progress | 2026-06-17 |
-| F034 | Add-on Wallet & Meta API Connector | ✅ Approved | ✅ Done | 2026-06-16 |
-| F035 | Discount Vouchers (Percent & Fixed) | ✅ Approved | ✅ Done | 2026-06-16 |
-| F036 | Lifetime Affiliate & Leaderboard | ✅ Approved | ✅ Done | 2026-06-17 |
+| F031 | Campaign Anti-Double Validation | ✅ Approved | ✅ Done | 2026-06-17 |
+| F032 | Modul Saksi & Real Count C1 | ✅ Approved | ✅ Done | 2026-06-17 |
+| F033 | Campaign Logistics Tracking | ✅ Approved | ✅ Done | 2026-06-17 |
+| F040 | WA Bot FAQ Panduan Kampanye (RAG) | ✅ Approved | ✅ Done | 2026-06-17 |
+| F043 | Multi-Level Election & Sainte-Laguë Simulator | ✅ Approved | ✅ Done | 2026-06-17 |
+| F044 | Campaign Modular License & Payment System | ✅ Approved | ✅ Done | 2026-06-17 |
 | F037 | Dashboard Sentimen Isu Harian (AI NLP) | ✅ Approved | ✅ Done | 2026-06-17 |
 | F038 | Wargame & Simulasi Kemenangan | ✅ Approved | ✅ Done | 2026-06-17 |
 | F039 | Peta Kerawanan & Pelaporan Pelanggaran | ✅ Approved | ✅ Done | 2026-06-17 |
@@ -109,7 +114,54 @@ Format per feature:
 | F045 | UMKM Healthcare Clinic Queue System | ✅ Approved | ✅ Done | 2026-06-17 |
 | F046 | Hierarchical Coordinator Assignment | ✅ Approved | ✅ Done | 2026-06-17 |
 | F047 | Hardening Migration (F024 cleanup) | ✅ Approved | ✅ Done | 2026-06-17 |
-| F048 | WA Provider Preferences (Auto/Cloud/Whatsmeow) & Chatbot Activation Guard | ✅ Approved | ✅ Done | 2026-06-17 |
+| F048 | WA Provider Preferences & Activation Guard | ✅ Approved | ✅ Done | 2026-06-17 |
+| F049 | Container Overhaul & Infrastructure Optimization | ✅ Approved | ✅ Done | 2026-06-17 |
+| F050 | AI Quota Per-Modalitas (Text/Vision/Image) | ⏳ Draft | ⏳ Pending | 2026-06-17 |
+| F051 | WCH E2E MCP Server (UI Testing & Browser Automation) | ⏳ Draft | ⏳ Pending | 2026-06-17 |
+
+## F049: Container Overhaul & Infrastructure Optimization
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+**Deskripsi:** Standarisasi penamaan container (`wch-` prefix), pengurangan duplikasi replika yang tidak perlu di environment dev, serta penambahan koneksi pool database (pgBouncer) untuk mencegah exhaustion koneksi pada arsitektur monorepo shared.
+
+**Acceptance Criteria (AC):**
+- [x] Semua container menggunakan `wch-` prefix secara eksplisit di `docker-compose.yml`.
+- [x] Duplikasi replika container `wa-gateway` dan `umkm-chatbot` diturunkan menjadi 1.
+- [x] Container pgbouncer ditambahkan di port 6432.
+- [x] Environment variable koneksi PostgreSQL dari seluruh service diubah dari host `postgres:5432` menjadi `pgbouncer:6432`.
+
+## F050: AI Quota Per-Modalitas (Text/Vision/Image)
+**Spec Status:** ⏳ Draft
+**Implementation:** ⏳ Pending
+**Deskripsi:** Membedakan quota rate-limit untuk penggunaan AI berdasarkan modalitasnya. Saat ini seluruh request ke `ai-gateway` menghabiskan 1 pool quota yang sama, menyebabkan risiko perebutan resource antara chatbot (text) dan fitur OCR Campaign (vision).
+
+**Tujuan:**
+- Mencegah starvation quota dari layanan yang murah (text chatbot) terhadap layanan yang mahal (vision OCR, image generation).
+- Menerapkan pembatasan `plan_features` secara lebih granular: `ai_text`, `ai_vision`, `ai_image`.
+
+**Acceptance Criteria (AC):**
+- [ ] Database migration untuk menambahkan feature keys baru di `plan_features`.
+- [ ] Implementasi routing key di `ai-gateway` middleware sesuai dengan modalitas endpoint.
+- [ ] Redis keys quota dihitung per modalitas: `tenant:{id}:ai_text`, dsb.
+
+## F051: WCH E2E MCP Server (UI Testing & Browser Automation)
+**Spec Status:** ⏳ Draft
+**Implementation:** ⏳ Pending
+
+**Deskripsi:** Server MCP kustom untuk otomatisasi UI browser, enabling Hermes untuk melakukan testing end-to-end (E2E) dan pengecekan UI secara langsung di environment dev (localhost).
+
+**Tujuan:**
+- Memberikan Hermes kemampuan untuk melihat/berinteraksi dengan UI.
+- Mempercepat testing alur pendaftaran, konfigurasi chatbot, dan dashboard.
+
+**Acceptance Criteria (AC):**
+- [ ] AC-1: Server MCP berjalan (`node infra/mcp/wch-e2e-server.js`) dan terintegrasi ke Hermes CLI.
+- [ ] AC-2: Implementasi tools: `e2e_navigate`, `e2e_click`, `e2e_fill`, `e2e_screenshot`, `e2e_expect_selector`.
+- [ ] AC-3: Flow testing: Login → Navigate `/chatbot-config` → Fill settings → Verify.
+
+**Files:**
+- `infra/mcp/wch-e2e-server.js` — Core MCP Server logic.
+- `infra/mcp/package.json` — Playwright dependencies.
 
 ## F033: Campaign Logistics Tracking
 
