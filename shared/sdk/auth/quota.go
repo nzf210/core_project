@@ -12,14 +12,25 @@ import (
 )
 
 func GetTenantPlan(ctx context.Context, tenantID string) string {
-	if cache.Client == nil {
-		return "inactive"
+	if cache.Client != nil {
+		val, err := cache.Client.Get(ctx, "tenant:plan:"+tenantID).Result()
+		if err == nil && val != "" {
+			return val
+		}
 	}
-	val, err := cache.Client.Get(ctx, "tenant:plan:"+tenantID).Result()
-	if err != nil || val == "" {
-		return "inactive"
+	// Fallback to DB if cache miss
+	if db.Pool != nil {
+		var tier string
+		err := db.Pool.QueryRow(ctx, "SELECT plan FROM tenants WHERE id = $1", tenantID).Scan(&tier)
+		if err == nil && tier != "" {
+			// populate cache for next time
+			if cache.Client != nil {
+				cache.Client.Set(ctx, "tenant:plan:"+tenantID, tier, 30*24*time.Hour)
+			}
+			return tier
+		}
 	}
-	return val
+	return "inactive"
 }
 
 func SetTenantPlan(ctx context.Context, tenantID, tier string) {
@@ -144,31 +155,31 @@ func HasFeatureAccess(tenantID string, feature string) (bool, string) {
 
 	switch feature {
 	case "pos":
-		if !plan.HasPOS {
+		if !plan.HasPOS && plan.Tier != "superadmin" {
 			return false, "Fitur POS memerlukan paket Lite atau lebih tinggi."
 		}
 	case "chatbot":
-		if !plan.HasChatbot {
+		if !plan.HasChatbot && plan.Tier != "superadmin" {
 			return false, "Fitur Chatbot memerlukan paket Lite atau lebih tinggi."
 		}
 	case "ai":
-		if !plan.HasAI {
+		if !plan.HasAI && plan.Tier != "superadmin" {
 			return false, "Fitur AI memerlukan paket Lite atau lebih tinggi."
 		}
 	case "inventory":
-		if !plan.HasInventory {
+		if !plan.HasInventory && plan.Tier != "superadmin" {
 			return false, "Fitur Inventory memerlukan paket Lite atau lebih tinggi."
 		}
 	case "reports":
-		if !plan.HasReports {
+		if !plan.HasReports && plan.Tier != "superadmin" {
 			return false, "Fitur Laporan memerlukan paket Lite atau lebih tinggi."
 		}
 	case "multi_user":
-		if !plan.HasMultiUser {
+		if !plan.HasMultiUser && plan.Tier != "superadmin" {
 			return false, "Fitur Multi-User memerlukan paket Lite atau lebih tinggi."
 		}
 	case "api_access":
-		if !plan.HasAPIAccess {
+		if !plan.HasAPIAccess && plan.Tier != "superadmin" {
 			return false, "API Access memerlukan paket Pro."
 		}
 	case "accounting":

@@ -122,13 +122,15 @@ async function loadProfile() {
   successMsg.value = ''
   try {
     const res = await api.getAffiliateProfile()
-    if (res && res.success && res.data) {
-      isAffiliate.value = res.data.is_affiliate
-      if (res.data.is_affiliate) {
-        affiliateId.value = res.data.affiliate_id
-        referralCode.value = res.data.referral_code
-        balance.value = res.data.cash_balance_cents || 0
-        totalEarnings.value = res.data.total_earnings_cents || 0
+    // Backend wraps in {status, message, data}; data itself contains {is_affiliate, ...}
+    const d = (res && res.data) ? res.data : null
+    if (d) {
+      isAffiliate.value = !!d.is_affiliate
+      if (d.is_affiliate) {
+        affiliateId.value = d.affiliate_id || 0
+        referralCode.value = d.referral_code || ''
+        balance.value = d.cash_balance_cents || 0
+        totalEarnings.value = d.total_earnings_cents || 0
       }
     }
   } catch (e: any) {
@@ -144,7 +146,8 @@ async function handleRegister() {
   successMsg.value = ''
   try {
     const res = await api.registerAffiliate()
-    if (res && res.success) {
+    // Backend returns {status, message, data}; treat status 2xx as success
+    if (res && res.status >= 200 && res.status < 300) {
       successMsg.value = res.message || 'Berhasil terdaftar!'
       await loadProfile()
     } else {
@@ -166,7 +169,7 @@ async function handleWithdraw() {
     // API takes cents, user inputs rupiah
     const cents = withdrawAmount.value * 100
     const res = await api.withdrawAffiliate(cents)
-    if (res && res.success) {
+    if (res && res.status >= 200 && res.status < 300) {
       withdrawSuccess.value = 'Permintaan tarik dana berhasil! Diproses dalam 1-3 hari kerja.'
       withdrawAmount.value = null
       await loadProfile()

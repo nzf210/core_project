@@ -93,24 +93,84 @@ func GetPlanFeatures(ctx context.Context, tenantID string) (PlanFeaturesRow, err
 		return PlanFeaturesRow{Tier: tier, PlanName: tier}, fmt.Errorf("db not initialized")
 	}
 
-	query := `
-		SELECT plan_id, max_users, max_transactions, max_ai_text,
-		       max_ai_vision, max_ai_audio_minutes, max_image_gen,
-		       max_products, max_customers, max_storage_mb,
-		       api_rate_limit_per_min, data_retention_months
-		FROM plan_features WHERE plan_id = $1`
+	// Superadmin gets all features (before DB query)
+	if tier == "superadmin" {
+		p := PlanFeaturesRow{
+			Tier:               "superadmin",
+			PlanName:           "Superadmin",
+			MaxUsers:           -1,
+			MaxTransactions:    -1,
+			MaxAIText:          -1,
+			MaxAIVision:        -1,
+			MaxAIAudioMinutes:  -1,
+			MaxImageGen:        -1,
+			MaxProducts:        -1,
+			MaxCustomers:       -1,
+			MaxStorageMB:       -1,
+			APIRateLimitPerMin: 9999,
+			DataRetentionMonths: 999,
+			HasAccounting:      true,
+			HasPOS:             true,
+			HasChatbot:         true,
+			HasAI:              true,
+			HasInventory:       true,
+			HasReports:         true,
+			HasMultiUser:        true,
+			HasAPIAccess:       true,
+			HasAdvancedReport:  true,
+			HasCustomBranding:  true,
+			HasPrioritySupport: true,
+		}
+		// Cache superadmin features too
+		if cache.Client != nil {
+			if b, _ := json.Marshal(p); b != nil {
+				cache.Client.Set(ctx, cacheKey, string(b), 1*time.Hour)
+			}
+		}
+		return p, nil
+	}
+
+	// Query all feature_key rows for this plan and map to boolean flags
 	var p PlanFeaturesRow
-	err := db.Pool.QueryRow(ctx, query, tier).Scan(
-		&p.Tier, &p.MaxUsers, &p.MaxTransactions, &p.MaxAIText,
-		&p.MaxAIVision, &p.MaxAIAudioMinutes, &p.MaxImageGen,
-		&p.MaxProducts, &p.MaxCustomers, &p.MaxStorageMB,
-		&p.APIRateLimitPerMin, &p.DataRetentionMonths,
-	)
+	p.Tier = tier
+	rows, err := db.Pool.Query(ctx, "SELECT feature_key, is_enabled, feature_value FROM plan_features WHERE plan_id = $1", tier)
 	if err != nil {
-		// Log error but fallback safely
 		return PlanFeaturesRow{Tier: tier, PlanName: tier}, err
 	}
-	p.PlanName = p.Tier
+	defer rows.Close()
+
+	for rows.Next() {
+		var key string
+		var enabled bool
+		var value string
+		if err := rows.Scan(&key, &enabled, &value); err != nil {
+			continue
+		}
+		switch key {
+		case "chatbot":
+			p.HasChatbot = enabled
+		case "pos":
+			p.HasPOS = enabled
+		case "ai_requests":
+			p.HasAI = enabled
+		case "accounting":
+			p.HasAccounting = enabled
+		case "reports":
+			p.HasReports = enabled
+		case "inventory":
+			p.HasInventory = enabled
+		case "api_access":
+			p.HasAPIAccess = enabled
+		case "multi_user":
+			p.HasMultiUser = enabled
+		case "custom_branding":
+			p.HasCustomBranding = enabled
+		case "priority_support":
+			p.HasPrioritySupport = enabled
+		}
+	}
+
+	p.PlanName = tier
 
 	// 4. Save to Cache (TTL 1 hour)
 	if cache.Client != nil {

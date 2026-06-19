@@ -355,10 +355,10 @@ func main() {
 
 	// F036: Lifetime Affiliate
 	mux.HandleFunc("/api/public/affiliate-leaderboard", handleAffiliateLeaderboard)
-	mux.Handle("/affiliate/profile", auth.Middleware(http.HandlerFunc(handleAffiliateProfile)))
-	mux.Handle("/affiliate/register", auth.Middleware(http.HandlerFunc(handleAffiliateRegister)))
-	mux.Handle("/affiliate/withdraw", auth.Middleware(http.HandlerFunc(handleAffiliateWithdraw)))
-	mux.Handle("/affiliate/redeem-referral", auth.Middleware(http.HandlerFunc(handleAffiliateRedeemReferral)))
+	mux.Handle("/profile", auth.Middleware(http.HandlerFunc(handleAffiliateProfile)))
+	mux.Handle("/register", auth.Middleware(http.HandlerFunc(handleAffiliateRegister)))
+	mux.Handle("/withdraw", auth.Middleware(http.HandlerFunc(handleAffiliateWithdraw)))
+	mux.Handle("/redeem-referral", auth.Middleware(http.HandlerFunc(handleAffiliateRedeemReferral)))
 
 	// F037: Referral Config (Superadmin)
 	mux.Handle("/admin/referral-config", auth.Middleware(http.HandlerFunc(handleAdminReferralConfig)))

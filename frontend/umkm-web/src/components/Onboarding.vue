@@ -316,7 +316,7 @@ const redeemVoucher = async () => {
   try {
     if (code.startsWith('AGEN-')) {
       const data = await api.redeemReferral(code)
-      if (data.status >= 400 || !data.success) {
+      if (data.status >= 400) {
         activationError.value = data.message || 'Kode referral tidak valid'
         return
       }

@@ -86,7 +86,8 @@ async function loadLeaderboard() {
   errorMsg.value = ''
   try {
     const res = await api.getAffiliateLeaderboard()
-    if (res && res.success && res.data) {
+    // Backend returns {status, message, data}; leaderboard array is in res.data
+    if (res && res.data && Array.isArray(res.data)) {
       leaders.value = res.data as Leader[]
     } else {
       errorMsg.value = res?.message || 'Gagal memuat leaderboard'

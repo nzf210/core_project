@@ -198,7 +198,7 @@ async function redeemPendingReferral() {
 
   try {
     const res = await api.redeemReferral(code)
-    if (res && res.success) {
+    if (res && res.status >= 200 && res.status < 300) {
       successMsg.value = 'Kode referral berhasil diterapkan!'
       localStorage.removeItem('pending_referral_code')
     } else {
