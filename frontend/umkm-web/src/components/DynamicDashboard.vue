@@ -16,6 +16,17 @@
       </div>
     </div>
 
+    <!-- WA Setup warning banner -->
+    <div v-if="waWarning" class="glass-card" style="margin-bottom: 1.5rem; padding: 1.25rem; border-left: 4px solid #f59e0b; background: rgba(245, 158, 11, 0.1);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong style="color: #f59e0b;">⚠️ WhatsApp Tidak Terhubung</strong>
+          <p style="margin: 0.25rem 0 0; font-size: 0.85rem;">Pelanggan tidak bisa chat dengan AI Anda. Silakan hubungkan WhatsApp.</p>
+        </div>
+        <button class="btn btn-secondary" @click="router.push('/wa-setup')">Setup WA</button>
+      </div>
+    </div>
+
     <div v-if="showUpgrade" class="upgrade-banner">
       <span>Upgrade ke Pro (Rp 450K/bln) untuk fitur advanced & AI unlimited.</span>
       <button class="btn btn-success" @click="upgradePlan('pro')">Upgrade Sekarang</button>
@@ -100,6 +111,7 @@ const businessType = ref('umum')
 const plan = ref('lite')
 const loading = ref(false)
 const showUpgrade = ref(false)
+const waWarning = ref(false)
 const quotaUsed = ref(0)
 const quotaLimit = ref(100)
 
@@ -228,6 +240,28 @@ const syncData = async () => {
     console.error('Sync data gagal:', e)
   } finally {
     loading.value = false
+  }
+
+  // Check WA Setup Status
+  try {
+    const waRes = await api.getWASetup()
+    if (waRes.success && waRes.data) {
+      const waProvider = waRes.data.wa_provider_preference
+      const wmConnected = waRes.data.whatsmeow?.connected
+      const cloudActive = waRes.data.cloud_api?.active
+
+      if (waProvider === 'whatsmeow' && !wmConnected) {
+        waWarning.value = true
+      } else if (waProvider === 'cloud_api' && !cloudActive) {
+        waWarning.value = true
+      } else if (waProvider === 'auto' && !wmConnected && !cloudActive) {
+        waWarning.value = true
+      } else {
+        waWarning.value = false
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to check WA status', e)
   }
 }
 

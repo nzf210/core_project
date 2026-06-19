@@ -16,6 +16,7 @@ import ForgotPassword from '../components/ForgotPassword.vue'
 import ResetPassword from '../components/ResetPassword.vue'
 import Automations from '../components/Automations.vue'
 import ChatbotConfig from '../components/ChatbotConfig.vue'
+import WASetup from '../components/WASetup.vue'
 import DataTransfer from '../components/DataTransfer.vue'
 import Reports from '../components/Reports.vue'
 import ClinicQueue from '../components/ClinicQueue.vue'
@@ -36,6 +37,7 @@ const routes = [
   { path: '/settings', component: Settings, name: 'Settings' },
   { path: '/automations', component: Automations, name: 'Automations' },
   { path: '/chatbot-config', component: ChatbotConfig, name: 'ChatbotConfig' },
+  { path: '/wa-setup', component: WASetup, name: 'WASetup' },
   { path: '/data-transfer', component: DataTransfer, name: 'DataTransfer' },
   { path: '/login', component: Login, name: 'Login', meta: { requiresGuest: true } },
   { path: '/register', component: Register, name: 'Register', meta: { requiresGuest: true } },

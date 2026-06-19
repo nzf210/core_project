@@ -95,9 +95,11 @@ func main() {
 
 	// ── Chatbot / N8N Hybrid Endpoints ──────────────────────────────────
 	mux.HandleFunc("/internal/tenant/{tenant_id}/chatbot-config", handleInternalChatbotConfig)
-	mux.HandleFunc("/chatbot/config", handleChatbotConfig)           // F020: GET/PUT per-tenant chatbot config (X-Tenant-ID)
-	mux.HandleFunc("/chatbot/config/test", handleChatbotConfigTest)  // F020: POST preview with current config
-	mux.HandleFunc("/chatbot/permissions", handleChatbotPermissions) // F048: GET addon permissions
+	mux.HandleFunc("/chatbot/config", handleChatbotConfig)            // F020: GET/PUT per-tenant chatbot config (X-Tenant-ID)
+	mux.HandleFunc("/chatbot/config/test", handleChatbotConfigTest)     // F020: POST preview with current config
+	mux.HandleFunc("/chatbot/permissions", handleChatbotPermissions)    // F048: GET addon permissions
+	mux.HandleFunc("/wa/setup", handleWASetup)                         // WA setup status + provider options
+	mux.HandleFunc("/wa/connect", handleWAConnect)                       // WA provider selection
 
 	// Clinic Queue System (F045) + Medical Records + Doctor Schedules (F047)
 	// All /clinic/* routes require business_type = 'clinic' (middleware enforced)
@@ -3210,6 +3212,132 @@ func handleChatbotPermissions(w http.ResponseWriter, r *http.Request) {
 			"plan":                plan,
 			"has_wa_cloud_api":    hasWaCloudAPI,
 			"available_providers": []string{"auto", "whatsmeow", "cloud_api"},
+		},
+	})
+}
+
+// handleWASetup — GET WA setup status for user-side page
+// Returns: provider options, connection status, credit balance (cloud_api)
+func handleWASetup(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		return
+	}
+
+	ctx := r.Context()
+
+	// Get current provider preference
+	var waProviderPref string
+	_ = DB.QueryRow(ctx, "SELECT wa_provider_preference FROM tenant_chatbot_configs WHERE tenant_id = $1", tenantID).Scan(&waProviderPref)
+	if waProviderPref == "" {
+		waProviderPref = "auto"
+	}
+
+	// Check whatsmeow connection status
+	var whatsmeowStatus struct {
+		Connected bool   `json:"connected"`
+		Status    string `json:"status"` // connected, qr_pending, disconnected
+	}
+	var wmStatus string
+	_ = DB.QueryRow(ctx, "SELECT status FROM wa_sessions WHERE tenant_id = $1", tenantID).Scan(&wmStatus)
+	if wmStatus == "connected" {
+		whatsmeowStatus.Connected = true
+		whatsmeowStatus.Status = "connected"
+	} else if wmStatus == "qr_pending" {
+		whatsmeowStatus.Status = "qr_pending"
+	} else {
+		whatsmeowStatus.Status = "disconnected"
+	}
+
+	// Check cloud_api credentials + credit balance
+	var cloudAPIStatus struct {
+		Active     bool   `json:"active"`
+		CreditUsed int64  `json:"credit_used_cents"` // in cents
+		CreditBal  int64  `json:"credit_balance_cents"`
+		LastSync   string `json:"last_sync_at"`
+	}
+	var hasCloudAPI bool
+	_ = DB.QueryRow(ctx, "SELECT is_active FROM wa_cloud_api_credentials WHERE tenant_id = $1", tenantID).Scan(&hasCloudAPI)
+	if hasCloudAPI {
+		cloudAPIStatus.Active = true
+		cloudAPIStatus.CreditBal = 0 // default, actual from Meta later
+	}
+
+	// Get tenant plan to check if cloud_api addon allowed
+	var plan string
+	_ = DB.QueryRow(ctx, "SELECT plan FROM tenants WHERE id = $1", tenantID).Scan(&plan)
+	var hasWaCloudAPIAddon bool
+	_ = DB.QueryRow(ctx, "SELECT is_enabled FROM plan_features WHERE plan_id = $1 AND feature_key = 'wa_cloud_api'", plan).Scan(&hasWaCloudAPIAddon)
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"wa_provider_preference": waProviderPref,
+			"whatsmeow":              whatsmeowStatus,
+			"cloud_api":              cloudAPIStatus,
+			"has_cloud_api_addon":    hasWaCloudAPIAddon,
+			"can_use_cloud_api":      hasWaCloudAPIAddon,
+		},
+	})
+}
+
+// handleWAConnect — POST set WA provider preference + handle connection actions
+func handleWAConnect(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		return
+	}
+
+	var body struct {
+		Provider string `json:"provider"` // auto, whatsmeow, cloud_api
+		Action   string `json:"action"`   // connect, disconnect, refresh_credential
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+		return
+	}
+
+	// Validate provider
+	if body.Provider != "" && body.Provider != "auto" && body.Provider != "whatsmeow" && body.Provider != "cloud_api" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Provider must be auto, whatsmeow, or cloud_api"})
+		return
+	}
+
+	ctx := r.Context()
+
+	// Validate cloud_api requires addon
+	if body.Provider == "cloud_api" {
+		var plan string
+		_ = DB.QueryRow(ctx, "SELECT plan FROM tenants WHERE id = $1", tenantID).Scan(&plan)
+		var hasAddon bool
+		_ = DB.QueryRow(ctx, "SELECT is_enabled FROM plan_features WHERE plan_id = $1 AND feature_key = 'wa_cloud_api'", plan).Scan(&hasAddon)
+		if !hasAddon {
+			writeJSON(w, http.StatusForbidden, APIResponse{
+				Message: "Cloud API memerlukan add-on. Hubungi superadmin untuk mengaktifkan fitur ini.",
+			})
+			return
+		}
+	}
+
+	// Update provider preference
+	_, err := DB.Exec(ctx, `
+		INSERT INTO tenant_chatbot_configs (tenant_id, wa_provider_preference)
+		VALUES ($1, $2)
+		ON CONFLICT (tenant_id)
+		DO UPDATE SET wa_provider_preference = $2, updated_at = NOW()
+	`, tenantID, body.Provider)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to update provider"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Message: "Provider preference updated",
+		Data: map[string]interface{}{
+			"wa_provider_preference": body.Provider,
 		},
 	})
 }

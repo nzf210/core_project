@@ -231,6 +231,23 @@ export const api = {
     return res.json()
   },
 
+  // WA Setup (Ultimate tier) — provider choice + credit tracking
+  async getWASetup() {
+    const res = await fetch(`${API_BASE}/api/umkm/wa/setup`, {
+      method: 'GET',
+      headers: headers(),
+    })
+    return res.json()
+  },
+  async updateWAProvider(provider: 'auto' | 'whatsmeow' | 'cloud_api') {
+    const res = await fetch(`${API_BASE}/api/umkm/wa/connect`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ provider }),
+    })
+    return res.json()
+  },
+
   // Cash Flow PDF (F021) — trigger browser download via window.location
   cashFlowPDFUrl(from: string, to: string) {
     return `${API_BASE}/api/umkm/reports/cash-flow/pdf?from=${from}&to=${to}`
