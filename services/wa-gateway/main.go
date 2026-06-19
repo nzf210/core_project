@@ -199,7 +199,7 @@ func getTenantWAProviderPreference(tenantID string) string {
 func isTransactional(r *http.Request) bool {
 	msgType := r.Header.Get("X-Message-Type")
 	switch msgType {
-	case "otp", "invoice", "payment", "subscription", "system":
+	case "otp", "invoice", "payment", "subscription", "system", "broadcast":
 		return true
 	}
 	source := r.Header.Get("X-Source")
@@ -889,6 +889,11 @@ func setupRoutes(_ context.Context, container *sqlstore.Container) {
 			if forceCloud {
 				log.Printf("Cloud API failed (forced) for tenant %s: %v", tenantID, err)
 				http.Error(w, fmt.Sprintf(`{"error":"Cloud API failed: %v"}`, err), http.StatusBadGateway)
+				return
+			}
+			if r.Header.Get("X-Message-Type") == "broadcast" {
+				log.Printf("Cloud API failed for broadcast, blocking fallback to QR for tenant %s: %v", tenantID, err)
+				http.Error(w, fmt.Sprintf(`{"error":"Broadcast must use Cloud API, setup required or insufficient balance: %v"}`, err), http.StatusPaymentRequired)
 				return
 			}
 			log.Printf("Cloud API failed, falling back to whatsmeow for tenant %s: %v", tenantID, err)

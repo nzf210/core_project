@@ -1924,7 +1924,7 @@ Wajib update:
 **Spec Status:** ✅ Approved
 **Implementation:** ⏳ Pending
 
-**Deskripsi:** Sistem saldo (wallet) untuk tenant UMKM guna membayar fitur berbiaya tinggi (AI Multimodal & Meta API). Harga kredit dikelola Superadmin. Memaksa migrasi koneksi WA dari Whatsmeow (QR) ke Meta Official saat add-on Meta diaktifkan.
+**Deskripsi:** Sistem saldo (wallet) untuk tenant UMKM guna membayar fitur berbiaya tinggi (AI Multimodal & Meta API Blast). Harga kredit dikelola Superadmin. Fitur Broadcast/Blast massal diwajibkan menggunakan Meta Cloud API (memotong saldo Wallet) dan memblokir QR (Whatsmeow) untuk tipe pesan broadcast demi menghindari pemblokiran nomor UMKM.
 
 **Spec:**
 1. **Wallet Tables (`wallet_credits`, `wallet_transactions`)**:
@@ -1945,7 +1945,7 @@ Wajib update:
 **Acceptance Criteria (AC):**
 - [ ] AC-1: Superadmin bisa ubah harga AI Vision dari 5000 ke 6000 di UI.
 - [ ] AC-2: Tenant saldo 0 tidak bisa panggil `/v1/vision` (Error 402 Payment Required).
-- [ ] AC-3: Aktivasi add-on Meta memicu status "Disconnected" pada sesi QR lama dan memaksa setup Cloud API.
+- [ ] AC-3: WA Gateway menolak pesan dengan `X-Message-Type: broadcast` jika tenant tidak setup Cloud API atau saldo 0, tidak mem-fallback ke QR.
 - [ ] AC-4: AI Text (chatbot biasa) tetap jalan meski saldo wallet 0.
 
 **Files Changed:**

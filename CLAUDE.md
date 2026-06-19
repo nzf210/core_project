@@ -183,14 +183,15 @@ WCH Platform menggunakan **arsitektur hybrid** untuk WhatsApp:
 
 | Jalur | Library | Use Case | Risiko Ban |
 |:------|:--------|:---------|:-----------|
-| **Cloud API (Meta Official)** | `services/wa-cloud-api` (port 8210) | OTP, invoice, subscription notices | ✅ Nyaris 0% |
-| **whatsmeow (Unofficial)** | `services/wa-gateway` (port 8202) | AI chatbot, broadcast, voucher | ⚠️ Rate-limited |
+| **Cloud API (Meta Official)** | `services/wa-cloud-api` (port 8210) | Broadcast Massal, Transaksional Eksternal | ✅ Nyaris 0%. Wajib pakai Wallet |
+| **whatsmeow (Unofficial)** | `services/wa-gateway` (port 8202) | AI chatbot, OTP Login Internal, Notif 1-on-1 (Klinik) | ⚠️ Rate-limited. DILARANG untuk Blast |
 
 **Message routing** terjadi di `services/wa-gateway` via header `X-Message-Type`:
-- `X-Message-Type: otp` → Cloud API (auth-service OTP)
-- `X-Message-Type: invoice` → Cloud API (billing-service notifications)
-- `X-Message-Type: subscription` → Cloud API (accounting revenue digest)
-- `X-Message-Type: system` → Cloud API (notification-service system alerts)
+- `X-Message-Type: broadcast` → WAJIB Cloud API (jika tenant QR, request gagal 402/400)
+- `X-Message-Type: otp` → Auto-routing (WCH System untuk new tenant, QR tenant untuk login internal)
+- `X-Message-Type: invoice` → Auto-routing
+- `X-Message-Type: subscription` → Auto-routing
+- `X-Message-Type: system` → Auto-routing
 - _(tanpa header)_ → whatsmeow (chatbot conversational)
 
 **Fallback:** Jika Cloud API gagal, wa-gateway otomatis fallback ke whatsmeow.
@@ -221,6 +222,8 @@ Tenant dapat meng-override hybrid routing dengan preferensi eksplisit di `tenant
 - `frontend/umkm-web/src/components/ChatbotConfig.vue` → dropdown "📡 WA Provider"
 
 ### 📨 OTP Routing via Header Override (F048 AC-6)
+
+**CATATAN PENTING**: OTP **hanya** digunakan untuk keperluan login internal (Owner/Staff UMKM) ke dashboard WCH, bukan untuk pelanggan UMKM. Pelanggan tidak perlu OTP untuk interaksi dengan toko/klinik.
 
 Untuk OTP (auth-service → wa-gateway), auth-service membaca `tenants.auth_wa_provider_preference` dan forward ke wa-gateway via HTTP header `X-WA-Provider-Override`. wa-gateway override preference dari header (lebih tinggi prioritas dari DB lookup).
 

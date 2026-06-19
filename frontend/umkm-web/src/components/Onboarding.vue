@@ -344,7 +344,7 @@ const goToDashboard = () => {
   // once. After that, the button just opens the regular dashboard.
   if (sessionStorage.getItem('chatbot_wizard_pending') === '1') {
     sessionStorage.removeItem('chatbot_wizard_pending')
-    router.push('/chatbot-config?first_run=1')
+    router.push('/wa-setup?activeTab=ai_config&first_run=1')
     return
   }
   router.push('/')

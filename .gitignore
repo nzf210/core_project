@@ -125,3 +125,10 @@ automation
 apps/umkm/automation/main_test.go
 frontend/*/src/env.d.ts
 apps/umkm/accounting/accounting
+
+# Temp AI scripts
+fix-*.sh
+update-*.sh
+fix-*.go
+temp_*.vue
+clean_*.sh

@@ -22,3 +22,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Temp AI scripts
+fix-*.sh
+update-*.sh
+clean_*.sh
+wipe_*.sh
+strip_*.sh
+generate_*.sh
+temp_*.vue
+fix-*.go

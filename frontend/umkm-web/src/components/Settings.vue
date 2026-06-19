@@ -59,43 +59,6 @@
       </div>
     </div>
 
-    <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
-      <h3 style="margin-bottom: 1.5rem;">Integrasi WhatsApp (QR Code)</h3>
-      <p style="color: var(--text-secondary); margin-bottom: 2rem;">
-        Hubungkan nomor WhatsApp utama toko Anda untuk bertindak sebagai Chatbot pintar yang melayani pelanggan secara
-        mandiri.
-      </p>
-
-      <div class="wa-status-box" :class="waStatus">
-        <div class="status-indicator"></div>
-        <span class="status-text">
-          {{ waStatus === 'checking' ? 'Memeriksa status...' :
-            waStatus === 'connected' ? 'WhatsApp Terhubung' : 'WhatsApp Terputus' }}
-        </span>
-      </div>
-
-      <div v-if="waStatus === 'disconnected'" style="margin-top: 1.5rem; text-align: center;">
-        <div v-if="qrCodeData" class="qr-container">
-          <p style="margin-bottom: 1rem;">Scan QR code di bawah menggunakan aplikasi WhatsApp Anda (Linked Devices /
-            Perangkat Taut)</p>
-          <img :src="qrCodeData" alt="WhatsApp QR Code" class="qr-image" />
-        </div>
-        <button v-else @click="requestQRCode" class="btn btn-primary" :disabled="loadingQr">
-          {{ loadingQr ? 'Memuat QR...' : 'Tautkan Perangkat' }}
-        </button>
-      </div>
-
-      <div v-else-if="waStatus === 'connected'" style="margin-top: 1.5rem;">
-        <div class="webhook-info"
-          style="padding: 1rem; background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; border-radius: 4px;">
-          <h4 style="margin-bottom: 0.5rem; color: #10b981;">Siap Melayani Pelanggan!</h4>
-          <p style="color: var(--text-secondary); font-size: 0.9rem;">
-            Nomor ini sekarang secara otomatis dijawab oleh AI Chatbot.
-          </p>
-        </div>
-      </div>
-    </div>
-
     <!-- QRIS Settings -->
     <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
       <div class="flex justify-between items-center" style="margin-bottom: 1.5rem;">
@@ -259,17 +222,6 @@
       </div>
     </div>
 
-    <!-- Customer Service AI (F020) -->
-    <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
-      <h3 style="margin-bottom: 1.5rem;">🤖 Customer Service AI</h3>
-      <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
-        Atur kepribadian, bahasa, jam operasional, dan kapan bot eskalasi ke admin.
-      </p>
-      <router-link to="/chatbot-config" class="btn btn-primary" style="text-decoration: none; display: inline-block;">
-        Setup / Edit AI CS →
-      </router-link>
-    </div>
-
     <!-- Custom Toast -->
     <div v-if="toast.visible" :class="['toast-notification', `toast-${toast.type}`]">
       {{ toast.message }}
@@ -278,14 +230,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { api, API_BASE, getQuotaUsage, type QuotaUsage } from '../api'
-
-const tenantId = ref(localStorage.getItem('tenant_id') || '')
-const waStatus = ref<'checking' | 'connected' | 'disconnected'>('checking')
-const qrCodeData = ref<string | null>(null)
-const loadingQr = ref(false)
-let pollingInterval: number | null = null
 
 const qrisEnabled = ref(false)
 const xenditApiKey = ref('')
@@ -423,46 +369,7 @@ const loadingStaff = ref(false)
 
 
 
-const checkWaStatus = async () => {
-  if (!tenantId.value) return
 
-  try {
-    const data = await api.wa('status', { tenant_id: tenantId.value })
-
-    if (data.status === 'connected') {
-      waStatus.value = 'connected'
-      qrCodeData.value = null // clear QR if connected
-      if (pollingInterval) clearInterval(pollingInterval)
-    } else {
-      waStatus.value = 'disconnected'
-    }
-  } catch (e) {
-    console.error("Gagal memeriksa status WA:", e)
-    waStatus.value = 'disconnected'
-  }
-}
-
-const requestQRCode = async () => {
-  loadingQr.value = true
-  try {
-    const data = await api.wa('qr', { tenant_id: tenantId.value })
-
-    if (data.status === 'qr' && data.qr_code) {
-      qrCodeData.value = data.qr_code
-      // Start polling for status
-    } else if (data.status === 'connected') {
-      waStatus.value = 'connected'
-      showToast("Sudah terhubung!")
-    } else {
-      showToast("Gagal memuat QR Code", "error")
-    }
-  } catch (e) {
-    console.error("Error get QR:", e)
-    showToast("Gagal menyambung ke server WA Gateway", "error")
-  } finally {
-    loadingQr.value = false
-  }
-}
 
 
 const handleAddStaff = async () => {
@@ -701,18 +608,12 @@ const loadQuota = async () => {
 }
 
 onMounted(() => {
-  checkWaStatus()
   loadSettings()
   loadProfile()
   loadFaqs()
   loadForwarders()
 })
-
-onUnmounted(() => {
-  if (pollingInterval) clearInterval(pollingInterval)
-})
 </script>
-
 <style scoped>
 .form-control {
   width: 100%;

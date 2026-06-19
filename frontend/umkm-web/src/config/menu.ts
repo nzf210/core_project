@@ -45,8 +45,7 @@ export const menuConfig: MenuGroup[] = [
     items: [
       // Automasi & AI CS: owner-only (advanced config; kasir tidak perlu akses)
       { label: 'Automasi', to: '/automations', icon: '⚡', roles: ['owner', 'admin', 'superadmin'] },
-      { label: 'AI Customer Service', to: '/chatbot-config', icon: '🤖', roles: ['owner', 'admin', 'superadmin'] },
-      { label: 'Setup WhatsApp', to: '/wa-setup', icon: '📱', roles: ['owner', 'admin', 'superadmin'] },
+      { label: 'WhatsApp & AI CS', to: '/wa-setup', icon: '🤖', roles: ['owner', 'admin', 'superadmin'] },
       { label: 'Agen Afiliasi', to: '/affiliate', icon: '🤝' },
       { label: 'Pengaturan', to: '/settings', icon: '⚙️' },
     ],
