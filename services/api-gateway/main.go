@@ -18,6 +18,7 @@ import (
 	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/config"
 	"core_project/shared/sdk/cache"
+	"core_project/shared/sdk/db"
 	"core_project/shared/sdk/response"
 )
 
@@ -37,6 +38,9 @@ func main() {
 
 	if err := cache.InitRedis(cfg); err != nil {
 		slog.Warn("Redis not available, rate limiting disabled", "error", err)
+	}
+	if err := db.InitDB(cfg); err != nil {
+		slog.Warn("DB not available, falling back to cache-only mode", "error", err)
 	}
 
 	mux := http.NewServeMux()

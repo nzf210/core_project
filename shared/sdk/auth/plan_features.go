@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"core_project/shared/sdk/cache"
@@ -68,6 +67,23 @@ func (p PlanFeaturesRow) IsUnlimited(field string) bool {
 	return false
 }
 
+// defaultPlanFeatures returns hardcoded feature defaults for known tiers.
+// Used when DB/Redis unavailable to prevent feature gate failures.
+func defaultPlanFeatures(tier string) PlanFeaturesRow {
+	switch tier {
+	case "superadmin":
+		return PlanFeaturesRow{Tier: "superadmin", PlanName: "Superadmin", MaxUsers: -1, MaxTransactions: -1, MaxAIText: -1, MaxAIVision: -1, MaxAIAudioMinutes: -1, MaxImageGen: -1, MaxProducts: -1, MaxCustomers: -1, MaxStorageMB: -1, HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: true, HasAdvancedReport: true, HasCustomBranding: true, HasPrioritySupport: true}
+	case "ultimate":
+		return PlanFeaturesRow{Tier: "ultimate", PlanName: "Ultimate", MaxUsers: -1, MaxTransactions: -1, MaxAIText: -1, MaxAIVision: 500, MaxAIAudioMinutes: 60, MaxImageGen: 30, MaxProducts: -1, MaxCustomers: -1, MaxStorageMB: -1, HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: true, HasAdvancedReport: true, HasCustomBranding: true, HasPrioritySupport: true}
+	case "pro":
+		return PlanFeaturesRow{Tier: "pro", PlanName: "Pro", MaxUsers: 10, MaxTransactions: 10000, MaxAIText: 5000, MaxAIVision: 50, MaxAIAudioMinutes: 0, MaxImageGen: 0, MaxProducts: 1000, MaxCustomers: 5000, MaxStorageMB: 10000, HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: true, HasAPIAccess: true, HasAdvancedReport: false, HasCustomBranding: false, HasPrioritySupport: true}
+	case "lite":
+		return PlanFeaturesRow{Tier: "lite", PlanName: "Lite", MaxUsers: 3, MaxTransactions: 1000, MaxAIText: 250, MaxAIVision: 0, MaxAIAudioMinutes: 0, MaxImageGen: 0, MaxProducts: 100, MaxCustomers: 500, MaxStorageMB: 1000, HasAccounting: true, HasPOS: true, HasChatbot: true, HasAI: true, HasInventory: true, HasReports: true, HasMultiUser: false, HasAPIAccess: false, HasAdvancedReport: false, HasCustomBranding: false, HasPrioritySupport: false}
+	default:
+		return PlanFeaturesRow{Tier: tier, PlanName: tier}
+	}
+}
+
 // GetPlanFeatures returns the plan features for a tenant.
 // It resolves the tenant's current plan tier, then fetches the limits from DB/cache.
 func GetPlanFeatures(ctx context.Context, tenantID string) (PlanFeaturesRow, error) {
@@ -90,7 +106,8 @@ func GetPlanFeatures(ctx context.Context, tenantID string) (PlanFeaturesRow, err
 
 	// 3. Fallback to DB
 	if db.Pool == nil {
-		return PlanFeaturesRow{Tier: tier, PlanName: tier}, fmt.Errorf("db not initialized")
+		// Return default features for known tiers when DB unavailable
+		return defaultPlanFeatures(tier), nil
 	}
 
 	// Superadmin gets all features (before DB query)

@@ -50,6 +50,12 @@ services:
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
       - REDIS_HOST=redis
       - N8N_HOST=n8n-main
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-wch_core}
+      - DB_SSLMODE=disable
     ports:
       - "8010:8000"
     depends_on:
@@ -543,7 +549,7 @@ services:
     container_name: wch-promtail
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro,rslave
       - ./infra/observability/promtail/local-config.yaml:/etc/promtail/config.yml
     command: -config.file=/etc/promtail/config.yml
     restart: unless-stopped
