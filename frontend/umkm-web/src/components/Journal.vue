@@ -110,6 +110,7 @@
     </div>
 
     <!-- Simple modal placeholder -->
+    <Teleport to="body">
     <div v-if="showForm" class="modal-overlay" @click.self="showForm = false">
       <div class="modal-content animate-fade-in" style="max-width: 700px; max-height: 90vh; overflow-y: auto; padding: 2rem;">
         <div class="flex items-center justify-between" style="margin-bottom: 1.5rem;">
@@ -173,6 +174,7 @@
         </div>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>
 
