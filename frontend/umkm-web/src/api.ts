@@ -347,6 +347,16 @@ export const api = {
     return res.json()
   },
 
+  // F055: Reset password ke default via username + no HP
+  async resetPasswordDefault(username: string, phoneNumber: string) {
+    const res = await fetch(`${API_BASE}/auth/reset-password-default`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, phoneNumber }),
+    })
+    return res.json()
+  },
+
   // UMKM Data (authenticated + tenant)
   async get(url: string) {
     const res = await fetch(`${API_BASE}${url}`, { headers: headers() })

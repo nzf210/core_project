@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"io"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -78,6 +79,11 @@ type TelegramLoginRequest struct {
 type SuperAdminLoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+type ResetPasswordDefaultRequest struct {
+	Username    string `json:"username"`
+	PhoneNumber string `json:"phoneNumber"`
 }
 
 type RefreshRequest struct {
@@ -188,6 +194,7 @@ func main() {
 	mux.HandleFunc("/health", handleHealth)
 	mux.HandleFunc("/forgot-password", handleForgotPassword)
 	mux.HandleFunc("/reset-password", handleResetPassword)
+	mux.HandleFunc("/reset-password-default", handleResetPasswordDefault)
 	mux.HandleFunc("/public/tenant/resolve", handleTenantResolve)
 	mux.HandleFunc("/telegram/register", handleTelegramRegister)
 	mux.HandleFunc("/telegram/login", handleTelegramLogin)
@@ -1330,6 +1337,139 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	DB.Exec(ctx, "DELETE FROM password_resets WHERE email = $1", email)
 
 	writeJSON(w, http.StatusOK, Response{Success: true, Message: "Password has been successfully reset."})
+}
+
+// handleResetPasswordDefault - reset password ke default berdasarkan username + phone
+func handleResetPasswordDefault(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		return
+	}
+
+	var req ResetPasswordDefaultRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
+		return
+	}
+
+	if req.Username == "" || req.PhoneNumber == "" {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Username dan nomor HP wajib diisi"})
+		return
+	}
+
+	ctx := context.Background()
+
+	// Cari user berdasarkan username, pastikan phone number cocok
+	var userID string
+	var storedPhone string
+	err := DB.QueryRow(ctx, "SELECT id, phone_number FROM users WHERE username = $1", req.Username).Scan(&userID, &storedPhone)
+	if err == pgx.ErrNoRows {
+		writeJSON(w, http.StatusOK, Response{Success: true, Message: "Jika username terdaftar, password akan direset."})
+		return
+	} else if err != nil {
+		slog.Error("DB error looking up user for password reset", "error", err)
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		return
+	}
+
+	// Validasi nomor HP cocok
+	if storedPhone != req.PhoneNumber {
+		writeJSON(w, http.StatusOK, Response{Success: true, Message: "Jika username terdaftar, password akan direset."})
+		return
+	}
+
+	// Generate default password (8 karakter random, no ambiguous chars)
+	defaultPw := generateDefaultPassword()
+
+	// Hash dengan bcrypt cost=12
+	hashed, err := bcrypt.GenerateFromPassword([]byte(defaultPw), 12)
+	if err != nil {
+		slog.Error("Failed to hash default password", "error", err)
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		return
+	}
+
+	// Update password di DB
+	_, err = DB.Exec(ctx, "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2", string(hashed), userID)
+	if err != nil {
+		slog.Error("Failed to update password", "error", err)
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		return
+	}
+
+	// Kirim password default via WhatsApp (reuse OTP sender pattern)
+	go func() {
+		target := formatPhoneToWAJID(req.PhoneNumber)
+
+		formData := url.Values{}
+		verifierTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
+		if verifierTenant == "" {
+			verifierTenant = "system"
+		}
+		formData.Set("tenant_id", verifierTenant)
+		formData.Set("target", target)
+		formData.Set("message", "Password default akun WCH Anda: "+defaultPw+"\nSilakan ubah password segera setelah login.")
+
+		waURL := os.Getenv("WA_GATEWAY_URL")
+		if waURL == "" {
+			waURL = "http://wa-gateway:8202"
+		}
+
+		var resp *http.Response
+		var err error
+		for i := 0; i < 3; i++ {
+			payload := strings.NewReader(formData.Encode())
+			req, _ := http.NewRequest("POST", waURL+"/api/wa/send", payload)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("X-Message-Type", "system")
+			req.Header.Set("X-Source", "auth-service")
+			resp, err = http.DefaultClient.Do(req)
+			if err != nil {
+				slog.Error("Failed to send default password via WA", "error", err, "attempt", i+1)
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			if resp.StatusCode == 409 {
+				resp.Body.Close()
+				slog.Warn("WA Gateway returned 409 (delegated), retrying...", "attempt", i+1)
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			break
+		}
+
+		if err != nil {
+			slog.Error("Failed to send default password after retries", "error", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			slog.Error("WA Gateway rejected default password message", "status", resp.StatusCode, "body", string(body))
+		} else {
+			slog.Info("Default password sent via WA", "username", req.Username, "phone", req.PhoneNumber)
+		}
+	}()
+
+	slog.Info("Password reset to default", "username", req.Username, "phone", req.PhoneNumber)
+	writeJSON(w, http.StatusOK, Response{
+		Success: true,
+		Message: "Password berhasil direset ke default. Cek WhatsApp Anda untuk password sementara.",
+	})
+}
+
+// generateDefaultPassword - buat 8 karakter random tanpa ambiguous chars
+func generateDefaultPassword() string {
+	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	for i := range b {
+		b[i] = charset[int(b[i])%len(charset)]
+	}
+	return string(b)
 }
 
 func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
