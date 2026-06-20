@@ -1172,6 +1172,14 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 						INSERT INTO affiliate_earnings (affiliate_id, tenant_id, invoice_id, amount_cents, commission_rate_percent, transaction_type, description)
 						VALUES ($1, $2, $3, $4, $5, 'subscription_renewal', 'Subscription renewal')
 					`, *referredByID, tenantID, externalID, commission, int(commissionPct))
+
+					// Mark first_purchase_at in affiliate_referrals on first commission
+					_, _ = DB.Exec(ctx, `
+						UPDATE affiliate_referrals
+						SET first_purchase_at = NOW()
+						WHERE affiliate_id = $1 AND tenant_id = $2 AND first_purchase_at IS NULL
+					`, *referredByID, tenantID)
+
 					slog.Info("Affiliate commission granted", "affiliate_id", *referredByID, "tenant_id", tenantID, "amount_cents", commission, "rate", commissionPct)
 				}
 			}
