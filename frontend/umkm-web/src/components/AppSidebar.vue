@@ -65,6 +65,7 @@
             <span v-else class="plan-chip plan-lite">LITE</span>
           </div>
         </div>
+        <ThemeToggle v-if="!isCollapsed" />
         <button @click="logout" class="logout-btn" :title="isCollapsed ? 'Keluar' : ''">
           <svg v-if="isCollapsed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           <span v-if="!isCollapsed">Keluar</span>
@@ -78,6 +79,7 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { menuConfig } from '../config/menu'
+import ThemeToggle from './ThemeToggle.vue'
 
 const props = defineProps<{
   isOpen: boolean

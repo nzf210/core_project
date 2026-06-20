@@ -47,8 +47,12 @@ import { useRoute } from 'vue-router'
 import { api } from './api'
 import Chatbot from './components/Chatbot.vue'
 import AppSidebar from './components/AppSidebar.vue'
+import { useTheme } from './composables/useTheme'
 
 const route = useRoute()
+
+// Initialize theme globally
+useTheme()
 
 const isLoggedIn = ref(false)
 const userRole = ref('user')

@@ -122,6 +122,25 @@ Format per feature:
 | F053 | Admin-Configurable Addon Pricing + Addon Purchase Flow | ✅ Approved | ✅ Done | 2026-06-20 |
 | F054 | Referral System: Discount Downline + Commission Upline | ✅ Approved | ✅ Done | 2026-06-20 |
 | F055 | Force Password Change (Reset Default + Wajib Ganti) | ✅ Approved | ✅ Done | 2026-06-20 |
+| F056 | Theme Management (Dark/Light/System) | ✅ Approved | ✅ Done | 2026-06-21 |
+
+## F056: Theme Management (Dark/Light/System)
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Fitur perpindahan tema (Dark, Light, System Default) di UMKM frontend menggunakan CSS Variables di `:root` dan class `.theme-light`.
+
+**Spec:**
+1. Tambah CSS variables khusus untuk `.theme-light` di `frontend/umkm-web/src/assets/main.css`.
+2. Buat state management/composable `useTheme()` untuk menghandle transisi state: `dark`, `light`, `system`.
+3. Default `system` → deteksi OS `prefers-color-scheme`.
+4. Simpan preferensi di `localStorage` (`theme-preference`).
+5. Toggle di `AppSidebar.vue` atau `Settings.vue`.
+
+**Acceptance Criteria:**
+- [x] AC-1: Theme toggle ganti warna tanpa error.
+- [x] AC-2: Local storage simpan `theme-preference`.
+- [x] AC-3: Auto detect system mode kalau belum diset.
 
 ## F055: Force Password Change (Reset Default + Wajib Ganti)
 **Spec Status:** ✅ Approved
