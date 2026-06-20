@@ -353,6 +353,11 @@ func main() {
 	mux.Handle("/wallet", auth.Middleware(http.HandlerFunc(handleWallet)))
 	mux.Handle("/wallet/topup", auth.Middleware(http.HandlerFunc(handleWalletTopup)))
 
+	// F053: Addon Purchase Flow
+	mux.Handle("/addon-marketplace", auth.Middleware(http.HandlerFunc(handleAddonMarketplace)))
+	mux.Handle("/addons/purchase", auth.Middleware(http.HandlerFunc(handlePurchaseAddon)))
+	mux.Handle("/addons", auth.Middleware(http.HandlerFunc(handleMyAddons)))
+
 	// F036: Lifetime Affiliate
 	mux.HandleFunc("/api/public/affiliate-leaderboard", handleAffiliateLeaderboard)
 	mux.Handle("/profile", auth.Middleware(http.HandlerFunc(handleAffiliateProfile)))
@@ -548,6 +553,20 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 	// Calculate final price
 	finalPrice := priceMonthly
+
+	// ── F054: Referral discount (applied after voucher, if any) ──
+	var referredByAffiliateID *int
+	var referralDiscountAmount int64
+	DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&referredByAffiliateID)
+	if referredByAffiliateID != nil {
+		var discountPct float64
+		_ = DB.QueryRow(ctx, `SELECT COALESCE(discount_percent,0) FROM referral_config WHERE id=1`).Scan(&discountPct)
+		if discountPct > 0 {
+			referralDiscountAmount = priceMonthly * int64(discountPct) / 100
+			finalPrice = maxInt64(0, finalPrice-referralDiscountAmount)
+		}
+	}
+
 	if voucherApplied {
 		// Recalculate with voucher discount
 		var discountType string
@@ -633,6 +652,15 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	`, externalID, tenantID, req.PlanID, finalPrice, paymentURL, req.VoucherCode)
 	if err != nil {
 		slog.Warn("Failed to save invoice", "error", err)
+	}
+
+	// F054: Record referral discount applied to this invoice
+	if referredByAffiliateID != nil && referralDiscountAmount > 0 {
+		_, _ = DB.Exec(ctx, `
+			INSERT INTO invoice_referrals (invoice_id, affiliate_id, discount_amount)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (invoice_id) DO NOTHING
+		`, externalID, *referredByAffiliateID, referralDiscountAmount)
 	}
 
 	// Create pending subscription — activates only after Xendit webhook confirms payment
@@ -1105,35 +1133,47 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ─────────────────────────────────────────────
-	// F036: LIFETIME AFFILIATE COMMISSION LOGIC
+	// F054: AFFILIATE COMMISSION LOGIC (lifetime)
 	// ─────────────────────────────────────────────
 	var referredByID *int
 	DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&referredByID)
 	if referredByID != nil {
-		// FIX #2: Read dynamic commission from referral_config (not hardcoded 20%)
 		var commissionPct float64
+		var minPurchaseCents, maxCommissionCents int64
+		var isActive bool
 		errCfg := DB.QueryRow(ctx, `
-			SELECT COALESCE(commission_percent, 10) FROM referral_config WHERE id = 1
-		`).Scan(&commissionPct)
+			SELECT COALESCE(commission_percent,10), COALESCE(min_purchase_cents,0),
+			       COALESCE(max_commission_cents,0), COALESCE(is_active,true)
+			FROM referral_config WHERE id = 1
+		`).Scan(&commissionPct, &minPurchaseCents, &maxCommissionCents, &isActive)
 		if errCfg != nil {
-			commissionPct = 10 // safe default
+			commissionPct = 10
+			minPurchaseCents = 0
+			maxCommissionCents = 0
+			isActive = true
 		}
-		commission := invoiceAmount * int64(commissionPct) / 100
-		if commission > 0 {
-			_, errAff := DB.Exec(ctx, `
-				UPDATE affiliates
-				SET cash_balance_cents = cash_balance_cents + $1,
-					total_earnings_cents = total_earnings_cents + $1,
-					updated_at = NOW()
-				WHERE id = $2
-			`, commission, *referredByID)
 
-			if errAff == nil {
-				DB.Exec(ctx, `
-					INSERT INTO affiliate_earnings (affiliate_id, tenant_id, invoice_id, amount_cents, commission_rate_percent)
-					VALUES ($1, $2, $3, $4, $5)
-				`, *referredByID, tenantID, externalID, commission, int(commissionPct))
-				slog.Info("Affiliate commission granted", "affiliate_id", *referredByID, "tenant_id", tenantID, "amount_cents", commission, "rate", commissionPct)
+		if isActive && commissionPct > 0 && invoiceAmount >= minPurchaseCents {
+			commission := invoiceAmount * int64(commissionPct) / 100
+			if maxCommissionCents > 0 && commission > maxCommissionCents {
+				commission = maxCommissionCents
+			}
+			if commission > 0 {
+				_, errAff := DB.Exec(ctx, `
+					UPDATE affiliates
+					SET cash_balance_cents = cash_balance_cents + $1,
+						total_earnings_cents = total_earnings_cents + $1,
+						updated_at = NOW()
+					WHERE id = $2
+				`, commission, *referredByID)
+
+				if errAff == nil {
+					_, _ = DB.Exec(ctx, `
+						INSERT INTO affiliate_earnings (affiliate_id, tenant_id, invoice_id, amount_cents, commission_rate_percent, transaction_type, description)
+						VALUES ($1, $2, $3, $4, $5, 'subscription_renewal', 'Subscription renewal')
+					`, *referredByID, tenantID, externalID, commission, int(commissionPct))
+					slog.Info("Affiliate commission granted", "affiliate_id", *referredByID, "tenant_id", tenantID, "amount_cents", commission, "rate", commissionPct)
+				}
 			}
 		}
 	}
@@ -3292,21 +3332,23 @@ func handleAdminAddonPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	rows, err := DB.Query(ctx, `SELECT addon_key, price_cents, unit FROM addon_prices ORDER BY addon_key`)
+	rows, err := DB.Query(ctx, `SELECT addon_key, price_cents, unit, description, is_active FROM addon_prices ORDER BY addon_key`)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to query addon prices", err)
 		return
 	}
 	defer rows.Close()
 	type ap struct {
-		Key   string `json:"addon_key"`
-		Price int64  `json:"price_cents"`
-		Unit  string `json:"unit"`
+		Key         string `json:"addon_key"`
+		Price       int64  `json:"price_cents"`
+		Unit        string `json:"unit"`
+		Description string `json:"description"`
+		IsActive    bool   `json:"is_active"`
 	}
 	var list []ap
 	for rows.Next() {
 		var a ap
-		if rows.Scan(&a.Key, &a.Price, &a.Unit) == nil {
+		if rows.Scan(&a.Key, &a.Price, &a.Unit, &a.Description, &a.IsActive) == nil {
 			list = append(list, a)
 		}
 	}
@@ -3330,19 +3372,47 @@ func handleAdminAddonPricesItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Price int64 `json:"price_cents"`
+		Price       *int64  `json:"price_cents"`
+		Unit        *string `json:"unit"`
+		IsActive    *bool   `json:"is_active"`
+		Description *string `json:"description"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, "Invalid JSON", nil)
 		return
 	}
 	ctx := r.Context()
-	_, err := DB.Exec(ctx, `UPDATE addon_prices SET price_cents = $1, updated_at = NOW() WHERE addon_key = $2`, req.Price, key)
+	setParts := "updated_at = NOW()"
+	args := []any{}
+	argIdx := 1
+	if req.Price != nil {
+		setParts += fmt.Sprintf(", price_cents = $%d", argIdx)
+		args = append(args, *req.Price)
+		argIdx++
+	}
+	if req.Unit != nil {
+		setParts += fmt.Sprintf(", unit = $%d", argIdx)
+		args = append(args, *req.Unit)
+		argIdx++
+	}
+	if req.IsActive != nil {
+		setParts += fmt.Sprintf(", is_active = $%d", argIdx)
+		args = append(args, *req.IsActive)
+		argIdx++
+	}
+	if req.Description != nil {
+		setParts += fmt.Sprintf(", description = $%d", argIdx)
+		args = append(args, *req.Description)
+		argIdx++
+	}
+	args = append(args, key)
+	query := fmt.Sprintf("UPDATE addon_prices SET %s WHERE addon_key = $%d", setParts, argIdx)
+	_, err := DB.Exec(ctx, query, args...)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Update failed", err)
 		return
 	}
-	response.JSON(w, http.StatusOK, "Addon price updated", map[string]interface{}{"addon_key": key, "price_cents": req.Price})
+	response.JSON(w, http.StatusOK, "Addon price updated", map[string]interface{}{"addon_key": key})
 }
 
 // GET /wallet — get current tenant wallet balance + transactions
@@ -3530,6 +3600,243 @@ func handleAdminQuotaUsage(w http.ResponseWriter, r *http.Request) {
 
 
 // ─────────────────────────────────────────────
+// F053: Addon Purchase Flow
+// GET /addon-marketplace — all available addons with price + has_addon for this tenant
+// POST /addons/purchase — buy an addon (wallet deducted)
+// GET /addons — list this tenant's active addons
+// ─────────────────────────────────────────────
+
+// GET /addon-marketplace
+func handleAddonMarketplace(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		response.Error(w, http.StatusUnauthorized, "Missing X-Tenant-ID", nil)
+		return
+	}
+	ctx := r.Context()
+
+	// Get all addon features
+	rows, err := DB.Query(ctx,
+		`SELECT af.feature_key, af.feature_name, af.description, af.category,
+		        af.addon_price_cents, af.addon_unit, af.is_addon,
+		        ta.status, ta.expires_at, ta.purchase_price_cents
+		 FROM available_features af
+		 LEFT JOIN tenant_addons ta ON ta.addon_key = af.feature_key
+		        AND ta.tenant_id = $1
+		 WHERE af.is_addon = true
+		 ORDER BY af.category, af.feature_key`, tenantID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to query marketplace", err)
+		return
+	}
+	defer rows.Close()
+
+	type marketplaceItem struct {
+		Key                string  `json:"addon_key"`
+		Name               string  `json:"feature_name"`
+		Description        string  `json:"description"`
+		Category           string  `json:"category"`
+		PriceCents        int64   `json:"price_cents"`
+		Unit               string  `json:"addon_unit"`
+		HasAddon           bool    `json:"has_addon"`
+		AddonStatus        *string `json:"addon_status,omitempty"`
+		ExpiresAt          *string `json:"expires_at,omitempty"`
+		PurchasePriceCents *int64  `json:"purchase_price_cents,omitempty"`
+	}
+
+	var items []marketplaceItem
+	for rows.Next() {
+		var m marketplaceItem
+		var expiresAt *time.Time
+		var addonStatus *string
+		var purchasePrice *int64
+		if err := rows.Scan(&m.Key, &m.Name, &m.Description, &m.Category,
+			&m.PriceCents, &m.Unit, &m.HasAddon,
+			&addonStatus, &expiresAt, &purchasePrice); err != nil {
+			continue
+		}
+		if addonStatus != nil && *addonStatus != "" {
+			m.HasAddon = true
+			m.AddonStatus = addonStatus
+			m.PurchasePriceCents = purchasePrice
+			if expiresAt != nil {
+				ea := expiresAt.Format(time.RFC3339)
+				m.ExpiresAt = &ea
+			}
+		}
+		items = append(items, m)
+	}
+
+	response.JSON(w, http.StatusOK, "Addon marketplace", map[string]any{"addons": items})
+}
+
+// POST /addons/purchase
+func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		response.Error(w, http.StatusUnauthorized, "Missing X-Tenant-ID", nil)
+		return
+	}
+	ctx := r.Context()
+
+	var req struct {
+		AddonKey string `json:"addon_key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.AddonKey == "" {
+		response.Error(w, http.StatusBadRequest, "addon_key required", nil)
+		return
+	}
+
+	// 1. Verify addon exists and is active
+	var price int64
+	var unit string
+	err := DB.QueryRow(ctx,
+		`SELECT addon_price_cents, addon_unit FROM available_features
+		 WHERE feature_key = $1 AND is_addon = true`,
+		req.AddonKey).Scan(&price, &unit)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "Addon not found", nil)
+		return
+	}
+
+	// 2. Check if already has active addon
+	var existingStatus string
+	err = DB.QueryRow(ctx,
+		`SELECT status FROM tenant_addons
+		 WHERE tenant_id = $1 AND addon_key = $2
+		   AND status = 'active'
+		   AND (expires_at IS NULL OR expires_at > NOW())`,
+		tenantID, req.AddonKey).Scan(&existingStatus)
+	if err == nil {
+		response.Error(w, http.StatusConflict, "Addon already active", nil)
+		return
+	}
+
+	// 3. Deduct wallet
+	if price > 0 {
+		if !auth.CheckWalletBalance(ctx, tenantID, price) {
+			response.JSON(w, http.StatusPaymentRequired, "Insufficient wallet balance. Please top up.", map[string]any{
+				"wallet_url": "/wallet",
+			})
+			return
+		}
+		if err := auth.DeductWalletBalance(ctx, tenantID, price,
+			"addon_purchase:"+req.AddonKey,
+			"Pembelian addon: "+req.AddonKey); err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to deduct wallet", err)
+			return
+		}
+	}
+
+	// 4. Calculate expiry (1 month from now)
+	expiresAt := time.Now().AddDate(0, 1, 0)
+
+	// 5. Upsert tenant_addons
+	_, err = DB.Exec(ctx,
+		`INSERT INTO tenant_addons (tenant_id, addon_key, status, purchased_at, expires_at, purchase_price_cents)
+		 VALUES ($1, $2, 'active', NOW(), $3, $4)
+		 ON CONFLICT (tenant_id, addon_key)
+		 DO UPDATE SET status='active', purchased_at=NOW(), expires_at=$3, purchase_price_cents=$4`,
+		tenantID, req.AddonKey, expiresAt, price)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to activate addon", err)
+		return
+	}
+
+	// 7. F054: Affiliate commission for addon purchases
+	var refAid *int
+	_ = DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&refAid)
+	if refAid != nil && price > 0 {
+		var cpct float64
+		_ = DB.QueryRow(ctx, `SELECT COALESCE(commission_percent,0) FROM referral_config WHERE id=1`).Scan(&cpct)
+		if cpct > 0 {
+			comm := price * int64(cpct) / 100
+			if comm > 0 {
+				txID := "addon:" + req.AddonKey + ":" + uuid.NewString()[:8]
+				_, _ = DB.Exec(ctx,
+					`INSERT INTO affiliate_earnings (affiliate_id,tenant_id,invoice_id,amount_cents,commission_rate_percent,transaction_type,description)
+					 VALUES ($1,$2,$3,$4,$5,'addon_purchase',$6)`,
+					*refAid, tenantID, txID, comm, int(cpct), "Addon: "+req.AddonKey)
+				_, _ = DB.Exec(ctx, `UPDATE affiliates SET cash_balance_cents = cash_balance_cents + $1 WHERE id = $2`, comm, *refAid)
+			}
+		}
+	}
+
+	// 6. Invalidate addon cache
+	auth.InvalidateAddonCache(ctx, tenantID, req.AddonKey)
+
+	response.JSON(w, http.StatusOK, "Addon purchased", map[string]any{
+		"addon_key":  req.AddonKey,
+		"expires_at": expiresAt.Format(time.RFC3339),
+		"price":      price,
+	})
+}
+
+// GET /addons — list tenant's active (and recent) addons
+func handleMyAddons(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		response.Error(w, http.StatusUnauthorized, "Missing X-Tenant-ID", nil)
+		return
+	}
+	ctx := r.Context()
+
+	rows, err := DB.Query(ctx,
+		`SELECT ta.addon_key, af.feature_name, ta.status,
+		        ta.purchased_at, ta.expires_at, ta.auto_renew,
+		        ta.purchase_price_cents, af.addon_unit
+		 FROM tenant_addons ta
+		 JOIN available_features af ON af.feature_key = ta.addon_key
+		 WHERE ta.tenant_id = $1
+		 ORDER BY ta.created_at DESC`, tenantID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to query addons", err)
+		return
+	}
+	defer rows.Close()
+
+	type addonItem struct {
+		Key                string  `json:"addon_key"`
+		Name               string  `json:"feature_name"`
+		Status             string  `json:"status"`
+		PurchasedAt        string  `json:"purchased_at"`
+		ExpiresAt          *string `json:"expires_at,omitempty"`
+		AutoRenew          bool    `json:"auto_renew"`
+		PurchasePriceCents int64   `json:"purchase_price_cents"`
+		Unit               string  `json:"addon_unit"`
+	}
+	var items []addonItem
+	for rows.Next() {
+		var a addonItem
+		var expiresAt *time.Time
+		if err := rows.Scan(&a.Key, &a.Name, &a.Status,
+			&a.PurchasedAt, &expiresAt, &a.AutoRenew,
+			&a.PurchasePriceCents, &a.Unit); err != nil {
+			continue
+		}
+		if expiresAt != nil {
+			ea := expiresAt.Format(time.RFC3339)
+			a.ExpiresAt = &ea
+		}
+		items = append(items, a)
+	}
+
+	response.JSON(w, http.StatusOK, "My addons", map[string]any{"addons": items})
+}
+
+// ─────────────────────────────────────────────
 // F036: Lifetime Affiliate & Leaderboard
 // ─────────────────────────────────────────────
 
@@ -3597,12 +3904,56 @@ func handleAffiliateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, http.StatusOK, "Profile retrieved", map[string]interface{}{
-		"is_affiliate": true,
-		"affiliate_id": affID,
-		"referral_code": refCode,
-		"cash_balance_cents": balance,
+	// Fetch recent earnings (last 50)
+	rows, err2 := DB.Query(context.Background(),
+		`SELECT ae.id, ae.tenant_id, ae.invoice_id, ae.amount_cents, ae.commission_rate_percent, ae.transaction_type, ae.created_at,
+		        t.name as tenant_name
+		 FROM affiliate_earnings ae
+		 LEFT JOIN tenants t ON t.id = ae.tenant_id
+		 WHERE ae.affiliate_id = $1
+		 ORDER BY ae.created_at DESC
+		 LIMIT 50`, affID)
+	if err2 != nil {
+		response.JSON(w, http.StatusOK, "Profile retrieved", map[string]interface{}{
+			"is_affiliate": true,
+			"affiliate_id": affID,
+			"referral_code": refCode,
+			"cash_balance_cents": balance,
+			"total_earnings_cents": earnings,
+			"earnings": []interface{}{},
+		})
+		return
+	}
+	defer rows.Close()
+
+	type earning struct {
+		ID              string    `json:"id"`
+		TenantID        string    `json:"tenant_id"`
+		TenantName      string    `json:"tenant_name"`
+		InvoiceID       string    `json:"invoice_id"`
+		AmountCents     int64     `json:"amount_cents"`
+		CommissionRate  int       `json:"commission_rate_percent"`
+		TransactionType string    `json:"transaction_type"`
+		CreatedAt       time.Time `json:"created_at"`
+	}
+	var earningsList []earning
+	for rows.Next() {
+		var e earning
+		var eid int
+		if err2 := rows.Scan(&eid, &e.TenantID, &e.InvoiceID, &e.AmountCents, &e.CommissionRate, &e.TransactionType, &e.CreatedAt, &e.TenantName); err2 == nil {
+			e.ID = strconv.Itoa(eid)
+			earningsList = append(earningsList, e)
+		}
+	}
+
+	response.JSON(w, http.StatusOK, "Affiliate profile retrieved", map[string]interface{}{
+		"is_affiliate":        true,
+		"affiliate_id":        affID,
+		"referral_code":       refCode,
+		"referral_link":       "https://wch.id/r/" + refCode,
+		"cash_balance_cents":  balance,
 		"total_earnings_cents": earnings,
+		"earnings":            earningsList,
 	})
 }
 
@@ -3696,17 +4047,34 @@ func handleAffiliateRedeemReferral(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update tenant
-	_, err = DB.Exec(r.Context(), "UPDATE tenants SET referred_by_affiliate_id = $1 WHERE id = $2 AND referred_by_affiliate_id IS NULL", affID, tenantID)
+	tx, err := DB.Begin(r.Context())
 	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "DB error", err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	_, err = tx.Exec(r.Context(), "UPDATE tenants SET referred_by_affiliate_id = $1 WHERE id = $2 AND referred_by_affiliate_id IS NULL", affID, tenantID)
+	if err != nil {
+		tx.Rollback(r.Context())
 		response.Error(w, http.StatusInternalServerError, "Failed to apply referral", err)
 		return
 	}
 
+	_, err = tx.Exec(r.Context(),
+		`INSERT INTO affiliate_referrals (affiliate_id, tenant_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+		affID, tenantID)
+	if err != nil {
+		tx.Rollback(r.Context())
+		response.Error(w, http.StatusInternalServerError, "Failed to record referral", err)
+		return
+	}
+
+	tx.Commit(r.Context())
 	response.JSON(w, http.StatusOK, "Referral applied successfully", nil)
 }
 func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-Role")
+	role := r.Header.Get("X-User-Role")
 	if role != "superadmin" && role != "admin" {
 		response.Error(w, http.StatusForbidden, "Admin only", nil)
 		return
@@ -3716,24 +4084,36 @@ func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		var discountPct, commissionPct float64
+		var discountPct, commissionPct, minPurchase, maxCommission float64
+		var isActive bool
+		var linkBase string
 		err := DB.QueryRow(ctx, `
-			SELECT COALESCE(discount_percent, 10), COALESCE(commission_percent, 10)
+			SELECT COALESCE(discount_percent,10), COALESCE(commission_percent,10),
+			       COALESCE(min_purchase_cents,0), COALESCE(max_commission_cents,0),
+			       COALESCE(is_active,true), COALESCE(referral_link_base,'wch.id/r')
 			FROM referral_config WHERE id = 1
-		`).Scan(&discountPct, &commissionPct)
+		`).Scan(&discountPct, &commissionPct, &minPurchase, &maxCommission, &isActive, &linkBase)
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, "Failed to load config", err)
 			return
 		}
 		response.JSON(w, http.StatusOK, "Referral config loaded", map[string]interface{}{
-			"discount_percent":   discountPct,
-			"commission_percent": commissionPct,
+			"discount_percent":     discountPct,
+			"commission_percent":   commissionPct,
+			"min_purchase_cents":   minPurchase,
+			"max_commission_cents": maxCommission,
+			"is_active":            isActive,
+			"referral_link_base":   linkBase,
 		})
 
 	case http.MethodPut, http.MethodPost:
 		var req struct {
-			DiscountPercent   float64 `json:"discount_percent"`
-			CommissionPercent float64 `json:"commission_percent"`
+			DiscountPercent    float64 `json:"discount_percent"`
+			CommissionPercent  float64 `json:"commission_percent"`
+			MinPurchaseCents   int64   `json:"min_purchase_cents"`
+			MaxCommissionCents int64   `json:"max_commission_cents"`
+			IsActive           bool    `json:"is_active"`
+			ReferralLinkBase   string  `json:"referral_link_base"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			response.Error(w, http.StatusBadRequest, "Invalid body", err)
@@ -3745,21 +4125,29 @@ func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
 		}
 
 		_, err := DB.Exec(ctx, `
-			INSERT INTO referral_config (id, discount_percent, commission_percent, updated_at)
-			VALUES (1, $1, $2, NOW())
-			ON CONFLICT (id) 
-			DO UPDATE SET discount_percent = EXCLUDED.discount_percent, 
+			INSERT INTO referral_config (id, discount_percent, commission_percent, min_purchase_cents, max_commission_cents, is_active, referral_link_base, updated_at)
+			VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
+			ON CONFLICT (id)
+			DO UPDATE SET discount_percent = EXCLUDED.discount_percent,
 			              commission_percent = EXCLUDED.commission_percent,
+			              min_purchase_cents = EXCLUDED.min_purchase_cents,
+			              max_commission_cents = EXCLUDED.max_commission_cents,
+			              is_active = EXCLUDED.is_active,
+			              referral_link_base = EXCLUDED.referral_link_base,
 			              updated_at = NOW()
-		`, req.DiscountPercent, req.CommissionPercent)
+		`, req.DiscountPercent, req.CommissionPercent, req.MinPurchaseCents, req.MaxCommissionCents, req.IsActive, req.ReferralLinkBase)
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, "Failed to update config", err)
 			return
 		}
 		slog.Info("Referral config updated", "discount", req.DiscountPercent, "commission", req.CommissionPercent)
 		response.JSON(w, http.StatusOK, "Referral config updated", map[string]interface{}{
-			"discount_percent":   req.DiscountPercent,
-			"commission_percent": req.CommissionPercent,
+			"discount_percent":     req.DiscountPercent,
+			"commission_percent":   req.CommissionPercent,
+			"min_purchase_cents":   req.MinPurchaseCents,
+			"max_commission_cents": req.MaxCommissionCents,
+			"is_active":            req.IsActive,
+			"referral_link_base":   req.ReferralLinkBase,
 		})
 
 	default:

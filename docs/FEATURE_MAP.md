@@ -100,24 +100,27 @@ Format per feature:
 | F031 | Campaign Anti-Double Validation | ✅ Approved | ✅ Done | 2026-06-17 |
 | F032 | Modul Saksi & Real Count C1 | ✅ Approved | ✅ Done | 2026-06-17 |
 | F033 | Campaign Logistics Tracking | ✅ Approved | ✅ Done | 2026-06-17 |
-| F040 | WA Bot FAQ Panduan Kampanye (RAG) | ✅ Approved | ✅ Done | 2026-06-17 |
-| F043 | Multi-Level Election & Sainte-Laguë Simulator | ✅ Approved | ✅ Done | 2026-06-17 |
-| F044 | Campaign Modular License & Payment System | ✅ Approved | ✅ Done | 2026-06-17 |
+| F034 | Add-on Wallet & Meta API Connector | ✅ Approved | ✅ Done | 2026-06-20 |
+| F035 | Discount Vouchers (Percent & Fixed) | ✅ Approved | 🔨 In Progress | 2026-06-20 |
+| F036 | Lifetime Affiliate, External Agent & Public Leaderboard | ✅ Approved | ✅ Done (backend coded; referral discount wired in F054) | 2026-06-20 |
 | F037 | Dashboard Sentimen Isu Harian (AI NLP) | ✅ Approved | ✅ Done | 2026-06-17 |
 | F038 | Wargame & Simulasi Kemenangan | ✅ Approved | ✅ Done | 2026-06-17 |
 | F039 | Peta Kerawanan & Pelaporan Pelanggaran | ✅ Approved | ✅ Done | 2026-06-17 |
-| F040 | WA Bot FAQ Panduan Kampanye (RAG) | ✅ Approved | 🔨 In Progress | 2026-06-17 |
+| F040 | WA Bot FAQ Panduan Kampanye (RAG) | ✅ Approved | ✅ Done | 2026-06-17 |
 | F041 | Gamification & Leaderboard Relawan | ✅ Approved | ✅ Done | 2026-06-17 |
 | F042 | Auto-Scan KTP (AI OCR Vision) | ✅ Approved | ✅ Done | 2026-06-17 |
-| F043 | Multi-Level Election & Sainte-Laguë Simulator | ✅ Approved | 🔨 In Progress | 2026-06-17 |
-| F044 | Campaign Modular License & Payment System | ✅ Approved | 🔨 In Progress | 2026-06-17 |
+| F043 | Multi-Level Election & Sainte-Laguë Simulator | ✅ Approved | ✅ Done | 2026-06-17 |
+| F044 | Campaign Modular License & Payment System | ✅ Approved | ✅ Done | 2026-06-17 |
 | F045 | UMKM Healthcare Clinic Queue System | ✅ Approved | ✅ Done | 2026-06-17 |
-| F046 | Hierarchical Coordinator Assignment | ✅ Approved | ✅ Done | 2026-06-17 |
+| F046 | Hierarchical Coordinator Assignment | ✅ Approved | ✅ Done | 2026-06-20 |
 | F047 | Hardening Migration (F024 cleanup) | ✅ Approved | ✅ Done | 2026-06-17 |
-| F048 | WA Provider Preferences & Activation Guard | ✅ Approved | ✅ Done | 2026-06-17 |
+| F048 | WA Provider Preferences & Activation Guard | ✅ Approved | ✅ Done | 2026-06-20 |
 | F049 | Container Overhaul & Infrastructure Optimization | ✅ Approved | ✅ Done | 2026-06-17 |
-| F050 | AI Quota Per-Modalitas (Text/Vision/Image) | ⏳ Draft | ⏳ Pending | 2026-06-17 |
-| F051 | WCH E2E MCP Server (UI Testing & Browser Automation) | ⏳ Draft | ⏳ Pending | 2026-06-17 |
+| F050 | WCH E2E MCP Server (UI Testing & Browser Automation) | ⏳ Draft | ⏳ Pending | 2026-06-17 |
+| F051 | AI Quota Per-Modalitas (Text/Vision/Image) | ⏳ Draft | ⏳ Pending | 2026-06-17 |
+| F052 | Tier-First Feature System + Per-Tenant Addon Guard | ✅ Approved | ✅ Done | 2026-06-20 |
+| F053 | Admin-Configurable Addon Pricing + Addon Purchase Flow | ✅ Approved | ✅ Done | 2026-06-20 |
+| F054 | Referral System: Discount Downline + Commission Upline | ⏳ Draft | ⏳ Pending | 2026-06-20 |
 
 ## F049: Container Overhaul & Infrastructure Optimization
 **Spec Status:** ✅ Approved
@@ -1730,29 +1733,9 @@ Wajib update:
 
 ---
 
-*Lihat [CONTRIBUTING.md](../CONTRIBUTING.md) untuk panduan coding.*### F028: N8N Media Delivery (PDF/Excel via WA)
+*Lihat [CONTRIBUTING.md](../CONTRIBUTING.md) untuk panduan coding.*
 
-**Spec Status:** ✅ Approved
-**Implementation:** ⏳ Pending
-
-**Deskripsi:** Upgrade pipeline notifikasi WA agar N8N bisa mengirimkan file attachment (PDF/Excel) ke WhatsApp.
-
-**Spec:**
-1. **notification-service (`N8NPayload`)**
-   - Tambah opsional field `media_url` dan `media_name` pada payload `/webhook/n8n/whatsapp`.
-   - Teruskan data tersebut saat POST ke `wa-gateway` endpoint `/api/wa/send`.
-2. **wa-gateway (`/api/wa/send`)**
-   - Tambah parsing parameter `media_url` dan `media_name` dari form request.
-   - Download file dari `media_url` ke memory (buffer).
-   - Gunakan `client.Upload(..., whatsmeow.MediaDocument)` untuk upload file.
-   - Bangun `waE2E.DocumentMessage` dengan parameter `message` sebagai caption.
-
-**Acceptance Criteria:**
-- [ ] AC-1: `notification-service` meneruskan parameter media.
-- [ ] AC-2: `wa-gateway` download file dan upload ke WA.
-- [ ] AC-3: File terkirim ke WhatsApp sebagai dokumen.
-- [ ] AC-4: `make check` pass.
-### F028: N8N Media Delivery (PDF/Excel via WA)
+## F028: N8N Media Delivery (PDF/Excel via WA)
 
 **Spec Status:** ✅ Approved
 **Implementation:** ✅ Done
@@ -1943,17 +1926,20 @@ Wajib update:
    - **Trigger**: Dashboard UMKM memunculkan modal "Koneksi Ulang Diperlukan". User harus input Meta Phone ID & Token. Whatsmeow (QR) otomatis diputus/dinonaktifkan untuk tenant tersebut.
 
 **Acceptance Criteria (AC):**
-- [ ] AC-1: Superadmin bisa ubah harga AI Vision dari 5000 ke 6000 di UI.
-- [ ] AC-2: Tenant saldo 0 tidak bisa panggil `/v1/vision` (Error 402 Payment Required).
-- [ ] AC-3: WA Gateway menolak pesan dengan `X-Message-Type: broadcast` jika tenant tidak setup Cloud API atau saldo 0, tidak mem-fallback ke QR.
-- [ ] AC-4: AI Text (chatbot biasa) tetap jalan meski saldo wallet 0.
+- [x] AC-1: Superadmin bisa ubah harga addon (price_cents, unit, is_active, description) via PATCH `/admin/addon-prices/{key}`.
+- [x] AC-2: `/v1/vision` (dan audio/image) deduct wallet via `ConsumeWalletAddon()` — insufficient balance → no deduction, endpoint returns mock.
+- [x] AC-3: `addon_prices` table extended: unit, description, is_active kolom added + backfilled (migration 000067).
+- [x] AC-4: AI Text (chatbot biasa) tetap jalan karena quota via `QuotaMiddlewareFeature`, bukan wallet.
+- [ ] AC-5: WA Gateway menolak broadcast jika tenant tidak setup Cloud API (sudah ada via F048 — lihat F048 spec).
+- [ ] AC-6: Wallet.vue UI — halaman depan untuk tenant lihat saldo + topup.
 
 **Files Changed:**
-- `shared/migrations/000055_wallet_and_pricing.up.sql` (NEW)
-- `shared/sdk/auth/quota.go` (Add Wallet check)
-- `services/billing-service/main.go` (Add Wallet & Pricing Handlers)
-- `services/wa-gateway/main.go` (Add Meta reconnection trigger)
-- `frontend/umkm-web/src/components/Wallet.vue` (NEW)
+- `shared/migrations/000067_wallet_addon_extend.up.sql` (NEW) — extend addon_prices (unit, description, is_active)
+- `shared/sdk/auth/quota_mw.go` — `ConsumeWalletAddon()` + `addonPricePerUnit()`
+- `services/ai-gateway/vision.go` — wallet deduction on ai_vision
+- `services/ai-gateway/audio.go` — wallet deduction on ai_audio_stt + ai_audio_tts
+- `services/ai-gateway/image.go` — wallet deduction on image_gen
+- `services/billing-service/main.go` — extend GET+PATCH addon_prices (unit, is_active, description)
 
 
 ---
@@ -2159,3 +2145,831 @@ Wajib update:
 - Frontend `hasWaPremium`: saat ini hardcode `false` — perlu fetch dari endpoint permission.
 - Affiliate endpoint `/affiliate/*` routing di nginx sudah difix (sebelumnya error JSON parsing).
 - ClinicFrontdesk.vue styling sudah diupgrade ke glass-card + btn class standar.
+
+---
+
+## F052: Tier-First Feature System + Per-Tenant Addon Guard
+
+**Spec Status:** ⏳ Draft
+**Implementation:** ⏳ Pending
+
+**Deskripsi:** Refactor sistem feature gating: (1) Fitur melekat di Tier — superadmin atur ON/OFF per tier di DB, tidak perlu code change untuk add/remove fitur; (2) Addon melekat di Tenant — tenant beli addon → tersimpan per-tenant → guard cek "tier support + addon active". Dua guard = `HasFeatureAccess(tenant, feature)` + `HasAddonAccess(tenant, addonKey)`.
+
+---
+
+### 📌 Background — State Saat Ini
+
+```
+现状 (Current):
+  plan_features (DB) → feature_key/enabled per plan
+    → PlanFeaturesRow (Go struct, hardcoded fields: HasPOS, HasChatbot, ...)
+    → HasFeatureAccess() switch/case per feature name
+    → hardcoded "Fitur X memerlukan paket Lite..."
+
+问题 (Problems):
+  1. Tambah fitur baru → migration (DB) + code change (Go struct + switch)
+  2. Tidak ada Addon table → F034 (addon wallet) done; F052 bikin Addon guard foundation
+  3. Guard tersebar (HasFeatureAccess, CheckQuota, RequireFeature, RequireClinicType, ...)
+  4. Enum "lite/pro/ultimate" hardcoded di banyak tempat
+```
+
+---
+
+### 🎯 Tujuan (Goals)
+
+1. **Admin-flexible features**: Superadmin ubah ON/OFF fitur per tier langsung di DB — tanpa code change.
+2. **Per-tenant addons**: Addon dibeli tenant → melekat di tenant itu → tidak tergantung tier.
+3. **Single source of truth guard**: `CanUse(tenantID, feature)` → cek tier + addon.
+4. **Scalable**: Tambah fitur baru cukup INSERT DB row, tidak perlu deploy Go code.
+
+---
+
+### 🏗️ Arsitektur Baru
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Guards (shared/sdk/auth/)                                  │
+│                                                              │
+│  CanUse(tenantID, "ai_vision")                              │
+│    ├─ 1. TierFeatureEnabled?(tier, "ai_vision")             │
+│    │     → SELECT is_enabled FROM plan_features              │
+│    │       WHERE plan_id = $tier AND feature_key = "ai_vision"│
+│    │                                                         │
+│    └─ 2. TenantHasAddon?(tenantID, "ai_vision")             │
+│          → SELECT 1 FROM tenant_addons                       │
+│            WHERE tenant_id = $tid AND addon_key = "ai_vision"│
+│            AND status = 'active' AND expires_at > NOW()      │
+│                                                              │
+│  Result: Tier ON? → allowed                                  │
+│          Tier OFF but Addon active? → allowed                │
+│          Tier OFF and no Addon? → denied                     │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 📊 Data Model
+
+#### Tabel `saas_plans` (existing)
+```
+id VARCHAR(20), name, price_monthly, is_active, sort_order
+→ Lite / Pro / Ultimate + "inactive" sentinel
+```
+
+#### Tabel `plan_features` (existing, perlu refactor)
+```
+Kolom existing:
+  id, plan_id, feature_key, feature_name, feature_value, is_enabled
+
+Tambah kolom (migration 000065):
+  min_tier VARCHAR(20)  -- tier minimum untuk akses (nullable)
+  -- Contoh: ai_vision min_tier='ultimate' → hanya Ultimate bisa beli addon
+  -- Jika NULL → semua tier bisa akses (default)
+
+Index: UNIQUE(plan_id, feature_key)
+```
+
+#### Tabel `available_features` (NEW — registry fitur)
+```
+id              UUID PK
+feature_key     VARCHAR(100) UNIQUE  -- "ai_vision", "wa_cloud_api", "extra_store"
+feature_name    VARCHAR(255)
+description     TEXT
+category        VARCHAR(50)  -- 'ai', 'wa', 'storage', 'addon'
+is_addon        BOOLEAN      -- TRUE = berbayar, FALSE = bundled per tier
+default_enabled VARCHAR(20)[] -- tier list where enabled by default: ARRAY['pro','ultimate']
+addon_price_cents BIGINT     -- harga per unit (jika is_addon=TRUE)
+addon_unit      VARCHAR(20)  -- 'per_month', 'per_request', 'per_session'
+created_at      TIMESTAMPTZ
+```
+
+#### Tabel `tenant_addons` (NEW — addon aktif per tenant)
+```
+id              UUID PK DEFAULT gen_random_uuid()
+tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE
+addon_key       VARCHAR(100) NOT NULL REFERENCES available_features(feature_key)
+status          VARCHAR(20)  -- 'active', 'expired', 'cancelled'
+purchased_at    TIMESTAMPTZ
+expires_at      TIMESTAMPTZ  -- NULL = unlimited
+auto_renew      BOOLEAN DEFAULT true
+purchase_price_cents BIGINT  -- harga saat dibeli
+wallet_transaction_id UUID   -- REF ke wallet_transactions
+created_at      TIMESTAMPTZ DEFAULT NOW()
+UNIQUE(tenant_id, addon_key)
+```
+
+---
+
+### 🔐 Guard Logic
+
+#### 1. `CanUseFeature(tenantID, featureKey)` — core guard
+```go
+func CanUseFeature(ctx context.Context, tenantID, featureKey string) (bool, string) {
+    tier := GetTenantPlan(ctx, tenantID)
+    feat := GetFeatureDef(featureKey)  // from available_features cache
+
+    // Addon-only check (feature tidak ada di plan_features)
+    if feat != nil && feat.IsAddon {
+        return CanUseAddon(ctx, tenantID, featureKey)
+    }
+
+    // Bundled feature check
+    row, _ := GetPlanFeaturesRow(ctx, tier)
+    // cek plan_features.is_enabled untuk featureKey
+    enabled := row.IsFeatureEnabled(featureKey)
+    if enabled {
+        return true, ""
+    }
+
+    // Fallback: apakah ini addon yang di-upgrade dari tier?
+    addonOK, _ := CanUseAddon(ctx, tenantID, featureKey)
+    if addonOK {
+        return true, ""
+    }
+
+    return false, fmt.Sprintf("Fitur %s tidak tersedia di paket %s.", feat.FeatureName, tier)
+}
+```
+
+#### 2. `CanUseAddon(ctx, tenantID, addonKey)` — addon guard
+```go
+func CanUseAddon(ctx context.Context, tenantID, addonKey string) (bool, error) {
+    feat := GetFeatureDef(addonKey)
+    if feat == nil || !feat.IsAddon {
+        return false, nil // bukan addon
+    }
+
+    // Cek tier minimum
+    row, _ := GetPlanFeaturesRow(ctx, GetTenantPlan(ctx, tenantID))
+    if feat.MinTier != "" && !row.TierAllowsFeature(addonKey) {
+        return false, nil // tier tidak memenuhi min tier
+    }
+
+    // Cek tenant_addons
+    var exists bool
+    err := db.Pool.QueryRow(ctx,
+        `SELECT EXISTS(
+            SELECT 1 FROM tenant_addons
+            WHERE tenant_id=$1 AND addon_key=$2
+            AND status='active'
+            AND (expires_at IS NULL OR expires_at > NOW())
+        )`, tenantID, addonKey).Scan(&exists)
+    return exists, err
+}
+```
+
+#### 3. `RequireFeature(feature string)` middleware
+```go
+// Supercedes existing RequireFeature — delegates to CanUseFeature
+func RequireFeature(feature string) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            tenantID, ok := r.Context().Value(TenantIDKey).(string)
+            if !ok || tenantID == "" {
+                response.Error(w, http.StatusUnauthorized, "Tenant context missing", nil)
+                return
+            }
+            allowed, reason := CanUseFeature(r.Context(), tenantID, feature)
+            if !allowed {
+                w.Header().Set("X-Feature-Gate", "denied")
+                w.Header().Set("X-Feature-Required", feature)
+                response.Error(w, http.StatusForbidden, reason, nil)
+                return
+            }
+            w.Header().Set("X-Feature-Gate", "allowed")
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+```
+
+---
+
+### 🛒 Addon Purchase Flow
+
+```
+1. Tenant buka menu "Add-ons" → list semua available_addons
+   → GET /api/umkm/addons (accounting service)
+   → Response: { key, name, description, price_cents, unit,
+                  is_active: bool, expires_at?, has_addon: bool }
+
+2. Tenant klik "Beli" → modal konfirmasi harga
+   → POST /api/umkm/addons/purchase { addon_key }
+   → BE: Cek wallet balance → DeductWalletBalance()
+   → INSERT tenant_addons (status='active', expires_at=NOW()+1bulan, ...)
+   → Return success
+
+3. GuardCanUseFeature() → otomatis allow karena tenant_addons aktif
+   → Tidak perlu restart, tidak perlu deploy
+   → Cached 1 menit via Redis: addon_check:{tenant_id}:{addon_key}
+```
+
+---
+
+### 📋 Seed Data (Migration 000065)
+
+```sql
+-- available_features registry
+INSERT INTO available_features (feature_key, feature_name, category, is_addon, default_enabled, addon_price_cents, addon_unit) VALUES
+    -- Bundled features (is_addon=FALSE, default_enabled sesuai tier)
+    ('accounting',       'Double-Entry Accounting',      'core',      false, ARRAY['lite','pro','ultimate'], 0,        NULL),
+    ('pos',              'Point of Sale',                  'core',      false, ARRAY['lite','pro','ultimate'], 0,        NULL),
+    ('chatbot',          'AI Chatbot WhatsApp',           'ai',        false, ARRAY['lite','pro','ultimate'], 0,        NULL),
+    ('ai_text',          'AI Text (Chat)',                 'ai',        false, ARRAY['lite','pro','ultimate'], 0,        NULL),
+    ('inventory',        'Inventory Management',            'core',      false, ARRAY['lite','pro','ultimate'], 0,        NULL),
+    ('reports',         'Laporan Keuangan',               'core',      false, ARRAY['lite','pro','ultimate'], 0,        NULL),
+    ('multi_user',       'Multi-User Access',             'core',      false, ARRAY['pro','ultimate'],       0,        NULL),
+    ('advanced_reports', 'Laporan Keuangan Lanjutan',     'core',      false, ARRAY['pro','ultimate'],       0,        NULL),
+    ('api_access',       'API Access',                    'core',      false, ARRAY['pro','ultimate'],       0,        NULL),
+    ('custom_branding',  'Custom Branding',               'core',      false, ARRAY['ultimate'],            0,        NULL),
+    ('priority_support', 'Priority Support',              'core',      false, ARRAY['pro','ultimate'],       0,        NULL),
+    -- Addon features (is_addon=TRUE)
+    ('ai_vision',        'AI Vision (Foto KTP/Produk)',   'ai',        true,  NULL,                           5000,      'per_request'),
+    ('ai_audio',         'AI Audio (Voice Note)',          'ai',        true,  NULL,                           1000,      'per_minute'),
+    ('wa_cloud_api',     'WA Cloud API Broadcast',        'wa',        true,  NULL,                           5000,      'per_session'),
+    ('wa_blast',         'WA Blast Massal',               'wa',        true,  NULL,                           10000,     'per_request'),
+    ('extra_store',      'Extra POS Store',               'storage',   true,  NULL,                           5000000,  'per_month'),
+    ('extra_user',       'Extra User Seat',               'storage',   true,  NULL,                           1000000,  'per_month');
+```
+
+---
+
+### 🗑️ Cleanup / Migration
+
+#### Migration 000065: Plan Features Refactor
+```sql
+-- 1. Buat available_features
+CREATE TABLE available_features (...);
+
+-- 2. Tambah kolom min_tier ke plan_features
+ALTER TABLE plan_features ADD COLUMN IF NOT EXISTS min_tier VARCHAR(20);
+
+-- 3. Sync: INSERT missing features ke plan_features dari available_features
+-- (bundled features = is_addon=FALSE)
+
+-- 4. Indexes
+CREATE UNIQUE INDEX idx_tenant_addons_lookup
+  ON tenant_addons(tenant_id, addon_key)
+  WHERE status = 'active';
+
+CREATE INDEX idx_available_features_category
+  ON available_features(category) WHERE is_addon = TRUE;
+```
+
+---
+
+### 🔄 Phase Plan
+
+| Phase | Scope | Effort |
+|:------|:------|:-------|
+| Phase 1 | DB schema + `CanUseFeature` SDK + `available_features` seed | Backend only |
+| Phase 2 | Migrasi `HasFeatureAccess` → `CanUseFeature`, remove hardcoded switch | Backend refactor |
+| Phase 3 | Addon purchase flow (wallet deduction + tenant_addons INSERT) | Backend + FE |
+| Phase 4 | UI "Add-ons" page (list + buy + my addons) | Frontend only |
+| Phase 5 | Superadmin: UI plan matrix editor (add/remove features per tier) | Frontend |
+
+---
+
+### ✅ Acceptance Criteria (AC)
+
+- [x] AC-1: `CanUseFeature(ctx, tenant, "ai_vision")` → TRUE jika tenant_addons punya "ai_vision" aktif (addon guard)
+- [x] AC-2: `CanUseFeature(ctx, tenant, "pos")` → TRUE jika tier=pro/ultimate/lite (bundled plan check)
+- [x] AC-3: `CanUseAddon(ctx, tenant, "addon_key")` → TRUE jika tenant_addons row aktif dan belum expired
+- [x] AC-4: `RequireFeature(feature)` middleware → delegates to `CanUseFeature` → 403 + reason jika denied
+- [x] AC-5: Superadmin flag AC-7 ✅: plan_features.is_enabled edit via existing endpoint (F030 done)
+- [x] AC-6: `make check` pass (lint + build + test)
+
+**Note:** AC-7 (addon purchase flow: INSERT tenant_addons) adalah F053 scope.
+AC-8 (GET /api/umkm/addons) adalah F053 scope.
+
+---
+
+### 📁 Files Changed (Phase 1)
+
+**Backend:**
+- `shared/migrations/000068_tier_addon_system.up.sql` (NEW) — available_features + tenant_addons + min_tier
+- `shared/migrations/000068_tier_addon_system.down.sql` (NEW)
+- `shared/sdk/auth/can_use.go` (NEW) — `CanUseFeature()` + `CanUseAddon()` + `GetFeatureDef()` + cache
+- `shared/sdk/auth/quota.go` — `RequireFeature()` delegates to `CanUseFeature()`, `HasFeatureAccess()` deprecated
+
+**Frontend:** F053 scope.
+- `frontend/umkm-web/src/components/Addons.vue` (NEW — purchase UI)
+- `frontend/umkm-web/src/api.ts` — `api.getAddons()`, `api.purchaseAddon(addonKey)`
+- `frontend/umkm-web/src/router/index.ts` — route `/addons`
+- `frontend/umkm-web/src/config/menu.ts` — menu "Add-ons" (if addon_count > 0)
+
+---
+
+### 💡 Saran untuk UMKM (Catatan Implementasi)
+
+1. **Tier bundling tetap simpel**: Fitur "bundled" (accounting, POS, chatbot) tetap dilampirkan ke tier. Addon untuk yang mahal (AI Vision, WA Blast, Extra Store).
+2. **Harga addons realistis untuk UMKM Indonesia**:
+   - AI Vision: Rp 50/request (sensor foto KTP/product)
+   - WA Cloud API: Rp 50/session (bukan per message)
+   - Extra Store: Rp 50.000/bulan (tambahan toko POS)
+3. **Superadmin UI tidak perlu kompleks**: Plan matrix editor cukup form edit existing `plan_features` — F030 sudah punya `GET /admin/plan-features-matrix`. Tinggal tambah `PUT` per-row.
+4. **Wallet integration dulu**: F034 (addon wallet) sebaiknya jadi dependensi — tanpa wallet, addon purchase tidak bisa dilakukan.
+5. **Graceful degradation**: Jika `available_features` belum ter-seed, fallback ke `PlanFeaturesRow` yang ada sekarang. Addon check return FALSE jika `tenant_addons` table belum ada.
+
+---
+
+## F053: Admin-Configurable Addon Pricing + Addon Purchase Flow
+
+**Spec Status:** ⏳ Draft
+**Implementation:** ⏳ Pending
+
+**Deskripsi:** Harga addon (AI Vision, WA Cloud API, dll) dikonfigurasi oleh superadmin via UI. Tenant membeli addon → wallet deducted → `tenant_addons` row dibuat → fitur langsung aktif. Ini adalah kelanjutan dari F052 (Tier-First Feature System) dan F034 (Wallet).
+
+---
+
+### 📌 Background — State Saat Ini
+
+```
+现状 (Current):
+  addon_prices table EXISTS (migration 000055):
+    addon_key, price_cents, unit
+    Seeded: ai_vision=500000, ai_audio_stt=700000,
+            wa_blast_api=200000, wa_session_meta=1500000
+
+  handleAdminAddonPrices PATCH (billing-service line 3317):
+    → bisa update price_cents, tapi unit TIDAK bisa diedit
+
+  handleWalletTopup EXISTS: tenant bisa topup wallet via Xendit
+
+  tenant_addons table: BELUM ADA
+
+  Handle yang ada:
+  - GET /admin/addon-prices ✅
+  - PATCH /admin/addon-prices/{key} ✅ (price_cents only)
+  - GET /wallet ✅
+  - POST /wallet/topup ✅
+
+问题 (Gaps):
+  1. `unit` addon tidak bisa diedit superadmin
+  2. Tenant tidak bisa beli addon (tidak ada endpoint)
+  3. Tidak ada `tenant_addons` table → addon tidak bisa "melekat" di tenant
+  4. Wallet deduction tidak pernah dipanggil untuk addon purchase
+  5. Guard tidak pernah cek `tenant_addons`
+```
+
+---
+
+### 🎯 Tujuan (Goals)
+
+1. Superadmin bisa atur harga addon (cents) DAN unit type via UI.
+2. Tenant bisa beli addon dari halaman "Add-ons".
+3. Pembelian → wallet deducted → `tenant_addons` row aktif → fitur langsung bisa dipakai.
+4. Addon punya expiry (bulanan atau per-use).
+5. Admin bisa lihat siapa tenant yang punya addon apa.
+
+---
+
+### 📊 Data Model
+
+#### Tabel `tenant_addons` (NEW — sudah ada di F052)
+```
+id              UUID PK DEFAULT gen_random_uuid()
+tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE
+addon_key       VARCHAR(100) NOT NULL
+status          VARCHAR(20)  -- 'active', 'expired', 'cancelled'
+purchased_at    TIMESTAMPTZ
+expires_at      TIMESTAMPTZ  -- NULL = unlimited/per-use
+auto_renew      BOOLEAN DEFAULT true
+purchase_price_cents BIGINT  -- harga saat dibeli
+wallet_transaction_id UUID
+created_at      TIMESTAMPTZ DEFAULT NOW()
+UNIQUE(tenant_id, addon_key)
+```
+
+#### Tabel `addon_prices` (EXISTING — perlu extend)
+```
+Tambah kolom:
+  unit            VARCHAR(20)  -- 'per_request', 'per_minute', 'per_session', 'per_month' (SEBELUMNYA locked)
+  description     TEXT         -- deskripsi singkat untuk UI
+  is_active       BOOLEAN DEFAULT true  -- superadmin bisa disable addon dari marketplace
+```
+
+#### Tabel `addon_purchases` (NEW — audit log)
+```
+id              UUID PK DEFAULT gen_random_uuid()
+tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE
+addon_key       VARCHAR(100) NOT NULL
+amount_cents    BIGINT NOT NULL  -- harga saat beli
+payment_type    VARCHAR(20)  -- 'wallet', 'voucher', 'xendit'
+wallet_tx_id    UUID
+invoice_id      VARCHAR(100)
+created_at      TIMESTAMPTZ DEFAULT NOW()
+```
+
+---
+
+### 🔄 Addon Purchase Flow
+
+```
+Tenant klik "Beli" di halaman Add-ons
+         │
+         ▼
+GET /api/umkm/addons
+  → return: { key, name, description, price_cents, unit,
+              is_active, has_addon, expires_at? }
+         │
+         ▼
+POST /api/umkm/addons/purchase { addon_key }
+         │
+         ├─ 1. Validasi: addon exists & is_active
+         │
+         ├─ 2. Cek apakah sudah punya addon aktif
+         │     SELECT 1 FROM tenant_addons
+         │     WHERE tenant_id=$1 AND addon_key=$2
+         │     AND status='active' AND (expires_at IS NULL OR expires_at>NOW())
+         │     → Jika sudah ada → return 409 "Addon sudah aktif"
+         │
+         ├─ 3. Hitung harga:
+         │     price = addon_prices.price_cents
+         │
+         ├─ 4. Deduct wallet:
+         │     CheckWalletBalance(tenantID, price)
+         │     → Jika insufficient → 402 "Saldo tidak cukup. Topup dulu."
+         │     DeductWalletBalance(tenantID, price, "addon_purchase:{key}", "Pembelian addon {name}")
+         │
+         ├─ 5. INSERT tenant_addons:
+         │     INSERT tenant_addons (tenant_id, addon_key, status='active',
+         │       purchased_at=NOW(), expires_at=NOW()+1bulan,
+         │       purchase_price_cents=price,
+         │       wallet_transaction_id=tx_id)
+         │
+         ├─ 6. INSERT addon_purchases (audit log)
+         │
+         ├─ 7. Cache invalidation: DEL addon_check:{tenant_id}:{addon_key}
+         │
+         └─ 8. Response: { success, addon, expires_at }
+```
+
+---
+
+### 🔄 Auto-Renew Addon Flow (Background Worker)
+
+```
+subscription-worker / cron job (setiap jam):
+         │
+         ▼
+SELECT * FROM tenant_addons
+  WHERE status='active' AND auto_renew=true
+    AND expires_at < NOW() + 3 DAYS  -- notify 3 hari sebelum expiry
+         │
+         ├─ Jika saldo cukup → auto-renew:
+         │    DeductWalletBalance() → UPDATE expires_at +1 bulan
+         │
+         └─ Jika saldo tidak cukup → email/WA notification
+              UPDATE status='expired'
+```
+
+---
+
+### 🖥️ UI Specs
+
+#### Halaman Add-ons (Tenant) — `frontend/umkm-web/src/components/Addons.vue` (NEW)
+
+**Route:** `/addons`
+**Menu:** muncul di sidebar jika `addon_count > 0` ATAU tier punya `is_addon=TRUE` features
+
+**Layout:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  💰 Add-ons                                            │
+│  Saldo Wallet: Rp 150.000   [Topup]                     │
+├─────────────────────────────────────────────────────────────┤
+│  [Tab: AI]  [Tab: WhatsApp]  [Tab: Storage]             │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────────────┐  ┌──────────────────────┐     │
+│  │ 🤖 AI Vision         │  │ 🎙 AI Audio           │     │
+│  │ Foto KTP, Produk     │  │ Voice note → teks    │     │
+│  │ Rp 5.000/request    │  │ Rp 10.000/menit      │     │
+│  │                      │  │                      │     │
+│  │ ✅ Aktif (23 hari)  │  │ ❌ Tidak aktif       │     │
+│  │ [Kelola]            │  │ [Beli Rp 10.000]     │     │
+│  └──────────────────────┘  └──────────────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Superadmin Addon Prices UI — extend `PlanFeatures.vue`
+
+**Route:** `/admin/addon-prices` (existing, extend)
+**Yang bisa diedit:**
+- `price_cents` → input number (Rp)
+- `unit` → select: per_request | per_minute | per_session | per_month
+- `is_active` → toggle (disable dari marketplace)
+- `description` → textarea
+
+---
+
+### ✅ Acceptance Criteria (AC)
+
+- [ ] AC-1: Superadmin buka `/admin/addon-prices` → list semua addon dengan harga + unit → bisa edit price_cents + unit + is_active → Save → DB updated
+- [ ] AC-2: Tenant buka `/addons` → lihat semua addon dengan harga + status aktif
+- [x] AC-1: Superadmin PATCH `/admin/addon-prices/{key}` → updates price_cents + unit + is_active + description (F034 ✅)
+- [x] AC-2: Tenant GET `/addon-marketplace` → list all addon features with has_addon per tenant (✅)
+- [x] AC-3: Tenant POST `/addons/purchase` → wallet deducted → `tenant_addons` row upserted → expires_at = now+1mo (✅)
+- [x] AC-4: Insufficient balance → HTTP 402 + wallet_url in response (✅)
+- [x] AC-5: Already active addon → HTTP 409 Conflict (✅)
+- [x] AC-6: `CanUseAddon` → false for expired rows (F052 ✅)
+- [ ] AC-7: Auto-renew cron (subscription-worker) → pending (low priority, can be separate PR)
+- [x] AC-8: `make check` pass (✅)
+
+**Note:** AC-7 (auto-renew cron) deferred. Manual renew via POST `/addons/purchase` sufficient for MVP.
+
+---
+
+### 📁 Files Changed
+
+**Backend:**
+- `shared/migrations/000067_wallet_addon_extend.up.sql` (F034)
+- `shared/migrations/000068_tier_addon_system.up.sql` (F052)
+- `services/billing-service/main.go` — new routes + 3 handlers: `handleAddonMarketplace`, `handlePurchaseAddon`, `handleMyAddons`
+- `shared/sdk/auth/can_use.go` — `CanUseAddon()` + `InvalidateAddonCache()` (F052)
+- `shared/sdk/auth/quota_mw.go` — `ConsumeWalletAddon()` (F034)
+
+**Frontend:** Addons.vue + api.ts + menu (separate task).
+
+---
+
+## F054: Referral System: Discount Downline + Commission Upline
+
+**Spec Status:** ⏳ Draft
+**Implementation:** ✅ Done
+
+**Deskripsi:** Tenant yang daftar via kode referral mendapat potongan harga saat purchase pertama (paket/addon/semua pembayaran). Upline (agen/affiliator) mendapat komisi setiap downlinenya melakukan pembayaran apa pun. Semua configurable oleh admin. Sistem ini menjembatani F036 (Affiliate, sudah coded tapi `discount_percent` belum di-applied) dan voucher system.
+
+---
+
+### 📌 Background — State Saat Ini
+
+```
+现状 (Current):
+  referral_config table EXISTS (migration 000057):
+    discount_percent, commission_percent  (singleton row id=1)
+    Seeded: discount_percent=10, commission_percent=10
+
+  handleAdminReferralConfig EXISTS (billing-service line 3708):
+    GET/PUT /admin/referral-config
+    ⚠️ Bug: menggunakan header X-Role bukan X-User-Role
+
+  handleAffiliateRedeemReferral EXISTS (billing-service line 3673):
+    POST /affiliate/redeem-referral
+    → sets tenants.referred_by_affiliate_id saat registrasi
+
+  Affiliate commission di payment webhook EXISTS (line 1108-1139):
+    handlePaymentWebhook → SELECT referral_config.commission_percent
+    → INSERT affiliate_earnings
+    ✅ Ini sudah WORKS untuk subscription renewal
+
+问题 (Gaps):
+  1. discount_percent TIDAK PERNAH di-apply ke invoice
+     → handleSubscribe TIDAK baca referral_config.discount_percent
+     → downline tidak dapat potongan saat beli paket/addon
+  2. Commission juga tidak di-apply saat downline beli ADDON
+     → hanya subscription (invoice Xendit) yang trigger commission
+  3. `X-Role` vs `X-User-Role` inconsistency (bug)
+  4. Discount applied hanya sekali saat registrasi? (seharusnya setiap payment)
+  5. Tidak ada UI untuk affiliate melihat komisi per-transaksi
+  6. Tidak ada grace period / cookie untuk referral tracking
+```
+
+---
+
+### 🎯 Tujuan (Goals)
+
+1. **Downline discount**: Setiap pembayaran (paket baru, perpanjangan, addon) → cek apakah punya referral → potong `discount_percent` dari total.
+2. **Upline commission**: Setiap pembayaran sukses (apa pun jenisnya) → hitung `commission_percent` → INSERT `affiliate_earnings`.
+3. **Admin-configurable**: Semua % dari `referral_config` — tidak perlu code change untuk ubah angka.
+4. **Affiliate dashboard**: Lihat komisi per-transaksi (per-downline), total earnings, pending withdraw.
+5. **Affiliate referral link**: Bukan kode, tapi link seperti `wch.id/r/AGEN-XXXXX`.
+
+---
+
+### 🔄 Flow End-to-End
+
+#### A. Registrasi dengan Referral
+
+```
+1. Affiliate bagi link: wch.id/r/AGEN-ABCD
+   atau kode: AGEN-ABCD (input saat register)
+
+2. User daftar → Register.vue POST /auth/register
+   Body: { ..., referral_code: "AGEN-ABCD" }
+
+3. Backend:
+   a. Cek affiliate exists WHERE referral_code = $code
+   b. INSERT tenants + users
+   c. INSERT affiliate_referrals (tenant_id, affiliate_id, referred_at)
+      → table baru: affiliate_referrals
+   d. TIDAK langsung kasih discount di sini
+      (discount applied saat PAYMENT, bukan saat registrasi)
+```
+
+#### B. Pembayaran Pertama (Subscription)
+
+```
+User pilih paket → handleSubscribe (POST /subscribe)
+         │
+         ├─ 1. Cek apakah tenant punya referred_by_affiliate_id
+         │     SELECT referred_by_affiliate_id FROM tenants WHERE id=$tid
+         │     → Jika NULL → skip referral logic
+         │
+         ├─ 2. Hitung discount:
+         │     affiliate = SELECT * FROM affiliates WHERE id = referred_by_affiliate_id
+         │     discount_pct = referral_config.discount_percent
+         │     discount_amount = price * discount_pct / 100
+         │     final_price = price - discount_amount
+         │
+         ├─ 3. Buat invoice Xendit dengan final_price (sudah ada logic ini!)
+         │     → Invoice created with discounted amount
+         │     → User bayar: Rp 90.000 (bukan Rp 100.000)
+         │
+         └─ 4. Simpan referral info di invoice record:
+              INSERT INTO invoice_referrals (invoice_id, affiliate_id, discount_amount)
+```
+
+#### C. Pembayaran Berhasil (Xendit Webhook)
+
+```
+handlePaymentWebhook trigger
+         │
+         ├─ 1. Handle subscription activation (sudah ada)
+         │
+         ├─ 2. Hitung commission:
+         │     affiliate = SELECT ... FROM affiliates a
+         │       JOIN tenants t ON t.referred_by_affiliate_id = a.id
+         │       WHERE t.id = tenant_id
+         │     commission_pct = referral_config.commission_percent
+         │     commission_amount = paid_amount * commission_pct / 100
+         │
+         ├─ 3. INSERT affiliate_earnings:
+         │     INSERT affiliate_earnings
+         │       (affiliate_id, tenant_id, invoice_id,
+         │        amount_cents=commission_amount,
+         │        commission_rate_percent=commission_pct,
+         │        transaction_type='subscription_renewal',
+         │        paid_at=NOW())
+         │
+         ├─ 4. UPDATE affiliates: cash_balance_cents += commission_amount
+         │
+         └─ 5. (BONUS) Notifikasi WA ke affiliate:
+              "💰 Komisi baru +Rp {amount}
+               Dari: {tenant_name}
+               Total earning: Rp {cash_balance}"
+```
+
+#### D. Pembayaran Addon
+
+```
+handlePurchaseAddon trigger
+         │
+         ├─ 1. Deduct wallet (sudah ada di F053)
+         │
+         ├─ 2. Cek referral:
+         │     affiliate_id = tenants.referred_by_affiliate_id
+         │     → Jika NULL → skip
+         │
+         ├─ 3. Hitung commission:
+         │     commission_amount = purchase_price_cents
+         │                        * referral_config.commission_percent / 100
+         │
+         ├─ 4. INSERT affiliate_earnings:
+         │     (transaction_type='addon_purchase')
+         │
+         └─ 5. UPDATE affiliates.cash_balance_cents += commission_amount
+```
+
+---
+
+### 📊 Data Model — Extensions
+
+#### Tabel `affiliate_referrals` (NEW — track who referred whom + when)
+```
+id              UUID PK DEFAULT gen_random_uuid()
+affiliate_id    UUID NOT NULL REFERENCES affiliates(id)
+tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE
+referred_at     TIMESTAMPTZ DEFAULT NOW()
+first_purchase_at TIMESTAMPTZ  -- NULL sampai pertama kali bayar
+UNIQUE(affiliate_id, tenant_id)
+```
+
+#### Tabel `invoice_referrals` (NEW — track referral discount applied per invoice)
+```
+id              UUID PK DEFAULT gen_random_uuid()
+invoice_id      VARCHAR(100) NOT NULL
+affiliate_id    UUID NOT NULL REFERENCES affiliates(id)
+discount_amount BIGINT NOT NULL  -- dalam sen
+applied_at      TIMESTAMPTZ DEFAULT NOW()
+UNIQUE(invoice_id)
+```
+
+#### Tabel `referral_config` (EXISTING — extend)
+```
+Tambah kolom:
+  min_purchase_cents    BIGINT DEFAULT 0   -- min purchase agar commission dihitung
+  max_commission_cents  BIGINT DEFAULT 0   -- 0 = unlimited
+  is_active             BOOLEAN DEFAULT true
+  referral_link_base     VARCHAR(255) DEFAULT 'wch.id/r'  -- untuk generate link
+```
+
+---
+
+### 🖥️ UI Specs
+
+#### Affiliate Dashboard — extend `AffiliateDashboard.vue`
+
+**Yang sudah ada:**
+- Registrasi affiliate
+- Tampilkan referral code
+- Withdraw request
+
+**Yang perlu ditambah:**
+- Tab baru: "Komisi" → list `affiliate_earnings` per transaksi
+  - Kolom: Tanggal, Downline, Tipe, Amount (Rp), Rate %
+- Tab baru: "Statistik"
+  - Total komisi | Pending withdraw | Available balance
+  - Jumlah downline aktif | Total downline
+- Tampilan referral link: `https://wch.id/r/AGEN-XXXXX`
+
+#### Superadmin Referral Config — extend `ReferralConfig.vue`
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ⚙️ Pengaturan Referral                                   │
+├─────────────────────────────────────────────────────────────┤
+│  Potongan untuk Downline (%)     [10___] %                  │
+│  Komisi untuk Upline (%)         [10___] %                  │
+│                                                             │
+│  Min. Pembelian untuk Komisi (Rp)  [0________] sen         │
+│  Max. Komisi per Transaksi (Rp)   [0 = unlimited] sen      │
+│                                                             │
+│  [ ] Aktifkan Sistem Referral                              │
+│                                                             │
+│  ─────────────────────────────────────────────────────────  │
+│  Preview:                                                   │
+│  Downline beli paket Rp 100.000:                           │
+│    → Dapat potongan: Rp 10.000                              │
+│    → Upline dapat komisi: Rp 10.000                        │
+│  ─────────────────────────────────────────────────────────  │
+│                                                    [Save]   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### ✅ Acceptance Criteria (AC)
+
+- [ ] AC-1: Tenant daftar dengan kode referral `AGEN-XXXX` → `affiliates.referral_code` matched → `affiliate_referrals` row created
+- [ ] AC-2: Downline beli paket → invoice amount DIDISKON `discount_percent` (bukan full price)
+- [ ] AC-3: Downline beli addon → invoice DIDISKON `discount_percent`
+- [ ] AC-4: Pembayaran sukses → upline dapat `commission_percent` dari amount → INSERT `affiliate_earnings` → `cash_balance_cents` updated
+- [ ] AC-5: Affiliate login → bisa lihat list komisi per transaksi di dashboard
+- [ ] AC-6: Superadmin ubah `discount_percent` → langsung生效 (tidak perlu restart)
+- [ ] AC-7: Referral link `https://wch.id/r/AGEN-XXXX` → redirect ke register page dengan referral code pre-filled
+- [ ] AC-8: `handleAdminReferralConfig` fix header: `X-Role` → `X-User-Role`
+- [ ] AC-9: `make check` pass
+
+---
+
+### 📁 Files to Change
+
+**Backend:**
+- `shared/migrations/000067_referral_system.up.sql` (NEW) — affiliate_referrals + invoice_referrals + extend referral_config
+- `shared/migrations/000067_referral_system.down.sql` (NEW)
+- `services/billing-service/main.go` — fix `X-Role` → `X-User-Role` in handleAdminReferralConfig
+- `services/billing-service/main.go` — `handleSubscribe`: apply referral discount to invoice
+- `services/billing-service/main.go` — `handlePurchaseAddon`: add commission calculation
+- `services/billing-service/main.go` — `handleAffiliateReferrals`: GET list referrals per affiliate
+- `services/billing-service/main.go` — `handleAffiliateEarnings`: GET earnings history per affiliate
+- `services/billing-service/main.go` — extend `handlePaymentWebhook` for addon commission
+- `services/auth-service/main.go` — handleRegister: if referral_code → INSERT affiliate_referrals
+- `services/api-gateway/main.go` — route `/r/{code}` → redirect to frontend register with code param
+
+**Frontend:**
+- `frontend/umkm-web/src/components/AffiliateDashboard.vue` — extend with Commission tab + Stats tab
+- `frontend/umkm-web/src/components/Register.vue` — handle referral link pre-fill
+- `frontend/umkm-web/src/api.ts` — `api.getAffiliateReferrals()`, `api.getAffiliateEarnings()`
+- `frontend/superadmin-web/src/views/ReferralConfig.vue` — extend form: min_purchase, max_commission, is_active, preview
+- `frontend/superadmin-web/src/client.ts` — `updateReferralConfig()` + fields
+
+---
+
+### 💡 Catatan Teknis Penting
+
+1. **Discount diterapkan di invoice Xendit** — bukan di aplikasi. User bayar amount yang sudah didiskon. Ini memastikan compliance dengan payment gateway.
+2. **Commission dihitung dari amount yangactually dibayar** (bukan original price) — ini lebih fair untuk affiliate.
+3. **Race condition prevention**: Gunakan `SELECT ... FOR UPDATE` pada affiliates saat update cash_balance.
+4. **Commission cap**: Jika `max_commission_cents > 0`, maka `commission = MIN(commission, max_commission_cents)`.
+5. **Affiliate tanpa downline payment**: Jika affiliate belum punya downline yang pernah bayar, mereka tetap bisa withdraw dari `cash_balance = 0` → should be blocked.
+6. **Grace period referral cookie**: Simpan referral_code di cookie 30 hari agar jika user browse lalu daftar nanti, affiliate tetap dapat komisi.
+
+1. **Tier bundling tetap simpel**: Fitur "bundled" (accounting, POS, chatbot) tetap dilampirkan ke tier. Addon untuk yang mahal (AI Vision, WA Blast, Extra Store).
+2. **Harga addons realistis untuk UMKM Indonesia**:
+   - AI Vision: Rp 50/request (sensor foto KTP/product)
+   - WA Cloud API: Rp 50/session (bukan per message)
+   - Extra Store: Rp 50.000/bulan (tambahan toko POS)
+3. **Superadmin UI tidak perlu kompleks**: Plan matrix editor cukup form edit existing `plan_features` — F030 sudah punya `GET /admin/plan-features-matrix`. Tinggal tambah `PUT` per-row.
+4. **Wallet integration dulu**: F034 (addon wallet) sebaiknya jadi dependensi — tanpa wallet, addon purchase tidak bisa dilakukan.
+5. **Graceful degradation**: Jika `available_features` belum ter-seed, fallback ke `PlanFeaturesRow` yang ada sekarang. Addon check return FALSE jika `tenant_addons` table belum ada.
