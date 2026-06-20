@@ -237,21 +237,13 @@ h1, h2, h3, h4, h5, h6 {
 /* === Modal Dialogs — Sidebar Theme === */
 .modal-overlay {
   position: fixed;
-
-
-  bottom: 2rem;
-  left: 17rem; right: auto; top: auto;
-  inset: auto;
-
-
-
+  inset: 0;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
-
-
+  align-items: center;
+  justify-content: center;
   z-index: 9999;
   padding: 1rem;
-  isolation: isolate;
 }
 
 /* Blur main content when any modal is open */
