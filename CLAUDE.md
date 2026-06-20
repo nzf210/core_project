@@ -817,3 +817,5 @@ Payment Webhook Callback
 ### Architecture Note: Plan Redis Cache Dependency
 - Auth-service login populate cache. Untuk existing tenant sebelum fix ini, set manual: `docker exec wch-redis redis-cli SET "tenant:plan:{id}" "{plan}"`
 - `GetTenantPlan()` akan refactored untuk fallback ke DB di versi berikutnya
+### Frontend CSS
+- **WAJIB**: Edit `frontend/umkm-web/src/assets/main.css` untuk merubah gaya CSS utama (termasuk .modal-overlay, .modal-content). File `style.css` hanya legacy/secondary.
