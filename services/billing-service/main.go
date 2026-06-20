@@ -4291,8 +4291,8 @@ func handleAffiliateEarnings(w http.ResponseWriter, r *http.Request) {
 
 func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
 	role := r.Header.Get("X-User-Role")
-	if role != "superadmin" && role != "admin" {
-		response.Error(w, http.StatusForbidden, "Admin only", nil)
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
 		return
 	}
 
