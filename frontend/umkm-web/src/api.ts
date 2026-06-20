@@ -44,37 +44,37 @@ function headers(withAuth = true): Record<string, string> {
 export const api = {
   // Clinic Queue System (F045)
   async getClinicSettings() {
-    const res = await fetch(`${API_BASE}/clinic/settings`, { headers: headers() })
+    const res = await fetch(`${API_BASE}/api/umkm/clinic/settings`, { headers: headers() })
     return res.json()
   },
   async updateClinicSettings(settings: any) {
-    const res = await fetch(`${API_BASE}/clinic/settings`, { method: 'PUT', headers: headers(), body: JSON.stringify(settings) })
+    const res = await fetch(`${API_BASE}/api/umkm/clinic/settings`, { method: 'PUT', headers: headers(), body: JSON.stringify(settings) })
     return res.json()
   },
   async bookClinicAppointment(appointment: any) {
-    const res = await fetch(`${API_BASE}/clinic/appointments/book`, { method: 'POST', headers: headers(), body: JSON.stringify(appointment) })
+    const res = await fetch(`${API_BASE}/api/umkm/clinic/appointments/book`, { method: 'POST', headers: headers(), body: JSON.stringify(appointment) })
     return res.json()
   },
   async cancelClinicAppointment(appointmentId: string, performedBy: string) {
-    const res = await fetch(`${API_BASE}/clinic/appointments/cancel`, { method: 'PUT', headers: headers(), body: JSON.stringify({ appointment_id: appointmentId, performed_by: performedBy }) })
+    const res = await fetch(`${API_BASE}/api/umkm/clinic/appointments/cancel`, { method: 'PUT', headers: headers(), body: JSON.stringify({ appointment_id: appointmentId, performed_by: performedBy }) })
     return res.json()
   },
   async getClinicQueue() {
-    const res = await fetch(`${API_BASE}/clinic/appointments/queue`, { headers: headers() })
+    const res = await fetch(`${API_BASE}/api/umkm/clinic/appointments/queue`, { headers: headers() })
     return res.json()
   },
   async callClinicAppointment(appointmentId: string) {
-    const res = await fetch(`${API_BASE}/clinic/appointments/call`, { method: 'PUT', headers: headers(), body: JSON.stringify({ appointment_id: appointmentId }) })
+    const res = await fetch(`${API_BASE}/api/umkm/clinic/appointments/call`, { method: 'PUT', headers: headers(), body: JSON.stringify({ appointment_id: appointmentId }) })
     return res.json()
   },
 
   // F047: Medical Records
   async getClinicMedicalRecords() {
-    const res = await fetch(`${API_BASE}/clinic/medical-records`, { headers: headers() })
+    const res = await fetch(`${API_BASE}/api/umkm/clinic/medical-records`, { headers: headers() })
     return res.json()
   },
   async createClinicMedicalRecord(record: Record<string, any>) {
-    const res = await fetch(`${API_BASE}/clinic/medical-records`, {
+    const res = await fetch(`${API_BASE}/api/umkm/clinic/medical-records`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify(record),
@@ -84,11 +84,11 @@ export const api = {
 
   // F047: Doctor Schedules
   async getClinicDoctors() {
-    const res = await fetch(`${API_BASE}/clinic/doctors`, { headers: headers() })
+    const res = await fetch(`${API_BASE}/api/umkm/clinic/doctors`, { headers: headers() })
     return res.json()
   },
   async createClinicDoctor(doctor: Record<string, any>) {
-    const res = await fetch(`${API_BASE}/clinic/doctors`, {
+    const res = await fetch(`${API_BASE}/api/umkm/clinic/doctors`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify(doctor),
@@ -421,11 +421,11 @@ export const api = {
 
   // F034: Wallet
   async getWallet() {
-    const res = await fetch(`${API_BASE}/wallet`, { headers: headers() })
+    const res = await fetch(`${API_BASE}/api/billing/wallet`, { headers: headers() })
     return res.json()
   },
   async topupWallet(amountCents: number) {
-    const res = await fetch(`${API_BASE}/wallet/topup`, {
+    const res = await fetch(`${API_BASE}/api/billing/wallet/topup`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ amount_cents: amountCents })
