@@ -2,7 +2,7 @@
   <div class="auth-split-container">
     <div class="auth-image-side">
       <div class="glass-overlay">
-        <h1 class="text-gradient">Super Admin</h1>
+        <h1 class="text-accent-primary">Super Admin</h1>
         <p>Kelola seluruh tenant dan WhatsApp Verifier</p>
       </div>
     </div>

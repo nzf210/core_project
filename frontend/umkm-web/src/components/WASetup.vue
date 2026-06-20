@@ -21,13 +21,13 @@
       </button>
     </div>
 
-    <div v-if="loading" class="glass-card" style="padding: 2rem; text-align: center;">
+    <div v-if="loading" class="surface-card" style="padding: 2rem; text-align: center;">
       <p>Memuat status...</p>
     </div>
     
     <!-- TAB 1: KONEKSI & PROVIDER -->
     <div v-else-if="activeTab === 'connection'" class="setup-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
-      <div class="glass-card" style="padding: 1.5rem;">
+      <div class="surface-card" style="padding: 1.5rem;">
         <h3 style="margin-bottom: 1rem;">Provider Utama</h3>
         <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
           Pilih provider yang ingin Anda gunakan. Mode Auto akan memprioritaskan Cloud API untuk notifikasi penting (jika aktif) dan Whatsmeow untuk chatbot.
@@ -99,7 +99,7 @@
         </div>
       </div>
 
-      <div class="glass-card preview-card" style="padding: 1.25rem;">
+      <div class="surface-card preview-card" style="padding: 1.25rem;">
         <h4 style="margin-bottom: 1rem; color: #f59e0b;">⚠️ Peringatan Broadcast</h4>
         <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1rem;">
           Whatsmeow adalah koneksi tidak resmi (unofficial). Sesuai kebijakan keamanan, <strong>pengiriman broadcast promosi massal diblokir pada jalur Whatsmeow</strong> untuk mencegah nomor WhatsApp Anda dibanned secara permanen.
@@ -119,7 +119,7 @@
 
     <!-- TAB 2: AI CONFIG -->
     <div v-else-if="activeTab === 'ai_config'" class="config-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
-      <div class="glass-card" style="padding: 1.5rem;">
+      <div class="surface-card" style="padding: 1.5rem;">
         <!-- Stepper Inside AI Config -->
         <div class="stepper" style="display: flex; gap: 0.5rem; margin-bottom: 2rem;">
           <div v-for="(label, i) in steps" :key="i" class="step-pill" :class="{ active: currentStep === i, done: currentStep > i }" @click="goToStep(i)">
@@ -295,7 +295,7 @@
       </div>
 
       <!-- PREVIEW COLUMN -->
-      <div class="glass-card preview-card" style="padding: 1.25rem;">
+      <div class="surface-card preview-card" style="padding: 1.25rem;">
         <h4 style="margin-bottom: 0.75rem;">Preview</h4>
         <div class="preview-row"><span>Bot</span><b>{{ form.bot_name || 'CS Toko Anda' }}</b></div>
         <div class="preview-row"><span>Bahasa</span><b>{{ form.language === 'en' ? '🇬🇧 English' : '🇮🇩 Indonesia' }}</b></div>
@@ -311,7 +311,7 @@
 
     <!-- QR Modal -->
     <div v-if="qrModal" class="modal-backdrop" @click.self="qrModal = false; stopQRPolling()">
-      <div class="modal-content glass-card" style="max-width: 360px; padding: 1.5rem; text-align: center;">
+      <div class="modal-content surface-card" style="max-width: 360px; padding: 1.5rem; text-align: center;">
         <h3 style="margin-bottom: 0.75rem;">📱 Scan QR Code</h3>
         <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
           Buka WhatsApp di HP Anda → Settings → Linked Devices → Link a Device
@@ -338,7 +338,7 @@
 
     <!-- Cloud API Credential Modal -->
     <div v-if="cloudApiModal" class="modal-backdrop" @click.self="closeCloudApiModal()">
-      <div class="modal-content glass-card" style="max-width: 520px; padding: 1.5rem;">
+      <div class="modal-content surface-card" style="max-width: 520px; padding: 1.5rem;">
         <h3 style="margin-bottom: 0.5rem;">☁️ Hubungkan Meta Cloud API</h3>
         <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem; line-height: 1.5;">
           <strong>Step 1:</strong> Masukkan credential → klik <em>Validate</em> untuk uji coba koneksi ke Meta.<br/>
@@ -385,7 +385,7 @@
 
     <!-- Test modal -->
     <div v-if="testOpen" class="modal-backdrop" @click.self="testOpen = false">
-      <div class="modal-content glass-card" style="max-width: 480px; padding: 1.5rem;">
+      <div class="modal-content surface-card" style="max-width: 480px; padding: 1.5rem;">
         <h3 style="margin-bottom: 0.75rem;">🧪 Test Bot</h3>
         <p style="font-size: 0.85rem; color: var(--text-secondary);">Coba kirim pesan ke bot untuk lihat bagaimana dia akan menjawab dengan konfigurasi saat ini.</p>
         <input v-model="testInput" type="text" class="form-control" placeholder='Misal: "Halo, ada diskon?"' @keydown.enter="runTest" style="margin-top: 0.5rem;" />
@@ -529,7 +529,7 @@ const saveProvider = async () => {
     if (res.success) {
       const toast = document.createElement('div')
       toast.textContent = '✅ Preferensi provider berhasil disimpan'
-      toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#10b981;color:white;padding:12px 20px;border-radius:8px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15);'
+      toast.style.cssText = 'position:fixed;top:16px;right:16px;background:#10b981;color:white;padding:12px 20px;border-radius:8px;z-index:2147483647;box-shadow:0 4px 12px rgba(0,0,0,.15);'
       document.body.appendChild(toast)
       setTimeout(() => toast.remove(), 2500)
     }
@@ -791,7 +791,7 @@ async function save() {
       sessionStorage.removeItem('chatbot_config_draft')
       const toast = document.createElement('div')
       toast.textContent = '✅ Konfigurasi tersimpan & AI CS aktif'
-      toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#10b981;color:white;padding:12px 20px;border-radius:8px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15);'
+      toast.style.cssText = 'position:fixed;top:16px;right:16px;background:#10b981;color:white;padding:12px 20px;border-radius:8px;z-index:2147483647;box-shadow:0 4px 12px rgba(0,0,0,.15);'
       document.body.appendChild(toast)
       setTimeout(() => toast.remove(), 2500)
     } else {

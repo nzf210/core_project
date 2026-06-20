@@ -2,7 +2,7 @@
   <div class="app-container">
     <!-- Read-only banner: tampil saat akun freeze. User bisa login& lihat data, tapi tidak bisa input baru. -->
     <div v-if="isLoggedIn && isFrozen" class="frozen-banner">
-      <span class="frozen-icon">❄️</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       <div class="frozen-text">
         <strong>Akun Anda dalam masa freeze.</strong>
         Anda masih bisa melihat data historis, tetapi tidak bisa input transaksi baru.

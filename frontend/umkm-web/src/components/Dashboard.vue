@@ -10,46 +10,56 @@
       </button>
     </div>
 
-    <div class="metrics-grid">
-      <div class="glass-card metric-card">
-        <div class="metric-header flex items-center justify-between">
-          <span class="metric-title">Total Pemasukan</span>
+    <div class="metrics-grid-bento">
+      <div class="metric-card">
+        <div class="flex items-center justify-between" style="margin-bottom: 0.5rem;">
+          <span class="text-secondary" style="font-size: 0.9rem; font-weight: 500;">Total Pemasukan</span>
           <span :class="['badge', revPercent >= 0 ? 'badge-success' : 'badge-danger']">
             {{ revPercent > 0 ? '+' : '' }}{{ revPercent.toFixed(1) }}%
           </span>
         </div>
-        <div class="metric-value text-gradient">Rp {{ incomeStatement.revenue.toLocaleString('id-ID') }}</div>
-        <div class="metric-subtitle">Laporan Laba Rugi</div>
+        <div style="font-size: 2rem; font-weight: 700; color: var(--text-primary); margin: 0.5rem 0;">
+          Rp {{ incomeStatement.revenue.toLocaleString('id-ID') }}
+        </div>
+        <span class="text-muted" style="font-size: 0.85rem;">Laporan Laba Rugi</span>
       </div>
 
-      <div class="glass-card metric-card">
-        <div class="metric-header flex items-center justify-between">
-          <span class="metric-title">Total Pengeluaran</span>
+      <div class="metric-card">
+        <div class="flex items-center justify-between" style="margin-bottom: 0.5rem;">
+          <span class="text-secondary" style="font-size: 0.9rem; font-weight: 500;">Total Pengeluaran</span>
           <span :class="['badge', expPercent > 0 ? 'badge-danger' : 'badge-success']">
             {{ expPercent > 0 ? '+' : '' }}{{ expPercent.toFixed(1) }}%
           </span>
         </div>
-        <div class="metric-value" style="color: var(--text-primary);">Rp {{ incomeStatement.expense.toLocaleString('id-ID') }}</div>
-        <div class="metric-subtitle">Laporan Laba Rugi</div>
+        <div style="font-size: 2rem; font-weight: 700; color: var(--text-primary); margin: 0.5rem 0;">
+          Rp {{ incomeStatement.expense.toLocaleString('id-ID') }}
+        </div>
+        <span class="text-muted" style="font-size: 0.85rem;">Laporan Laba Rugi</span>
       </div>
 
-      <div class="glass-card metric-card">
-        <div class="metric-header flex items-center justify-between">
-          <span class="metric-title">Laba Bersih</span>
+      <div class="metric-card">
+        <div class="flex items-center justify-between" style="margin-bottom: 0.5rem;">
+          <span class="text-secondary" style="font-size: 0.9rem; font-weight: 500;">Laba Bersih</span>
           <span :class="['badge', netPercent >= 0 ? 'badge-success' : 'badge-danger']">
             {{ netPercent > 0 ? '+' : '' }}{{ netPercent.toFixed(1) }}%
           </span>
         </div>
-        <div class="metric-value text-gradient">Rp {{ incomeStatement.net_income.toLocaleString('id-ID') }}</div>
-        <div class="metric-subtitle">Laporan Laba Rugi</div>
+        <div style="font-size: 2rem; font-weight: 700; color: var(--text-primary); margin: 0.5rem 0;">
+          Rp {{ incomeStatement.net_income.toLocaleString('id-ID') }}
+        </div>
+        <span class="text-muted" style="font-size: 0.85rem;">Laporan Laba Rugi</span>
       </div>
 
-      <div class="glass-card metric-card">
-        <div class="metric-header flex items-center justify-between">
-          <span class="metric-title">Total Aset (Neraca)</span>
+      <div class="metric-card">
+        <div class="flex items-center justify-between" style="margin-bottom: 0.5rem;">
+          <span class="text-secondary" style="font-size: 0.9rem; font-weight: 500;">Total Aset (Neraca)</span>
         </div>
-        <div class="metric-value" style="color: var(--text-primary);">Rp {{ balanceSheet.assets.toLocaleString('id-ID') }}</div>
-        <div class="metric-subtitle">Kewajiban: Rp {{ balanceSheet.liabilities.toLocaleString('id-ID') }}</div>
+        <div style="font-size: 2rem; font-weight: 700; color: var(--text-primary); margin: 0.5rem 0;">
+          Rp {{ balanceSheet.assets.toLocaleString('id-ID') }}
+        </div>
+        <span class="text-muted" style="font-size: 0.85rem;">
+          Kewajiban: Rp {{ balanceSheet.liabilities.toLocaleString('id-ID') }}
+        </span>
       </div>
     </div>
 

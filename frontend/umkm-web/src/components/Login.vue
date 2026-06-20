@@ -2,7 +2,7 @@
   <div class="auth-split-container">
     <div class="auth-image-side">
       <div class="glass-overlay">
-        <h1 class="text-gradient">{{ businessName }}</h1>
+        <h1>{{ businessName }}</h1>
         <p>Dashboard terpadu dengan asisten AI akuntansi pertama di Indonesia.</p>
       </div>
     </div>

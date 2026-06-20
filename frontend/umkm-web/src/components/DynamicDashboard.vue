@@ -45,7 +45,7 @@
 
         <!-- Metric widget -->
         <div v-if="widget.type === 'metric'" class="widget-metric">
-          <div class="metric-value text-gradient">{{ formatCurrency(widgetData[widget.id]?.value || 0) }}</div>
+          <div class="metric-value text-accent-primary">{{ formatCurrency(widgetData[widget.id]?.value || 0) }}</div>
           <div v-if="widgetData[widget.id]?.change !== undefined" class="metric-change" :class="widgetData[widget.id]?.change >= 0 ? 'positive' : 'negative'">
             {{ widgetData[widget.id]?.change > 0 ? '+' : '' }}{{ widgetData[widget.id]?.change?.toFixed(1) }}% vs bulan lalu
           </div>

@@ -2,19 +2,28 @@
   <div>
     <!-- Floating Button Icon -->
     <button v-if="!isOpen" class="chatbot-toggle-btn" @click="isOpen = true">
-      💬
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
     </button>
 
     <!-- Chat Container -->
-    <div v-if="isOpen" class="chatbot-container glass-card">
+    <div v-if="isOpen" class="chatbot-container surface-card">
       <div class="chat-header">
         <div style="display: flex; align-items: center; gap: 10px;">
-          <h3>AI Business Assistant</h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <h3 style="margin: 0; font-size: 1rem;">AI Business Assistant</h3>
           <span class="status-indicator"></span>
         </div>
-        <button class="close-btn" @click="isOpen = false">✖</button>
+        <button class="close-btn" @click="isOpen = false">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
-      
+
       <div class="chat-window" ref="chatWindow">
         <div v-for="(msg, index) in messages" :key="index" :class="['chat-bubble', msg.role]">
           {{ msg.content }}
@@ -25,10 +34,10 @@
       </div>
 
       <div class="chat-input-area">
-        <input 
-          v-model="inputMsg" 
-          @keyup.enter="sendMessage" 
-          type="text" 
+        <input
+          v-model="inputMsg"
+          @keyup.enter="sendMessage"
+          type="text"
           placeholder="Tanya soal keuangan atau strategi bisnis..."
           class="form-control"
         />
@@ -98,8 +107,6 @@ const sendMessage = async () => {
   bottom: 20px;
   right: 20px;
   z-index: 1000;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
 }
 
 .chat-header {
@@ -108,15 +115,16 @@ const sendMessage = async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--surface-2);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .status-indicator {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   background: var(--success);
   border-radius: 50%;
-  box-shadow: 0 0 8px var(--success);
+  box-shadow: 0 0 6px var(--success);
 }
 
 .chat-window {
@@ -125,28 +133,29 @@ const sendMessage = async () => {
   padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .chat-bubble {
   max-width: 80%;
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
-  font-size: 0.9rem;
-  line-height: 1.4;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .chat-bubble.assistant {
-  background: var(--bg-tertiary);
+  background: var(--surface-2);
+  color: var(--text-primary);
   align-self: flex-start;
-  border-bottom-left-radius: 2px;
+  border-bottom-left-radius: var(--radius-sm);
 }
 
 .chat-bubble.user {
-  background: var(--accent-primary);
-  color: white;
+  background: var(--accent);
+  color: #fff;
   align-self: flex-end;
-  border-bottom-right-radius: 2px;
+  border-bottom-right-radius: var(--radius-sm);
 }
 
 .chat-bubble.loading {
@@ -155,55 +164,50 @@ const sendMessage = async () => {
 }
 
 .chat-input-area {
-  padding: 1rem;
+  padding: 0.75rem;
   border-top: 1px solid var(--border-color);
   display: flex;
   gap: 0.5rem;
-}
-
-.form-control {
-  flex: 1;
-  padding: 0.5rem;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
+  background: var(--surface-1);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 .chatbot-toggle-btn {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  width: 60px;
-  height: 60px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: var(--accent-gradient);
+  background: var(--accent);
   border: none;
-  font-size: 24px;
   color: white;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 12px var(--shadow-glow);
   cursor: pointer;
   z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s ease;
+  transition: transform 0.15s ease;
 }
 .chatbot-toggle-btn:hover {
-  transform: scale(1.1);
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px var(--shadow-glow);
 }
+.chatbot-toggle-btn:active { transform: scale(0.97); }
 
 .close-btn {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 16px;
   cursor: pointer;
   padding: 4px;
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
 }
 .close-btn:hover {
   color: var(--danger);
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
 }
 </style>

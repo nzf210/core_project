@@ -1,21 +1,35 @@
 <template>
   <div class="settings-page">
     <div class="header-actions flex items-center justify-between" style="margin-bottom: 2rem;">
-      <h2>Pengaturan</h2>
-      <p>Kelola akun, profil toko, dan integrasi</p>
+      <div>
+        <h2>Pengaturan</h2>
+        <p>Kelola akun, profil toko, dan integrasi</p>
+      </div>
     </div>
 
     <!-- Pengaturan Akun -->
-    <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem;">
+    <div class="surface-card animate-fade-in" style="max-width: 600px; padding: 2rem;">
       <h3 style="margin-bottom: 1.5rem;">Pengaturan Akun</h3>
       <div style="display: flex; flex-direction: column; gap: 1rem;">
-        <input type="text" placeholder="Username" v-model="profileForm.username" class="form-control" />
-        <input type="text" placeholder="Nomor HP" v-model="profileForm.phone_number" class="form-control" />
+        <div>
+          <label class="form-label">Username</label>
+          <input type="text" placeholder="Username" v-model="profileForm.username" class="form-control" />
+        </div>
+        <div>
+          <label class="form-label">Nomor HP</label>
+          <input type="text" placeholder="Nomor HP" v-model="profileForm.phone_number" class="form-control" />
+        </div>
         <div class="divider" style="border-top: 1px solid var(--border-color); margin: 0.5rem 0;"></div>
-        <h4 style="margin-bottom: 0; font-size: 1rem;">Ganti Password</h4>
-        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: -0.5rem;">Kosongkan jika tidak ingin mengubah password</p>
-        <input type="password" placeholder="Password Saat Ini" v-model="profileForm.old_password" class="form-control" />
-        <input type="password" placeholder="Password Baru" v-model="profileForm.new_password" class="form-control" />
+        <h4 style="margin-bottom: 0.25rem; font-size: 1rem; color: var(--text-primary);">Ganti Password</h4>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0;">Kosongkan jika tidak ingin mengubah password</p>
+        <div>
+          <label class="form-label">Password Saat Ini</label>
+          <input type="password" placeholder="Password Saat Ini" v-model="profileForm.old_password" class="form-control" />
+        </div>
+        <div>
+          <label class="form-label">Password Baru</label>
+          <input type="password" placeholder="Password Baru" v-model="profileForm.new_password" class="form-control" />
+        </div>
         <button class="btn btn-primary" @click="saveAccount" :disabled="loadingAccount">
           {{ loadingAccount ? 'Menyimpan...' : 'Simpan Akun' }}
         </button>
@@ -23,15 +37,15 @@
     </div>
 
     <!-- Profil Toko -->
-    <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
+    <div class="surface-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
       <h3 style="margin-bottom: 1.5rem;">Profil Toko</h3>
 
       <div class="profile-logo-section" style="margin-bottom: 1.5rem; text-align: center;">
         <div class="logo-preview"
-          style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; margin: 0 auto 0.5rem; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center;">
+          style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; margin: 0 auto 0.5rem; border: 2px solid var(--border-color);">
           <img v-if="profileForm.logo_url" :src="profileForm.logo_url" alt="Logo"
             style="width: 100%; height: 100%; object-fit: cover;" />
-          <span v-else style="font-size: 2rem; color: var(--text-secondary);">🏪</span>
+          <span v-else style="font-size: 2rem; color: var(--text-secondary);">S</span>
         </div>
         <label class="btn btn-secondary" style="cursor: pointer; font-size: 0.8rem; padding: 0.3rem 0.8rem;">
           <input type="file" accept="image/png,image/jpeg,image/webp" @change="handleLogoUpload" hidden />
@@ -630,17 +644,12 @@ onMounted(() => {
   font-family: inherit;
 }
 
+/* Toast positioning handled by global main.css (top-right viewport) */
 .toast-notification {
-  position: fixed;
-  bottom: 2rem;
-  right: 2rem;
-  padding: 1rem 1.5rem;
-  border-radius: 8px;
-  color: #fff;
+  padding: 0.875rem 1.25rem;
+  border-radius: var(--radius-md);
   font-weight: 500;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  z-index: 9999;
-  animation: slideIn 0.3s ease-out;
+  box-shadow: var(--shadow-lg);
 }
 
 .toast-success {

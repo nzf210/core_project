@@ -25,7 +25,7 @@
             </div>
             <div class="pos-item-details">
               <h4>{{ product.name }}</h4>
-              <p class="text-gradient">{{ formatCurrency(product.price) }}</p>
+              <p class="text-accent-primary">{{ formatCurrency(product.price) }}</p>
               <div style="margin-top: 0.5rem; font-size: 0.85rem;">
                 <span :class="['badge', product.stock_quantity <= 0 ? 'badge-danger' : 'badge-success']">
                   Stok: {{ product.stock_quantity }}
@@ -60,7 +60,7 @@
         <div class="cart-summary" v-if="cart.length > 0">
           <div class="flex items-center justify-between" style="font-size:1.25rem; font-weight:700; margin-bottom:1.5rem;">
             <span>Total</span>
-            <span class="text-gradient">{{ formatCurrency(cartTotal) }}</span>
+            <span class="text-accent-primary">{{ formatCurrency(cartTotal) }}</span>
           </div>
           <button class="btn btn-primary" style="width: 100%; font-size:1.1rem; padding:1rem;" @click="showPaymentModal = true">
             Bayar

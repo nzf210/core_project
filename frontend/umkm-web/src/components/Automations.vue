@@ -569,20 +569,13 @@ input:checked+.slider:before { transform: translateX(26px); }
 .slider.round { border-radius: 24px; }
 .slider.round:before { border-radius: 50%; }
 
+/* Toast positioning handled by global main.css (top-right viewport) */
 .toast-notification {
-  position: fixed; bottom: 2rem; right: 2rem;
-  padding: 1rem 1.5rem; border-radius: 8px; color: #fff;
-  font-weight: 500; z-index: 9999;
-  animation: slideIn 0.3s ease-out;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+  padding: 0.875rem 1.25rem; border-radius: var(--radius-md);
+  font-weight: 500; box-shadow: var(--shadow-lg);
 }
 .toast-success { background-color: #10b981; }
 .toast-error { background: #ef4444; }
-
-@keyframes slideIn {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
 
 @media (max-width: 768px) {
   .upgrade-banner { flex-direction: column; }

@@ -429,7 +429,7 @@ async function save() {
       // Toast sederhana
       const toast = document.createElement('div')
       toast.textContent = '✅ Konfigurasi tersimpan & AI CS aktif'
-      toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#10b981;color:white;padding:12px 20px;border-radius:8px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15);'
+      toast.style.cssText = 'position:fixed;top:16px;right:16px;background:#10b981;color:white;padding:12px 20px;border-radius:8px;z-index:2147483647;box-shadow:0 4px 12px rgba(0,0,0,.15);'
       document.body.appendChild(toast)
       setTimeout(() => toast.remove(), 2500)
     } else {

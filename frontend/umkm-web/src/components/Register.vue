@@ -2,7 +2,7 @@
   <div class="auth-split-container">
     <div class="auth-image-side">
       <div class="glass-overlay">
-        <h1 class="text-gradient">WCH UMKM</h1>
+        <h1>WCH UMKM</h1>
         <p>Bergabunglah dengan ribuan UMKM lain yang telah mentransformasi bisnis mereka dengan bantuan AI.</p>
       </div>
     </div>
