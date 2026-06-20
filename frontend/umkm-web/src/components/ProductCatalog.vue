@@ -433,6 +433,9 @@ onMounted(() => {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   display: flex;
   flex-direction: column;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
 }
 
 .product-card:hover {

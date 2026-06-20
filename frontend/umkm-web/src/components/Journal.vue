@@ -19,7 +19,7 @@
       </div>
     </div>
 
-    <div class="glass-card table-container">
+    <div class="table-container">
       <table class="data-table">
         <thead>
           <tr>
@@ -361,6 +361,9 @@ const printReceipt = async (trx: any) => {
 
 .table-container {
   overflow-x: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
 }
 
 .data-table {
