@@ -14,5 +14,5 @@ CREATE TABLE IF NOT EXISTS wa_cloud_api_credentials (
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_wa_cloud_credentials_tenant ON wa_cloud_api_credentials(tenant_id);
-CREATE UNIQUE INDEX idx_wa_cloud_credentials_phone ON wa_cloud_api_credentials(phone_number_id);
+CREATE INDEX IF NOT EXISTS idx_wa_cloud_credentials_tenant ON wa_cloud_api_credentials(tenant_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wa_cloud_credentials_phone ON wa_cloud_api_credentials(phone_number_id);
