@@ -41,8 +41,8 @@ Format per feature:
 ```markdown
 ### FXXX: [Nama Feature]
 
-**Spec Status:** ⏳ Draft | 🔍 In Review | ✅ Approved | ❌ Rejected
-**Implementation:** ⏳ Pending | 🔨 In Progress | ✅ Done | ❌ Cancelled
+**Spec Status:** ✅ Approved | 🔍 In Review | ✅ Approved | ❌ Rejected
+**Implementation:** ✅ Done | 🔨 In Progress | ✅ Done | ❌ Cancelled
 
 **Deskripsi:** Apa yang fitur ini lakukan
 
@@ -3095,3 +3095,18 @@ Tambah kolom:
 3. **Superadmin UI tidak perlu kompleks**: Plan matrix editor cukup form edit existing `plan_features` — F030 sudah punya `GET /admin/plan-features-matrix`. Tinggal tambah `PUT` per-row.
 4. **Wallet integration dulu**: F034 (addon wallet) sebaiknya jadi dependensi — tanpa wallet, addon purchase tidak bisa dilakukan.
 5. **Graceful degradation**: Jika `available_features` belum ter-seed, fallback ke `PlanFeaturesRow` yang ada sekarang. Addon check return FALSE jika `tenant_addons` table belum ada.
+
+### F050: Staff Management UI
+
+**Spec Status:** ⏳ Draft
+
+**Description:**
+Halaman/Dialog untuk menampilkan daftar karyawan/staff sebuah UMKM dan melakukan pengaturan seperti ganti username, nomor HP, dan reset password.
+
+**Acceptance Criteria:**
+- [ ] BE: Endpoint `GET /auth/staff` untuk mendapatkan daftar staff berdasarkan tenant_id.
+- [ ] BE: Endpoint `PUT /auth/staff/{id}` untuk update detail staff.
+- [ ] FE: Tabel daftar staff di halaman Settings.
+- [ ] FE: Modal edit staff untuk ubah data.
+
+**Implementation:** ⏳ Pending

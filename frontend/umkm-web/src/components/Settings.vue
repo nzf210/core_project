@@ -83,7 +83,7 @@
         </label>
       </div>
       <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-        Aktifkan pembayaran QRIS di halaman Kasir secara otomatis via Xendit. 
+        Aktifkan pembayaran QRIS di halaman Kasir secara otomatis via Xendit.
         Masukkan API Key dan Webhook Token akun Xendit Anda agar sistem bisa meng-generate invoice.
       </p>
 
@@ -178,6 +178,40 @@
       </div>
     </div>
 
+    <!-- Staff List -->
+    <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
+      <h3 style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+        Daftar Pegawai
+        <button class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem;" @click="fetchStaffList" :disabled="loadingStaffList">
+          {{ loadingStaffList ? '...' : 'Refresh' }}
+        </button>
+      </h3>
+
+      <div v-if="loadingStaffList" style="text-align: center; padding: 2rem;">Loading...</div>
+      <div v-else-if="staffList.length === 0" style="text-align: center; padding: 2rem; opacity: 0.7;">Belum ada data pegawai.</div>
+
+      <div v-else style="display: flex; flex-direction: column; gap: 1rem;">
+        <div v-for="staff in staffList" :key="staff.id" style="border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+            <div>
+              <strong>{{ staff.username }}</strong>
+              <span style="font-size: 0.8rem; padding: 0.2rem 0.5rem; background: rgba(var(--primary-color-rgb), 0.2); border-radius: 4px; margin-left: 0.5rem;">
+                {{ staff.role }}
+              </span>
+            </div>
+            <div>
+              <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; margin-right: 0.5rem;" @click="openEditStaffModal(staff)">Edit</button>
+              <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" @click="handleDeleteStaff(staff.id)">Hapus</button>
+            </div>
+          </div>
+          <div style="font-size: 0.9rem; opacity: 0.8;">
+            <div v-if="staff.email">Email: {{ staff.email }}</div>
+            <div v-if="staff.phone_number">WA: {{ staff.phone_number }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Pengaturan FAQ Bot -->
     <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
       <div class="flex justify-between items-center" style="margin-bottom: 1.5rem;">
@@ -218,6 +252,34 @@
       </div>
     </div>
 
+    <!-- Edit Staff Modal -->
+    <div v-if="showEditStaffModal" class="modal-overlay" @click.self="showEditStaffModal = false">
+      <div class="modal-content glass-card animate-fade-in" style="max-width: 400px; width: 100%;">
+        <h3>Edit Pegawai</h3>
+        <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem;">
+          <div>
+            <label style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 0.3rem; display: block;">Username</label>
+            <input type="text" v-model="editStaffForm.username" class="form-control" />
+          </div>
+          <div>
+            <label style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 0.3rem; display: block;">No. WA</label>
+            <input type="text" v-model="editStaffForm.phone_number" class="form-control" />
+          </div>
+          <div>
+            <label style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 0.3rem; display: block;">Reset Password (opsional)</label>
+            <input type="password" placeholder="Biarkan kosong jika tidak diubah" v-model="editStaffForm.password" class="form-control" />
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem;">
+            <button class="btn btn-secondary" @click="showEditStaffModal = false">Batal</button>
+            <button class="btn btn-primary" @click="handleUpdateStaff" :disabled="loadingUpdateStaff">
+              {{ loadingUpdateStaff ? 'Menyimpan...' : 'Simpan' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Pengaturan Forwarder -->
     <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
       <h3 style="margin-bottom: 1.5rem;">Nomor WA Eskalasi (Forwarder)</h3>
@@ -250,6 +312,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { api, API_BASE, getQuotaUsage, type QuotaUsage } from '../api'
+import { authApi } from '../api'
 
 const qrisEnabled = ref(false)
 const xenditApiKey = ref('')
@@ -259,7 +322,6 @@ const loadingQris = ref(false)
 
 const reportEnabled = ref(false)
 const reportTime = ref('07:00')
-
 
 const toast = ref({ visible: false, message: '', type: 'success' })
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -385,11 +447,76 @@ const handleLogoUpload = async (e: Event) => {
 // Staff Form State
 const staffForm = ref({ username: '', email: '', password: '', phoneNumber: '', role: 'kasir' })
 const loadingStaff = ref(false)
+const staffList = ref<any[]>([])
+const loadingStaffList = ref(false)
+const showEditStaffModal = ref(false)
+const editStaffForm = ref({ id: '', username: '', phone_number: '', password: '' })
+const loadingUpdateStaff = ref(false)
+const userRole = computed(() => localStorage.getItem('role') || '')
 
+const fetchStaffList = async () => {
+  if (userRole.value !== 'owner') return;
+  loadingStaffList.value = true;
+  try {
+    const res = await authApi.getStaffList();
+    if (res.success && res.data) {
+      staffList.value = res.data;
+    }
+  } catch (error) {
+    console.error('Failed to fetch staff:', error);
+  } finally {
+    loadingStaffList.value = false;
+  }
+}
 
+const openEditStaffModal = (staff: any) => {
+  editStaffForm.value = {
+    id: staff.id,
+    username: staff.username,
+    phone_number: staff.phone_number || '',
+    password: ''
+  };
+  showEditStaffModal.value = true;
+}
 
+const handleUpdateStaff = async () => {
+  if (!editStaffForm.value.username) {
+    alert('Username tidak boleh kosong');
+    return;
+  }
 
+  loadingUpdateStaff.value = true;
+  try {
+    const res = await authApi.updateStaff(editStaffForm.value);
+    if (res.success) {
+      alert('Pegawai berhasil diperbarui');
+      showEditStaffModal.value = false;
+      fetchStaffList();
+    } else {
+      alert(res.message || 'Gagal memperbarui pegawai');
+    }
+  } catch (error: any) {
+    alert(error.message || 'Terjadi kesalahan jaringan');
+  } finally {
+    loadingUpdateStaff.value = false;
+  }
+}
 
+const handleDeleteStaff = async (id: string) => {
+  if (!confirm('Yakin ingin menghapus pegawai ini?')) return;
+
+  try {
+    const res = await authApi.deleteStaff(id);
+    if (res.success) {
+      alert('Pegawai berhasil dihapus');
+      fetchStaffList();
+    } else {
+      alert(res.message || 'Gagal menghapus pegawai');
+    }
+  } catch (error: any) {
+    alert(error.message || 'Terjadi kesalahan jaringan');
+  }
+}
 
 const handleAddStaff = async () => {
   if (!staffForm.value.username || !staffForm.value.phoneNumber) {
@@ -461,8 +588,6 @@ const saveQrisSettings = async () => {
     loadingQris.value = false
   }
 }
-
-
 
 // FAQ Management
 const faqs = ref<any[]>([])
@@ -577,7 +702,7 @@ const quotaTenantInput = ref(localStorage.getItem('tenant_id') || '')
 const loadingQuota = ref(false)
 
 function quotaPercent(used: number, limit: number): number {
-  if (!limit || limit < 0) return 0   // 0 = disabled, <0 = unlimited
+  if (!limit || limit < 0) return 0
   return Math.min(100, Math.round((used / limit) * 100))
 }
 
@@ -594,15 +719,14 @@ const quotaRows = computed(() => {
   for (const u of quota.value.usage || []) {
     usedBy[u.feature] = (usedBy[u.feature] || 0) + (u.used || 0)
   }
-  const rows: { key: string; label: string; used: number; limitText: string; percent: number }[] = [
-    { key: 'ai_text',         label: 'AI Text Requests',         used: usedBy.ai_text         || 0, limitText: limitDisplay(limits.max_ai_text),          percent: quotaPercent(usedBy.ai_text         || 0, limits.max_ai_text) },
-    { key: 'ai_vision',       label: 'AI Vision (Image→Text)',   used: usedBy.ai_vision       || 0, limitText: limitDisplay(limits.max_ai_vision),        percent: quotaPercent(usedBy.ai_vision       || 0, limits.max_ai_vision) },
-    { key: 'ai_audio_stt',    label: 'AI Audio (STT minutes)',   used: usedBy.ai_audio_stt    || 0, limitText: limitDisplay(limits.max_ai_audio_minutes), percent: quotaPercent(usedBy.ai_audio_stt    || 0, limits.max_ai_audio_minutes) },
-    { key: 'image_gen',       label: 'AI Image Generation',      used: usedBy.image_gen       || 0, limitText: limitDisplay(limits.max_image_gen),        percent: quotaPercent(usedBy.image_gen       || 0, limits.max_image_gen) },
-    { key: 'chatbot_messages',label: 'Chatbot Messages',         used: usedBy.chatbot_messages|| 0, limitText: '—',                                          percent: 0 },
-    { key: 'transactions',    label: 'Transactions (period)',    used: 0,                       limitText: limitDisplay(limits.max_transactions),      percent: 0 },
+  return [
+    { key: 'ai_text', label: 'AI Text Requests', used: usedBy.ai_text || 0, limitText: limitDisplay(limits.max_ai_text), percent: quotaPercent(usedBy.ai_text || 0, limits.max_ai_text) },
+    { key: 'ai_vision', label: 'AI Vision (Image→Text)', used: usedBy.ai_vision || 0, limitText: limitDisplay(limits.max_ai_vision), percent: quotaPercent(usedBy.ai_vision || 0, limits.max_ai_vision) },
+    { key: 'ai_audio_stt', label: 'AI Audio (STT minutes)', used: usedBy.ai_audio_stt || 0, limitText: limitDisplay(limits.max_ai_audio_minutes), percent: quotaPercent(usedBy.ai_audio_stt || 0, limits.max_ai_audio_minutes) },
+    { key: 'image_gen', label: 'AI Image Generation', used: usedBy.image_gen || 0, limitText: limitDisplay(limits.max_image_gen), percent: quotaPercent(usedBy.image_gen || 0, limits.max_image_gen) },
+    { key: 'chatbot_messages', label: 'Chatbot Messages', used: usedBy.chatbot_messages || 0, limitText: '—', percent: 0 },
+    { key: 'transactions', label: 'Transactions (period)', used: 0, limitText: limitDisplay(limits.max_transactions), percent: 0 },
   ]
-  return rows
 })
 
 const loadQuota = async () => {
@@ -633,6 +757,7 @@ onMounted(() => {
   loadProfile()
   loadFaqs()
   loadForwarders()
+  fetchStaffList()
 })
 </script>
 <style scoped>
@@ -646,7 +771,6 @@ onMounted(() => {
   font-family: inherit;
 }
 
-/* Toast positioning handled by global main.css (top-right viewport) */
 .toast-notification {
   padding: 0.875rem 1.25rem;
   border-radius: var(--radius-md);
@@ -663,7 +787,6 @@ onMounted(() => {
   color: white;
 }
 
-/* Switch styling */
 .switch {
   position: relative;
   display: inline-block;
@@ -773,7 +896,6 @@ input:checked+.slider:before {
   margin: 0 auto;
 }
 
-/* Quota Usage (F025, Task 2.9) */
 .quota-bar-fill {
   background: #4f46e5;
   height: 100%;

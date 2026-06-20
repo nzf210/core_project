@@ -520,3 +520,27 @@ export async function getQuotaUsage(tenantId: string): Promise<QuotaUsage | null
   if (res && res.success && res.data) return res.data as QuotaUsage
   return null
 }
+
+// F050: Staff Management API (owner-only)
+export const authApi = {
+  async getStaffList() {
+    const res = await fetch(`${API_BASE}/auth/staff`, { headers: headers() })
+    return res.json()
+  },
+  async updateStaff(data: { id?: string; username?: string; phone_number?: string; password?: string }) {
+    const res = await fetch(`${API_BASE}/auth/staff/update`, {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  },
+  async deleteStaff(id: string) {
+    const res = await fetch(`${API_BASE}/auth/staff/delete`, {
+      method: 'DELETE',
+      headers: headers(),
+      body: JSON.stringify({ id }),
+    })
+    return res.json()
+  },
+}

@@ -149,3 +149,9 @@ strip_*.sh
 strip-*.sh
 generate_*.sh
 generate-*.sh
+
+# Temporary injection/patch scripts (F050 and similar)
+apply_f*.go
+apply_*.go
+apply_f*.patch
+apply_*.patch
