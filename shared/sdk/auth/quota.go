@@ -149,6 +149,8 @@ func DeductWalletBalance(ctx context.Context, tenantID string, amountCents int64
 }
 
 // HasFeatureAccess checks if a tenant has access to a specific feature.
+// DEPRECATED: Use CanUseFeature instead. This only checks bundled plan features,
+// not addon purchases. Kept for backward compatibility during F052 transition.
 // Returns (allowed, reason) where reason is a human-readable message if denied.
 func HasFeatureAccess(tenantID string, feature string) (bool, string) {
 	plan := GetPlan(tenantID)
@@ -190,8 +192,8 @@ func HasFeatureAccess(tenantID string, feature string) (bool, string) {
 }
 
 // RequireFeature returns a middleware that blocks access to a feature
-// if the tenant's plan does not include it. Pass the feature name
-// (e.g. "pos", "chatbot", "ai", "inventory").
+// if the tenant's plan does not include it. Delegates to CanUseFeature
+// so both bundled plan features and addon purchases are honored.
 // Usage: mux.Handle("/api/umkm/pos/", auth.RequireFeature("pos")(auth.Middleware(handler)))
 func RequireFeature(feature string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -202,18 +204,18 @@ func RequireFeature(feature string) func(http.Handler) http.Handler {
 				return
 			}
 
-			allowed, reason := HasFeatureAccess(tenantID, feature)
+			allowed, reason := CanUseFeature(r.Context(), tenantID, feature)
 			if !allowed {
 				w.Header().Set("X-Feature-Gate", "denied")
 				w.Header().Set("X-Required-Feature", feature)
-				w.Header().Set("X-Plan-Tier", GetPlan(tenantID).Tier)
+				w.Header().Set("X-Plan-Tier", GetTenantPlan(r.Context(), tenantID))
 				response.Error(w, http.StatusForbidden, reason, nil)
 				return
 			}
 
 			w.Header().Set("X-Feature-Gate", "allowed")
 			w.Header().Set("X-Required-Feature", feature)
-			w.Header().Set("X-Plan-Tier", GetPlan(tenantID).Tier)
+			w.Header().Set("X-Plan-Tier", GetTenantPlan(r.Context(), tenantID))
 			next.ServeHTTP(w, r)
 		})
 	}

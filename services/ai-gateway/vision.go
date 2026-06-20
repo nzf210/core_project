@@ -24,40 +24,43 @@ func HandleVision(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "Invalid request"})
 		return
 	}
-
 	if req.ImageURL == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "image_url cannot be empty"})
 		return
 	}
 
-	// Get tenant from context
-	_ = ""
+	// F034: Wallet gate — get tenant from context (set by tenantContextMiddleware)
+	tenantID := ""
 	if t, ok := r.Context().Value(auth.TenantIDKey).(string); ok {
-		_ = t
+		tenantID = t
+	}
+	if tenantID != "" {
+		price := auth.AddonPricePerUnit(r.Context(), "ai_vision")
+		if price > 0 && !auth.CheckWalletBalance(r.Context(), tenantID, price) {
+			writeJSON(w, http.StatusPaymentRequired, APIResponse{
+				Success: false,
+				Message: "Insufficient wallet balance for AI Vision. Please top up.",
+				Data:    map[string]any{"wallet_url": "/wallet"},
+			})
+			return
+		}
+		auth.ConsumeWalletAddon(r.Context(), tenantID, "ai_vision")
 	}
 
-	// MOCK Implementation for C1 Real Count Form Processing:
-	// For now, this returns a simulated JSON extracting numbers from the C1 image
-	// In production, we would use MiniMax-M3-Vision or OpenAI GPT-4o Vision API
-	// and pass the image URL and the prompt.
-
+	// MOCK Implementation for C1 Real Count Form Processing.
+	// In production: Claude Sonnet Vision or OpenAI GPT-4o Vision API.
 	var respText string
-
-	// Specific prompt mapping for Real Count C1
 	if req.Prompt == "Extract C1 numbers" {
-		// Mock response mimicking OCR
 		respText = `{"candidate_votes": 125, "opponent_votes": 85, "invalid_votes": 2}`
 	} else if req.Prompt == "Extract KTP data" {
-		// Mock response mimicking KTP OCR
 		respText = `{"nik": "3171234567890123", "name": "BUDI SANTOSO", "address": "JL. MERDEKA NO 45", "gender": "LAKI-LAKI", "age": 35}`
 	} else {
-		// General fallback mock
 		respText = "[MOCK VISION] Gambar diterima: " + req.ImageURL + " | Prompt: " + req.Prompt
 	}
 
 	writeJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Message: "Success",
-		Data:    map[string]interface{}{"text": respText},
+		Data:    map[string]any{"text": respText},
 	})
 }
