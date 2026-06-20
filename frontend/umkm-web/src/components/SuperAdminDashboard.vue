@@ -24,7 +24,7 @@
         </div>
         <div class="card-body">
           <p class="text-muted" style="margin-bottom: 1rem;">
-            <strong>{{ myProfile.username }}</strong> &mdash; Super Admin
+            <strong>{{ myProfile.username }}</strong> &mdash; {{ role }}
           </p>
           <p class="text-muted" style="font-size: 0.85rem;">
             {{ myProfile.phone_number || 'No phone' }}
@@ -604,9 +604,9 @@
 
     <!-- Toast -->
     <Teleport to="body">
-    <div v-if="toast.visible" :class="['toast-notification', `toast-${toast.type}`]" :style="{ top: toastTop + 'px' }">
-      {{ toast.message }}
-    </div>
+      <div v-if="toast.visible" :class="['toast-notification', `toast-${toast.type}`]" :style="{ top: toastTop + 'px' }">
+        {{ toast.message }}
+      </div>
     </Teleport>
   </div>
 </template>
@@ -701,6 +701,7 @@ const showToast = (message: string, type: 'success' | 'error' = 'success') => {
 const showMyProfile = ref(false)
 const myProfile = ref({ username: '', phone_number: '', old_password: '', new_password: '' })
 const savingMyProfile = ref(false)
+const role = computed(() => localStorage.getItem('role') || 'Super Admin')
 const myProfileError = ref('')
 
 watch(showMyProfile, (v) => { if (v) openModal(); else closeModal(); })

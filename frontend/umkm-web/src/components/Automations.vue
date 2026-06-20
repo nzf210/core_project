@@ -163,9 +163,11 @@
     </div>
 
     <!-- Toast -->
-    <div v-if="toast.visible" :class="['toast-notification', `toast-${toast.type}`]">
-      {{ toast.message }}
-    </div>
+    <Teleport to="body">
+      <div v-if="toast.visible" :class="['toast-notification', `toast-${toast.type}`]">
+        {{ toast.message }}
+      </div>
+    </Teleport>
   </div>
 </template>
 
