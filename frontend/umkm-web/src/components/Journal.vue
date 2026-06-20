@@ -111,7 +111,7 @@
 
     <!-- Simple modal placeholder -->
     <div v-if="showForm" class="modal-overlay" @click.self="showForm = false">
-      <div class="glass-card modal-content animate-fade-in" style="max-width: 700px; max-height: 90vh; overflow-y: auto; padding: 2rem;">
+      <div class="modal-content animate-fade-in" style="max-width: 700px; max-height: 90vh; overflow-y: auto; padding: 2rem;">
         <div class="flex items-center justify-between" style="margin-bottom: 1.5rem;">
           <h3>Catat Jurnal Baru</h3>
           <button @click="showForm = false" style="background:none;border:none;cursor:pointer;font-size:1.2rem;padding:0.25rem;">✕</button>
@@ -449,7 +449,7 @@ const printReceipt = async (trx: any) => {
   padding: 2rem;
   max-height: 90vh;
   overflow-y: auto;
-  background-color: rgba(255, 255, 255, 0.98);
+  background-color: #fff;
 }
 
 .btn-sm {

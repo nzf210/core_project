@@ -74,7 +74,7 @@
 
     <!-- Detail Modal -->
     <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
-      <div class="modal-content glass-card animate-fade-in" style="max-width: 600px; max-height: 90vh; overflow-y: auto;" @click.stop>
+      <div class="modal-content animate-fade-in" style="max-width: 600px; max-height: 90vh; overflow-y: auto;" @click.stop>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
           <h3 style="margin: 0;">Detail Produk</h3>
           <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; border: none; font-size: 1.5rem;" @click="closeDetailModal">&times;</button>
@@ -117,7 +117,7 @@
 
     <!-- Add/Edit Modal -->
     <div v-if="showModal" class="modal-overlay">
-      <div class="modal-content glass-card animate-fade-in" style="max-height: 90vh; overflow-y: auto;">
+      <div class="modal-content animate-fade-in" style="max-height: 90vh; overflow-y: auto;">
         <h3 style="margin-bottom: 1.5rem;">{{ isEditing ? 'Edit Produk' : 'Tambah Produk Baru' }}</h3>
         
         <form @submit.prevent="saveProduct">
@@ -531,7 +531,7 @@ onMounted(() => {
   padding: 2rem;
   max-height: 90vh;
   overflow-y: auto;
-  background-color: rgba(255, 255, 255, 0.98);
+  background-color: #fff;
 }
 
 /* Mobile Responsiveness */
