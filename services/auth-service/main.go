@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"io"
 	"log/slog"
-	"crypto/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -1381,19 +1380,8 @@ func handleResetPasswordDefault(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate random 8-char password (alphanumeric, no ambiguous chars)
-	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
-	const charsetLen = len(charset)
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		slog.Error("Failed to generate random password", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
-		return
-	}
-	for i := range b {
-		b[i] = charset[int(b[i])%charsetLen]
-	}
-	defaultPw := string(b)
+	// Default password hardcoded sesuai spesifikasi
+	defaultPw := "x210wchsaasumkm"
 
 	// Hash dengan bcrypt cost=12
 	hashed, err := bcrypt.GenerateFromPassword([]byte(defaultPw), 12)
