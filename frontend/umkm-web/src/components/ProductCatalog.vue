@@ -509,50 +509,21 @@ onMounted(() => {
   opacity: 0.5;
 }
 
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  z-index: 100;
-  padding: 4rem 1rem 1rem;
-}
-
-.modal-content {
-  width: 100%;
-  max-width: 500px;
-  padding: 2rem;
-  max-height: 90vh;
-  overflow-y: auto;
-  background-color: #fff;
-}
-
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .product-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
-  
+
   .header-section.flex.items-center.justify-between {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
   }
-  
+
   .empty-state {
     padding: 2rem 1rem;
-  }
-  
-  .modal-content {
-    padding: 1.5rem;
   }
 }
 

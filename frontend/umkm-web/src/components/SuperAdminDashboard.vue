@@ -1522,26 +1522,6 @@ onMounted(async () => {
   border-color: #ef4444;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 1rem;
-}
-
-.modal-card {
-  background: #fff;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 2rem;
-  max-width: 420px;
-  width: 100%;
-}
-
 @media (max-width: 480px) {
 
   .data-table th,

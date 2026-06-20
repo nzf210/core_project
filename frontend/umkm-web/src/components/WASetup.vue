@@ -1047,11 +1047,6 @@ onUnmounted(() => {
   justify-content: center;
   z-index: 1000;
 }
-.modal-content {
-  width: 90%;
-  max-width: 480px;
-  background-color: #fff;
-}
 @media (max-width: 768px) {
   .config-layout, .setup-layout {
     grid-template-columns: 1fr !important;

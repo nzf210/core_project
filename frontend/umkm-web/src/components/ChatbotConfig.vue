@@ -587,19 +587,9 @@ onMounted(() => {
   background: transparent !important;
   padding: 0.3rem !important;
 }
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
 .modal-content {
   width: 90%;
   max-width: 480px;
-  background-color: #fff;
 }
 @media (max-width: 768px) {
   .config-layout {

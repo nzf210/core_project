@@ -428,28 +428,12 @@ const printReceipt = async (trx: any) => {
   border-radius: 4px;
 }
 
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  z-index: 100;
-  padding: 4rem 1rem 1rem;
-}
-
 .modal-content {
   width: 100%;
   max-width: 700px;
   padding: 2rem;
   max-height: 90vh;
   overflow-y: auto;
-  background-color: #fff;
 }
 
 .modal-content .input-field {
