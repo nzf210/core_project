@@ -248,6 +248,23 @@ export const api = {
     return res.json()
   },
 
+  // F048: Cloud API credential (per-tenant Meta credentials)
+  async getCloudAPICredential() {
+    const res = await fetch(`${API_BASE}/api/umkm/wa/cloud-api-credential`, {
+      method: 'GET',
+      headers: headers(),
+    })
+    return res.json()
+  },
+  async saveCloudAPICredential(cred: { phone_number_id: string; waba_id: string; access_token: string; verify_token: string }) {
+    const res = await fetch(`${API_BASE}/api/umkm/wa/cloud-api-credential`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(cred),
+    })
+    return res.json()
+  },
+
   // Cash Flow PDF (F021) — trigger browser download via window.location
   cashFlowPDFUrl(from: string, to: string) {
     return `${API_BASE}/api/umkm/reports/cash-flow/pdf?from=${from}&to=${to}`

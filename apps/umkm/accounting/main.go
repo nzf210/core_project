@@ -100,6 +100,7 @@ func main() {
 	mux.HandleFunc("/chatbot/permissions", handleChatbotPermissions)    // F048: GET addon permissions
 	mux.HandleFunc("/wa/setup", handleWASetup)                         // WA setup status + provider options
 	mux.HandleFunc("/wa/connect", handleWAConnect)                       // WA provider selection
+	mux.HandleFunc("/wa/cloud-api-credential", handleWACloudAPICredential) // F048: tenant Cloud API credential
 
 	// Clinic Queue System (F045) + Medical Records + Doctor Schedules (F047)
 	// All /clinic/* routes require business_type = 'clinic' (middleware enforced)
@@ -3340,6 +3341,77 @@ func handleWAConnect(w http.ResponseWriter, r *http.Request) {
 			"wa_provider_preference": body.Provider,
 		},
 	})
+}
+
+// handleWACloudAPICredential — GET/POST per-tenant Cloud API credential (phone_number_id, access_token, waba_id, verify_token).
+// GET  — return current credential (without access_token)
+// POST — upsert credential
+func handleWACloudAPICredential(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		return
+	}
+	ctx := r.Context()
+
+	switch r.Method {
+	case http.MethodGet:
+		var cred struct {
+			ID            string `json:"id"`
+			PhoneNumberID string `json:"phone_number_id"`
+			WABAID        string `json:"waba_id"`
+			VerifyToken   string `json:"verify_token"`
+			IsActive      bool   `json:"is_active"`
+			CreatedAt     string `json:"created_at"`
+			UpdatedAt     string `json:"updated_at"`
+		}
+		err := DB.QueryRow(ctx, `
+			SELECT id, phone_number_id, COALESCE(waba_id,''), COALESCE(verify_token,''), is_active, created_at::text, updated_at::text
+			FROM wa_cloud_api_credentials WHERE tenant_id = $1
+		`, tenantID).Scan(&cred.ID, &cred.PhoneNumberID, &cred.WABAID, &cred.VerifyToken, &cred.IsActive, &cred.CreatedAt, &cred.UpdatedAt)
+		if err != nil {
+			writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: nil})
+			return
+		}
+		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: cred})
+
+	case http.MethodPost:
+		var body struct {
+			PhoneNumberID string `json:"phone_number_id"`
+			WABAID        string `json:"waba_id"`
+			AccessToken   string `json:"access_token"`
+			VerifyToken   string `json:"verify_token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+			return
+		}
+		body.PhoneNumberID = strings.TrimSpace(body.PhoneNumberID)
+		body.AccessToken = strings.TrimSpace(body.AccessToken)
+		if body.PhoneNumberID == "" || body.AccessToken == "" {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "phone_number_id dan access_token wajib diisi"})
+			return
+		}
+		if body.VerifyToken == "" {
+			body.VerifyToken = tenantID // Use tenantID as default verify token
+		}
+		_, err := DB.Exec(ctx, `
+			INSERT INTO wa_cloud_api_credentials (tenant_id, phone_number_id, waba_id, access_token, verify_token)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (tenant_id) DO UPDATE SET
+				phone_number_id = EXCLUDED.phone_number_id,
+				waba_id = EXCLUDED.waba_id,
+				access_token = EXCLUDED.access_token,
+				verify_token = EXCLUDED.verify_token,
+				is_active = true,
+				updated_at = NOW()
+		`, tenantID, body.PhoneNumberID, body.WABAID, body.AccessToken, body.VerifyToken)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal menyimpan credential: " + err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Cloud API credential tersimpan"})
+	}
 }
 
 // handleChatbotConfigTest — F020 preview endpoint.

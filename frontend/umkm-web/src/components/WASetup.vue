@@ -92,7 +92,9 @@
             <button class="btn btn-secondary" style="margin-top: 1rem; width: 100%;">Top Up Kredit</button>
           </div>
           <div v-else class="action-row">
-            <button class="btn btn-primary" :disabled="!waSetupState.can_use_cloud_api">Hubungkan ke Meta</button>
+            <button class="btn btn-primary" :disabled="!waSetupState.can_use_cloud_api" @click="openCloudApiModal">
+              Hubungkan ke Meta
+            </button>
           </div>
         </div>
       </div>
@@ -334,6 +336,45 @@
       </div>
     </div>
 
+    <!-- Cloud API Credential Modal -->
+    <div v-if="cloudApiModal" class="modal-backdrop" @click.self="cloudApiModal = false">
+      <div class="modal-content glass-card" style="max-width: 520px; padding: 1.5rem;">
+        <h3 style="margin-bottom: 0.5rem;">☁️ Hubungkan Meta Cloud API</h3>
+        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
+          Peroleh <strong>Phone Number ID</strong> dan <strong>WABA ID</strong> dari
+          <a href="https://business.facebook.com" target="_blank" style="color: #3b82f6;">Meta Business</a>
+          → WhatsApp → Phone Numbers. Access Token dari
+          <a href="https://developers.facebook.com" target="_blank" style="color: #3b82f6;">Meta Developers</a>.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+          <label>
+            <span style="display: block; font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--text-secondary);">Phone Number ID <span style="color: #dc2626;">*</span></span>
+            <input v-model="cloudApiForm.phone_number_id" type="text" class="form-control" placeholder="例: 123456789012345" />
+          </label>
+          <label>
+            <span style="display: block; font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--text-secondary);">WABA ID (WhatsApp Business Account)</span>
+            <input v-model="cloudApiForm.waba_id" type="text" class="form-control" placeholder="例: 987654321098765" />
+          </label>
+          <label>
+            <span style="display: block; font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--text-secondary);">Permanent Access Token <span style="color: #dc2626;">*</span></span>
+            <input v-model="cloudApiForm.access_token" type="password" class="form-control" placeholder="Token dari Meta Developers" />
+          </label>
+          <label>
+            <span style="display: block; font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--text-secondary);">Webhook Verify Token (opsional)</span>
+            <input v-model="cloudApiForm.verify_token" type="text" class="form-control" placeholder="Kosongkan untuk auto-generate" />
+          </label>
+        </div>
+        <p v-if="cloudApiError" class="error-text" style="margin-top: 0.75rem;">{{ cloudApiError }}</p>
+        <p v-if="cloudApiSuccess" class="success-text" style="margin-top: 0.75rem;">{{ cloudApiSuccess }}</p>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem;">
+          <button class="btn btn-secondary" @click="cloudApiModal = false">Batal</button>
+          <button class="btn btn-primary" :disabled="cloudApiLoading" @click="saveCloudApiCredential">
+            {{ cloudApiLoading ? 'Menyimpan...' : 'Simpan' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Test modal -->
     <div v-if="testOpen" class="modal-backdrop" @click.self="testOpen = false">
       <div class="modal-content glass-card" style="max-width: 480px; padding: 1.5rem;">
@@ -490,12 +531,76 @@ const saveProvider = async () => {
   }
 }
 
+async function openCloudApiModal() {
+  cloudApiModal.value = true
+  cloudApiError.value = ''
+  cloudApiSuccess.value = ''
+  cloudApiForm.phone_number_id = ''
+  cloudApiForm.waba_id = ''
+  cloudApiForm.access_token = ''
+  cloudApiForm.verify_token = ''
+  try {
+    const res = await api.getCloudAPICredential()
+    if (res.success && res.data) {
+      cloudApiForm.phone_number_id = res.data.phone_number_id || ''
+      cloudApiForm.waba_id = res.data.waba_id || ''
+      cloudApiForm.verify_token = res.data.verify_token || ''
+      // access_token tidak pernah di-return (security)
+    }
+  } catch {}
+}
+
+async function saveCloudApiCredential() {
+  if (!cloudApiForm.phone_number_id.trim() || !cloudApiForm.access_token.trim()) {
+    cloudApiError.value = 'Phone Number ID dan Access Token wajib diisi.'
+    return
+  }
+  cloudApiLoading.value = true
+  cloudApiError.value = ''
+  cloudApiSuccess.value = ''
+  try {
+    const res = await api.saveCloudAPICredential({
+      phone_number_id: cloudApiForm.phone_number_id.trim(),
+      waba_id: cloudApiForm.waba_id.trim(),
+      access_token: cloudApiForm.access_token.trim(),
+      verify_token: cloudApiForm.verify_token.trim(),
+    })
+    if (res.success) {
+      cloudApiSuccess.value = '✅ Cloud API credential berhasil disimpan!'
+      // Refresh WA setup state
+      const resWA = await api.getWASetup()
+      if (resWA.success) waSetupState.value = resWA.data
+      // Reset access_token field
+      cloudApiForm.access_token = ''
+      setTimeout(() => { cloudApiModal.value = false; cloudApiSuccess.value = '' }, 2000)
+    } else {
+      cloudApiError.value = res.message || 'Gagal menyimpan credential'
+    }
+  } catch (e: any) {
+    cloudApiError.value = e?.message || 'Terjadi kesalahan'
+  } finally {
+    cloudApiLoading.value = false
+  }
+}
+
 // --- QR STATE ---
 const qrModal = ref(false)
 const qrImage = ref('')
 const qrStatus = ref<'loading'|'qr'|'connected'|'error'>('loading')
 const qrError = ref('')
 let qrPollInterval: ReturnType<typeof setInterval> | null = null
+
+// --- CLOUD API CREDENTIAL STATE ---
+const cloudApiModal = ref(false)
+const cloudApiLoading = ref(false)
+const cloudApiError = ref('')
+const cloudApiSuccess = ref('')
+const cloudApiForm = reactive({
+  phone_number_id: '',
+  waba_id: '',
+  access_token: '',
+  verify_token: '',
+})
 
 function stopQRPolling() {
   if (qrPollInterval) { clearInterval(qrPollInterval); qrPollInterval = null }
