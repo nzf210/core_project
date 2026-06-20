@@ -126,9 +126,25 @@ apps/umkm/automation/main_test.go
 frontend/*/src/env.d.ts
 apps/umkm/accounting/accounting
 
-# Temp AI scripts
+# Temp AI scripts (dash and underscore variants)
 fix-*.sh
+fix_*.sh
 update-*.sh
+update_*.sh
 fix-*.go
+fix_*.go
+fix_*.py
+fix-*.py
+fix_*.cjs
+fix_*.js
+fix_*.*.archived
 temp_*.vue
+temp-*.vue
 clean_*.sh
+clean-*.sh
+wipe_*.sh
+wipe-*.sh
+strip_*.sh
+strip-*.sh
+generate_*.sh
+generate-*.sh

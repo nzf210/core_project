@@ -23,12 +23,25 @@ dist-ssr
 *.sln
 *.sw?
 
-# Temp AI scripts
+# Temp AI scripts (dash and underscore variants)
 fix-*.sh
+fix_*.sh
 update-*.sh
+update_*.sh
 clean_*.sh
+clean-*.sh
 wipe_*.sh
+wipe-*.sh
 strip_*.sh
+strip-*.sh
 generate_*.sh
+generate-*.sh
 temp_*.vue
+temp-*.vue
 fix-*.go
+fix_*.go
+fix_*.py
+fix-*.py
+fix_*.cjs
+fix_*.js
+fix_*.*.archived
