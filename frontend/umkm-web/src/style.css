@@ -3,7 +3,7 @@
   --text-secondary: #6b7280;
   --bg-color: #f3f4f6;
   --surface-0: #ffffff;
-  --surface-1: #f9fafb;
+  --surface-1: #ffffff;
   --border-color: #e5e7eb;
   --accent: #6366f1;
   --accent-hover: #4f46e5;
@@ -28,7 +28,7 @@ body {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: var(--text-primary);
-  background-color: var(--surface-0);
+  background-color: #ffffff;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -100,7 +100,7 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: var(--radius-md);
   font-size: 1rem;
   color: var(--text-primary);
-  background-color: var(--surface-0);
+  background-color: #ffffff;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -141,7 +141,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .btn-outline:hover:not(:disabled) {
-  background-color: var(--surface-1);
+  background-color: #f9fafb;
 }
 
 .btn:disabled {
@@ -176,7 +176,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .data-table th {
   font-weight: 600;
-  background-color: var(--surface-1);
+  background-color: #f9fafb;
   color: var(--text-secondary);
   font-size: 0.875rem;
   text-transform: uppercase;
@@ -238,7 +238,7 @@ h1, h2, h3, h4, h5, h6 {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -256,7 +256,7 @@ body.modal-open .app-main {
 
 .modal-content,
 .modal-card {
-  background: #f9fafb;
+  background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 0.75rem;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);

@@ -108,7 +108,7 @@
               deskripsi.` }}</p>
 
             <div
-              style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; background: var(--surface); padding: 1rem; border-radius: 8px;">
+              style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; background: #f9fafb; padding: 1rem; border-radius: 8px;">
               <div>
                 <strong style="color: var(--text-muted); font-size: 0.9em;">Harga</strong> <br /> <span
                   style="font-size: 1.1em; font-weight: bold;">{{ formatCurrency(selectedProduct.price) }}</span>
@@ -581,8 +581,8 @@ onMounted(() => {
 .gallery-img-placeholder {
   width: 200px;
   height: 200px;
-  background: var(--surface);
-  border: 1px dashed var(--border);
+  background: #f9fafb;
+  border: 1px dashed #e5e7eb;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -614,7 +614,7 @@ onMounted(() => {
   top: 50%;
   transform: translateY(-50%);
   background: rgba(255, 255, 255, 0.8);
-  border: 1px solid var(--border);
+  border: 1px solid #e5e7eb;
   color: var(--text-primary);
   width: 36px;
   height: 36px;
@@ -631,7 +631,7 @@ onMounted(() => {
 }
 
 .gallery-nav:hover {
-  background: var(--surface);
+  background: #f9fafb;
   transform: translateY(-50%) scale(1.1);
 }
 
