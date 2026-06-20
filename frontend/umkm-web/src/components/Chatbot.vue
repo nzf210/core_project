@@ -1,28 +1,20 @@
 <template>
   <div>
-    <!-- Floating Button Icon — always visible -->
-    <button class="chatbot-toggle-btn" @click="toggleChat">
-      <svg v-if="!isOpen" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-      </svg>
-      <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-      </svg>
-    </button>
-
     <!-- Chat Container -->
     <div v-if="isOpen" class="chatbot-container surface-card">
       <div class="chat-header">
         <div style="display: flex; align-items: center; gap: 10px;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
           <h3 style="margin: 0; font-size: 1rem;">AI Business Assistant</h3>
           <span class="status-indicator"></span>
         </div>
-        <button class="close-btn" @click="isOpen = false">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        <!-- Proper Close Button in Header -->
+        <button @click="toggleChat" class="close-btn" title="Tutup">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
       </div>
@@ -37,16 +29,18 @@
       </div>
 
       <div class="chat-input-area">
-        <input
-          v-model="inputMsg"
-          @keyup.enter="sendMessage"
-          type="text"
-          placeholder="Tanya soal keuangan atau strategi bisnis..."
-          class="form-control"
-        />
+        <input v-model="inputMsg" @keyup.enter="sendMessage" type="text"
+          placeholder="Tanya soal keuangan atau strategi bisnis..." class="form-control" />
         <button @click="sendMessage" class="btn btn-primary" :disabled="isLoading || !inputMsg.trim()">Kirim</button>
       </div>
     </div>
+
+    <!-- Floating Button Icon — hidden when chat is open -->
+    <button v-show="!isOpen" class="chatbot-toggle-btn" @click="toggleChat">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
+    </button>
   </div>
 </template>
 
@@ -93,9 +87,9 @@ const sendMessage = async () => {
       throw new Error(data.message || 'API Error')
     }
   } catch (e: any) {
-    messages.value.push({ 
-      role: 'assistant', 
-      content: 'Maaf, sistem AI Chatbot sedang bermasalah atau belum terhubung.' 
+    messages.value.push({
+      role: 'assistant',
+      content: 'Maaf, sistem AI Chatbot sedang bermasalah atau belum terhubung.'
     })
   }
 
@@ -198,11 +192,15 @@ const sendMessage = async () => {
   transition: transform 0.15s ease;
   pointer-events: auto;
 }
+
 .chatbot-toggle-btn:hover {
   transform: scale(1.08);
   box-shadow: 0 6px 20px var(--shadow-glow);
 }
-.chatbot-toggle-btn:active { transform: scale(0.97); }
+
+.chatbot-toggle-btn:active {
+  transform: scale(0.97);
+}
 
 .close-btn {
   background: transparent;
@@ -214,6 +212,7 @@ const sendMessage = async () => {
   display: flex;
   align-items: center;
 }
+
 .close-btn:hover {
   color: var(--danger);
   background: rgba(255, 255, 255, 0.05);

@@ -35,9 +35,10 @@
     <main class="app-main" :class="{ 'with-sidebar': isLoggedIn, 'frozen-active': isFrozen }">
       <div class="container animate-fade-in">
         <router-view />
-        <Chatbot v-if="isLoggedIn" />
       </div>
     </main>
+
+    <Chatbot v-if="isLoggedIn" />
   </div>
 </template>
 
