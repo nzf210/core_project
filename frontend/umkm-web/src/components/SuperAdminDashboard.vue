@@ -1534,7 +1534,7 @@ onMounted(async () => {
 }
 
 .modal-card {
-  background: var(--bg-secondary);
+  background: #fff;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 2rem;

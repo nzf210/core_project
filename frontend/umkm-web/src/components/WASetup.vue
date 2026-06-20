@@ -1050,6 +1050,7 @@ onUnmounted(() => {
 .modal-content {
   width: 90%;
   max-width: 480px;
+  background-color: #fff;
 }
 @media (max-width: 768px) {
   .config-layout, .setup-layout {

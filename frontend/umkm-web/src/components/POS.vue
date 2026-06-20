@@ -71,7 +71,7 @@
 
     <!-- Payment Modal -->
     <div v-if="showPaymentModal" class="modal-overlay">
-      <div class="glass-card modal-content animate-fade-in">
+      <div class="modal-content animate-fade-in">
         <div v-if="!checkoutSuccess">
           <h3 style="margin-bottom: 1.5rem; text-align:center;">Pilih Metode Pembayaran</h3>
           <div class="payment-methods">
@@ -392,6 +392,7 @@ const finishTransaction = () => {
   width: 100%;
   max-width: 450px;
   padding: 2.5rem;
+  background-color: #fff;
 }
 
 .payment-methods {

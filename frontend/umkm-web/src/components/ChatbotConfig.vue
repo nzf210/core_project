@@ -223,7 +223,7 @@
 
     <!-- Test modal -->
     <div v-if="testOpen" class="modal-backdrop" @click.self="testOpen = false">
-      <div class="modal-content glass-card" style="max-width: 480px; padding: 1.5rem;">
+      <div class="modal-content" style="max-width: 480px; padding: 1.5rem;">
         <h3 style="margin-bottom: 0.75rem;">🧪 Test Bot</h3>
         <p style="font-size: 0.85rem; color: var(--text-secondary);">Coba kirim pesan ke bot untuk lihat bagaimana dia akan menjawab dengan konfigurasi saat ini.</p>
         <input v-model="testInput" type="text" class="form-control" placeholder='Misal: "Halo, ada diskon?"' @keydown.enter="runTest" style="margin-top: 0.5rem;" />
@@ -599,6 +599,7 @@ onMounted(() => {
 .modal-content {
   width: 90%;
   max-width: 480px;
+  background-color: #fff;
 }
 @media (max-width: 768px) {
   .config-layout {
