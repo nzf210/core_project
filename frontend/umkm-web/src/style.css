@@ -113,8 +113,8 @@ h1, h2, h3, h4, h5, h6 {
 /* Buttons */
 .btn {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
+
+
   padding: 0.5rem 1rem;
   font-size: 0.95rem;
   font-weight: 500;
@@ -237,11 +237,18 @@ h1, h2, h3, h4, h5, h6 {
 /* === Modal Dialogs — Sidebar Theme === */
 .modal-overlay {
   position: fixed;
-  inset: 0;
+
+
+  bottom: 2rem;
+  left: 17rem; right: auto; top: auto;
+  inset: auto;
+
+
+
   background: rgba(0, 0, 0, 0.5);
   display: flex;
-  align-items: center;
-  justify-content: center;
+
+
   z-index: 9999;
   padding: 1rem;
   isolation: isolate;

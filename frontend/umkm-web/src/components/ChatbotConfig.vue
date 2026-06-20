@@ -6,13 +6,16 @@
     </div>
 
     <!-- First-run banner -->
-    <div v-if="isFirstRun" class="glass-card first-run-banner" style="margin-bottom: 1.5rem; padding: 1.25rem; border-left: 4px solid #4f46e5;">
-      <strong>🎉 Selamat!</strong> Langganan Anda aktif. Lengkapi 3 langkah mudah ini agar AI CS toko Anda bisa langsung melayani pelanggan.
+    <div v-if="isFirstRun" class="glass-card first-run-banner"
+      style="margin-bottom: 1.5rem; padding: 1.25rem; border-left: 4px solid #4f46e5;">
+      <strong>🎉 Selamat!</strong> Langganan Anda aktif. Lengkapi 3 langkah mudah ini agar AI CS toko Anda bisa langsung
+      melayani pelanggan.
     </div>
 
     <!-- Stepper -->
     <div class="stepper" style="display: flex; gap: 0.5rem; margin-bottom: 2rem;">
-      <div v-for="(label, i) in steps" :key="i" class="step-pill" :class="{ active: currentStep === i, done: currentStep > i }" @click="goToStep(i)">
+      <div v-for="(label, i) in steps" :key="i" class="step-pill"
+        :class="{ active: currentStep === i, done: currentStep > i }" @click="goToStep(i)">
         <span class="step-num">{{ currentStep > i ? '✓' : i + 1 }}</span>
         <span class="step-label">{{ label }}</span>
       </div>
@@ -54,8 +57,10 @@
               </select>
             </div>
             <label>
-              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">System Prompt Custom (opsional, advanced)</span>
-              <textarea v-model="form.system_prompt" class="form-control" rows="3" placeholder="Biarkan kosong untuk pakai default. Isi jika ingin instruksi spesifik, misal 'Kamu selalu jawab pakai emoji ✨'."></textarea>
+              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">System Prompt Custom (opsional,
+                advanced)</span>
+              <textarea v-model="form.system_prompt" class="form-control" rows="3"
+                placeholder="Biarkan kosong untuk pakai default. Isi jika ingin instruksi spesifik, misal 'Kamu selalu jawab pakai emoji ✨'."></textarea>
             </label>
           </div>
         </div>
@@ -77,7 +82,8 @@
             <div>
               <span style="display: block; font-size: 0.85rem; margin-bottom: 0.5rem;">Hari Operasional</span>
               <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <label v-for="d in dayList" :key="d.value" class="day-pill" :class="{ active: form.business_days.includes(d.value) }">
+                <label v-for="d in dayList" :key="d.value" class="day-pill"
+                  :class="{ active: form.business_days.includes(d.value) }">
                   <input type="checkbox" :value="d.value" v-model="form.business_days" hidden />
                   {{ d.short }}
                 </label>
@@ -89,25 +95,23 @@
               <span>Aktifkan auto-eskalasi ke admin</span>
             </label>
             <div v-if="form.escalation_enabled">
-              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Kata Kunci Eskalasi (pisahkan dengan Enter)</span>
+              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Kata Kunci Eskalasi (pisahkan
+                dengan Enter)</span>
               <div class="keyword-input">
                 <span v-for="(kw, i) in form.escalation_keywords" :key="i" class="kw-tag">
                   {{ kw }}
                   <button type="button" @click="form.escalation_keywords.splice(i, 1)">×</button>
                 </span>
-                <input
-                  type="text"
-                  v-model="newKeyword"
-                  @keydown.enter.prevent="addKeyword"
-                  @keydown.,.prevent="addKeyword"
-                  placeholder="Tekan Enter untuk tambah"
-                  class="form-control kw-input"
-                />
+                <input type="text" v-model="newKeyword" @keydown.enter.prevent="addKeyword"
+                  @keydown.,.prevent="addKeyword" placeholder="Tekan Enter untuk tambah"
+                  class="form-control kw-input" />
               </div>
             </div>
             <label>
-              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Auto-eskalasi setelah berapa menit tanpa jawaban?</span>
-              <input v-model.number="form.auto_escalate_after_minutes" type="number" min="0" max="60" class="form-control" style="max-width: 120px;" />
+              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Auto-eskalasi setelah berapa
+                menit tanpa jawaban?</span>
+              <input v-model.number="form.auto_escalate_after_minutes" type="number" min="0" max="60"
+                class="form-control" style="max-width: 120px;" />
             </label>
           </div>
         </div>
@@ -121,16 +125,19 @@
               <textarea v-model="form.welcome_message" class="form-control" rows="2" />
             </label>
             <label>
-              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Pesan Fallback (kalau bot bingung)</span>
+              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Pesan Fallback (kalau bot
+                bingung)</span>
               <textarea v-model="form.fallback_message" class="form-control" rows="2" />
             </label>
             <label>
-              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Pesan di Luar Jam Operasional</span>
+              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Pesan di Luar Jam
+                Operasional</span>
               <textarea v-model="form.outside_hours_message" class="form-control" rows="2" />
             </label>
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.5rem 0;" />
             <div>
-              <span style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">AI Modality</span>
+              <span style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">AI
+                Modality</span>
               <label class="toggle-row" style="margin-bottom: 0.25rem;">
                 <input type="checkbox" v-model="form.enable_vision" />
                 <span><strong>Enable Vision</strong> (Process image messages)</span>
@@ -152,7 +159,8 @@
             <div>
               <span style="display: block; font-size: 0.85rem; margin-bottom: 0.5rem;">Channel Aktif</span>
               <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                <label class="channel-pill" :class="{ active: form.channels_enabled.includes('whatsapp'), locked: true }">
+                <label class="channel-pill"
+                  :class="{ active: form.channels_enabled.includes('whatsapp'), locked: true }">
                   <input type="checkbox" value="whatsapp" v-model="form.channels_enabled" disabled /> 📱 WhatsApp
                 </label>
                 <label class="channel-pill" :class="{ active: form.channels_enabled.includes('telegram') }">
@@ -169,16 +177,20 @@
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.5rem 0;" />
 
             <div>
-              <span style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">📡 WA Provider</span>
+              <span style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">📡 WA
+                Provider</span>
               <select v-model="form.wa_provider_preference" class="form-control">
                 <option value="auto">⚡ Auto (Rekomendasi)</option>
                 <option value="whatsmeow">📱 Whatsmeow Only</option>
                 <option value="cloud_api" :disabled="!hasWaPremium">☁️ Cloud API (Meta) — butuh add-on</option>
               </select>
               <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                <template v-if="form.wa_provider_preference === 'auto'">Sistem otomatis pilih provider terbaik untuk setiap pesan.</template>
-                <template v-else-if="form.wa_provider_preference === 'whatsmeow'">Semua pesan dipaksa lewat whatsmeow. Cloud API tidak dipakai.</template>
-                <template v-else-if="form.wa_provider_preference === 'cloud_api'">Semua pesan dipaksa lewat Cloud API Meta. Jika gagal, pesan tidak akan terkirim.</template>
+                <template v-if="form.wa_provider_preference === 'auto'">Sistem otomatis pilih provider terbaik untuk
+                  setiap pesan.</template>
+                <template v-else-if="form.wa_provider_preference === 'whatsmeow'">Semua pesan dipaksa lewat whatsmeow.
+                  Cloud API tidak dipakai.</template>
+                <template v-else-if="form.wa_provider_preference === 'cloud_api'">Semua pesan dipaksa lewat Cloud API
+                  Meta. Jika gagal, pesan tidak akan terkirim.</template>
               </p>
             </div>
 
@@ -210,11 +222,14 @@
       <div class="glass-card preview-card" style="padding: 1.25rem;">
         <h4 style="margin-bottom: 0.75rem;">Preview</h4>
         <div class="preview-row"><span>Bot</span><b>{{ form.bot_name || 'CS Toko Anda' }}</b></div>
-        <div class="preview-row"><span>Bahasa</span><b>{{ form.language === 'en' ? '🇬🇧 English' : '🇮🇩 Indonesia' }}</b></div>
+        <div class="preview-row"><span>Bahasa</span><b>{{ form.language === 'en' ? '🇬🇧 English' : '🇮🇩 Indonesia'
+            }}</b>
+        </div>
         <div class="preview-row"><span>Tone</span><b>{{ toneLabel }}</b></div>
         <div class="preview-row"><span>Aktif</span><b>{{ form.is_active ? '✅ Ya' : '❌ Tidak' }}</b></div>
         <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.75rem 0;" />
-        <div class="preview-row"><span>Jam</span><b>{{ form.business_hours_start }}–{{ form.business_hours_end }}</b></div>
+        <div class="preview-row"><span>Jam</span><b>{{ form.business_hours_start }}–{{ form.business_hours_end }}</b>
+        </div>
         <div class="preview-row"><span>Hari</span><b>{{ dayShortList || 'Setiap hari' }}</b></div>
         <div class="preview-row"><span>Escalation</span><b>{{ form.escalation_enabled ? '✅ On' : '❌ Off' }}</b></div>
         <div class="preview-row"><span>Channel</span><b>{{ form.channels_enabled.join(', ') || '-' }}</b></div>
@@ -225,16 +240,23 @@
     <div v-if="testOpen" class="modal-backdrop" @click.self="testOpen = false">
       <div class="modal-content" style="max-width: 480px; padding: 1.5rem;">
         <h3 style="margin-bottom: 0.75rem;">🧪 Test Bot</h3>
-        <p style="font-size: 0.85rem; color: var(--text-secondary);">Coba kirim pesan ke bot untuk lihat bagaimana dia akan menjawab dengan konfigurasi saat ini.</p>
-        <input v-model="testInput" type="text" class="form-control" placeholder='Misal: "Halo, ada diskon?"' @keydown.enter="runTest" style="margin-top: 0.5rem;" />
-        <div v-if="testReply" class="test-reply" style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 0.5rem;">
+        <p style="font-size: 0.85rem; color: var(--text-secondary);">Coba kirim pesan ke bot untuk lihat bagaimana dia
+          akan
+          menjawab dengan konfigurasi saat ini.</p>
+        <input v-model="testInput" type="text" class="form-control" placeholder='Misal: "Halo, ada diskon?"'
+          @keydown.enter="runTest" style="margin-top: 0.5rem;" />
+        <div v-if="testReply" class="test-reply"
+          style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 0.5rem;">
           <p style="margin: 0 0 0.5rem; font-size: 0.9rem;">{{ testReply }}</p>
-          <p v-if="testWouldEscalate" style="margin: 0; font-size: 0.75rem; color: #f59e0b;">⚠️ Pesan ini akan di-eskalasi ke admin (kata kunci cocok).</p>
+          <p v-if="testWouldEscalate" style="margin: 0; font-size: 0.75rem; color: #f59e0b;">⚠️ Pesan ini akan
+            di-eskalasi
+            ke admin (kata kunci cocok).</p>
         </div>
         <p v-if="testError" style="color: #dc2626; font-size: 0.85rem; margin-top: 0.5rem;">{{ testError }}</p>
         <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;">
           <button class="btn btn-secondary" @click="testOpen = false">Tutup</button>
-          <button class="btn btn-primary" @click="runTest" :disabled="testing || !testInput.trim()">{{ testing ? 'Mengirim...' : 'Kirim' }}</button>
+          <button class="btn btn-primary" @click="runTest" :disabled="testing || !testInput.trim()">{{ testing ?
+            'Mengirim...' : 'Kirim' }}</button>
         </div>
       </div>
     </div>
@@ -260,7 +282,6 @@ const testing = ref(false)
 const errorMsg = ref('')
 const hasWaPremium = ref(false) // F048: fetched from /chatbot/permissions
 
-watch(testOpen, (v) => { if (v) openModal(); else closeModal(); })
 
 async function loadPermissions() {
   try {
@@ -275,6 +296,7 @@ async function loadPermissions() {
 }
 
 const testOpen = ref(false)
+watch(testOpen, (v) => { if (v) openModal(); else closeModal(); })
 const testInput = ref('')
 const testReply = ref('')
 const testWouldEscalate = ref(false)
@@ -385,14 +407,14 @@ function addKeyword() {
 function saveDraft() {
   try {
     sessionStorage.setItem('chatbot_config_draft', JSON.stringify(form))
-  } catch {}
+  } catch { }
 }
 
 function loadDraft() {
   try {
     const raw = sessionStorage.getItem('chatbot_config_draft')
     if (raw) Object.assign(form, JSON.parse(raw))
-  } catch {}
+  } catch { }
 }
 
 async function save() {
@@ -493,14 +515,17 @@ onMounted(() => {
   cursor: pointer;
   transition: all 0.2s;
 }
+
 .step-pill.active {
   background: #4f46e5;
   color: white;
 }
+
 .step-pill.done {
   background: #10b981;
   color: white;
 }
+
 .step-num {
   display: inline-flex;
   align-items: center;
@@ -512,6 +537,7 @@ onMounted(() => {
   font-size: 0.75rem;
   font-weight: 600;
 }
+
 .radio-pill,
 .day-pill,
 .channel-pill {
@@ -527,24 +553,31 @@ onMounted(() => {
   user-select: none;
   transition: all 0.15s;
 }
+
 .radio-pill input,
-.channel-pill input { margin: 0; }
+.channel-pill input {
+  margin: 0;
+}
+
 .day-pill.active,
 .channel-pill.active {
   background: #4f46e5;
   color: white;
   border-color: #4f46e5;
 }
+
 .channel-pill.locked {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
 .toggle-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.9rem;
 }
+
 .preview-row {
   display: flex;
   justify-content: space-between;
@@ -552,8 +585,15 @@ onMounted(() => {
   font-size: 0.85rem;
   border-bottom: 1px dashed var(--border-color);
 }
-.preview-row:last-child { border-bottom: 0; }
-.preview-row span { color: var(--text-secondary); }
+
+.preview-row:last-child {
+  border-bottom: 0;
+}
+
+.preview-row span {
+  color: var(--text-secondary);
+}
+
 .keyword-input {
   display: flex;
   flex-wrap: wrap;
@@ -564,6 +604,7 @@ onMounted(() => {
   border-radius: 0.5rem;
   background: var(--bg-primary);
 }
+
 .kw-tag {
   display: inline-flex;
   align-items: center;
@@ -574,6 +615,7 @@ onMounted(() => {
   border-radius: 999px;
   font-size: 0.8rem;
 }
+
 .kw-tag button {
   background: rgba(255, 255, 255, 0.3);
   border: 0;
@@ -585,6 +627,7 @@ onMounted(() => {
   font-size: 0.9rem;
   line-height: 1;
 }
+
 .kw-input {
   flex: 1;
   min-width: 120px;
@@ -592,14 +635,17 @@ onMounted(() => {
   background: transparent !important;
   padding: 0.3rem !important;
 }
+
 .modal-content {
   width: 90%;
   max-width: 480px;
 }
+
 @media (max-width: 768px) {
   .config-layout {
     grid-template-columns: 1fr !important;
   }
+
   .stepper {
     flex-direction: column;
   }

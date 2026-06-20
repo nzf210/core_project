@@ -434,6 +434,7 @@ const testing = ref(false)
 const errorMsg = ref('')
 
 const testOpen = ref(false)
+watch(testOpen, (v) => { if (v) openModal(); else closeModal(); });
 const testInput = ref('')
 const testReply = ref('')
 const testWouldEscalate = ref(false)
@@ -655,13 +656,13 @@ const qrModal = ref(false)
 const qrImage = ref('')
 
 watch(qrModal, (v) => { if (v) openModal(); else closeModal(); });
-watch(cloudApiModal, (v) => { if (v) openModal(); else closeModal(); });
 const qrStatus = ref<'loading'|'qr'|'connected'|'error'>('loading')
 const qrError = ref('')
 let qrPollInterval: ReturnType<typeof setInterval> | null = null
 
 // --- CLOUD API CREDENTIAL STATE ---
 const cloudApiModal = ref(false)
+watch(cloudApiModal, (v) => { if (v) openModal(); else closeModal(); });
 const cloudApiLoading = ref(false)
 const cloudApiValidating = ref(false)
 const cloudApiError = ref('')

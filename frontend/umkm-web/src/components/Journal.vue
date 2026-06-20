@@ -121,17 +121,17 @@
         <div class="form-row-2">
           <div class="input-group">
             <label class="input-label">Tanggal</label>
-            <input type="date" class="input-field" v-model="form.date" />
+            <input type="date" class="form-control" v-model="form.date" />
           </div>
           <div class="input-group">
             <label class="input-label">Referensi</label>
-            <input type="text" class="input-field" v-model="form.reference" placeholder="cth: INV-001" />
+            <input type="text" class="form-control" v-model="form.reference" placeholder="cth: INV-001" />
           </div>
         </div>
 
         <div class="input-group" style="margin-bottom: 1rem;">
           <label class="input-label">Keterangan</label>
-          <input type="text" class="input-field" v-model="form.description" placeholder="cth: Penjualan Produk A" />
+          <input type="text" class="form-control" v-model="form.description" placeholder="cth: Penjualan Produk A" />
         </div>
 
         <div style="margin-bottom: 0.75rem; font-weight: 600; font-size: 0.9rem; color: var(--text-secondary);">
@@ -140,14 +140,14 @@
 
         <div class="journal-lines">
           <div v-for="(line, idx) in form.lines" :key="idx" class="journal-line-row">
-            <select class="input-field" v-model="line.account_id" style="flex: 2;">
+            <select class="form-control" v-model="line.account_id" style="flex: 2;">
               <option value="">Pilih Akun</option>
               <option v-for="acc in accounts" :key="acc.id" :value="acc.id">
                 {{ acc.code }} — {{ acc.name }}
               </option>
             </select>
-            <input type="number" class="input-field" v-model.number="line.debit" placeholder="Debit (Rp)" min="0" style="flex: 1;" @input="line.credit = 0" />
-            <input type="number" class="input-field" v-model.number="line.credit" placeholder="Kredit (Rp)" min="0" style="flex: 1;" @input="line.debit = 0" />
+            <input type="number" class="form-control" v-model.number="line.debit" placeholder="Debit (Rp)" min="0" style="flex: 1;" @input="line.credit = 0" />
+            <input type="number" class="form-control" v-model.number="line.credit" placeholder="Kredit (Rp)" min="0" style="flex: 1;" @input="line.debit = 0" />
             <button class="btn btn-secondary btn-sm" @click="removeLine(idx)" style="padding: 0.3rem 0.5rem; color: #ef4444;">✕</button>
           </div>
         </div>
@@ -441,10 +441,10 @@ const printReceipt = async (trx: any) => {
   overflow-y: auto;
 }
 
-.modal-content .input-field {
+.modal-content .form-control {
   width: 100%;
   padding: 0.75rem 1rem;
-  background: var(--surface-0);
+  background: #ffffff;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   color: var(--text-primary);
@@ -453,7 +453,7 @@ const printReceipt = async (trx: any) => {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.modal-content .input-field:focus {
+.modal-content .form-control:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
