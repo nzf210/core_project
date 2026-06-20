@@ -74,7 +74,7 @@
 
     <!-- Detail Modal -->
     <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
-      <div class="modal-content glass-card animate-fade-in" style="max-width: 600px;" @click.stop>
+      <div class="modal-content glass-card animate-fade-in" style="max-width: 600px; max-height: 90vh; overflow-y: auto;" @click.stop>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
           <h3 style="margin: 0;">Detail Produk</h3>
           <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; border: none; font-size: 1.5rem;" @click="closeDetailModal">&times;</button>
@@ -519,10 +519,10 @@ onMounted(() => {
   background-color: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 100;
-  padding: 1rem;
+  padding: 4rem 1rem 1rem;
 }
 
 .modal-content {

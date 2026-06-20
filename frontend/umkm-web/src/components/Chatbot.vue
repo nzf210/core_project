@@ -1,9 +1,12 @@
 <template>
   <div>
-    <!-- Floating Button Icon -->
-    <button v-if="!isOpen" class="chatbot-toggle-btn" @click="isOpen = true">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <!-- Floating Button Icon — always visible -->
+    <button class="chatbot-toggle-btn" @click="toggleChat">
+      <svg v-if="!isOpen" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+      <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
     </button>
 
@@ -52,6 +55,10 @@ import { ref, nextTick } from 'vue'
 import { api } from '../api'
 
 const isOpen = ref(false)
+
+const toggleChat = () => {
+  isOpen.value = !isOpen.value
+}
 
 const messages = ref([
   { role: 'assistant', content: 'Halo! Saya AI Assistant Anda. Ada yang bisa saya bantu terkait pembukuan atau strategi penjualan hari ini?' }
@@ -184,11 +191,12 @@ const sendMessage = async () => {
   color: white;
   box-shadow: 0 4px 12px var(--shadow-glow);
   cursor: pointer;
-  z-index: 1000;
+  z-index: 1001;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.15s ease;
+  pointer-events: auto;
 }
 .chatbot-toggle-btn:hover {
   transform: scale(1.08);

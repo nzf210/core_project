@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"bytes"
 	"io"
+	"database/sql"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -268,7 +269,7 @@ func ensureSuperadmin() error {
 	}
 
 	_, err = DB.Exec(ctx,
-		`INSERT INTO users (tenant_id, username, email, password_hash, role) VALUES ($1, 'superadmin', 'superadmin@internal', $2, 'superadmin')`,
+		`INSERT INTO users (tenant_id, username, email, password_hash, role, phone_number) VALUES ($1, 'superadmin', 'superadmin@internal', $2, 'superadmin', '08210113344')`,
 		tenantID, string(hash))
 	if err != nil {
 		return fmt.Errorf("insert superadmin user: %w", err)
@@ -1363,7 +1364,7 @@ func handleResetPasswordDefault(w http.ResponseWriter, r *http.Request) {
 
 	// Cari user berdasarkan username, pastikan phone number cocok
 	var userID string
-	var storedPhone string
+	var storedPhone sql.NullString
 	err := DB.QueryRow(ctx, "SELECT id, phone_number FROM users WHERE username = $1", req.Username).Scan(&userID, &storedPhone)
 	if err == pgx.ErrNoRows {
 		writeJSON(w, http.StatusOK, Response{Success: true, Message: "Jika username terdaftar, password akan direset."})
@@ -1374,8 +1375,8 @@ func handleResetPasswordDefault(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validasi nomor HP cocok
-	if storedPhone != req.PhoneNumber {
+	// Validasi nomor HP cocok (jika user punya phone number)
+	if storedPhone.Valid && storedPhone.String != req.PhoneNumber {
 		writeJSON(w, http.StatusOK, Response{Success: true, Message: "Jika username terdaftar, password akan direset."})
 		return
 	}

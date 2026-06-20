@@ -111,7 +111,7 @@
 
     <!-- Simple modal placeholder -->
     <div v-if="showForm" class="modal-overlay" @click.self="showForm = false">
-      <div class="glass-card modal-content animate-fade-in" style="max-width: 700px;">
+      <div class="glass-card modal-content animate-fade-in" style="max-width: 700px; max-height: 90vh; overflow-y: auto; padding: 2rem;">
         <div class="flex items-center justify-between" style="margin-bottom: 1.5rem;">
           <h3>Catat Jurnal Baru</h3>
           <button @click="showForm = false" style="background:none;border:none;cursor:pointer;font-size:1.2rem;padding:0.25rem;">✕</button>
@@ -437,14 +437,18 @@ const printReceipt = async (trx: any) => {
   background-color: rgba(15, 23, 42, 0.8);
   backdrop-filter: blur(4px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  z-index: 50;
+  z-index: 100;
+  padding: 4rem 1rem 1rem;
 }
 
 .modal-content {
   width: 100%;
-  max-width: 500px;
+  max-width: 700px;
+  padding: 2rem;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .btn-sm {
