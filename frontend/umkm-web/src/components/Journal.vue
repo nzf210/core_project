@@ -452,6 +452,37 @@ const printReceipt = async (trx: any) => {
   background-color: #fff;
 }
 
+.modal-content .input-field {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--surface-0);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 1rem;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.modal-content .input-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.modal-content .input-label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.modal-content .input-group {
+  display: flex;
+  flex-direction: column;
+}
+
 .btn-sm {
   padding: 0.3rem 0.6rem;
   font-size: 0.8rem;
