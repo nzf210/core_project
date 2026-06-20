@@ -4,7 +4,7 @@
 -- 1. affiliate_referrals: track who referred whom
 CREATE TABLE IF NOT EXISTS affiliate_referrals (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    affiliate_id        UUID NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
+    affiliate_id        INT NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
     tenant_id           UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     referred_at         TIMESTAMPTZ DEFAULT NOW(),
     first_purchase_at   TIMESTAMPTZ,
@@ -17,7 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_affiliate_referrals_tenant   ON affiliate_referra
 CREATE TABLE IF NOT EXISTS invoice_referrals (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     invoice_id      VARCHAR(100) NOT NULL,
-    affiliate_id    UUID NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
+    affiliate_id    INT NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
     discount_amount BIGINT NOT NULL DEFAULT 0,  -- sen
     applied_at      TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(invoice_id)
