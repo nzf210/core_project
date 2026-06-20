@@ -744,6 +744,37 @@ cd frontend/umkm-web && npm run dev
 
 ---
 
+## 💳 Xendit Per-Tenant Architecture (F034 Extension)
+
+Setiap tenant memiliki kredensial Xendit sendiri di tabel `tenants`:
+
+| Kolom | Tipe | Fungsi |
+|:------|:-----|:-------|
+| `xendit_api_key` | VARCHAR(255) | API key akun Xendit tenant |
+| `xendit_merchant_id` | VARCHAR(255) | Merchant account ID (pembayaran langsung ke akun tenant) |
+| `xendit_webhook_token` | VARCHAR(255) | Token verifikasi webhook per-tenant |
+
+**Architecture:**
+```
+Subscription/Topup Request
+  → getTenantXenditClient(tenantID)  ← cache 5-min TTL (sync.RWMutex)
+  → baca xendit_api_key dari DB
+  → CreateInvoice di merchantID tenant
+  → Dana masuk ke bank account tenant ✅
+
+Payment Webhook Callback
+  → Extract tenantID dari external_id
+     INV-{uuid}|{tenantID}  (invoice)
+     {uuid}-wallet-topup-{tenantID}  (topup)
+  → Verify webhook token: prioritas 1 = DB per-tenant, fallback = env XENDIT_WEBHOOK_TOKEN
+```
+
+**Client Caching:** 5-minute TTL — menghindari DB hit per request, mendukung key rotation.
+
+**Backward Compat:** Webhook fallback ke env var `XENDIT_WEBHOOK_TOKEN` untuk tenant lama.
+
+---
+
 ## 🔧 Known Issues & Fixes (2026-06-14 Session)
 
 ### Fix 1: journal_entries.metadata Column Missing

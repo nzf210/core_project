@@ -102,7 +102,7 @@ Format per feature:
 | F033 | Campaign Logistics Tracking | ✅ Approved | ✅ Done | 2026-06-17 |
 | F034 | Add-on Wallet & Meta API Connector | ✅ Approved | ✅ Done | 2026-06-20 |
 | F035 | Discount Vouchers (Percent & Fixed) | ✅ Approved | ✅ Done | 2026-06-20 |
-| F036 | Lifetime Affiliate, External Agent & Public Leaderboard | ✅ Approved | ✅ Done (backend coded; referral discount wired in F054) | 2026-06-20 |
+| F036 | Lifetime Affiliate, External Agent & Public Leaderboard | ✅ Approved | ✅ Done | 2026-06-20 |
 | F037 | Dashboard Sentimen Isu Harian (AI NLP) | ✅ Approved | ✅ Done | 2026-06-17 |
 | F038 | Wargame & Simulasi Kemenangan | ✅ Approved | ✅ Done | 2026-06-17 |
 | F039 | Peta Kerawanan & Pelaporan Pelanggaran | ✅ Approved | ✅ Done | 2026-06-17 |
@@ -116,8 +116,8 @@ Format per feature:
 | F047 | Hardening Migration (F024 cleanup) | ✅ Approved | ✅ Done | 2026-06-17 |
 | F048 | WA Provider Preferences & Activation Guard | ✅ Approved | ✅ Done (v2) | 2026-06-20 |
 | F049 | Container Overhaul & Infrastructure Optimization | ✅ Approved | ✅ Done | 2026-06-17 |
-| F050 | WCH E2E MCP Server (UI Testing & Browser Automation) | ⏳ Draft | ⏳ Pending | 2026-06-17 |
-| F051 | AI Quota Per-Modalitas (Text/Vision/Image) | ⏳ Draft | ⏳ Pending | 2026-06-17 |
+| F050 | WCH E2E MCP Server (UI Testing & Browser Automation) | ✅ Approved | ✅ Done | 2026-06-20 |
+| F051 | AI Quota Per-Modalitas (Text/Vision/Image) | ✅ Approved | ✅ Done | 2026-06-20 |
 | F052 | Tier-First Feature System + Per-Tenant Addon Guard | ✅ Approved | ✅ Done | 2026-06-20 |
 | F053 | Admin-Configurable Addon Pricing + Addon Purchase Flow | ✅ Approved | ✅ Done | 2026-06-20 |
 | F054 | Referral System: Discount Downline + Commission Upline | ✅ Approved | ✅ Done | 2026-06-20 |
@@ -133,9 +133,9 @@ Format per feature:
 - [x] Container pgbouncer ditambahkan di port 6432.
 - [x] Environment variable koneksi PostgreSQL dari seluruh service diubah dari host `postgres:5432` menjadi `pgbouncer:6432`.
 
-## F050: AI Quota Per-Modalitas (Text/Vision/Image)
-**Spec Status:** ⏳ Draft
-**Implementation:** ⏳ Pending
+## F051: AI Quota Per-Modalitas (Text/Vision/Image)
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
 **Deskripsi:** Membedakan quota rate-limit untuk penggunaan AI berdasarkan modalitasnya. Saat ini seluruh request ke `ai-gateway` menghabiskan 1 pool quota yang sama, menyebabkan risiko perebutan resource antara chatbot (text) dan fitur OCR Campaign (vision).
 
 **Tujuan:**
@@ -143,13 +143,21 @@ Format per feature:
 - Menerapkan pembatasan `plan_features` secara lebih granular: `ai_text`, `ai_vision`, `ai_image`.
 
 **Acceptance Criteria (AC):**
-- [ ] Database migration untuk menambahkan feature keys baru di `plan_features`.
-- [ ] Implementasi routing key di `ai-gateway` middleware sesuai dengan modalitas endpoint.
-- [ ] Redis keys quota dihitung per modalitas: `tenant:{id}:ai_text`, dsb.
+- [x] Database migration untuk menambahkan feature keys baru di `plan_features`.
+- [x] Implementasi routing key di `ai-gateway` middleware sesuai dengan modalitas endpoint.
+- [x] Redis keys quota dihitung per modalitas: `quota_counter:{tenant}:{period}:{feature}` (feature = `ai_text` / `ai_vision` / `ai_audio_stt` / `ai_audio_tts` / `image_gen` / `ai_image`).
 
-## F051: WCH E2E MCP Server (UI Testing & Browser Automation)
-**Spec Status:** ⏳ Draft
-**Implementation:** ⏳ Pending
+**Files:**
+- `shared/migrations/000072_ai_image_modality.up.sql` — seed `ai_image` plan_feature key + per-tier numeric limits
+- `services/ai-gateway/main.go` — per-modality quota routing (`ai_text`, `ai_vision`, `ai_audio_*`, `image_gen`)
+- `services/ai-gateway/image.go` — increments `ai_image` counter on image generation
+- `shared/sdk/auth/quota_counter.go` — `ai_image` → `MaxImageGen` mapping
+- `services/ai-gateway/f050_modality_test.go` — modality routing key assertions
+- `shared/sdk/auth/quota_counter_test.go` — `ai_image` limit coverage
+
+## F050: WCH E2E MCP Server (UI Testing & Browser Automation)
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
 
 **Deskripsi:** Server MCP kustom untuk otomatisasi UI browser, enabling Hermes untuk melakukan testing end-to-end (E2E) dan pengecekan UI secara langsung di environment dev (localhost).
 
@@ -158,18 +166,20 @@ Format per feature:
 - Mempercepat testing alur pendaftaran, konfigurasi chatbot, dan dashboard.
 
 **Acceptance Criteria (AC):**
-- [ ] AC-1: Server MCP berjalan (`node infra/mcp/wch-e2e-server.js`) dan terintegrasi ke Hermes CLI.
-- [ ] AC-2: Implementasi tools: `e2e_navigate`, `e2e_click`, `e2e_fill`, `e2e_screenshot`, `e2e_expect_selector`.
-- [ ] AC-3: Flow testing: Login → Navigate `/chatbot-config` → Fill settings → Verify.
+- [x] AC-1: Server MCP berjalan (`node infra/mcp/wch-e2e-server.js`) dan terintegrasi ke Hermes CLI.
+- [x] AC-2: Implementasi tools: `e2e_navigate`, `e2e_click`, `e2e_fill`, `e2e_screenshot`, `e2e_expect_selector`.
+- [x] AC-3: Flow testing: Login → Navigate `/chatbot-config` → Fill settings → Verify (contoh di README.md).
 
 **Files:**
-- `infra/mcp/wch-e2e-server.js` — Core MCP Server logic.
-- `infra/mcp/package.json` — Playwright dependencies.
+- `infra/mcp/wch-e2e-server.js` — Core MCP Server logic (stdio transport, single-page Playwright session).
+- `infra/mcp/package.json` — Playwright + MCP SDK dependencies, `start` & `test` scripts.
+- `infra/mcp/test-server.js` — Unit test (tool registry validation tanpa launch browser).
+- `infra/mcp/README.md` — Quick start + AC-3 example flow.
 
 ## F033: Campaign Logistics Tracking
 
 **Spec Status:** ✅ Approved
-**Implementation:** 🔨 In Progress
+**Implementation:** ✅ Done
 
 **Deskripsi:** Sistem anti-bocor logistik kampanye (kaos, sembako, baliho) dari gudang pusat hingga ke rumah warga/TPS, dipantau via WhatsApp Bot dengan validasi lokasi.
 
@@ -185,7 +195,7 @@ Format per feature:
 ## F034: Cost-per-Vote (Campaign Accounting)
 
 **Spec Status:** ✅ Approved
-**Implementation:** 🔨 In Progress
+**Implementation:** ✅ Done
 
 **Deskripsi:** Integrasi *Accounting Engine* (yang sudah ada di UMKM) ke modul *Campaign* untuk melacak setiap Rupiah yang keluar dan membaginya dengan jumlah dukungan valid.
 
@@ -193,10 +203,20 @@ Format per feature:
 - Menghitung *Cost-per-Vote* di setiap desa/kecamatan secara real-time.
 - Mencegah pengeluaran kampanye di daerah yang sudah over-target (hijau).
 
+**Spec:**
+- **Database:** Tabel `campaign_expenses` (tenant_id, campaign_id, expense_category, amount, target_region_type, target_region_id, description) — migration `000074`
+- **API Endpoint (`POST /campaign/expenses`):** Catat pengeluaran kampanye dengan region targeting opsional. Auto-sync ke UMKM Accounting engine.
+- **Cost-per-Vote Calculation:** `total_expense / total_valid_endorsements` — dihitung real-time di `GET /campaign/finance`
+- **Alert System:** `checkAndAlertCPV()` — jika CPV > Rp 200.000, tulis ke tabel `notifications` dengan type `cpv_alert`
+
 **Acceptance Criteria (AC):**
-- [ ] AC-1: Aplikasi Campaign dapat memanggil API Accounting internal untuk mencatat pengeluaran kampanye.
-- [ ] AC-2: Perhitungan *Cost-per-Vote* = (Total Pengeluaran Daerah X) / (Total Endorsement Valid Daerah X).
-- [ ] AC-3: Jika Cost-per-Vote di suatu desa melampaui batas wajar (misal Rp 200.000/suara), sistem mengirimkan alert notifikasi.
+- [x] AC-1: Aplikasi Campaign dapat memanggil API Accounting internal untuk mencatat pengeluaran kampanye.
+- [x] AC-2: Perhitungan *Cost-per-Vote* = (Total Pengeluaran Daerah X) / (Total Endorsement Valid Daerah X).
+- [x] AC-3: Jika Cost-per-Vote di suatu desa melampaui batas wajar (misal Rp 200.000/suara), sistem mengirimkan alert notifikasi.
+
+**Files:**
+- `shared/migrations/000074_f034_campaign_expenses.up.sql` — tabel `campaign_expenses`
+- `apps/campaign/api/handlers/finance.go` — `HandleCampaignFinance` (GET CPV + POST expense), `checkAndAlertCPV()`, `syncExpenseToAccounting()`
 
 ## F035: Auto-Scan KTP (AI OCR Vision)
 **Spec Status:** ✅ Approved
@@ -224,7 +244,7 @@ Format per feature:
 
 ## F039: Pemilih Siluman & Anomali Detektor
 **Spec Status:** ✅ Approved
-**Implementation:** 🔨 In Progress
+**Implementation:** ✅ Done
 **Deskripsi:** Job otomatis yang mem-flag `endorsements`. Syarat siluman: Usia > 100 thn, 1 relawan setor 500 KTP dalam 1 jam (indikasi bot/joki), kode wilayah NIK tidak cocok dengan TPS.
 **Target:** Cleansing data agar kandidat tidak tertipu "Data Sampah" timses.
 
@@ -1948,7 +1968,7 @@ Wajib update:
 ## F034: Add-on Wallet & Meta API Connector
 
 **Spec Status:** ✅ Approved
-**Implementation:** ⏳ Pending
+**Implementation:** ✅ Done
 
 **Deskripsi:** Sistem saldo (wallet) untuk tenant UMKM guna membayar fitur berbiaya tinggi (AI Multimodal & Meta API Blast). Harga kredit dikelola Superadmin. Fitur Broadcast/Blast massal diwajibkan menggunakan Meta Cloud API (memotong saldo Wallet) dan memblokir QR (Whatsmeow) untuk tipe pesan broadcast demi menghindari pemblokiran nomor UMKM.
 
@@ -1973,8 +1993,8 @@ Wajib update:
 - [x] AC-2: `/v1/vision` (dan audio/image) deduct wallet via `ConsumeWalletAddon()` — insufficient balance → no deduction, endpoint returns mock.
 - [x] AC-3: `addon_prices` table extended: unit, description, is_active kolom added + backfilled (migration 000067).
 - [x] AC-4: AI Text (chatbot biasa) tetap jalan karena quota via `QuotaMiddlewareFeature`, bukan wallet.
-- [ ] AC-5: WA Gateway menolak broadcast jika tenant tidak setup Cloud API (sudah ada via F048 — lihat F048 spec).
-- [ ] AC-6: Wallet.vue UI — halaman depan untuk tenant lihat saldo + topup.
+- [x] AC-5: WA Gateway menolak broadcast jika tenant tidak setup Cloud API (sudah ada via F048 — lihat F048 spec).
+- [x] AC-6: Wallet.vue UI — halaman depan untuk tenant lihat saldo + topup.
 
 **Files Changed:**
 - `shared/migrations/000067_wallet_addon_extend.up.sql` (NEW) — extend addon_prices (unit, description, is_active)
@@ -1983,6 +2003,7 @@ Wajib update:
 - `services/ai-gateway/audio.go` — wallet deduction on ai_audio_stt + ai_audio_tts
 - `services/ai-gateway/image.go` — wallet deduction on image_gen
 - `services/billing-service/main.go` — extend GET+PATCH addon_prices (unit, is_active, description)
+- `services/billing-service/main.go` — wallet topup via Xendit per-tenant (xendit_api_key dari DB)
 
 
 ---
@@ -2175,8 +2196,8 @@ Wajib update:
 
 ## F052: Tier-First Feature System + Per-Tenant Addon Guard
 
-**Spec Status:** ⏳ Draft
-**Implementation:** ⏳ Pending
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
 
 **Deskripsi:** Refactor sistem feature gating: (1) Fitur melekat di Tier — superadmin atur ON/OFF per tier di DB, tidak perlu code change untuk add/remove fitur; (2) Addon melekat di Tenant — tenant beli addon → tersimpan per-tenant → guard cek "tier support + addon active". Dua guard = `HasFeatureAccess(tenant, feature)` + `HasAddonAccess(tenant, addonKey)`.
 

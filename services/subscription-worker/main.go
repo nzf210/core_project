@@ -74,6 +74,9 @@ func main() {
 	// Stdlib timer (no cron dep), runs alongside the freeze ticker.
 	go scheduleMonthly(runQuotaCleanup)
 
+	// Daily anomaly detection — runs at 02:00 UTC every day via scheduleDaily.
+	go scheduleDaily(runAnomalyDetection)
+
 	// Run once at startup, then on ticker
 	runFreezePass(graceHours)
 	ticker := time.NewTicker(interval)
@@ -115,6 +118,80 @@ func scheduleMonthly(fn func()) {
 		time.Sleep(d)
 		fn()
 	}
+}
+
+// scheduleDaily runs fn at 02:00 UTC every day, then re-arms itself.
+func scheduleDaily(fn func()) {
+	for {
+		now := time.Now().UTC()
+		next := time.Date(now.Year(), now.Month(), now.Day(), 2, 0, 0, 0, time.UTC)
+		if next.Before(now) {
+			next = next.Add(24 * time.Hour)
+		}
+		d := time.Until(next)
+		slog.Info("Next anomaly detection scheduled", "at", next.Format(time.RFC3339), "in", d.String())
+		time.Sleep(d)
+		fn()
+	}
+}
+
+// runAnomalyDetection runs the F039 anomaly detection queries across all active tenants.
+// Mirrors the logic in apps/campaign/api/handlers/anomaly.go but uses the worker's DB pool.
+func runAnomalyDetection() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	rows, err := DB.Query(ctx, "SELECT DISTINCT tenant_id FROM endorsements WHERE status = 'valid'")
+	if err != nil {
+		slog.Error("Anomaly detection: failed to fetch tenants", "error", err)
+		return
+	}
+	defer rows.Close()
+
+	var tenants []string
+	for rows.Next() {
+		var tid string
+		if err := rows.Scan(&tid); err == nil {
+			tenants = append(tenants, tid)
+		}
+	}
+
+	totalAnomalies := 0
+	for _, tenantID := range tenants {
+		// Age > 100 (siluman)
+		_, _ = DB.Exec(ctx, `
+			UPDATE endorsements e SET is_anomaly=TRUE, anomaly_reason='Usia Terindikasi > 100 Tahun (Siluman)'
+			FROM citizens c WHERE e.citizen_id=c.id AND e.tenant_id=$1 AND e.is_anomaly=FALSE
+			AND CAST(SUBSTRING(c.nik FROM 9 FOR 2) AS INTEGER) >= 20
+			AND CAST(SUBSTRING(c.nik FROM 9 FOR 2) AS INTEGER) <= 25
+		`, tenantID)
+
+		// Burst > 500/jam
+		_, _ = DB.Exec(ctx, `
+			WITH burst_recruiters AS (
+				SELECT recruiter_id FROM endorsements
+				WHERE tenant_id=$1 GROUP BY recruiter_id, date_trunc('hour',created_at)
+				HAVING count(id)>500
+			)
+			UPDATE endorsements SET is_anomaly=TRUE, anomaly_reason='Terdeteksi Joki/Bot: Burst Insert > 500/jam'
+			WHERE tenant_id=$1 AND recruiter_id IN (SELECT recruiter_id FROM burst_recruiters) AND is_anomaly=FALSE
+		`, tenantID)
+
+		// Regional mismatch
+		_, _ = DB.Exec(ctx, `
+			UPDATE endorsements e SET is_anomaly=TRUE, anomaly_reason='NIK regional code mismatch dengan TPS region'
+			FROM citizens c LEFT JOIN tps_records t ON t.id=e.tps_id
+			WHERE e.tenant_id=$1 AND e.is_anomaly=FALSE AND c.nik IS NOT NULL
+			AND t.region_code IS NOT NULL AND LENGTH(c.nik)>=6
+			AND SUBSTRING(c.nik FROM 1 FOR 6) != t.region_code
+		`, tenantID)
+
+		var count int
+		_ = DB.QueryRow(ctx, "SELECT COUNT(*) FROM endorsements WHERE tenant_id=$1 AND is_anomaly=TRUE", tenantID).Scan(&count)
+		totalAnomalies += count
+	}
+
+	slog.Info("Anomaly detection finished", "tenants_checked", len(tenants), "total_anomalies", totalAnomalies)
 }
 
 func runFreezePass(graceHours int) {

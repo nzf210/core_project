@@ -37,6 +37,7 @@ type PlanFeaturesRow struct {
 	HasAdvancedReport   bool   `json:"has_advanced_report"`
 	HasCustomBranding   bool   `json:"has_custom_branding"`
 	HasPrioritySupport  bool   `json:"has_priority_support"`
+	HasWACloudAPI       bool   `json:"has_wa_cloud_api"`
 }
 
 // IsUnlimited returns true if the given field's value is the unlimited sentinel (-1).
@@ -184,6 +185,10 @@ func GetPlanFeatures(ctx context.Context, tenantID string) (PlanFeaturesRow, err
 			p.HasCustomBranding = enabled
 		case "priority_support":
 			p.HasPrioritySupport = enabled
+		case "advanced_reports":
+			p.HasAdvancedReport = enabled
+		case "wa_cloud_api":
+			p.HasWACloudAPI = enabled
 		}
 	}
 
