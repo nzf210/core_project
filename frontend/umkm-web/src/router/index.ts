@@ -14,6 +14,7 @@ import Register from '../components/Register.vue'
 import SuperAdminLogin from '../components/SuperAdminLogin.vue'
 import ForgotPassword from '../components/ForgotPassword.vue'
 import ResetPassword from '../components/ResetPassword.vue'
+import ForcePasswordChange from '../components/ForcePasswordChange.vue'
 import Automations from '../components/Automations.vue'
 import WASetup from '../components/WASetup.vue'
 import DataTransfer from '../components/DataTransfer.vue'
@@ -49,6 +50,8 @@ const routes = [
   { path: '/superadmin-login', component: SuperAdminLogin, name: 'SuperAdminLogin', meta: { requiresGuest: true } },
   { path: '/forgot-password', component: ForgotPassword, name: 'ForgotPassword', meta: { requiresGuest: true } },
   { path: '/reset-password', component: ResetPassword, name: 'ResetPassword', meta: { requiresGuest: true }, props: (route: any) => ({ initialEmail: route.query.email }) },
+  // F055: Force password change after default reset
+  { path: '/force-password-change', component: ForcePasswordChange, name: 'ForcePasswordChange', meta: { requiresAuth: true } },
   // F036: Affiliate
   { path: '/affiliate', component: AffiliateDashboard, name: 'AffiliateDashboard' },
   { path: '/leaderboard', component: AffiliateLeaderboard, name: 'AffiliateLeaderboard', meta: { public: true } },
@@ -92,6 +95,9 @@ async function fetchAndSyncMe(): Promise<any | null> {
     }
     if (res.data.addons !== undefined) {
       localStorage.setItem('tenant_addons', JSON.stringify(res.data.addons))
+    }
+    if (res.data.must_change_password !== undefined) {
+      localStorage.setItem('must_change_password', res.data.must_change_password ? 'true' : 'false')
     }
   }
   return res && res.success ? res.data : null
@@ -142,6 +148,13 @@ router.beforeEach(async (to, _from, next) => {
             next({ path: '/onboarding' })
             return
           }
+        }
+
+        // F055: Redirect ke force password change jika perlu
+        const mustChangePw = localStorage.getItem('must_change_password')
+        if (mustChangePw === 'true' && to.path !== '/force-password-change' && !isSuperadmin) {
+          next({ path: '/force-password-change' })
+          return
         }
       }
       next()

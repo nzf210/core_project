@@ -357,6 +357,16 @@ export const api = {
     return res.json()
   },
 
+  // F055: Force change password setelah reset ke default
+  async forceChangePassword(oldPassword: string, newPassword: string) {
+    const res = await fetch(`${API_BASE}/auth/force-change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oldPassword, newPassword }),
+    })
+    return res.json()
+  },
+
   // UMKM Data (authenticated + tenant)
   async get(url: string) {
     const res = await fetch(`${API_BASE}${url}`, { headers: headers() })
