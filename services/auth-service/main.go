@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"io"
 	"log/slog"
-	"math/rand"
+	"crypto/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -195,6 +195,7 @@ func main() {
 	mux.HandleFunc("/forgot-password", handleForgotPassword)
 	mux.HandleFunc("/reset-password", handleResetPassword)
 	mux.HandleFunc("/reset-password-default", handleResetPasswordDefault)
+	mux.HandleFunc("/force-change-password", handleForceChangePassword)
 	mux.HandleFunc("/public/tenant/resolve", handleTenantResolve)
 	mux.HandleFunc("/telegram/register", handleTelegramRegister)
 	mux.HandleFunc("/telegram/login", handleTelegramLogin)
@@ -662,12 +663,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	var userID, tenantID, passwordHash string
 	var rolePtr *string
-	var isDataVerified bool
+	var isDataVerified, mustChangePw bool
 
-	err := DB.QueryRow(ctx, 
-		"SELECT id, tenant_id, role, password_hash, is_phone_verified FROM users WHERE username = $1 OR email = $1", 
+	err := DB.QueryRow(ctx,
+		"SELECT id, tenant_id, role, password_hash, is_phone_verified, must_change_password FROM users WHERE username = $1 OR email = $1",
 		req.Username,
-	).Scan(&userID, &tenantID, &rolePtr, &passwordHash, &isDataVerified)
+	).Scan(&userID, &tenantID, &rolePtr, &passwordHash, &isDataVerified, &mustChangePw)
 
 	if err == pgx.ErrNoRows {
 		slog.Error("Login: user not found", "username", req.Username)
@@ -730,10 +731,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Message: "Login successful",
 		Data: map[string]interface{}{
-			"accessToken":  tokens.AccessToken,
-			"refreshToken": tokens.RefreshToken,
-			"tenantId":     tenantID,
-			"role":         role,
+			"accessToken":        tokens.AccessToken,
+			"refreshToken":       tokens.RefreshToken,
+			"tenantId":           tenantID,
+			"role":               role,
+			"mustChangePassword": mustChangePw,
 		},
 	})
 }
@@ -922,16 +924,16 @@ func handleProfile(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		var username, role string
 		var phoneNumber, email, businessName, waNumber, logoURL, businessAddress, businessType, plan, tenantName *string
-		var isFrozen, onboardingCompleted bool
+		var isFrozen, onboardingCompleted, mustChangePw bool
 		err := DB.QueryRow(ctx, `
 			SELECT u.username, u.email, u.phone_number, u.role,
-			       COALESCE(t.business_name, t.name), t.wa_number, t.logo_url, t.business_address, t.business_type, t.plan, t.name, COALESCE(t.is_frozen, false), COALESCE(t.onboarding_completed, false)
+			       COALESCE(t.business_name, t.name), t.wa_number, t.logo_url, t.business_address, t.business_type, t.plan, t.name, COALESCE(t.is_frozen, false), COALESCE(t.onboarding_completed, false), u.must_change_password
 			FROM users u
 			JOIN tenants t ON t.id = u.tenant_id
 			WHERE u.id = $1 AND u.tenant_id = $2
 		`, claims.UserID, claims.TenantID).Scan(
 			&username, &email, &phoneNumber, &role,
-			&businessName, &waNumber, &logoURL, &businessAddress, &businessType, &plan, &tenantName, &isFrozen, &onboardingCompleted,
+			&businessName, &waNumber, &logoURL, &businessAddress, &businessType, &plan, &tenantName, &isFrozen, &onboardingCompleted, &mustChangePw,
 		)
 
 		if err != nil {
@@ -946,19 +948,20 @@ func handleProfile(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, Response{
 			Success: true,
 			Data: map[string]interface{}{
-				"username":              username,
-				"email":                 derefStr(email),
-				"phone_number":          derefStr(phoneNumber),
-				"role":                  role,
-				"business_name":         derefStr(businessName),
-				"wa_number":             derefStr(waNumber),
-				"logo_url":              derefStr(logoURL),
-				"business_address":      derefStr(businessAddress),
-				"business_type":         derefStr(businessType),
-				"plan":                  derefStr(plan),
-				"tenant_id":             claims.TenantID,
-				"is_frozen":             isFrozen,
-				"onboarding_completed":  onboardingCompleted,
+				"username":               username,
+				"email":                  derefStr(email),
+				"phone_number":           derefStr(phoneNumber),
+				"role":                   role,
+				"business_name":          derefStr(businessName),
+				"wa_number":              derefStr(waNumber),
+				"logo_url":               derefStr(logoURL),
+				"business_address":       derefStr(businessAddress),
+				"business_type":          derefStr(businessType),
+				"plan":                   derefStr(plan),
+				"tenant_id":              claims.TenantID,
+				"is_frozen":              isFrozen,
+				"onboarding_completed":   onboardingCompleted,
+				"must_change_password":   mustChangePw,
 			},
 		})
 
@@ -985,7 +988,7 @@ func handleProfile(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			newHash, _ := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
-			DB.Exec(ctx, "UPDATE users SET password_hash = $1 WHERE id = $2", string(newHash), claims.UserID)
+			DB.Exec(ctx, "UPDATE users SET password_hash = $1, must_change_password = false WHERE id = $2", string(newHash), claims.UserID)
 		}
 
 		if req.Username != "" {
@@ -1378,8 +1381,19 @@ func handleResetPasswordDefault(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate default password (8 karakter random, no ambiguous chars)
-	defaultPw := generateDefaultPassword()
+	// Generate random 8-char password (alphanumeric, no ambiguous chars)
+	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+	const charsetLen = len(charset)
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		slog.Error("Failed to generate random password", "error", err)
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		return
+	}
+	for i := range b {
+		b[i] = charset[int(b[i])%charsetLen]
+	}
+	defaultPw := string(b)
 
 	// Hash dengan bcrypt cost=12
 	hashed, err := bcrypt.GenerateFromPassword([]byte(defaultPw), 12)
@@ -1389,87 +1403,104 @@ func handleResetPasswordDefault(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update password di DB
-	_, err = DB.Exec(ctx, "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2", string(hashed), userID)
+	// Update password di DB + set flag must_change_password
+	_, err = DB.Exec(ctx, "UPDATE users SET password_hash = $1, must_change_password = true, updated_at = NOW() WHERE id = $2", string(hashed), userID)
 	if err != nil {
 		slog.Error("Failed to update password", "error", err)
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
 		return
 	}
 
-	// Kirim password default via WhatsApp (reuse OTP sender pattern)
-	go func() {
-		target := formatPhoneToWAJID(req.PhoneNumber)
-
-		formData := url.Values{}
-		verifierTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
-		if verifierTenant == "" {
-			verifierTenant = "system"
-		}
-		formData.Set("tenant_id", verifierTenant)
-		formData.Set("target", target)
-		formData.Set("message", "Password default akun WCH Anda: "+defaultPw+"\nSilakan ubah password segera setelah login.")
-
-		waURL := os.Getenv("WA_GATEWAY_URL")
-		if waURL == "" {
-			waURL = "http://wa-gateway:8202"
-		}
-
-		var resp *http.Response
-		var err error
-		for i := 0; i < 3; i++ {
-			payload := strings.NewReader(formData.Encode())
-			req, _ := http.NewRequest("POST", waURL+"/api/wa/send", payload)
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			req.Header.Set("X-Message-Type", "system")
-			req.Header.Set("X-Source", "auth-service")
-			resp, err = http.DefaultClient.Do(req)
-			if err != nil {
-				slog.Error("Failed to send default password via WA", "error", err, "attempt", i+1)
-				time.Sleep(500 * time.Millisecond)
-				continue
-			}
-			if resp.StatusCode == 409 {
-				resp.Body.Close()
-				slog.Warn("WA Gateway returned 409 (delegated), retrying...", "attempt", i+1)
-				time.Sleep(500 * time.Millisecond)
-				continue
-			}
-			break
-		}
-
-		if err != nil {
-			slog.Error("Failed to send default password after retries", "error", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			slog.Error("WA Gateway rejected default password message", "status", resp.StatusCode, "body", string(body))
-		} else {
-			slog.Info("Default password sent via WA", "username", req.Username, "phone", req.PhoneNumber)
-		}
-	}()
-
-	slog.Info("Password reset to default", "username", req.Username, "phone", req.PhoneNumber)
+	slog.Info("Password reset to default (force change required)", "username", req.Username, "phone", req.PhoneNumber)
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
-		Message: "Password berhasil direset ke default. Cek WhatsApp Anda untuk password sementara.",
+		Message: "Password berhasil direset ke default. Silakan login dan ubah password Anda.",
 	})
 }
 
-// generateDefaultPassword - buat 8 karakter random tanpa ambiguous chars
-func generateDefaultPassword() string {
-	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return ""
+// handleForceChangePassword - wajib dipanggil setelah reset password default
+// User harus mengirim old_password (password default) + new_password
+func handleForceChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		return
 	}
-	for i := range b {
-		b[i] = charset[int(b[i])%len(charset)]
+
+	// Auth middleware sudah validate token
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Missing authorization"})
+		return
 	}
-	return string(b)
+
+	claims, err := validateToken(strings.TrimPrefix(authHeader, "Bearer "))
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Invalid token"})
+		return
+	}
+
+	var req struct {
+		OldPassword string `json:"oldPassword"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
+		return
+	}
+
+	if req.OldPassword == "" || req.NewPassword == "" {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "oldPassword dan newPassword wajib diisi"})
+		return
+	}
+
+	if len(req.NewPassword) < 8 {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Password baru minimal 8 karakter"})
+		return
+	}
+
+	ctx := context.Background()
+
+	// Cek apakah user memang wajib ganti password
+	var mustChange bool
+	var currentHash string
+	err = DB.QueryRow(ctx, "SELECT password_hash, must_change_password FROM users WHERE id = $1", claims.UserID).Scan(&currentHash, &mustChange)
+	if err != nil {
+		slog.Error("DB error checking force change password", "error", err)
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		return
+	}
+
+	if !mustChange {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Password tidak perlu diganti"})
+		return
+	}
+
+	// Verifikasi old password (password default)
+	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.OldPassword)); err != nil {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Password lama tidak sesuai"})
+		return
+	}
+
+	// Update password baru + reset flag
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 12)
+	if err != nil {
+		slog.Error("Failed to hash new password", "error", err)
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		return
+	}
+
+	_, err = DB.Exec(ctx, "UPDATE users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE id = $2", string(newHash), claims.UserID)
+	if err != nil {
+		slog.Error("Failed to update password", "error", err)
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		return
+	}
+
+	slog.Info("Password changed successfully after forced reset", "user_id", claims.UserID)
+	writeJSON(w, http.StatusOK, Response{
+		Success: true,
+		Message: "Password berhasil diubah. Silakan login kembali.",
+	})
 }
 
 func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
