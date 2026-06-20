@@ -152,7 +152,6 @@ h1, h2, h3, h4, h5, h6 {
 /* Glass Card */
 .glass-card {
   background-color: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
@@ -240,12 +239,19 @@ h1, h2, h3, h4, h5, h6 {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  z-index: 1000;
-  padding: 5rem 1rem 1rem;
+  z-index: 9999;
+  padding: 1rem;
+  isolation: isolate;
+}
+
+/* Blur main content when any modal is open */
+body.modal-open .app-main {
+  filter: blur(4px);
+  pointer-events: none;
+  user-select: none;
 }
 
 .modal-content,

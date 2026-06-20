@@ -612,9 +612,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { superadminApi } from '../superadminApi'
 import { api, API_BASE } from '../api'
+import { useModalState } from '../utils/modalState'
+
+const { openModal, closeModal } = useModalState()
 
 const verifierStatus = ref<'connected' | 'disconnected'>('disconnected')
 const verifierJID = ref('')
@@ -663,6 +666,19 @@ const uploadingLogo = ref(false)
 const savingProfile = ref(false)
 const profileError = ref('')
 
+// Track all modals for body blur
+watch(showAddTenant, (v) => { if (v) openModal(); else closeModal(); });
+watch(editTarget, (v) => { if (v) openModal(); else closeModal(); });
+watch(deleteTarget, (v) => { if (v) openModal(); else closeModal(); });
+
+const showGenerateVoucherModal = ref(false)
+const showVoucherListModal = ref(false)
+const showPlanEditor = ref(false)
+
+watch(showGenerateVoucherModal, (v) => { if (v) openModal(); else closeModal(); });
+watch(showVoucherListModal, (v) => { if (v) openModal(); else closeModal(); });
+watch(showPlanEditor, (v) => { if (v) openModal(); else closeModal(); });
+
 const businessTypes = [
   { id: 'umum', name: 'Umum / General' },
   { id: 'warung', name: 'Warung / Toko Kelontong' },
@@ -686,6 +702,8 @@ const showMyProfile = ref(false)
 const myProfile = ref({ username: '', phone_number: '', old_password: '', new_password: '' })
 const savingMyProfile = ref(false)
 const myProfileError = ref('')
+
+watch(showMyProfile, (v) => { if (v) openModal(); else closeModal(); })
 
 const loadMyProfile = async () => {
   try {
@@ -965,7 +983,6 @@ const closeAddModal = () => {
 
 // ── Plan Editor ──────────────────────────────────────────────────────────────────
 
-const showPlanEditor = ref(false)
 const editablePlans = ref<any[]>([])
 const loadingPlans = ref(false)
 const savingPlans = ref(false)
@@ -973,8 +990,6 @@ const planError = ref('')
 const planOptions = ref<any[]>([])
 
 // ── Voucher Generation ────────────────────────────────────────────────────────
-const showGenerateVoucherModal = ref(false)
-const showVoucherListModal = ref(false)
 const generatingVoucher = ref(false)
 const voucherError = ref('')
 const voucherForm = ref({

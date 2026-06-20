@@ -404,8 +404,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { api } from '../api'
+import { useModalState } from '../utils/modalState'
+
+const { openModal, closeModal } = useModalState()
 
 const activeTab = ref<'connection'|'ai_config'>('connection')
 
@@ -650,6 +653,9 @@ async function saveCloudApiCredential() {
 // --- QR STATE ---
 const qrModal = ref(false)
 const qrImage = ref('')
+
+watch(qrModal, (v) => { if (v) openModal(); else closeModal(); });
+watch(cloudApiModal, (v) => { if (v) openModal(); else closeModal(); });
 const qrStatus = ref<'loading'|'qr'|'connected'|'error'>('loading')
 const qrError = ref('')
 let qrPollInterval: ReturnType<typeof setInterval> | null = null

@@ -70,6 +70,7 @@
     </div>
 
     <!-- Payment Modal -->
+    <Teleport to="body">
     <div v-if="showPaymentModal" class="modal-overlay">
       <div class="modal-content animate-fade-in">
         <div v-if="!checkoutSuccess">
@@ -119,12 +120,16 @@
         </div>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { api } from '../api'
+import { useModalState } from '../utils/modalState'
+
+const { openModal, closeModal } = useModalState()
 
 
 const products = ref<any[]>([])
@@ -134,6 +139,8 @@ const cart = ref<any[]>([])
 const showPaymentModal = ref(false)
 const paymentMethod = ref('cash')
 const loadingCheckout = ref(false)
+
+watch(showPaymentModal, (v) => { if (v) openModal(); else closeModal(); })
 const checkoutSuccess = ref(false)
 const qrisUrl = ref('')
 const paymentStatus = ref('')

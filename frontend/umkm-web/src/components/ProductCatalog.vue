@@ -6,11 +6,12 @@
         <p class="text-muted">Kelola daftar produk, harga, dan deskripsi produk Anda.</p>
       </div>
       <div class="header-actions">
-        <select v-model="selectedCategory" class="form-control" style="width: 200px; display: inline-block; margin-right: 1rem;">
+        <select v-model="selectedCategory" class="form-control"
+          style="width: 200px; display: inline-block; margin-right: 1rem;">
           <option value="">Semua Kategori</option>
           <option v-for="cat in uniqueCategories" :key="cat" :value="cat">{{ cat }}</option>
         </select>
-        
+
         <button class="btn btn-outline" @click="exportCSV" style="margin-right: 0.5rem;" :disabled="exporting">
           {{ exporting ? 'Mengekspor...' : 'Export CSV' }}
         </button>
@@ -19,7 +20,8 @@
         </button>
 
         <input type="file" ref="fileInput" accept=".csv,.xlsx" style="display: none" @change="handleFileUpload" />
-        <button class="btn btn-outline" @click="( $refs.fileInput as HTMLInputElement ).click()" style="margin-right: 0.5rem;" :disabled="uploading">
+        <button class="btn btn-outline" @click="($refs.fileInput as HTMLInputElement).click()"
+          style="margin-right: 0.5rem;" :disabled="uploading">
           {{ uploading ? 'Mengimpor...' : 'Import (CSV/XLSX)' }}
         </button>
 
@@ -52,7 +54,8 @@
             <div style="display: flex; gap: 0.5rem; width: 100%;">
               <button class="btn btn-primary btn-sm" style="flex: 1;" @click="openDetailModal(product)">Detail</button>
               <button class="btn btn-outline btn-sm" style="flex: 1;" @click="openEditModal(product)">Edit</button>
-              <button class="btn btn-outline btn-sm" style="flex: 1; color: #ef4444; border-color: #ef4444;" @click="deleteProduct(product.id)" :disabled="deleting === product.id">
+              <button class="btn btn-outline btn-sm" style="flex: 1; color: #ef4444; border-color: #ef4444;"
+                @click="deleteProduct(product.id)" :disabled="deleting === product.id">
                 {{ deleting === product.id ? 'Menghapus...' : 'Hapus' }}
               </button>
             </div>
@@ -60,7 +63,7 @@
         </div>
       </div>
     </div>
-    
+
     <div v-else-if="loading" class="empty-state glass-card text-center">
       <h3>Memuat data produk...</h3>
     </div>
@@ -73,108 +76,135 @@
     </div>
 
     <!-- Detail Modal -->
-    <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
-      <div class="modal-content animate-fade-in" style="max-width: 600px; max-height: 90vh; overflow-y: auto;" @click.stop>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-          <h3 style="margin: 0;">Detail Produk</h3>
-          <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; border: none; font-size: 1.5rem;" @click="closeDetailModal">&times;</button>
-        </div>
-        
-        <div v-if="selectedProduct" style="display: flex; flex-direction: column; gap: 1rem; max-width: 100%;">
-          <div style="position: relative; max-width: 100%;">
-            <button class="gallery-nav left" @click.stop="scrollGallery('left')">&lt;</button>
-            <div ref="galleryRef" class="gallery-container" style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; max-width: 100%; -webkit-overflow-scrolling: touch;">
-               <img v-if="selectedProduct.photo_url" :src="selectedProduct.photo_url" class="gallery-img" />
-               <div v-if="!selectedProduct.photo_url && (!selectedProduct.additional_photos || selectedProduct.additional_photos.length === 0)" class="gallery-img-placeholder">
-                 Tanpa Foto
-               </div>
-               <img v-for="(photo, index) in selectedProduct.additional_photos" :key="index" :src="photo" class="gallery-img" />
-            </div>
-            <button class="gallery-nav right" @click.stop="scrollGallery('right')">&gt;</button>
+    <Teleport to="body">
+      <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
+        <div class="modal-content animate-fade-in" style="max-width: 600px; max-height: 90vh; overflow-y: auto;"
+          @click.stop>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0;">Detail Produk</h3>
+            <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; border: none; font-size: 1.5rem;"
+              @click="closeDetailModal">&times;</button>
           </div>
 
-          <h3>{{ selectedProduct.name }}</h3>
-          <p style="color: var(--text-muted); white-space: pre-wrap;">{{ selectedProduct.description || 'Tidak ada deskripsi.' }}</p>
-          
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; background: var(--surface); padding: 1rem; border-radius: 8px;">
-            <div>
-              <strong style="color: var(--text-muted); font-size: 0.9em;">Harga</strong> <br/> <span style="font-size: 1.1em; font-weight: bold;">{{ formatCurrency(selectedProduct.price) }}</span>
+          <div v-if="selectedProduct" style="display: flex; flex-direction: column; gap: 1rem; max-width: 100%;">
+            <div style="position: relative; max-width: 100%;">
+              <button class="gallery-nav left" @click.stop="scrollGallery('left')">&lt;</button>
+              <div ref="galleryRef" class="gallery-container"
+                style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; max-width: 100%; -webkit-overflow-scrolling: touch;">
+                <img v-if="selectedProduct.photo_url" :src="selectedProduct.photo_url" class="gallery-img" />
+                <div
+                  v-if="!selectedProduct.photo_url && (!selectedProduct.additional_photos || selectedProduct.additional_photos.length === 0)"
+                  class="gallery-img-placeholder">
+                  Tanpa Foto
+                </div>
+                <img v-for="(photo, index) in selectedProduct.additional_photos" :key="index" :src="photo"
+                  class="gallery-img" />
+              </div>
+              <button class="gallery-nav right" @click.stop="scrollGallery('right')">&gt;</button>
             </div>
-            <div>
-              <strong style="color: var(--text-muted); font-size: 0.9em;">Kategori</strong> <br/> {{ selectedProduct.category || 'Umum' }}
-            </div>
-            <div>
-              <strong style="color: var(--text-muted); font-size: 0.9em;">Stok Saat Ini</strong> <br/> <span :class="['badge', selectedProduct.stock_quantity <= 0 ? 'badge-danger' : 'badge-success']">{{ selectedProduct.stock_quantity }}</span>
+
+            <h3>{{ selectedProduct.name }}</h3>
+            <p style="color: var(--text-muted); white-space: pre-wrap;">{{ selectedProduct.description || `Tidak ada
+              deskripsi.` }}</p>
+
+            <div
+              style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; background: var(--surface); padding: 1rem; border-radius: 8px;">
+              <div>
+                <strong style="color: var(--text-muted); font-size: 0.9em;">Harga</strong> <br /> <span
+                  style="font-size: 1.1em; font-weight: bold;">{{ formatCurrency(selectedProduct.price) }}</span>
+              </div>
+              <div>
+                <strong style="color: var(--text-muted); font-size: 0.9em;">Kategori</strong> <br /> {{
+                  selectedProduct.category || 'Umum' }}
+              </div>
+              <div>
+                <strong style="color: var(--text-muted); font-size: 0.9em;">Stok Saat Ini</strong> <br /> <span
+                  :class="['badge', selectedProduct.stock_quantity <= 0 ? 'badge-danger' : 'badge-success']">{{
+                    selectedProduct.stock_quantity }}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div style="margin-top: 2rem; display: flex; justify-content: flex-end;">
-          <button class="btn btn-primary" @click="closeDetailModal">Tutup</button>
+          <div style="margin-top: 2rem; display: flex; justify-content: flex-end;">
+            <button class="btn btn-primary" @click="closeDetailModal">Tutup</button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- Add/Edit Modal -->
-    <div v-if="showModal" class="modal-overlay">
-      <div class="modal-content animate-fade-in" style="max-height: 90vh; overflow-y: auto;">
-        <h3 style="margin-bottom: 1.5rem;">{{ isEditing ? 'Edit Produk' : 'Tambah Produk Baru' }}</h3>
-        
-        <form @submit.prevent="saveProduct">
-          <div class="form-group">
-            <label>URL Foto Utama (Opsional)</label>
-            <input type="url" v-model="formData.photo_url" class="form-control" placeholder="https://contoh.com/gambar.jpg" />
-          </div>
+    <Teleport to="body">
+      <div v-if="showModal" class="modal-overlay">
+        <div class="modal-content animate-fade-in" style="max-height: 90vh; overflow-y: auto;">
+          <h3 style="margin-bottom: 1.5rem;">{{ isEditing ? 'Edit Produk' : 'Tambah Produk Baru' }}</h3>
 
-          <div class="form-group">
-            <label>Foto Tambahan (Opsional)</label>
-            <div v-for="(_, index) in formData.additional_photos" :key="index" style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-              <input type="url" v-model="formData.additional_photos[index]" placeholder="https://contoh.com/foto-tambahan.jpg" class="form-control" />
-              <button class="btn btn-outline" style="color: #ef4444; border-color: #ef4444; padding: 0 0.75rem;" @click.prevent="formData.additional_photos.splice(index, 1)">X</button>
+          <form @submit.prevent="saveProduct">
+            <div class="form-group">
+              <label>URL Foto Utama (Opsional)</label>
+              <input type="url" v-model="formData.photo_url" class="form-control"
+                placeholder="https://contoh.com/gambar.jpg" />
             </div>
-            <button class="btn btn-outline btn-sm" @click.prevent="formData.additional_photos.push('')" style="margin-top: 0.5rem; width: 100%;">+ Tambah Foto Lainnya</button>
-          </div>
-          
-          <div class="form-group">
-            <label>Nama Produk</label>
-            <input type="text" v-model="formData.name" class="form-control" required placeholder="Contoh: Kopi Susu Aren" />
-          </div>
-          
-          <div class="form-group">
-            <label>Harga (Rp)</label>
-            <input type="number" v-model="formData.price" class="form-control" required min="0" />
-          </div>
-          
-          <div class="form-group">
-            <label>Kategori</label>
-            <input type="text" v-model="formData.category" class="form-control" placeholder="Contoh: Makanan, Minuman, Pakaian" />
-          </div>
-          
-          <div class="form-group">
-            <label>Stok Barang</label>
-            <input type="number" v-model="formData.stock_quantity" class="form-control" required />
-          </div>
 
-          <div class="form-group">
-            <label>Deskripsi (Opsional)</label>
-            <textarea v-model="formData.description" class="form-control" placeholder="Deskripsi singkat produk" rows="3"></textarea>
-          </div>
+            <div class="form-group">
+              <label>Foto Tambahan (Opsional)</label>
+              <div v-for="(_, index) in formData.additional_photos" :key="index"
+                style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <input type="url" v-model="formData.additional_photos[index]"
+                  placeholder="https://contoh.com/foto-tambahan.jpg" class="form-control" />
+                <button class="btn btn-outline" style="color: #ef4444; border-color: #ef4444; padding: 0 0.75rem;"
+                  @click.prevent="formData.additional_photos.splice(index, 1)">X</button>
+              </div>
+              <button class="btn btn-outline btn-sm" @click.prevent="formData.additional_photos.push('')"
+                style="margin-top: 0.5rem; width: 100%;">+ Tambah Foto Lainnya</button>
+            </div>
 
-          <div class="modal-actions flex justify-end gap-2" style="margin-top: 2rem;">
-            <button type="button" class="btn btn-outline" @click="closeModal" :disabled="saving">Batal</button>
-            <button type="submit" class="btn btn-primary" :disabled="saving">
-              {{ saving ? 'Menyimpan...' : 'Simpan' }}
-            </button>
-          </div>
-        </form>
+            <div class="form-group">
+              <label>Nama Produk</label>
+              <input type="text" v-model="formData.name" class="form-control" required
+                placeholder="Contoh: Kopi Susu Aren" />
+            </div>
+
+            <div class="form-group">
+              <label>Harga (Rp)</label>
+              <input type="number" v-model="formData.price" class="form-control" required min="0" />
+            </div>
+
+            <div class="form-group">
+              <label>Kategori</label>
+              <input type="text" v-model="formData.category" class="form-control"
+                placeholder="Contoh: Makanan, Minuman, Pakaian" />
+            </div>
+
+            <div class="form-group">
+              <label>Stok Barang</label>
+              <input type="number" v-model="formData.stock_quantity" class="form-control" required />
+            </div>
+
+            <div class="form-group">
+              <label>Deskripsi (Opsional)</label>
+              <textarea v-model="formData.description" class="form-control" placeholder="Deskripsi singkat produk"
+                rows="3"></textarea>
+            </div>
+
+            <div class="modal-actions flex justify-end gap-2" style="margin-top: 2rem;">
+              <button type="button" class="btn btn-outline" @click="closeModal" :disabled="saving">Batal</button>
+              <button type="submit" class="btn btn-primary" :disabled="saving">
+                {{ saving ? 'Menyimpan...' : 'Simpan' }}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { api } from '../api';
+import { useModalState } from '../utils/modalState';
+
+const { openModal } = useModalState()
 
 interface Product {
   id: string;
@@ -211,6 +241,9 @@ const isEditing = ref(false);
 
 const showDetailModal = ref(false);
 const selectedProduct = ref<Product | null>(null);
+
+watch(showModal, (v) => { if (v) openModal(); else closeModal(); });
+watch(showDetailModal, (v) => { if (v) openModal(); else closeModal(); });
 
 const galleryRef = ref<HTMLElement | null>(null);
 
@@ -541,7 +574,7 @@ onMounted(() => {
   height: 200px;
   object-fit: cover;
   border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   flex-shrink: 0;
 }
 
@@ -563,16 +596,17 @@ onMounted(() => {
 }
 
 .gallery-container::-webkit-scrollbar-track {
-  background: rgba(0,0,0,0.05);
+  background: rgba(0, 0, 0, 0.05);
   border-radius: 4px;
 }
 
 .gallery-container::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.2);
+  background: rgba(0, 0, 0, 0.2);
   border-radius: 4px;
 }
+
 .gallery-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(0,0,0,0.3);
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .gallery-nav {
@@ -592,7 +626,7 @@ onMounted(() => {
   font-size: 1.2rem;
   cursor: pointer;
   z-index: 10;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
 }
 

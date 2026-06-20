@@ -242,9 +242,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../api'
+import { useModalState } from '../utils/modalState'
+
+const { openModal, closeModal } = useModalState()
 
 const route = useRoute()
 const isFirstRun = computed(() => route.query.first_run === '1')
@@ -256,6 +259,8 @@ const saving = ref(false)
 const testing = ref(false)
 const errorMsg = ref('')
 const hasWaPremium = ref(false) // F048: fetched from /chatbot/permissions
+
+watch(testOpen, (v) => { if (v) openModal(); else closeModal(); })
 
 async function loadPermissions() {
   try {
