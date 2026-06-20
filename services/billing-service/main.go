@@ -364,6 +364,8 @@ func main() {
 	mux.Handle("/register", auth.Middleware(http.HandlerFunc(handleAffiliateRegister)))
 	mux.Handle("/withdraw", auth.Middleware(http.HandlerFunc(handleAffiliateWithdraw)))
 	mux.Handle("/redeem-referral", auth.Middleware(http.HandlerFunc(handleAffiliateRedeemReferral)))
+	mux.Handle("/referrals", auth.Middleware(http.HandlerFunc(handleAffiliateReferrals)))
+	mux.Handle("/earnings", auth.Middleware(http.HandlerFunc(handleAffiliateEarnings)))
 
 	// F037: Referral Config (Superadmin)
 	mux.Handle("/admin/referral-config", auth.Middleware(http.HandlerFunc(handleAdminReferralConfig)))
@@ -4081,6 +4083,104 @@ func handleAffiliateRedeemReferral(w http.ResponseWriter, r *http.Request) {
 	tx.Commit(r.Context())
 	response.JSON(w, http.StatusOK, "Referral applied successfully", nil)
 }
+
+func handleAffiliateReferrals(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	userID := r.Header.Get("X-User-Id")
+	ctx := r.Context()
+
+	var affID int
+	err := DB.QueryRow(ctx, "SELECT id FROM affiliates WHERE user_id = $1", userID).Scan(&affID)
+	if err != nil {
+		response.JSON(w, http.StatusOK, "Not an affiliate", map[string]interface{}{"referrals": []interface{}{}})
+		return
+	}
+
+	rows, err2 := DB.Query(ctx,
+		`SELECT ar.id, ar.tenant_id, ar.referred_at, ar.first_purchase_at, t.name as tenant_name
+		 FROM affiliate_referrals ar
+		 LEFT JOIN tenants t ON t.id = ar.tenant_id
+		 WHERE ar.affiliate_id = $1
+		 ORDER BY ar.referred_at DESC`, affID)
+	if err2 != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to query referrals", err2)
+		return
+	}
+	defer rows.Close()
+
+	type referral struct {
+		ID            string     `json:"id"`
+		TenantID      string     `json:"tenant_id"`
+		TenantName    string     `json:"tenant_name"`
+		ReferredAt    time.Time  `json:"referred_at"`
+		FirstPurchase *time.Time `json:"first_purchase_at"`
+	}
+	var referrals []referral
+	for rows.Next() {
+		var r referral
+		var tid string
+		if err := rows.Scan(&r.ID, &tid, &r.ReferredAt, &r.FirstPurchase, &r.TenantName); err == nil {
+			r.TenantID = tid
+			referrals = append(referrals, r)
+		}
+	}
+	response.JSON(w, http.StatusOK, "Referrals retrieved", referrals)
+}
+
+func handleAffiliateEarnings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+	userID := r.Header.Get("X-User-Id")
+	ctx := r.Context()
+
+	var affID int
+	err := DB.QueryRow(ctx, "SELECT id FROM affiliates WHERE user_id = $1", userID).Scan(&affID)
+	if err != nil {
+		response.JSON(w, http.StatusOK, "Not an affiliate", map[string]interface{}{"earnings": []interface{}{}})
+		return
+	}
+
+	rows, err2 := DB.Query(ctx,
+		`SELECT ae.id, ae.tenant_id, ae.invoice_id, ae.amount_cents, ae.commission_rate_percent,
+		        ae.transaction_type, ae.description, ae.created_at, t.name as tenant_name
+		 FROM affiliate_earnings ae
+		 LEFT JOIN tenants t ON t.id = ae.tenant_id
+		 WHERE ae.affiliate_id = $1
+		 ORDER BY ae.created_at DESC`, affID)
+	if err2 != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to query earnings", err2)
+		return
+	}
+	defer rows.Close()
+
+	type earning struct {
+		ID              string    `json:"id"`
+		TenantID        string    `json:"tenant_id"`
+		TenantName      string    `json:"tenant_name"`
+		InvoiceID       string    `json:"invoice_id"`
+		AmountCents     int64     `json:"amount_cents"`
+		CommissionRate  int       `json:"commission_rate_percent"`
+		TransactionType string    `json:"transaction_type"`
+		Description     string    `json:"description"`
+		CreatedAt       time.Time `json:"created_at"`
+	}
+	var earningsList []earning
+	for rows.Next() {
+		var e earning
+		var eid int
+		if err := rows.Scan(&eid, &e.TenantID, &e.InvoiceID, &e.AmountCents, &e.CommissionRate, &e.TransactionType, &e.Description, &e.CreatedAt, &e.TenantName); err == nil {
+			e.ID = strconv.Itoa(eid)
+			earningsList = append(earningsList, e)
+		}
+	}
+	response.JSON(w, http.StatusOK, "Earnings retrieved", earningsList)
+}
+
 func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
 	role := r.Header.Get("X-User-Role")
 	if role != "superadmin" && role != "admin" {

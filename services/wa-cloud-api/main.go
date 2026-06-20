@@ -156,6 +156,7 @@ func main() {
 	mux.HandleFunc("/healthz", handleHealthz)
 	mux.HandleFunc("/admin/credentials", handleAdminCredentials)
 	mux.HandleFunc("/admin/credentials/", handleAdminCredentialsItem)
+	mux.HandleFunc("/validate", handleValidateCredential)
 
 	port := cfg.WhatsApp.CloudAPIPort
 	if port == "" {
@@ -567,6 +568,70 @@ func handleHealthz(w http.ResponseWriter, r *http.Request) {
 		"service":    "wa-cloud-api",
 		"graph_api":  graphBaseURL + "/" + graphVersion,
 	})
+}
+
+// POST /validate
+// Validasi credential Meta Cloud API dengan melakukan test call ke Graph API.
+// Body: { "access_token": "...", "phone_number_id": "..." }
+func handleValidateCredential(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
+
+	var body struct {
+		AccessToken   string `json:"access_token"`
+		PhoneNumberID string `json:"phone_number_id"`
+		WABAID        string `json:"waba_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	if body.AccessToken == "" || body.PhoneNumberID == "" {
+		response.Error(w, http.StatusBadRequest, "access_token dan phone_number_id wajib diisi", nil)
+		return
+	}
+
+	// Test credential dengan memanggil Meta Graph API - cek phone number info
+	testURL := fmt.Sprintf("%s/%s/%s", graphBaseURL, graphVersion, body.PhoneNumberID)
+	req, err := http.NewRequest(http.MethodGet, testURL, nil)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to create request", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+body.AccessToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		response.Error(w, http.StatusBadGateway, "Gagal terhubung ke Meta API", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == http.StatusOK {
+		response.JSON(w, http.StatusOK, "Credential valid", map[string]interface{}{
+			"valid":           true,
+			"phone_number_id": body.PhoneNumberID,
+			"waba_id":         body.WABAID,
+		})
+		return
+	}
+
+	// Parse error dari Meta
+	var metaResp map[string]interface{}
+	_ = json.Unmarshal(respBody, &metaResp)
+	errorMsg := "Credential tidak valid"
+	if errObj, ok := metaResp["error"].(map[string]interface{}); ok {
+		if msg, ok := errObj["message"].(string); ok {
+			errorMsg = msg
+		}
+	}
+
+	response.Error(w, http.StatusUnauthorized, errorMsg, nil)
 }
 
 // ─────────────────────────────────────────────

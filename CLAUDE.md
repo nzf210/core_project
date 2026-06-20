@@ -214,11 +214,22 @@ Tenant dapat meng-override hybrid routing dengan preferensi eksplisit di `tenant
 
 **Addon Gate untuk Cloud API:** Cloud API option di-lock di UI kecuali tenant punya `plan_features.feature_key = 'wa_cloud_api' AND is_enabled = true` untuk plan-nya. Cek via endpoint `GET /api/umkm/chatbot/permissions`.
 
+**Hybrid WA Setup Wizard (v2):**
+- Frontend `WASetup.vue` menyediakan halaman setup WA terpadu dengan 2 tab: Koneksi & Provider, Pengaturan AI CS
+- Flow validasi 2-step: Validate credential via Meta Graph API → Baru simpan ke DB
+- Backend `POST /api/wa/validate` (via api-gateway → wa-cloud-api) untuk validasi real-time access token + phone number ID
+- Migration `000070` menambah kolom `verification_status`, `verified_at`, `last_checked_at`, `check_error` ke `wa_cloud_api_credentials`
+
 **Files involved:**
 - `services/wa-gateway/main.go` → `getTenantWAProviderPreference()` (line ~172), override routing (line ~835)
-- `apps/umkm/accounting/main.go` → `ChatbotConfig.WAProviderPreference`, handler `GET/PUT /chatbot/config`
+- `apps/umkm/accounting/main.go` → `ChatbotConfig.WAProviderPreference`, handler `GET/PUT /chatbot/config`, enhanced `handleWACloudAPICredential`
+- `services/wa-cloud-api/main.go` → `handleValidateCredential` (real-time Meta API validation)
+- `services/api-gateway/main.go` → route `/api/wa/validate`
 - `shared/migrations/000063_wa_provider_preferences.up.sql` → enum + kolom
 - `shared/migrations/000064_wa_cloud_api_plan_feature.up.sql` → seed plan_features
+- `shared/migrations/000070_wa_credential_verification.up.sql` → verification status columns
+- `frontend/umkm-web/src/components/WASetup.vue` → 2-step validate+save wizard
+- `frontend/umkm-web/src/api.ts` → `validateCloudAPICredential()`
 - `frontend/umkm-web/src/components/ChatbotConfig.vue` → dropdown "📡 WA Provider"
 
 ### 📨 OTP Routing via Header Override (F048 AC-6)

@@ -32,6 +32,7 @@ type RegisterRequest struct {
 	TenantID     string `json:"tenantId"`
 	BusinessName string `json:"businessName"`
 	BusinessType string `json:"businessType"`
+	ReferralCode string `json:"referralCode"`
 }
 
 type VerifyOTPRequest struct {
@@ -515,6 +516,17 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Phone number or username already exists"})
 		return
+	}
+
+	// F054: Link referral code to tenant if provided
+	if regReq.ReferralCode != "" && tenantID != "" {
+		var affID int
+		errRef := tx.QueryRow(ctx, "SELECT id FROM affiliates WHERE referral_code = $1", regReq.ReferralCode).Scan(&affID)
+		if errRef == nil {
+			_, _ = tx.Exec(ctx, "UPDATE tenants SET referred_by_affiliate_id = $1 WHERE id = $2 AND referred_by_affiliate_id IS NULL", affID, tenantID)
+			_, _ = tx.Exec(ctx, "INSERT INTO affiliate_referrals (affiliate_id, tenant_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", affID, tenantID)
+			slog.Info("Referral linked", "affiliate_id", affID, "tenant_id", tenantID, "referral_code", regReq.ReferralCode)
+		}
 	}
 
 	tx.Commit(ctx)

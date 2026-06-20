@@ -64,6 +64,7 @@ func main() {
 	// Logistics Tracking (F033)
 	mux.HandleFunc("/logistics", handlers.HandleLogistics)
 	mux.HandleFunc("/logistics/distribute", handlers.HandleDistributeLogistics)
+	mux.HandleFunc("/logistics/stalled", handlers.HandleStalledDistributions)
 
 	// Cost-per-Vote / Finance (F034)
 	mux.HandleFunc("/finance", handlers.HandleCampaignFinance)
@@ -79,6 +80,8 @@ func main() {
 
 	// Anomaly Detector / Pemilih Siluman (F039)
 	mux.HandleFunc("POST /anomalies/detect", handlers.HandleAnomalyDetection)
+	// F039 AC-3: Cron automation — auto-detect anomalies setiap hari jam 02:00
+	mux.HandleFunc("POST /anomalies/auto-detect", handlers.HandleAutoAnomalyDetection)
 
 	// WA Blast Micro-targeting (F040)
 	mux.HandleFunc("POST /blast/target", handlers.HandleBlastTarget)
@@ -96,8 +99,10 @@ func main() {
 	mux.HandleFunc("POST /billing/checkout", handlers.HandleBillingCheckout)
 	mux.HandleFunc("POST /billing/webhook", handlers.HandleBillingWebhook)
 	mux.HandleFunc("POST /licenses/redeem", handlers.HandleRedeemLicense)
+	mux.HandleFunc("GET /licenses/active", handlers.HandleTenantActiveAddons)
 	// In production, this should be under a different superadmin mux/port, mapped here for simplicity
 	mux.HandleFunc("POST /superadmin/licenses/generate", handlers.HandleSuperadminGenerateLicense)
+	mux.HandleFunc("GET /superadmin/licenses", handlers.HandleListLicenses)
 
 	// F037 (Campaign): Affiliate Referral — extends global UMKM affiliate to Campaign
 	mux.HandleFunc("POST /affiliate/redeem-referral", handlers.HandleCampaignAffiliateRedeemReferral)

@@ -337,14 +337,12 @@
     </div>
 
     <!-- Cloud API Credential Modal -->
-    <div v-if="cloudApiModal" class="modal-backdrop" @click.self="cloudApiModal = false">
+    <div v-if="cloudApiModal" class="modal-backdrop" @click.self="closeCloudApiModal()">
       <div class="modal-content glass-card" style="max-width: 520px; padding: 1.5rem;">
         <h3 style="margin-bottom: 0.5rem;">☁️ Hubungkan Meta Cloud API</h3>
-        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5;">
-          Peroleh <strong>Phone Number ID</strong> dan <strong>WABA ID</strong> dari
-          <a href="https://business.facebook.com" target="_blank" style="color: #3b82f6;">Meta Business</a>
-          → WhatsApp → Phone Numbers. Access Token dari
-          <a href="https://developers.facebook.com" target="_blank" style="color: #3b82f6;">Meta Developers</a>.
+        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem; line-height: 1.5;">
+          <strong>Step 1:</strong> Masukkan credential → klik <em>Validate</em> untuk uji coba koneksi ke Meta.<br/>
+          <strong>Step 2:</strong> Jika valid, klik <em>Simpan</em> untuk menyimpan.
         </p>
         <div style="display: flex; flex-direction: column; gap: 0.85rem;">
           <label>
@@ -364,12 +362,22 @@
             <input v-model="cloudApiForm.verify_token" type="text" class="form-control" placeholder="Kosongkan untuk auto-generate" />
           </label>
         </div>
-        <p v-if="cloudApiError" class="error-text" style="margin-top: 0.75rem;">{{ cloudApiError }}</p>
+        <!-- Validation status badge -->
+        <div v-if="cloudApiValidationResult === 'valid'" class="success-text" style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(16,185,129,0.1); border-radius: 0.5rem;">
+          ✅ Credential tervalidasi! Silakan klik Simpan.
+        </div>
+        <div v-if="cloudApiValidationResult === 'invalid'" class="error-text" style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(220,38,38,0.1); border-radius: 0.5rem;">
+          ❌ {{ cloudApiError || 'Credential tidak valid. Periksa kembali.' }}
+        </div>
+        <p v-if="cloudApiError && cloudApiValidationResult !== 'invalid'" class="error-text" style="margin-top: 0.75rem;">{{ cloudApiError }}</p>
         <p v-if="cloudApiSuccess" class="success-text" style="margin-top: 0.75rem;">{{ cloudApiSuccess }}</p>
         <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem;">
-          <button class="btn btn-secondary" @click="cloudApiModal = false">Batal</button>
-          <button class="btn btn-primary" :disabled="cloudApiLoading" @click="saveCloudApiCredential">
-            {{ cloudApiLoading ? 'Menyimpan...' : 'Simpan' }}
+          <button class="btn btn-secondary" @click="closeCloudApiModal()">Batal</button>
+          <button v-if="!cloudApiValidated" class="btn btn-primary" :disabled="cloudApiLoading || !cloudApiForm.access_token.trim() || !cloudApiForm.phone_number_id.trim()" @click="validateAndSaveCredential">
+            {{ cloudApiValidating ? '⏳ Validasi...' : '🔍 Validate' }}
+          </button>
+          <button v-if="cloudApiValidated" class="btn btn-primary" :disabled="cloudApiLoading" @click="saveCloudApiCredential">
+            {{ cloudApiLoading ? 'Menyimpan...' : '💾 Simpan' }}
           </button>
         </div>
       </div>
@@ -531,6 +539,22 @@ const saveProvider = async () => {
   }
 }
 
+function closeCloudApiModal() {
+  cloudApiModal.value = false
+  cloudApiError.value = ''
+  cloudApiSuccess.value = ''
+  cloudApiValidated.value = false
+  cloudApiValidationResult.value = ''
+  cloudApiForm.phone_number_id = ''
+  cloudApiForm.waba_id = ''
+  cloudApiForm.access_token = ''
+  cloudApiForm.verify_token = ''
+}
+
+function validateAndSaveCredential() {
+  saveCloudApiCredential()
+}
+
 async function openCloudApiModal() {
   cloudApiModal.value = true
   cloudApiError.value = ''
@@ -555,6 +579,42 @@ async function saveCloudApiCredential() {
     cloudApiError.value = 'Phone Number ID dan Access Token wajib diisi.'
     return
   }
+
+  // Step 1: Validasi credential dulu sebelum save
+  if (!cloudApiValidated.value) {
+    cloudApiValidating.value = true
+    cloudApiError.value = ''
+    cloudApiSuccess.value = ''
+    try {
+      const res = await api.validateCloudAPICredential({
+        access_token: cloudApiForm.access_token.trim(),
+        phone_number_id: cloudApiForm.phone_number_id.trim(),
+        waba_id: cloudApiForm.waba_id.trim(),
+      })
+      if (res.success) {
+        cloudApiValidated.value = true
+        cloudApiValidationResult.value = 'valid'
+        cloudApiSuccess.value = '✅ Credential valid! Silakan klik "Simpan" untuk menyimpan.'
+        cloudApiLoading.value = false
+      } else {
+        cloudApiValidationResult.value = 'invalid'
+        cloudApiError.value = res.message || 'Credential tidak valid. Periksa access token dan phone number ID.'
+        cloudApiValidated.value = false
+        cloudApiLoading.value = false
+        return
+      }
+    } catch (e: any) {
+      cloudApiError.value = e?.message || 'Gagal validasi credential'
+      cloudApiValidated.value = false
+      cloudApiLoading.value = false
+      return
+    } finally {
+      cloudApiValidating.value = false
+    }
+    return // Jangan save dulu, tunggu user klik "Simpan" setelah validasi sukses
+  }
+
+  // Step 2: Simpan credential setelah validasi sukses
   cloudApiLoading.value = true
   cloudApiError.value = ''
   cloudApiSuccess.value = ''
@@ -570,14 +630,18 @@ async function saveCloudApiCredential() {
       // Refresh WA setup state
       const resWA = await api.getWASetup()
       if (resWA.success) waSetupState.value = resWA.data
-      // Reset access_token field
+      // Reset state
       cloudApiForm.access_token = ''
+      cloudApiValidated.value = false
+      cloudApiValidationResult.value = ''
       setTimeout(() => { cloudApiModal.value = false; cloudApiSuccess.value = '' }, 2000)
     } else {
       cloudApiError.value = res.message || 'Gagal menyimpan credential'
+      cloudApiValidated.value = false
     }
   } catch (e: any) {
     cloudApiError.value = e?.message || 'Terjadi kesalahan'
+    cloudApiValidated.value = false
   } finally {
     cloudApiLoading.value = false
   }
@@ -593,8 +657,11 @@ let qrPollInterval: ReturnType<typeof setInterval> | null = null
 // --- CLOUD API CREDENTIAL STATE ---
 const cloudApiModal = ref(false)
 const cloudApiLoading = ref(false)
+const cloudApiValidating = ref(false)
 const cloudApiError = ref('')
 const cloudApiSuccess = ref('')
+const cloudApiValidated = ref(false)
+const cloudApiValidationResult = ref('')
 const cloudApiForm = reactive({
   phone_number_id: '',
   waba_id: '',

@@ -265,6 +265,15 @@ export const api = {
     return res.json()
   },
 
+  async validateCloudAPICredential(cred: { access_token: string; phone_number_id: string; waba_id?: string }) {
+    const res = await fetch(`${API_BASE}/api/wa/validate`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(cred),
+    })
+    return res.json()
+  },
+
   // Cash Flow PDF (F021) — trigger browser download via window.location
   cashFlowPDFUrl(from: string, to: string) {
     return `${API_BASE}/api/umkm/reports/cash-flow/pdf?from=${from}&to=${to}`

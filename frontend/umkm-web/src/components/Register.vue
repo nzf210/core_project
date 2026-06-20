@@ -99,9 +99,10 @@
             </div>
 
             <div class="form-group">
-              <label>Kode Referral <span style="color: var(--text-secondary); font-size: 0.8rem;">(opsional, dari agen)</span></label>
-              <input v-model="referralCode" type="text" class="form-control"
-                placeholder="cth: AGEN-ABC123" style="text-transform: uppercase;" />
+              <label>Kode Referral <span style="color: var(--text-secondary); font-size: 0.8rem;">(opsional, dari
+                  agen)</span></label>
+              <input v-model="referralCode" type="text" class="form-control" placeholder="cth: AGEN-ABC123"
+                style="text-transform: uppercase;" />
             </div>
 
             <div class="form-group" style="margin-bottom: 2rem;">
@@ -183,7 +184,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
 
 const router = useRouter()
@@ -196,6 +197,12 @@ const errorMsg = ref('')
 const successMsg = ref('')
 const otpCode = ref('')
 const referralCode = ref('')
+
+// Pre-fill referral code from URL query param
+const route = useRoute()
+if (route.query.referral_code) {
+  referralCode.value = String(route.query.referral_code).toUpperCase()
+}
 
 const formData = ref({
   name: '',

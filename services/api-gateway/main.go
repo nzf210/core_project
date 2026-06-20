@@ -96,7 +96,13 @@ func main() {
 	// F036: Affiliate — all /affiliate/* routes proxy to billing-service (some are public, some require auth)
 	mux.Handle("/api/public/affiliate-leaderboard", rateLimitMiddleware(rateLimitPublic)(newProxy(getTarget("billing-service", "8003"))))
 	mux.Handle("/affiliate/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/affiliate", newTenantProxy(getTarget("billing-service", "8003"))))))
+	// F054: Referral link redirect — /r/{code} → frontend register with code pre-filled
+	mux.HandleFunc("/r/{code}", handleReferralLinkRedirect)
 	mux.Handle("/api/wa/", auth.Middleware(tenantRateLimitMiddleware(auth.RequireFeature("chatbot")(newTenantProxy(getTarget("wa-gateway", "8202"))))))
+	// F048: Validate Meta Cloud API credential directly against wa-cloud-api
+	mux.Handle("/api/wa/validate", auth.Middleware(tenantRateLimitMiddleware(
+		http.StripPrefix("/api/wa/validate", newTenantProxy(getTarget("wa-cloud-api", "8210")+"/validate")),
+	)))
 	mux.Handle("/api/notifications/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/notifications", newTenantProxy(getTarget("notification-service", "8005"))))))
 
 	// Aggregated health check — panggil semua service & return ringkas
@@ -117,6 +123,17 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		slog.Error("Failed to start API Gateway", "error", err)
 	}
+}
+
+func handleReferralLinkRedirect(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/r/")
+	segments := strings.SplitN(path, "/", 2)
+	code := segments[0]
+	if code == "" {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/register?referral_code="+code, http.StatusFound)
 }
 
 func corsMiddleware(next http.Handler) http.Handler {

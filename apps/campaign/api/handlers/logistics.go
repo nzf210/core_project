@@ -3,7 +3,9 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"time"
 
 	"core_project/apps/campaign/api/repository"
 )
@@ -124,7 +126,7 @@ func HandleDistributeLogistics(w http.ResponseWriter, r *http.Request) {
 
 	// Record distribution
 	query := `
-		INSERT INTO logistic_distributions 
+		INSERT INTO logistic_distributions
 		(item_id, sender_id, receiver_id, target_region_type, target_region_id, quantity, status, proof_image_url, location_lat, location_lng)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id
 	`
@@ -154,6 +156,77 @@ func HandleDistributeLogistics(w http.ResponseWriter, r *http.Request) {
 		Data: map[string]interface{}{
 			"distribution_id": distID,
 			"status":          status,
+		},
+	})
+}
+
+// HandleStalledDistributions — F033 AC-3: Cek distribusi yang terhenti > 2 hari
+// GET /logistics/stalled?since_days=2
+func HandleStalledDistributions(w http.ResponseWriter, r *http.Request) {
+	tenantID := ExtractTenantID(r)
+	if tenantID == "" {
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing context"})
+		return
+	}
+
+	sinceDays := 2
+	if d := r.URL.Query().Get("since_days"); d != "" {
+		fmt.Sscanf(d, "%d", &sinceDays)
+	}
+
+	ctx := context.Background()
+
+	query := `
+		SELECT d.id, d.item_id, li.name as item_name, d.quantity, d.status,
+		       d.target_region_type, d.target_region_id, d.created_at,
+		       v.name as receiver_name
+		FROM logistic_distributions d
+		JOIN logistic_items li ON li.id = d.item_id
+		LEFT JOIN volunteers v ON v.id = d.receiver_id
+		WHERE d.tenant_id = $1
+		  AND d.status IN ('in_transit', 'pending')
+		  AND d.created_at < NOW() - INTERVAL '$1 days'
+		ORDER BY d.created_at ASC
+	`
+
+	rows, err := repository.DB.Query(ctx, query, tenantID, sinceDays)
+	if err != nil {
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		return
+	}
+	defer rows.Close()
+
+	var stalled []map[string]interface{}
+	for rows.Next() {
+		var id, itemID, itemName, status, regionType, regionID, receiverName string
+		var quantity int
+		var createdAt time.Time
+		if err := rows.Scan(&id, &itemID, &itemName, &quantity, &status, &regionType, &regionID, &createdAt, &receiverName); err == nil {
+			stalled = append(stalled, map[string]interface{}{
+				"id":                id,
+				"item_id":           itemID,
+				"item_name":         itemName,
+				"quantity":          quantity,
+				"status":            status,
+				"target_region_type": regionType,
+				"target_region_id":  regionID,
+				"receiver_name":     receiverName,
+				"days_stalled":      int(time.Since(createdAt).Hours() / 24),
+				"created_at":        createdAt.Format(time.RFC3339),
+			})
+		}
+	}
+
+	if stalled == nil {
+		stalled = []map[string]interface{}{}
+	}
+
+	WriteJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"threshold_days": sinceDays,
+			"stalled_count":  len(stalled),
+			"distributions":  stalled,
 		},
 	})
 }
