@@ -22,6 +22,7 @@ import ClinicQueue from '../components/ClinicQueue.vue'
 import ClinicFrontdesk from '../components/ClinicFrontdesk.vue'
 import AffiliateDashboard from '../components/AffiliateDashboard.vue'
 import AffiliateLeaderboard from '../components/AffiliateLeaderboard.vue'
+import Wallet from '../components/Wallet.vue'
 
 const routes = [
   { path: '/', component: DynamicDashboard, name: 'Dashboard' },
@@ -51,6 +52,7 @@ const routes = [
   // F036: Affiliate
   { path: '/affiliate', component: AffiliateDashboard, name: 'AffiliateDashboard' },
   { path: '/leaderboard', component: AffiliateLeaderboard, name: 'AffiliateLeaderboard', meta: { public: true } },
+  { path: '/wallet', component: Wallet, name: 'Wallet' },
 ]
 
 const router = createRouter({

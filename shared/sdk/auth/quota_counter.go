@@ -79,6 +79,8 @@ func getFeatureLimit(p PlanFeaturesRow, feature string) int {
 		return p.MaxAIAudioMinutes
 	case "image_gen":
 		return p.MaxImageGen
+	case "ai_image": // F050: per-modality image generation quota
+		return p.MaxImageGen
 	case "chatbot_messages":
 		return p.MaxAIText // Using MaxAIText from DB instead of hardcoded
 	}

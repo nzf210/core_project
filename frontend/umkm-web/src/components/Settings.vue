@@ -76,6 +76,8 @@
       <div v-if="qrisEnabled" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem;">
         <input type="password" v-model="xenditApiKey" class="form-control"
           placeholder="Xendit Secret API Key (xnd_...)" />
+        <input type="text" v-model="xenditMerchantID" class="form-control"
+          placeholder="Xendit Merchant ID (opsional, untuk routing pembayaran ke akun Anda)" />
         <input type="password" v-model="xenditWebhookToken" class="form-control"
           placeholder="Xendit Webhook Verification Token" />
       </div>
@@ -236,6 +238,7 @@ import { api, API_BASE, getQuotaUsage, type QuotaUsage } from '../api'
 const qrisEnabled = ref(false)
 const xenditApiKey = ref('')
 const xenditWebhookToken = ref('')
+const xenditMerchantID = ref('')
 const loadingQris = ref(false)
 
 const reportEnabled = ref(false)
@@ -409,6 +412,7 @@ const loadSettings = async () => {
     if (data.success && data.data) {
       qrisEnabled.value = data.data.qris_enabled || false
       xenditApiKey.value = data.data.xendit_api_key || ''
+      xenditMerchantID.value = data.data.xendit_merchant_id || ''
       xenditWebhookToken.value = data.data.xendit_webhook_token || ''
       reportEnabled.value = data.data.report_enabled || false
       reportTime.value = data.data.report_time || '07:00'
@@ -424,6 +428,7 @@ const saveQrisSettings = async () => {
     const payload = {
       qris_enabled: qrisEnabled.value,
       xendit_api_key: xenditApiKey.value,
+      xendit_merchant_id: xenditMerchantID.value,
       xendit_webhook_token: xenditWebhookToken.value,
       report_enabled: reportEnabled.value,
       report_time: reportTime.value

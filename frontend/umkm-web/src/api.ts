@@ -399,6 +399,20 @@ export const api = {
     return res.json()
   },
 
+  // F034: Wallet
+  async getWallet() {
+    const res = await fetch(`${API_BASE}/wallet`, { headers: headers() })
+    return res.json()
+  },
+  async topupWallet(amountCents: number) {
+    const res = await fetch(`${API_BASE}/wallet/topup`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ amount_cents: amountCents })
+    })
+    return res.json()
+  },
+
   // F036: Affiliate & Referral
   async getAffiliateLeaderboard() {
     const res = await fetch(`${API_BASE}/api/public/affiliate-leaderboard`)
@@ -426,6 +440,24 @@ export const api = {
       headers: headers(),
       body: JSON.stringify({ referral_code: referralCode })
     })
+    return res.json()
+  },
+
+  // F053: Addon Marketplace & Purchase
+  async getAddons() {
+    const res = await fetch(`${API_BASE}/api/umkm/addons`, { headers: headers() })
+    return res.json()
+  },
+  async purchaseAddon(addonKey: string) {
+    const res = await fetch(`${API_BASE}/api/umkm/addons/purchase`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ addon_key: addonKey })
+    })
+    return res.json()
+  },
+  async getMyAddons() {
+    const res = await fetch(`${API_BASE}/api/umkm/addons`, { headers: headers() })
     return res.json()
   },
 }

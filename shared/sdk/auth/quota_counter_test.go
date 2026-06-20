@@ -38,6 +38,8 @@ func TestGetFeatureLimit(t *testing.T) {
 		{"ultimate", "ai_vision", 500},
 		{"ultimate", "ai_audio_stt", 60},
 		{"ultimate", "image_gen", 30},
+		{"ultimate", "ai_image", 30}, // F050
+		{"pro", "ai_image", 0},      // F050
 		{"pro", "ai_text", 5000},
 		{"pro", "ai_vision", 50},
 		{"pro", "ai_audio_stt", 0},

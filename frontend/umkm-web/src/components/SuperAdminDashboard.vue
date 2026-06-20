@@ -156,6 +156,7 @@
               <th>Phone</th>
               <th>Users</th>
               <th>Paket</th>
+              <th>Xendit Merchant</th>
               <th>Terdaftar</th>
               <th>Aksi</th>
             </tr>
@@ -167,6 +168,10 @@
               <td>{{ t.owner_phone || '-' }}</td>
               <td>{{ t.user_count ?? 0 }}</td>
               <td><span :class="['badge', 'badge-' + t.plan]">{{ t.plan?.toUpperCase() }}</span></td>
+              <td>
+                <code v-if="t.xendit_merchant_id" style="font-size: 0.75rem; color: var(--accent-primary); background: rgba(99,102,241,0.1); padding: 0.15rem 0.4rem; border-radius: 4px;">{{ t.xendit_merchant_id }}</code>
+                <span v-else style="font-size: 0.75rem; color: var(--text-muted);">— SaaS</span>
+              </td>
               <td>{{ t.created_at ? new Date(t.created_at).toLocaleDateString('id-ID') : '-' }}</td>
               <td>
                 <button class="btn-edit" @click="openEditProfile(t)" title="Edit profil tenant">
@@ -296,6 +301,9 @@
         </div>
         <div class="form-group"><label>Subdomain</label><input v-model="editForm.subdomain" class="form-control" placeholder="opsional" /></div>
         <div class="form-group"><label>Custom Domain</label><input v-model="editForm.custom_domain" class="form-control" placeholder="opsional" /></div>
+        <div class="form-group"><label>Xendit Merchant ID <span style="color: var(--text-secondary); font-weight: 400; font-size: 0.75rem;">(kosongkan jika pakai SaaS pool)</span></label>
+          <input v-model="editForm.xendit_merchant_id" class="form-control" placeholder="opsional — untuk tenant B2B dengan akun Xendit sendiri" />
+        </div>
         <div class="form-group"><label>Nomor WA Toko (CS)</label><input v-model="editForm.wa_number" class="form-control"
             placeholder="0812..." /></div>
         <div class="form-group"><label>Nomor WA Owner (Login)</label><input v-model="editForm.owner_phone" class="form-control"
@@ -646,7 +654,8 @@ const editForm = ref({
   new_password: '',
   logo_url: '',
   subdomain: '',
-  custom_domain: ''
+  custom_domain: '',
+  xendit_merchant_id: ''
 })
 const editLogoFile = ref<File | null>(null)
 const editLogoPreview = ref('')
@@ -865,6 +874,7 @@ const openEditProfile = async (tenant: any) => {
       editForm.value.owner_phone = p.owner_phone || ''
       editForm.value.subdomain = p.subdomain || ''
       editForm.value.custom_domain = p.custom_domain || ''
+      editForm.value.xendit_merchant_id = p.xendit_merchant_id || ''
     } else {
       profileError.value = 'Gagal memuat profil'
     }
@@ -926,7 +936,8 @@ const saveProfile = async () => {
       business_type: editForm.value.business_type,
       plan: editForm.value.plan,
       subdomain: editForm.value.subdomain,
-      custom_domain: editForm.value.custom_domain
+      custom_domain: editForm.value.custom_domain,
+      xendit_merchant_id: editForm.value.xendit_merchant_id
     }
     if (editForm.value.new_password) {
       payload.new_password = editForm.value.new_password

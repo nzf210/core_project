@@ -1139,15 +1139,15 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
-		var waNumber, xenditApiKey, xenditWebhookToken, reportTime *string
+		var waNumber, xenditApiKey, xenditWebhookToken, xenditMerchantID, reportTime *string
 		var qrisEnabled, reportEnabled *bool
-		err := DB.QueryRow(r.Context(), "SELECT wa_number, xendit_api_key, xendit_webhook_token, qris_enabled, report_enabled, report_time FROM tenants WHERE id = $1", tenantID).Scan(&waNumber, &xenditApiKey, &xenditWebhookToken, &qrisEnabled, &reportEnabled, &reportTime)
+		err := DB.QueryRow(r.Context(), "SELECT wa_number, xendit_api_key, xendit_webhook_token, xendit_merchant_id, qris_enabled, report_enabled, report_time FROM tenants WHERE id = $1", tenantID).Scan(&waNumber, &xenditApiKey, &xenditWebhookToken, &xenditMerchantID, &qrisEnabled, &reportEnabled, &reportTime)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
 			return
 		}
 
-		wNum, xApiKey, xWebToken, rTime := "", "", "", "07:00"
+		wNum, xApiKey, xWebToken, xMerchantID, rTime := "", "", "", "", "07:00"
 		qEnabled, rEnabled := false, false
 		if waNumber != nil {
 			wNum = *waNumber
@@ -1157,6 +1157,9 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if xenditWebhookToken != nil {
 			xWebToken = *xenditWebhookToken
+		}
+		if xenditMerchantID != nil {
+			xMerchantID = *xenditMerchantID
 		}
 		if qrisEnabled != nil {
 			qEnabled = *qrisEnabled
@@ -1171,12 +1174,13 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, APIResponse{
 			Success: true,
 			Data: map[string]interface{}{
-				"wa_number":            wNum,
-				"xendit_api_key":       xApiKey,
-				"xendit_webhook_token": xWebToken,
-				"qris_enabled":         qEnabled,
-				"report_enabled":       rEnabled,
-				"report_time":          rTime,
+				"wa_number":             wNum,
+				"xendit_api_key":        xApiKey,
+				"xendit_webhook_token":  xWebToken,
+				"xendit_merchant_id":    xMerchantID,
+				"qris_enabled":          qEnabled,
+				"report_enabled":        rEnabled,
+				"report_time":           rTime,
 			},
 		})
 		return
@@ -1187,6 +1191,7 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 			WaNumber           string `json:"wa_number"`
 			XenditApiKey       string `json:"xendit_api_key"`
 			XenditWebhookToken string `json:"xendit_webhook_token"`
+			XenditMerchantID   string `json:"xendit_merchant_id"`
 			QrisEnabled        bool   `json:"qris_enabled"`
 			ReportEnabled      bool   `json:"report_enabled"`
 			ReportTime         string `json:"report_time"`
@@ -1203,7 +1208,7 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 			req.WaNumber = *existingWNum
 		}
 
-		_, err := DB.Exec(r.Context(), "UPDATE tenants SET wa_number = $1, xendit_api_key = $2, xendit_webhook_token = $3, qris_enabled = $4, report_enabled = $5, report_time = $6, updated_at = NOW() WHERE id = $7", req.WaNumber, req.XenditApiKey, req.XenditWebhookToken, req.QrisEnabled, req.ReportEnabled, req.ReportTime, tenantID)
+		_, err := DB.Exec(r.Context(), "UPDATE tenants SET wa_number = $1, xendit_api_key = $2, xendit_webhook_token = $3, xendit_merchant_id = $4, qris_enabled = $5, report_enabled = $6, report_time = $7, updated_at = NOW() WHERE id = $8", req.WaNumber, req.XenditApiKey, req.XenditWebhookToken, req.XenditMerchantID, req.QrisEnabled, req.ReportEnabled, req.ReportTime, tenantID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to update settings"})
 			return

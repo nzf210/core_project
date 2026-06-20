@@ -1,13 +1,14 @@
 {
-  "name": "mcp",
+  "name": "wch-e2e-mcp-server",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "WCH Platform E2E MCP Server — browser automation via Playwright (navigate/click/fill/screenshot/expect)",
+  "main": "wch-e2e-server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node wch-e2e-server.js",
+    "test": "node test-server.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["mcp", "playwright", "e2e", "wch", "browser-automation"],
+  "author": "WCH Platform",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {

@@ -1105,7 +1105,7 @@ Tenant redeem voucher dengan validity_days = 30:
 - `services/wa-cloud-api/migrations.go` — Auto-migration runner
 - `services/wa-gateway/main.go` — Message router + rate limiter + reconnect backoff
 - `shared/sdk/config/config.go` — WhatsApp Cloud API config fields
-- `shared/migrations/000030_wa_cloud_api_credentials.up.sql` — New credential table
+- `shared/migrations/000075_wa_cloud_api_credentials.up.sql` — New credential table
 - `services/api-gateway/main.go` — Webhook route `/webhooks/wa-cloud/` + health check
 - `services/auth-service/main.go` — `X-Message-Type: otp` + `X-Source: auth-service`
 - `services/billing-service/main.go` — `X-Message-Type: invoice` + `X-Source: billing-service`
@@ -2066,7 +2066,7 @@ Wajib update:
 
 ## F046: Hierarchical Coordinator Assignment
 
-**Spec Status:** ⏳ Draft
+**Spec Status:** ✅ Approved
 **Implementation:** ✅ Done
 
 **Deskripsi:** Sistem penunjukan koordinator kampanye berlapis (Gubernur → Kabupaten → Kecamatan → Desa → TPS) dengan validasi area scope otomatis dan tier access untuk melihat hierarki.
@@ -2521,8 +2521,8 @@ AC-8 (GET /api/umkm/addons) adalah F053 scope.
 
 ## F053: Admin-Configurable Addon Pricing + Addon Purchase Flow
 
-**Spec Status:** ⏳ Draft
-**Implementation:** ⏳ Pending
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
 
 **Deskripsi:** Harga addon (AI Vision, WA Cloud API, dll) dikonfigurasi oleh superadmin via UI. Tenant membeli addon → wallet deducted → `tenant_addons` row dibuat → fitur langsung aktif. Ini adalah kelanjutan dari F052 (Tier-First Feature System) dan F034 (Wallet).
 

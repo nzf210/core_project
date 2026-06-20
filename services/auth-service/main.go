@@ -99,17 +99,18 @@ type Response struct {
 }
 
 type TenantProfileUpdateRequest struct {
-	TenantID        string `json:"tenant_id"`
-	Name            string `json:"name"`
-	BusinessName    string `json:"business_name"`
-	WaNumber        string `json:"wa_number"`
-	OwnerPhone      string `json:"owner_phone"`
-	BusinessAddress string `json:"business_address"`
-	BusinessType    string `json:"business_type"`
-	Plan            string `json:"plan"`
-	NewPassword     string `json:"new_password"`
-	CustomDomain    string `json:"custom_domain"`
-	Subdomain       string `json:"subdomain"`
+	TenantID         string `json:"tenant_id"`
+	Name             string `json:"name"`
+	BusinessName     string `json:"business_name"`
+	WaNumber         string `json:"wa_number"`
+	OwnerPhone       string `json:"owner_phone"`
+	BusinessAddress  string `json:"business_address"`
+	BusinessType     string `json:"business_type"`
+	Plan             string `json:"plan"`
+	NewPassword      string `json:"new_password"`
+	CustomDomain     string `json:"custom_domain"`
+	Subdomain        string `json:"subdomain"`
+	XenditMerchantID string `json:"xendit_merchant_id"`
 }
 
 type UpdateProfileRequest struct {
@@ -1733,7 +1734,8 @@ func handleSuperadminTenants(w http.ResponseWriter, r *http.Request) {
 			SELECT t.id, t.name, t.plan, t.created_at,
 				COALESCE(u.username, '') as owner_username,
 				COALESCE(u.phone_number, '') as owner_phone,
-				(SELECT COUNT(*) FROM users WHERE tenant_id = t.id) as user_count
+				(SELECT COUNT(*) FROM users WHERE tenant_id = t.id) as user_count,
+				t.xendit_merchant_id
 			FROM tenants t
 			LEFT JOIN users u ON u.tenant_id = t.id AND u.role = 'owner'
 			ORDER BY t.created_at DESC
@@ -1750,17 +1752,23 @@ func handleSuperadminTenants(w http.ResponseWriter, r *http.Request) {
 			var id, name, plan, ownerUsername, ownerPhone string
 			var userCount int
 			var createdAt time.Time
-			if err := rows.Scan(&id, &name, &plan, &createdAt, &ownerUsername, &ownerPhone, &userCount); err != nil {
+			var xenditMerchantID *string
+			if err := rows.Scan(&id, &name, &plan, &createdAt, &ownerUsername, &ownerPhone, &userCount, &xenditMerchantID); err != nil {
 				continue
 			}
+			merchant := ""
+			if xenditMerchantID != nil {
+				merchant = *xenditMerchantID
+			}
 			tenants = append(tenants, map[string]interface{}{
-				"id":             id,
-				"name":           name,
-				"plan":           plan,
-				"owner_username": ownerUsername,
-				"owner_phone":    ownerPhone,
-				"user_count":     userCount,
-				"created_at":     createdAt,
+				"id":                 id,
+				"name":               name,
+				"plan":               plan,
+				"owner_username":     ownerUsername,
+				"owner_phone":        ownerPhone,
+				"user_count":         userCount,
+				"created_at":         createdAt,
+				"xendit_merchant_id": merchant,
 			})
 		}
 
@@ -1853,14 +1861,15 @@ func handleSuperadminTenantProfile(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var id, name, plan, ownerUsername, ownerID string
-		var businessName, waNumber, logoURL, businessAddress, businessType, ownerPhone, customDomain, subdomain *string
+		var businessName, waNumber, logoURL, businessAddress, businessType, ownerPhone, customDomain, subdomain, xenditMerchantID *string
 		if err := DB.QueryRow(ctx, `
 			SELECT t.id, t.name, t.plan, t.business_name, t.wa_number, t.logo_url, t.business_address, t.business_type,
-			       t.custom_domain, t.subdomain, COALESCE(u.username, '') as owner_username, COALESCE(u.id::text, '') as owner_id, u.phone_number as owner_phone
+			       t.custom_domain, t.subdomain, t.xendit_merchant_id,
+			       COALESCE(u.username, '') as owner_username, COALESCE(u.id::text, '') as owner_id, u.phone_number as owner_phone
 			FROM tenants t
 			LEFT JOIN users u ON u.tenant_id = t.id AND u.role = 'owner'
 			WHERE t.id = $1
-		`, tenantID).Scan(&id, &name, &plan, &businessName, &waNumber, &logoURL, &businessAddress, &businessType, &customDomain, &subdomain, &ownerUsername, &ownerID, &ownerPhone); err != nil {
+		`, tenantID).Scan(&id, &name, &plan, &businessName, &waNumber, &logoURL, &businessAddress, &businessType, &customDomain, &subdomain, &xenditMerchantID, &ownerUsername, &ownerID, &ownerPhone); err != nil {
 			if err == pgx.ErrNoRows {
 				writeJSON(w, http.StatusNotFound, Response{Success: false, Message: "Tenant tidak ditemukan"})
 				return
@@ -1871,19 +1880,20 @@ func handleSuperadminTenantProfile(w http.ResponseWriter, r *http.Request) {
 		}
 
 		data := map[string]interface{}{
-			"id":               id,
-			"name":             name,
-			"plan":             plan,
-			"business_name":    derefStr(businessName),
-			"wa_number":        derefStr(waNumber),
-			"owner_phone":      derefStr(ownerPhone),
-			"logo_url":         derefStr(logoURL),
-			"business_address": derefStr(businessAddress),
-			"business_type":    derefStr(businessType),
-			"custom_domain":    derefStr(customDomain),
-			"subdomain":        derefStr(subdomain),
-			"owner_username":   ownerUsername,
-			"owner_id":         ownerID,
+			"id":                 id,
+			"name":               name,
+			"plan":               plan,
+			"business_name":      derefStr(businessName),
+			"wa_number":          derefStr(waNumber),
+			"owner_phone":        derefStr(ownerPhone),
+			"logo_url":           derefStr(logoURL),
+			"business_address":   derefStr(businessAddress),
+			"business_type":      derefStr(businessType),
+			"custom_domain":      derefStr(customDomain),
+			"subdomain":          derefStr(subdomain),
+			"xendit_merchant_id": derefStr(xenditMerchantID),
+			"owner_username":     ownerUsername,
+			"owner_id":           ownerID,
 		}
 		writeJSON(w, http.StatusOK, Response{Success: true, Data: data})
 
@@ -1900,9 +1910,9 @@ func handleSuperadminTenantProfile(w http.ResponseWriter, r *http.Request) {
 		}
 
 		tag, err := DB.Exec(ctx, `
-			UPDATE tenants SET name=$1, business_name=$2, wa_number=$3, business_address=$4, business_type=$5, plan=$6, custom_domain=NULLIF($7, ''), subdomain=NULLIF($8, ''), updated_at=NOW()
-			WHERE id=$9
-		`, req.Name, req.BusinessName, req.WaNumber, req.BusinessAddress, req.BusinessType, req.Plan, req.CustomDomain, req.Subdomain, req.TenantID)
+			UPDATE tenants SET name=$1, business_name=$2, wa_number=$3, business_address=$4, business_type=$5, plan=$6, custom_domain=NULLIF($7, ''), subdomain=NULLIF($8, ''), xendit_merchant_id=NULLIF($9, ''), updated_at=NOW()
+			WHERE id=$10
+		`, req.Name, req.BusinessName, req.WaNumber, req.BusinessAddress, req.BusinessType, req.Plan, req.CustomDomain, req.Subdomain, req.XenditMerchantID, req.TenantID)
 		if err != nil {
 			slog.Error("Failed to update tenant profile", "error", err)
 			writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to update profile"})

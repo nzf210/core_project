@@ -48,6 +48,7 @@ export const menuConfig: MenuGroup[] = [
       { label: 'WhatsApp & AI CS', to: '/wa-setup', icon: '🤖', roles: ['owner', 'admin', 'superadmin'] },
       { label: 'Agen Afiliasi', to: '/affiliate', icon: '🤝' },
       { label: 'Pengaturan', to: '/settings', icon: '⚙️' },
+      { label: 'Wallet', to: '/wallet', icon: '💳', roles: ['owner', 'admin', 'superadmin'] },
     ],
   },
   {

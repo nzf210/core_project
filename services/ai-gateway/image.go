@@ -24,12 +24,14 @@ func HandleGenerateImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// F034: Wallet gate
+	// F034: Wallet gate (image_gen) + F050: per-modality ai_image counter
 	tenantID := ""
 	if t, ok := r.Context().Value(auth.TenantIDKey).(string); ok {
 		tenantID = t
 	}
 	if tenantID != "" {
+		// Increment quota first (best-effort) so quota drift doesn't outlive wallet state.
+		_, _, _ = auth.IncrementQuota(r.Context(), tenantID, "ai_image", 1)
 		auth.ConsumeWalletAddon(r.Context(), tenantID, "image_gen")
 	}
 

@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"strconv"
+	"sync"
 	"net/http"
 	"net/url"
 	"os"
@@ -88,9 +89,71 @@ type N8NStatus struct {
 // ─────────────────────────────────────────────
 
 var (
-	xenditClient *xendit.APIClient
-	tenantCache  = make(map[string]cachedTenant)
+	tenantCache = make(map[string]cachedTenant)
 )
+
+type xenditClientCacheEntry struct {
+	client    *xendit.APIClient
+	createdAt time.Time
+}
+
+var (
+	xenditClientMu    sync.RWMutex
+	xenditClientCache = make(map[string]*xenditClientCacheEntry) // tenantID → client
+)
+
+// getTenantXenditClient returns a cached Xendit API client for the given tenant.
+// Caches for 5 minutes, then re-creates (in case key was rotated).
+func getTenantXenditClient(ctx context.Context, tenantID string) (*xendit.APIClient, error) {
+	xenditClientMu.RLock()
+	entry, ok := xenditClientCache[tenantID]
+	xenditClientMu.RUnlock()
+
+	if ok && time.Since(entry.createdAt) < 5*time.Minute {
+		return entry.client, nil
+	}
+
+	// Fetch tenant's Xendit API key from DB
+	var apiKey string
+	err := DB.QueryRow(ctx, "SELECT xendit_api_key FROM tenants WHERE id = $1", tenantID).Scan(&apiKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get xendit_api_key for tenant %s: %w", tenantID, err)
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("tenant %s has no xendit_api_key configured", tenantID)
+	}
+
+	client := xendit.NewClient(apiKey)
+
+	xenditClientMu.Lock()
+	xenditClientCache[tenantID] = &xenditClientCacheEntry{
+		client:    client,
+		createdAt: time.Now(),
+	}
+	xenditClientMu.Unlock()
+
+	return client, nil
+}
+
+// getTenantXenditMerchantID returns the tenant's Xendit merchant ID.
+func getTenantXenditMerchantID(ctx context.Context, tenantID string) (string, error) {
+	var merchantID string
+	err := DB.QueryRow(ctx, "SELECT xendit_merchant_id FROM tenants WHERE id = $1", tenantID).Scan(&merchantID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get xendit_merchant_id for tenant %s: %w", tenantID, err)
+	}
+	return merchantID, nil
+}
+
+// getTenantXenditWebhookToken returns the tenant's Xendit webhook token for verification.
+func getTenantXenditWebhookToken(ctx context.Context, tenantID string) (string, error) {
+	var token string
+	err := DB.QueryRow(ctx, "SELECT xendit_webhook_token FROM tenants WHERE id = $1", tenantID).Scan(&token)
+	if err != nil {
+		return "", fmt.Errorf("failed to get xendit_webhook_token for tenant %s: %w", tenantID, err)
+	}
+	return token, nil
+}
 
 type cachedTenant struct {
 	name      string
@@ -291,12 +354,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	startPendingCleanupWorker(ctx)
-
-	xKey := os.Getenv("XENDIT_API_KEY")
-	if xKey == "" {
-		xKey = "xnd_development_mock_key_1234567890"
-	}
-	xenditClient = xendit.NewClient(xKey)
 
 	mux := http.NewServeMux()
 
@@ -617,7 +674,13 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, _, err := xenditClient.InvoiceApi.CreateInvoice(r.Context()).
+	xClient, errXc := getTenantXenditClient(ctx, tenantID)
+	if errXc != nil {
+		slog.Error("Failed to get xendit client for tenant", "tenant_id", tenantID, "error", errXc)
+		response.Error(w, http.StatusInternalServerError, "Payment provider not configured", nil)
+		return
+	}
+	resp, _, err := xClient.InvoiceApi.CreateInvoice(r.Context()).
 		CreateInvoiceRequest(*createReq).Execute()
 	paymentURL = ""
 	if err != nil {
@@ -956,13 +1019,6 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	callbackToken := r.Header.Get("x-callback-token")
-	if expectedToken := os.Getenv("XENDIT_WEBHOOK_TOKEN"); expectedToken != "" && callbackToken != expectedToken {
-		slog.Warn("Unauthorized webhook attempt", "token", callbackToken)
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	var payload map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -971,6 +1027,52 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 
 	status, _ := payload["status"].(string)
 	externalID, _ := payload["external_id"].(string)
+
+	// ── Per-tenant webhook token verification ──
+	// Extract tenantID from external_id format:
+	//   Invoice: "INV-{uuid}|{tenantID}"
+	//   Topup:   "{uuid}-wallet-topup-{tenantID}"
+	var tenantID string
+	if strings.Contains(externalID, "-wallet-topup-") {
+		parts := strings.Split(externalID, "-wallet-topup-")
+		if len(parts) == 2 {
+			tenantID = parts[1]
+		}
+	} else {
+		parts := strings.Split(externalID, "|")
+		if len(parts) >= 2 {
+			tenantID = parts[1]
+		}
+	}
+
+	if tenantID == "" {
+		slog.Warn("Malformed external_id in webhook", "external_id", externalID)
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	// Verify per-tenant webhook token
+	callbackToken := r.Header.Get("x-callback-token")
+	if callbackToken != "" {
+		dbToken, err := getTenantXenditWebhookToken(r.Context(), tenantID)
+		if err == nil && dbToken != "" {
+			// Per-tenant token takes precedence
+			if callbackToken != dbToken {
+				slog.Warn("Unauthorized webhook: token mismatch", "tenant_id", tenantID,
+					"expected", dbToken, "got", callbackToken)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		} else if envToken := os.Getenv("XENDIT_WEBHOOK_TOKEN"); envToken != "" {
+			// Fallback to global env token (backward compat)
+			if callbackToken != envToken {
+				slog.Warn("Unauthorized webhook attempt", "token", callbackToken)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+	}
+
 	paidAmountFloat, _ := payload["paid_amount"].(float64)
 	paidAmountCents := int64(paidAmountFloat)
 
@@ -1035,14 +1137,6 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-	parts := strings.Split(externalID, "|")
-	if len(parts) < 2 {
-		slog.Warn("Malformed external_id", "external_id", externalID)
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	tenantID := parts[1]
 
 	ctx := r.Context()
 
@@ -3137,14 +3231,21 @@ func handleAdminTenantItem(w http.ResponseWriter, r *http.Request) {
 		}
 
 		tenant = map[string]interface{}{
-			"id":            tID,
-			"name":          name,
-			"plan":          plan,
-			"is_frozen":     isFrozen,
-			"created_at":    createdAt.Format(time.RFC3339),
-			"frozen_at":     formatTime(frozenAt),
-			"expires_at":    formatTime(expiresAt),
-			"plan_priority": planPriority,
+			"id":              tID,
+			"name":            name,
+			"plan":            plan,
+			"is_frozen":       isFrozen,
+			"created_at":      createdAt.Format(time.RFC3339),
+			"frozen_at":       formatTime(frozenAt),
+			"expires_at":      formatTime(expiresAt),
+			"plan_priority":   planPriority,
+			"xendit_merchant_id": "",
+		}
+		// Fetch xendit_merchant_id separately (may be NULL)
+		var merchantID *string
+		DB.QueryRow(ctx, `SELECT xendit_merchant_id FROM tenants WHERE id = $1`, tenantID).Scan(&merchantID)
+		if merchantID != nil {
+			tenant["xendit_merchant_id"] = *merchantID
 		}
 
 		// Active vouchers for this tenant
@@ -3431,7 +3532,7 @@ func handleWallet(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
 		return
 	}
-	tenantID := r.Header.Get("X-User-Id")
+	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
 		response.Error(w, http.StatusUnauthorized, "Missing tenant", nil)
 		return
@@ -3492,6 +3593,7 @@ func handleWalletTopup(w http.ResponseWriter, r *http.Request) {
 	}
 	desc := "Top-up Wallet Credit"
 	curr := "IDR"
+	ctx := r.Context()
 	// FIX #4: Use UUID for external_id (unpredictable, not UnixNano)
 	invoiceReq := invoice.CreateInvoiceRequest{
 		ExternalId:     uuid.NewString() + "-wallet-topup-" + tenantID,
@@ -3499,7 +3601,13 @@ func handleWalletTopup(w http.ResponseWriter, r *http.Request) {
 		Description:    &desc,
 		Currency:       &curr,
 	}
-	invoiceResp, _, err := xenditClient.InvoiceApi.CreateInvoice(context.Background()).CreateInvoiceRequest(invoiceReq).Execute()
+	xClient, errXc := getTenantXenditClient(ctx, tenantID)
+	if errXc != nil {
+		slog.Error("Failed to get xendit client for tenant", "tenant_id", tenantID, "error", errXc)
+		response.Error(w, http.StatusInternalServerError, "Payment provider not configured", nil)
+		return
+	}
+	invoiceResp, _, err := xClient.InvoiceApi.CreateInvoice(context.Background()).CreateInvoiceRequest(invoiceReq).Execute()
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to create invoice", err)
 		return
