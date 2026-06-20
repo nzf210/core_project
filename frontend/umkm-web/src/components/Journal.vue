@@ -449,6 +449,7 @@ const printReceipt = async (trx: any) => {
   padding: 2rem;
   max-height: 90vh;
   overflow-y: auto;
+  background-color: rgba(255, 255, 255, 0.98);
 }
 
 .btn-sm {
