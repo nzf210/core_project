@@ -121,6 +121,63 @@ Format per feature:
 | F052 | Tier-First Feature System + Per-Tenant Addon Guard | ✅ Approved | ✅ Done | 2026-06-20 |
 | F053 | Admin-Configurable Addon Pricing + Addon Purchase Flow | ✅ Approved | ✅ Done | 2026-06-20 |
 | F054 | Referral System: Discount Downline + Commission Upline | ✅ Approved | ✅ Done | 2026-06-20 |
+| F055 | Force Password Change (Reset Default + Wajib Ganti) | ✅ Approved | ✅ Done | 2026-06-20 |
+
+## F055: Force Password Change (Reset Default + Wajib Ganti)
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Admin/tenant owner bisa mereset password user ke random default (8 karakter, alfanumerik, no ambiguous chars) berdasarkan username + nomor HP terdaftar. Setelah reset, user **wajib** mengubah password pada login berikutnya (flag `must_change_password=true`). Flow ini menggantikan reset-password via email untuk use case internal/tenant recovery.
+
+**Spec:**
+- **Endpoint:** `POST /auth/reset-password-default`
+- **Input:** `{ "username": "...", "phoneNumber": "+62..." }`
+- **Validasi:**
+  - Username dan phoneNumber wajib diisi
+  - Username harus terdaftar di tabel `users`
+  - Nomor HP harus cocok dengan `users.phone_number`
+  - Untuk keamanan: response generik — "Jika username terdaftar, password akan direset" (tidak reveal apakah username/phone valid atau tidak)
+- **Backend logic:**
+  1. Cari user by `username` → dapatkan `id` dan `phone_number`
+  2. Bandingkan `phone_number` dengan input (constant-time safe via DB comparison)
+  3. Generate random 8-char password (charset: `ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789`)
+  4. Hash dengan bcrypt cost=12
+  5. Update `users.password_hash` + set `must_change_password = true`
+  6. Return success generik
+- **Frontend flow:**
+  1. `ForgotPassword.vue` — form username + nomor HP → POST ke `/auth/reset-password-default`
+  2. Success → redirect ke `/login` dengan message "Password sudah direset, silakan login dan ubah password"
+  3. User login → backend cek `must_change_password=true` → redirect ke `/force-password-change`
+  4. `ForcePasswordChange.vue` — minta password lama (default) + password baru → POST `/auth/force-change-password`
+  5. Success → clear localStorage tokens → redirect ke `/login`
+
+**Previous Flow (email-based, DEPRECATED):**
+- `POST /auth/forgot-password` dengan email → kirim token ke email → `POST /auth/reset-password` dengan token
+- Flow ini TIDAK dihapus untuk backward compat, tapi `ForgotPassword.vue` sekarang mengarah ke flow F055
+
+**Acceptance Criteria (AC):**
+- [x] AC-1: `POST /auth/reset-password-default` dengan username + phone valid → password direset, `must_change_password=true`
+- [x] AC-2: Username tidak terdaftar → response generik "Jika username terdaftar..." (tidak error 404)
+- [x] AC-3: Phone number tidak cocok → response generik yang sama (tidak reveal info)
+- [x] AC-4: Password default: 8 karakter, charset unambiguous, bcrypt cost=12
+- [x] AC-5: Setelah reset, user login → redirect otomatis ke `/force-password-change`
+- [x] AC-6: Force change: password lama (default) + baru + konfirmasi → update password, clear `must_change_password`
+- [x] AC-7: Force change tanpa auth → 401
+- [x] AC-8: Password baru < 8 char → reject 400
+- [x] AC-9: Password baru ≠ konfirmasi → reject 400
+- [x] AC-10: Route `/force-password-change` protected `requiresAuth: true`, redirect otomatis saat `must_change_password=true`
+- [x] AC-11: `go build`, `go vet`, `go test` clean
+- [x] AC-12: `vue-tsc` clean, frontend build pass
+
+**Files Changed:**
+- `services/auth-service/main.go` — `handleResetPasswordDefault`, `handleForceChangePassword`, `ResetPasswordDefaultRequest`
+- `shared/migrations/000076_force_password_change.up.sql` — kolom `must_change_password`
+- `frontend/umkm-web/src/components/ForgotPassword.vue` — form username + phone (bukan email)
+- `frontend/umkm-web/src/components/ForcePasswordChange.vue` — UI force change password
+- `frontend/umkm-web/src/router/index.ts` — route + guard must_change_password
+- `frontend/umkm-web/src/api.ts` — `resetPasswordDefault()`, `forceChangePassword()`
+
+---
 
 ## F049: Container Overhaul & Infrastructure Optimization
 **Spec Status:** ✅ Approved

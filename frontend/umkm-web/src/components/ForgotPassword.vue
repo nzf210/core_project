@@ -11,23 +11,34 @@
       <div class="auth-form-wrapper glass-card animate-fade-in">
         <div style="margin-bottom: 2.5rem;">
           <h2>Lupa Kata Sandi</h2>
-          <p class="text-muted">Masukkan email Anda untuk menerima token reset kata sandi.</p>
+          <p class="text-muted">Masukkan username dan nomor HP terdaftar untuk mereset password.</p>
         </div>
 
         <form v-if="!success" @submit.prevent="handleForgot">
+          <div class="form-group">
+            <label>Username</label>
+            <input
+              v-model="username"
+              type="text"
+              class="form-control"
+              placeholder="Masukkan username Anda"
+              required
+            />
+          </div>
+
           <div class="form-group" style="margin-bottom: 2rem;">
-            <label>Email Terdaftar</label>
-            <input 
-              v-model="email" 
-              type="email" 
-              class="form-control" 
-              placeholder="Masukkan email Anda" 
-              required 
+            <label>Nomor HP Terdaftar</label>
+            <input
+              v-model="phoneNumber"
+              type="tel"
+              class="form-control"
+              placeholder="Masukkan nomor HP terdaftar"
+              required
             />
           </div>
 
           <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;" :disabled="loading">
-            {{ loading ? 'Memproses...' : 'Kirim Token Reset' }}
+            {{ loading ? 'Memproses...' : 'Reset Password' }}
           </button>
 
           <div v-if="errorMsg" class="error-msg text-center" style="margin-top: 1rem; color: #ef4444; font-size: 0.875rem;">
@@ -38,9 +49,9 @@
         <div v-else class="text-center">
           <div style="color: #10b981; font-size: 3rem; margin-bottom: 1rem;">✓</div>
           <h3>Berhasil!</h3>
-          <p class="text-muted" style="margin-bottom: 2rem;">Jika email tersebut terdaftar, kami telah mengirim link reset ke email Anda.</p>
-          <button class="btn btn-outline" style="width: 100%; padding: 0.75rem;" @click="router.push({ path: '/reset-password', query: { email } })">
-            Lanjutkan ke Reset Sandi
+          <p class="text-muted" style="margin-bottom: 2rem;">Password telah direset ke default. Silakan login dan ubah password Anda.</p>
+          <button class="btn btn-primary" style="width: 100%; padding: 0.75rem;" @click="router.push('/login')">
+            Kembali ke Login
           </button>
         </div>
 
@@ -59,7 +70,8 @@ import { api } from '../api'
 
 const router = useRouter()
 
-const email = ref('')
+const username = ref('')
+const phoneNumber = ref('')
 const loading = ref(false)
 const errorMsg = ref('')
 const success = ref(false)
@@ -69,7 +81,7 @@ const handleForgot = async () => {
   errorMsg.value = ''
 
   try {
-    const data = await api.forgotPassword(email.value)
+    const data = await api.resetPasswordDefault(username.value, phoneNumber.value)
     if (data.success) {
       success.value = true
     } else {
