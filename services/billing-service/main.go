@@ -617,21 +617,8 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	// Calculate final price
 	finalPrice := priceMonthly
 
-	// ── F054: Referral discount (applied after voucher, if any) ──
-	var referredByAffiliateID *int
-	var referralDiscountAmount int64
-	DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&referredByAffiliateID)
-	if referredByAffiliateID != nil {
-		var discountPct float64
-		_ = DB.QueryRow(ctx, `SELECT COALESCE(discount_percent,0) FROM referral_config WHERE id=1`).Scan(&discountPct)
-		if discountPct > 0 {
-			referralDiscountAmount = priceMonthly * int64(discountPct) / 100
-			finalPrice = maxInt64(0, finalPrice-referralDiscountAmount)
-		}
-	}
-
+	// ── Voucher discount (applied first) ──
 	if voucherApplied {
-		// Recalculate with voucher discount
 		var discountType string
 		var discountValue int
 		DB.QueryRow(ctx, `
@@ -645,6 +632,19 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		case "discount_fixed":
 			finalPrice = maxInt64(0, priceMonthly-int64(discountValue))
 		// free_months: finalPrice stays same, handled elsewhere
+		}
+	}
+
+	// ── F054: Referral discount (stacked on post-voucher price) ──
+	var referredByAffiliateID *int
+	var referralDiscountAmount int64
+	DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&referredByAffiliateID)
+	if referredByAffiliateID != nil {
+		var discountPct float64
+		_ = DB.QueryRow(ctx, `SELECT COALESCE(discount_percent,0) FROM referral_config WHERE id=1`).Scan(&discountPct)
+		if discountPct > 0 {
+			referralDiscountAmount = finalPrice * int64(discountPct) / 100
+			finalPrice = maxInt64(0, finalPrice-referralDiscountAmount)
 		}
 	}
 
@@ -2507,7 +2507,7 @@ func handleAdminAddonGating(w http.ResponseWriter, r *http.Request) {
 		// Set min_tier in plan_features for all plans that have this addon row
 		if req.MinTier != nil && *req.MinTier != "" {
 			_, err = DB.Exec(r.Context(), `
-				UPDATE plan_features SET min_tier=$1 WHERE feature_key=$2 AND min_tier IS NULL
+				UPDATE plan_features SET min_tier=$1 WHERE feature_key=$2
 			`, *req.MinTier, req.FeatureKey)
 		} else {
 			_, err = DB.Exec(r.Context(), `
@@ -4213,15 +4213,26 @@ func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Deduct wallet
-	if price > 0 {
-		if !auth.CheckWalletBalance(ctx, tenantID, price) {
+	// 3. Deduct wallet (after referral discount)
+	var addonFinalPrice = price
+	var refAid *int
+	_ = DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&refAid)
+	if refAid != nil {
+		var dpct float64
+		_ = DB.QueryRow(ctx, `SELECT COALESCE(discount_percent,0) FROM referral_config WHERE id=1`).Scan(&dpct)
+		if dpct > 0 {
+			disc := price * int64(dpct) / 100
+			addonFinalPrice = maxInt64(0, price-disc)
+		}
+	}
+	if addonFinalPrice > 0 {
+		if !auth.CheckWalletBalance(ctx, tenantID, addonFinalPrice) {
 			response.JSON(w, http.StatusPaymentRequired, "Insufficient wallet balance. Please top up.", map[string]any{
 				"wallet_url": "/wallet",
 			})
 			return
 		}
-		if err := auth.DeductWalletBalance(ctx, tenantID, price,
+		if err := auth.DeductWalletBalance(ctx, tenantID, addonFinalPrice,
 			"addon_purchase:"+req.AddonKey,
 			"Pembelian addon: "+req.AddonKey); err != nil {
 			response.Error(w, http.StatusInternalServerError, "Failed to deduct wallet", err)
@@ -4245,7 +4256,6 @@ func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 7. F054: Affiliate commission for addon purchases
-	var refAid *int
 	_ = DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&refAid)
 	if refAid != nil && price > 0 {
 		var cpct float64

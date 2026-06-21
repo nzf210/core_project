@@ -558,9 +558,42 @@
     <div v-if="showAddonEditor" class="modal-overlay" @click.self="showAddonEditor = false">
       <div class="modal-card" style="max-width: 600px;">
         <h3 style="margin: 0 0 0.25rem 0;">Kelola Harga Add-on</h3>
-        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem;">
-          Ubah harga fitur add-on untuk marketplace wallet.
-        </p>
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+          <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0;">
+            Ubah harga fitur add-on untuk marketplace wallet.
+          </p>
+          <button class="btn btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" @click="showAddAddonForm = true">
+            + Buat Addon Baru
+          </button>
+        </div>
+
+        <div v-if="showAddAddonForm" class="form-group" style="background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.3); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <strong>Buat Addon Baru</strong>
+            <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" @click="showAddAddonForm = false">Batal</button>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div>
+              <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Key Addon</label>
+              <input v-model.trim="newAddon.feature_key" type="text" class="form-control" placeholder="extra_store" />
+            </div>
+            <div>
+              <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Nama</label>
+              <input v-model.trim="newAddon.feature_name" type="text" class="form-control" placeholder="Extra Store" />
+            </div>
+          </div>
+          <div style="margin-top: 0.75rem;">
+            <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Kategori</label>
+            <input v-model.trim="newAddon.category" type="text" class="form-control" placeholder="growth" />
+          </div>
+          <div style="margin-top: 0.75rem;">
+            <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Deskripsi</label>
+            <input v-model.trim="newAddon.description" type="text" class="form-control" placeholder="Tambah jumlah toko" />
+          </div>
+          <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.75rem;">
+            <button class="btn btn-secondary" @click="createAddon">Simpan Addon</button>
+          </div>
+        </div>
 
         <div v-if="loadingAddons" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
           Memuat data add-on...
@@ -590,6 +623,31 @@
             <div style="margin-top: 0.75rem;">
               <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Deskripsi</label>
               <input v-model="addon.description" type="text" class="form-control" />
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
+              <div>
+                <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Tier minimum</label>
+                <select v-model="addon.min_tier" class="form-control">
+                  <option value="">Semua tier</option>
+                  <option value="lite">Lite</option>
+                  <option value="pro">Pro</option>
+                  <option value="ultimate">Ultimate</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Default aktif di tier</label>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <label v-for="t in ['lite', 'pro', 'ultimate']" :key="t" style="font-size: 0.75rem; display: flex; align-items: center; gap: 0.25rem;">
+                    <input type="checkbox" :value="t" v-model="addon.default_enabled" />
+                    <span>{{ t.charAt(0).toUpperCase() + t.slice(1) }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top: 0.75rem; text-align: right;">
+              <button class="btn" style="background: #ef444420; color: #ef4444; border: 1px solid #ef444440; padding: 0.25rem 0.6rem; font-size: 0.75rem;" @click="deleteAddon(addon)" :disabled="deletingAddon === addon.addon_key">
+                {{ deletingAddon === addon.addon_key ? 'Menghapus...' : 'Hapus' }}
+              </button>
             </div>
           </div>
 
@@ -1295,25 +1353,87 @@ const loadingAddons = ref(false)
 const savingAddons = ref(false)
 const addonOptions = ref<any[]>([])
 const addonSaveMsg = ref('')
+const showAddAddonForm = ref(false)
+const deletingAddon = ref<string | null>(null)
+const newAddon = ref({
+  feature_key: '',
+  feature_name: '',
+  description: '',
+  category: 'growth',
+})
 
 const openAddonEditor = async () => {
   showAddonEditor.value = true
   addonSaveMsg.value = ''
   loadingAddons.value = true
   try {
-    const data = await superadminApi.getAddonPrices()
-    if (data && data.success) {
-      addonOptions.value = (data.data || []).map((a: any) => ({
-        ...a,
-        price: Math.round((a.price_cents || 0) / 100)
-      }))
-    } else {
-      addonSaveMsg.value = data?.message || 'Gagal memuat add-on'
-    }
-  } catch (e) {
-    addonSaveMsg.value = 'Kesalahan jaringan memuat add-on'
+    const [featuresRes, gatingRes] = await Promise.all([
+      superadminApi.getAvailableFeatures(),
+      superadminApi.getAddonGating()
+    ])
+    const features = featuresRes.success ? (featuresRes.data || []) : []
+    const gating = gatingRes.success ? (gatingRes.data || []) : []
+    const gatingMap = new Map(gating.map((g: any) => [g.feature_key, g]))
+    addonOptions.value = features.map((a: any) => ({
+      ...a,
+      price: Math.round((a.addon_price_cents || 0) / 100),
+      min_tier: (gatingMap.get(a.feature_key) as any)?.min_tier || ''
+    }))
+    if (!featuresRes.success) addonSaveMsg.value = featuresRes?.message || 'Gagal memuat features'
+  } catch (e: any) {
+    addonSaveMsg.value = e?.message || 'Kesalahan jaringan memuat add-on'
   } finally {
     loadingAddons.value = false
+  }
+}
+
+const createAddon = async () => {
+  if (!newAddon.value.feature_key || !newAddon.value.feature_name) {
+    addonSaveMsg.value = 'Key dan nama addon wajib diisi'
+    return
+  }
+  addonSaveMsg.value = ''
+  try {
+    const result = await superadminApi.upsertAvailableFeature({
+      ...newAddon.value,
+      is_addon: true,
+      addon_price_cents: 0,
+      addon_unit: 'month',
+      default_enabled: [],
+    })
+    if (!result.success) {
+      addonSaveMsg.value = result.message || 'Gagal menyimpan addon'
+      return
+    }
+    addonSaveMsg.value = 'Addon berhasil dibuat'
+    showAddAddonForm.value = false
+    newAddon.value = {
+      feature_key: '',
+      feature_name: '',
+      description: '',
+      category: 'growth',
+    }
+    await openAddonEditor()
+  } catch (e: any) {
+    addonSaveMsg.value = e?.message || 'Kesalahan jaringan saat menyimpan addon'
+  }
+}
+
+const deleteAddon = async (addon: any) => {
+  if (!confirm(`Hapus addon ${addon.addon_key}?`)) return
+  deletingAddon.value = addon.addon_key
+  try {
+    const result = await superadminApi.deleteAvailableFeature(addon.addon_key)
+    if (!result.success) {
+      addonSaveMsg.value = result.message || 'Gagal menghapus addon'
+      return
+    }
+    addonSaveMsg.value = 'Addon berhasil dihapus'
+    addonOptions.value = addonOptions.value.filter((a: any) => a.addon_key !== addon.addon_key)
+  } catch (e) {
+    addonSaveMsg.value = 'Kesalahan jaringan saat menghapus addon'
+  } finally {
+    deletingAddon.value = null
   }
 }
 
@@ -1324,17 +1444,24 @@ const saveAddons = async () => {
   try {
     for (const addon of addonOptions.value) {
       const payload = {
-        price_cents: Math.round((addon.price || 0) * 100),
-        unit: addon.unit,
+        feature_name: addon.feature_name,
         description: addon.description,
-        is_active: addon.is_active
+        addon_price_cents: Math.round((addon.price || 0) * 100),
+        addon_unit: addon.unit || 'month',
       }
-      const result = await superadminApi.updateAddonPrice(addon.addon_key, payload)
-      if (!result.success) hasError = true
+      const r1 = await superadminApi.updateAvailableFeature(addon.addon_key, payload)
+      if (!r1.success) hasError = true
+      const r2 = await superadminApi.updateAddonGating({
+        feature_key: addon.addon_key,
+        min_tier: addon.min_tier || null,
+        default_enabled: addon.default_enabled || [],
+      })
+      if (!r2.success) hasError = true
     }
     addonSaveMsg.value = hasError ? 'Beberapa perubahan gagal disimpan' : 'Semua perubahan berhasil disimpan'
-  } catch (e) {
-    addonSaveMsg.value = 'Kesalahan jaringan saat menyimpan'
+    if (!hasError) await openAddonEditor()
+  } catch (e: any) {
+    addonSaveMsg.value = e?.message || 'Kesalahan jaringan saat menyimpan'
   } finally {
     savingAddons.value = false
   }

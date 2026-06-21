@@ -119,11 +119,14 @@ Format per feature:
 | F050 | WCH E2E MCP Server (UI Testing & Browser Automation) | ✅ Approved | ✅ Done | 2026-06-20 |
 | F051 | AI Quota Per-Modalitas (Text/Vision/Image) | ✅ Approved | ✅ Done | 2026-06-20 |
 | F052 | Tier-First Feature System + Per-Tenant Addon Guard | ✅ Approved | ✅ Done | 2026-06-20 |
-| F053 | Admin-Configurable Addon Pricing + Addon Purchase Flow | ✅ Approved | ✅ Done | 2026-06-20 |
-| F054 | Referral System: Discount Downline + Commission Upline | ✅ Approved | ✅ Done | 2026-06-20 |
+| F053 | Admin-Configurable Addon Pricing + Addon Purchase Flow | ✅ Approved | ✅ Done | 2026-06-22 |
+| F054 | Referral System: Discount Downline + Commission Upline | ✅ Approved | ✅ Done | 2026-06-22 |
 | F055 | Force Password Change (Reset Default + Wajib Ganti) | ✅ Approved | ✅ Done | 2026-06-20 |
 | F056 | Theme Management (Dark/Light/System) | ✅ Approved | ✅ Done | 2026-06-21 |
-| F057 | Superadmin Feature Matrix + Addon Tier Gating | ✅ Approved | ✅ Done | 2026-06-21 |
+| F057 | Superadmin Feature Matrix + Addon Tier Gating | ✅ Approved | ✅ Done | 2026-06-22 |
+| F058 | Wallet Payment untuk Subscription & Topup | ✅ Approved | 🔨 In Progress | 2026-06-22 |
+| F059 | Landing Page — Marketing & Onboarding | ✅ Approved | ⏳ Pending | 2026-06-22 |
+| F060 | Sales Dashboard Chart — Visual Penjualan | ✅ Approved | ⏳ Pending | 2026-06-22 |
 
 ## F056: Theme Management (Dark/Light/System)
 **Spec Status:** ✅ Approved
@@ -135,9 +138,26 @@ Format per feature:
 
 ## F057: Superadmin Feature Matrix + Addon Tier Gating
 **Spec Status:** ✅ Approved
-**Implementation:** 🔨 In Progress
+**Implementation:** ✅ Done
 
 **Deskripsi:** Superadmin bisa mengatur feature per tier (toggle is_enabled per plan × feature) dan addon gating (set `min_tier` — tier minimum yang dibutuhkan untuk membeli addon). Enforcement BE membaca `min_tier` saat `CanUseAddon()`.
+
+**⚠️ KNOWN ISSUE — Dual Data Source Addon:** Ada 2 tabel addon yang tumpang tindih:
+- `available_features` (F052/F057 — primary) — berisi: `ai_vision`, `ai_audio`, `wa_blast`, `extra_store`, `extra_user`
+- `addon_prices` (F034 legacy) — berisi: `ai_vision`, `ai_audio_stt`, `wa_blast_api`, `wa_session_meta`
+- **Overlap:** `ai_vision` ada di kedua tabel.
+- **Dampak:**
+  1. Addon gating, feature matrix, dan marketplace hanya baca `available_features` → addon legacy (`ai_audio_stt`, `wa_blast_api`, `wa_session_meta`) **tidak muncul** di matrix/gating/marketplace
+  2. Harga bisa berbeda antara 2 sumber
+- **Solusi:** Konsolidasi migration — INSERT addon legacy ke `available_features`, lalu deprecate endpoint `handleAdminAddonPrices` (arahkan superadmin UI ke available_features)
+
+**⚠️ KNOWN ISSUE — PATCH min_tier Bug:**
+Di `handleAdminAddonGating` (line 2508-2511), query UPDATE punya `WHERE min_tier IS NULL`:
+```sql
+UPDATE plan_features SET min_tier=$1 WHERE feature_key=$2 AND min_tier IS NULL
+```
+Akibatnya: jika `min_tier` sudah di-set "lite" lalu diganti "pro", query tidak mengupdate apapun karena `min_tier` tidak NULL.
+**Fix:** Hapus `AND min_tier IS NULL` — UPDATE tanpa kondisi itu.
 
 **Spec (Opsi C — Hybrid):**
 
@@ -157,6 +177,18 @@ Format per feature:
 | `GET` | `/admin/addon-gating` | List addon + min_tier + default_enabled |
 | `PATCH` | `/admin/addon-gating` | Update min_tier + default_enabled per addon |
 
+### Konsolidasi Data Source
+1. Migration baru: INSERT addon legacy (`ai_audio_stt`, `wa_blast_api`, `wa_session_meta`) dari `addon_prices` ke `available_features` (set `is_addon=true`, `addon_price_cents`, `addon_unit`)
+2. Deprecate: `handleAdminAddonPrices` → redirect superadmin UI ke available_features saja
+3. Opsional: tambah kolom `legacy_from TEXT` di `available_features` untuk tracking
+
+### PATCH min_tier Fix
+```diff
+- UPDATE plan_features SET min_tier=$1 WHERE feature_key=$2 AND min_tier IS NULL
++ UPDATE plan_features SET min_tier=$1 WHERE feature_key=$2
+```
+Tanpa kondisi `AND min_tier IS NULL` — agar bisa raise maupun lower tier kapan saja.
+
 ### Frontend UI (SuperAdminDashboard.vue)
 - Tombol "Feature Matrix" di header card daftar tenant
 - Modal dengan tabel matrix: baris = feature keys, kolom = paket (lite/pro/ultimate)
@@ -171,14 +203,18 @@ Format per feature:
 **Acceptance Criteria (AC):**
 - [x] AC-1: `CanUseAddon()` enforce `min_tier` — tenant tier < min_tier → false (即使有tenant_addons purchase)
 - [x] AC-2: Superadmin toggle feature is_enabled → instant cache invalidation
-- [x] AC-3: Superadmin set addon `min_tier` → BE enforcement update langsung
-- [x] AC-4: Feature Matrix UI — checkbox toggle per cell
-- [x] AC-5: Addon Gating UI — select min_tier per addon
-- [x] AC-6: `go build ./...` clean ✅ (2026-06-21)
+- [ ] AC-3: **Fix PATCH min_tier** — hapus `AND min_tier IS NULL` agar bisa naik/turun tier kapan saja
+- [ ] AC-4: **Konsolidasi addon** — INSERT legacy addon ke `available_features`, deprecate `addon_prices` endpoints
+- [x] AC-5: Feature Matrix UI — checkbox toggle per cell
+- [x] AC-6: Addon Gating UI — select min_tier per addon
+- [ ] AC-7: Semua addon (termasuk legacy) muncul di matrix setelah konsolidasi
+- [x] AC-8: `go build ./...` clean ✅ (2026-06-21)
 
 **Files Changed:**
 - `shared/sdk/auth/can_use.go` — `tierPriority()` + `min_tier` enforcement in `CanUseAddon()`
 - `services/billing-service/main.go` — 4 new handlers: `handleAdminAvailableFeaturesCollection`, `handleAdminAvailableFeaturesItem`, `handleAdminFeatureMatrix`, `handleAdminAddonGating` + 4 new routes
+- `services/billing-service/main.go` — Fix PATCH min_tier (hapus `AND min_tier IS NULL`)
+- `shared/migrations/NNNNNN_consolidate_addon_sources.up.sql` — INSERT legacy addon ke available_features
 - `frontend/umkm-web/src/superadminApi.ts` — 7 new API methods
 - `frontend/umkm-web/src/components/SuperAdminDashboard.vue` — Feature Matrix modal + state + logic
 - `docs/FEATURE_MAP.md` — F057 entry
@@ -187,6 +223,637 @@ Format per feature:
 - `available_features` registry + `plan_features` toggle matrix = clean separation between "apa yang ada" vs "siapa dapat apa"
 - `min_tier` sudah ada di schema (migration 000068), enforcement baru diaktifkan di F057
 - Addon gating per tier: tidak semua addon bisa dibeli oleh semua tier (misal: wa_blast hanya untuk pro+)
+- **PENTING:** Setelah konsolidasi, hapus routing `handleAdminAddonPrices` dari billing-service main.go untuk mencegah confusion
+
+---
+
+## F058: Wallet Payment untuk Subscription & Topup
+
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
+
+**Deskripsi:** Tenant bisa bayar subscription menggunakan saldo wallet (setelah topup via Xendit), bypass Xendit invoice. Juga standardisasi topup flow + referral discount integration di subscription payment.
+
+---
+
+### 📌 Background — State Saat Ini
+
+```
+现状 (Current):
+  wallet_credits table EXISTS (migration 000055):
+    tenant_id UUID PK, balance_cents BIGINT, updated_at
+    → Hanya dipakai untuk addon purchase
+
+  wallet_transactions table EXISTS:
+    id, tenant_id, amount_cents, transaction_type ('topup'|'consume'),
+    reference, description, created_at
+    → transaction_type belum ada 'subscription'
+
+  handleWalletTopup EXISTS (billing-service line 3951):
+    POST /wallet/topup → Xendit invoice → webhook → INSERT wallet_credits
+
+  handleSubscribe (line 577-767):
+    ✅ Referral discount applied
+    ✅ Voucher handling
+    ❌ Wallet bypass: final_price > 0 → selalu CREATE Xendit invoice
+    ❌ Tidak ada opsi "bayar dari wallet" untuk subscription
+
+  handlePaymentWebhook (line 1020-1330):
+    ✅ Deteksi wallet topup via -wallet-topup- external_id
+    ✅ Overpayment → kelebihan masuk wallet
+    ❌ Tidak handle subscription-via-wallet (karena handleSubscribe belum kirim wallet payment)
+
+  Addon purchase (handlePurchaseAddon):
+    ✅ Wallet deduction SUDAH
+    ✅ Referral commission SUDAH
+    ❌ Referral discount BELUM
+
+问题 (Gaps):
+  1. Subscription selalu lewat Xendit — tidak bisa pakai wallet
+  2. Tidak ada transaksi type 'subscription' di wallet_transactions
+  3. Frontend tidak ada indikator wallet balance saat checkout subscription
+  4. Auto-deduct: tenant bisa milih "bayar dari wallet" otomatis tiap bulan (auto-renew pake wallet)
+  5. Referral discount hanya untuk subscription Xendit — kalau wallet bypass, discount harus tetap jalan
+```
+
+---
+
+### 🎯 Tujuan (Goals)
+
+1. **Subscription via wallet**: Jika wallet balance cukup → bypass Xendit → deduct wallet → activateSubscription langsung
+2. **Topup+Subscribe flow**: Jika balance kurang → partial pay? (opsi lanjutan). MVP: full pay dari wallet atau full Xendit.
+3. **Wallet balance indicator di UI**: Saat checkout subscription, tampilkan "Saldo wallet: Rp X. Bayar via Wallet?"
+4. **Auto-renew subscription via wallet**: Setiap bulan, auto-deduct wallet untuk perpanjang subscription
+5. **Referral discount tetap jalan**: Baik bayar via Xendit maupun wallet, referral discount dihitung sama
+
+---
+
+### 📊 Data Model — Ekstensi
+
+#### `wallet_transactions` — tambah enum `transaction_type`
+```
+ALTER TABLE wallet_transactions
+  DROP CONSTRAINT IF EXISTS valid_transaction_type;
+  
+-- Sebelumnya hanya 'topup' dan 'consume'
+-- Tambah: 'subscription', 'subscription_auto_renew', 'subscription_refund'
+```
+
+#### `wallet_credits` — trigger untuk auto-renew opt-in (opsional)
+```
+ALTER TABLE wallet_credits
+  ADD COLUMN IF NOT EXISTS auto_renew_subscription BOOLEAN DEFAULT false;
+  -- Jika true, sistem auto-deduct wallet setiap bulan untuk perpanjang
+```
+
+**TIDAK perlu tabel baru** — reuse existing `wallet_credits` + `wallet_transactions`.
+
+---
+
+### 🔄 Flow End-to-End
+
+#### A. Topup Wallet (EXISTING — didokumentasikan untuk kelengkapan)
+
+```
+Tenant klik "Topup Wallet" → /wallet/topup { amount_cents }
+         │
+         ├─ 1. Validasi: min Rp 10.000 (10000 cents) ✅
+         ├─ 2. CREATE Xendit invoice:
+         │     external_id = {uuid}-wallet-topup-{tenantID}
+         │     amount = req.AmountCents
+         │     → Return invoice_url ke tenant
+         │
+         ├─ 3. Tenant bayar via Xendit
+         │
+         └─ 4. Xendit webhook → handlePaymentWebhook:
+              ├─ Deteksi "-wallet-topup-" di external_id ✅
+              ├─ Dedup: cek existing wallet_transactions.reference ✅
+              ├─ Transaction: UPSERT wallet_credits (balance += amount)
+              ├─ INSERT wallet_transactions (type='topup')
+              └─ WA notification: "Topup Rp X berhasil. Saldo: Rp Y"
+```
+
+#### B. Subscription via Wallet (NEW)
+
+```
+Tenant pilih paket → handleSubscribe
+         │
+         ├─ 1. Hitung final_price:
+         │     base_price → voucher_discount → referral_discount
+         │     (sama seperti sekarang, line 617-649)
+         │
+         ├─ 2. Cek bayar_via_wallet flag dari request body:
+         │     req.PayViaWallet = true
+         │     → Jika tidak dikirim, default false (Xendit seperti biasa)
+         │
+         ├─ 3. Jika PayViaWallet = true:
+         │     ├─ Cek wallet balance >= final_price
+         │     │   CheckWalletBalance(tenantID, final_price)
+         │     │
+         │     ├─ Jika CUKUP:
+         │     │   ├─ DeductWalletBalance(tenantID, final_price,
+         │     │   │   "subscription:{planID}:{ts}",
+         │     │   │   "Pembayaran langganan {planName} via Wallet")
+         │     │   │   → transaction_type = 'subscription'
+         │     │   │
+         │     │   ├─ activateSubscription(..., activatedBy="wallet")
+         │     │   │
+         │     │   ├─ F054: Affiliate commission (sama seperti Xendit
+         │     │   │   → hitung dari final_price)
+         │     │   │
+         │     │   └─ Response: { status: 'activated', method: 'wallet' }
+         │     │
+         │     └─ Jika TIDAK CUKUP:
+         │         └─ Response 402: { message: "Saldo tidak cukup",
+         │             balance_cents, required_cents,
+         │             topup_url: "/wallet" }
+         │
+         └─ 4. Jika PayViaWallet = false (default):
+             └─ CREATE Xendit invoice seperti biasa (existing flow)
+```
+
+#### C. Auto-Renew Subscription via Wallet (NEW — background worker)
+
+```
+Cron job (di billing-service) — setiap jam:
+         │
+         ├─ SELECT FROM tenant_subscriptions ts
+         │   JOIN wallet_credits wc ON wc.tenant_id = ts.tenant_id
+         │   WHERE ts.status = 'active'
+         │     AND ts.remaining_days <= 3       -- 3 hari sebelum expired
+         │     AND wc.balance_cents >= (
+         │       SELECT price_monthly FROM saas_plans sp
+         │       WHERE sp.id = ts.plan_id
+         │     )
+         │     AND ts.auto_renew_via_wallet = true   -- flag baru!
+         │
+         ├─ Untuk setiap row:
+         │   ├─ Deduct wallet: price_monthly
+         │   │   → transaction_type = 'subscription_auto_renew'
+         │   │
+         │   ├─ Extend subscription: remaining_days += 30
+         │   │   current_plan_expires_at = NOW() + 30 days
+         │   │
+         │   ├─ F054: Affiliate commission dari amount
+         │   │
+         │   └─ Kirim notifikasi: "Langganan diperpanjang otomatis via Wallet"
+         │
+         └─ Logging: subscription_auto_renew_logs (atau reuse wallet_transactions)
+```
+
+#### D. Referral Discount + Wallet Integration
+
+```
+handleSubscribe (patch):
+         │
+         ├─ 1. base_price = priceMonthly ✅ (existing)
+         ├─ 2. Voucher discount ✅ (existing)
+         ├─ 3. Referral discount ✅ (existing — line 620-631)
+         │
+         ├─ 4. Jika PayViaWallet:
+         │     └─ Deduct final_price dari wallet (setelah semua diskon)
+         │
+         └─ 5. Jika !PayViaWallet (Xendit):
+             └─ CREATE invoice dengan final_price (existing)
+```
+
+**PENTING:** Referral discount dihitung SEBELUM decide bayar via wallet atau Xendit. Jadi discount_amount sama dalam kedua kasus.
+
+---
+
+### 🖥️ UI Specs
+
+#### Checkout Subscription — wallet indicator
+
+Di halaman pilih paket / checkout subscription (saat ini di `Subscribe.vue` atau modal activation):
+
+```
+┌─────────────────────────────────────────────┐
+│  Langganan Pro                             │
+│  Harga: Rp 100.000/bulan                   │
+│                                             │
+│  👜 Saldo Wallet: Rp 250.000               │ ← NEW
+│                                             │
+│  Metode Pembayaran:                         │
+│  ○ Xendit (Bank Transfer / QRIS / EWallet)  │ ← default
+│  ● Bayar dari Wallet (Rp 100.000)          │ ← NEW
+│                                             │
+│  [Langganan Sekarang]                       │
+└─────────────────────────────────────────────┘
+```
+
+#### Wallet Page — subscription history
+
+Di halaman Wallet (saat ini hanya show topup + addon consumes):
+
+```
+Tab "Transaksi":
+  ├─ +Rp 100.000 — Topup via BCA (2026-06-20)
+  ├─ -Rp 50.000  — Addon: Extra Store (2026-06-19)
+  ├─ -Rp 100.000 — Langganan Pro (2026-06-18)      ← NEW
+  └─ -Rp 100.000 — Langganan Pro (perpanjang)       ← NEW
+```
+
+---
+
+### ✅ Acceptance Criteria (AC)
+
+- [ ] AC-1: POST `/subscribe` dengan `pay_via_wallet=true` dan balance cukup → deduct wallet → activateSubscription → response `{status:'activated', method:'wallet'}`
+- [ ] AC-2: POST `/subscribe` dengan `pay_via_wallet=true` dan balance kurang → response 402 + `{required_cents, balance_cents, topup_url}`
+- [ ] AC-3: POST `/subscribe` tanpa `pay_via_wallet` (default false) → Xendit invoice seperti biasa
+- [ ] AC-4: Referral discount tetap di-apply baik via wallet maupun Xendit
+- [ ] AC-5: Wallet auto-renew: tenant dengan `auto_renew_via_wallet=true` → 3 hari sebelum expired → auto-deduct + extend 30 hari
+- [ ] AC-6: Frontend checkout menampilkan wallet balance + opsi "Bayar dari Wallet"
+- [ ] AC-7: Wallet page menampilkan transaksi subscription di history
+- [ ] AC-8: `make check` pass
+
+---
+
+### 📁 Files to Change
+
+**Backend:**
+- `services/billing-service/main.go` — **PATCH** `handleSubscribe`: tambah param `pay_via_wallet`, logic wallet deduct + bypass Xendit
+- `services/billing-service/main.go` — **PATCH** `handlePaymentWebhook`: tambah transaction_type 'subscription' untuk wallet payment
+- `services/billing-service/main.go` — **NEW** `handleWalletSubscriptionAutoRenew`: cron job untuk auto-renew via wallet
+- `shared/sdk/auth/quota.go` — tambah `DeductWalletBalanceForSubscription()` atau reuse existing (sudah cukup generic)
+- `shared/migrations/NNNNNN_wallet_subscription.up.sql` — tambah `tenant_subscriptions.auto_renew_via_wallet BOOLEAN DEFAULT false`, perluas constraint transaction_type
+
+**Frontend:**
+- `frontend/umkm-web/src/components/Subscribe.vue` (atau modal activation) — wallet balance display + opsi pembayaran
+- `frontend/umkm-web/src/components/Wallet.vue` — tambah tab subscription history
+- `frontend/umkm-web/src/api.ts` — update `subscribe()` untuk kirim `pay_via_wallet` flag
+
+---
+
+### Notes:
+
+- Wallet subscription adalah **opsi**, bukan kewajiban. Tenant bisa tetap pakai Xendit.
+- Auto-renew flag (`auto_renew_via_wallet`) terpisah dari `auto_renew` addon — jangan campur.
+- Referral discount priority: voucher → referral → final_price. Konsisten dengan F054 fix.
+- Untuk MVP: wallet deduct full amount. Partial payment (wallet + Xendit) terlalu kompleks untuk sekarang— bisa jadi F059 jika diperlukan.
+- Race condition: `DeductWalletBalance` sudah pakai `SELECT ... FOR UPDATE` di dalam transaksi (via `UPDATE ... WHERE balance_cents >= $1`). Aman untuk concurrent request.
+
+---
+
+## F059: Landing Page — Marketing & Onboarding
+
+**Spec Status:** ✅ Approved
+**Implementation:** ⏳ Pending
+
+**Deskripsi:** Halaman publik (tanpa auth) yang menjelaskan WCH Platform, fitur, dan pricing. Calon tenant bisa melihat value proposition sebelum daftar. Route `/landing` (atau `/` untuk guest). User yang sudah login langsung redirect ke dashboard.
+
+---
+
+### 📌 Background — State Saat Ini
+
+```
+现状 (Current):
+  - User buka domain → langsung ke /login
+  - Tidak ada halaman "Apa itu WCH?" atau daftar fitur
+  - Tidak ada pricing display sebelum register
+  - Satu-satunya jalur konversi: orang daftar karena dikasih tahu (word of mouth)
+  
+  Route yang ada:
+  - /login → Login.vue
+  - /register → Register.vue
+  - Semua route lain requires auth
+
+  Theme: dark/light mode SUDAH ada (F056)
+  CSS variables: SUDAH ada di main.css
+
+  Masalah:
+  - Bounce rate tinggi: orang yang dikasih link WCH langsung lihat login → close
+  - Tidak ada SEO: Google tidak index halaman kosong
+  - Tidak ada conversion path: landing → CTA → register adalah funnel standar
+```
+
+### 🎯 Tujuan
+
+1. Halaman publik yang menjelaskan produk dengan jelas: "Aplikasi Kasir, Pembukuan & AI untuk UMKM"
+2. Menampilkan fitur unggulan: POS, Akuntansi Double-Entry, AI Chatbot, Laporan
+3. Pricing table (Lite/Pro/Ultimate) — ambil data dari backend (opsional: static fallback)
+4. CTA yang jelas: "Coba Gratis" → register
+5. SEO-friendly: meta tags, semantic HTML
+6. Fully responsive (mobile-first)
+7. Dark/light mode compatible (reuse F056 theme system)
+8. User yang sudah login → redirect ke dashboard
+
+---
+
+### 🖥️ UI Specs
+
+#### Layout
+
+```
+┌─────────────────────────────────────────────────────┐
+│  🏪 WCH Platform    [Fitur] [Harga] [Login] 🟢Daftar│ ← Navbar sticky
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  Hero Section                                       │
+│  ┌─────────────────────────────────────────────┐   │
+│  │  Aplikasi UMKM All-in-One                   │   │
+│  │  POS + Pembukuan + AI Chatbot dalam        │   │
+│  │   satu platform                              │   │
+│  │                                             │   │
+│  │  [Mulai Gratis →] [Lihat Demo]              │   │
+│  │                                             │   │
+│  │  Dipakai oleh 100+ UMKM di Indonesia        │   │
+│  └─────────────────────────────────────────────┘   │
+│                                                     │
+│  Features Grid (4-6 cards)                          │
+│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐              │
+│  │  POS │ │Buku  │ │  AI  │ │Lapor │              │
+│  │ Kasir│ │Besar │ │Chat  │ │Keuan │              │
+│  └──────┘ └──────┘ └──────┘ └──────┘              │
+│                                                     │
+│  Pricing Table                                      │
+│  ┌──────┐ ┌──────┐ ┌──────┐                        │
+│  │ Lite │ │ Pro  │ │Ultim │                        │
+│  │ Gratis│ │Rp450k│ │Rp1jt │                        │
+│  │ ...  │ │ ...  │ │ ...  │                        │
+│  └──────┘ └──────┘ └──────┘                        │
+│                                                     │
+│  Footer                                             │
+│  © 2026 WCH Platform                                │
+└─────────────────────────────────────────────────────┘
+```
+
+#### Design Direction
+
+- **Tone:** Professional, modern, trustworthy
+- **Warna:** Dark theme (existing) untuk landing, dengan aksen hijau/teal untuk CTA
+- **Font:** Pakai font existing system
+- **Motion:** Subtle fade-in on scroll (CSS only, tanpa library)
+- **Layout:** Asymmetric hero (text left, illustration/device mockup right)
+
+#### Feature Cards
+
+| Icon | Judul | Deskripsi |
+|:-----|:------|:----------|
+| 💰 | **Kasir POS** | Catat transaksi jual-beli dengan cepat. Dukung multi-pembayaran (tunai, QRIS, transfer). |
+| 📒 | **Pembukuan Otomatis** | Double-entry accounting. Setiap transaksi POS langsung tercatat di jurnal. |
+| 🤖 | **AI Customer Service** | Bot WhatsApp otomatis jawab pertanyaan pelanggan 24/7. Bisa di-training dengan FAQ toko. |
+| 📊 | **Laporan Keuangan** | Laba rugi, arus kas, neraca — siap pakai untuk pajak dan pengajuan kredit. |
+| 🏪 | **Multi-Toko** | Kelola beberapa cabang dalam satu akun. Cocok untuk franchise. |
+| 🔗 | **Integrasi Marketplace** | (Coming soon) Hubungkan dengan GoFood, Grab, Shopee. |
+
+#### Pricing Table
+
+| | Lite | Pro | Ultimate |
+|:--|:-----|:----|:---------|
+| Harga | **Gratis** | **Rp 450K/bln** | **Rp 1.000K/bln** |
+| POS | ✅ | ✅ | ✅ |
+| Transaksi/bln | 100 | 10.000 | Unlimited |
+| AI Chatbot | — | ✅ | ✅ |
+| Laporan Keuangan | ✅ | ✅ | ✅ |
+| Multi-User | 1 user | 5 user | Unlimited |
+| AI Vision | — | — | ✅ |
+| CTA | [Daftar Gratis] | [Mulai Trial] | [Hubungi Sales] |
+
+#### Route & Redirect Logic
+
+```
+- GET / → LandingPage.vue (jika guest), redirect /dashboard (jika authed)
+- GET /landing → LandingPage.vue (jika guest), redirect /dashboard (jika authed)
+- Navbar "Login" → /login
+- Navbar "Daftar" → /register
+- CTA buttons:
+  "Mulai Gratis" → /register
+  "Lihat Demo" → scroll ke features section / modal video
+```
+
+### ✅ Acceptance Criteria (AC)
+
+- [ ] AC-1: Guest buka `/` → lihat landing page (hero, features, pricing, footer)
+- [ ] AC-2: User login buka `/` → redirect ke `/dashboard`
+- [ ] AC-3: "Mulai Gratis" CTA → `/register`
+- [ ] AC-4: Pricing table menampilkan 3 tier (Lite/Pro/Ultimate) — static atau dari backend
+- [ ] AC-5: Responsive — mobile & desktop layout rapi
+- [ ] AC-6: Dark/light mode konsisten dengan F056 theme
+- [ ] AC-7: SEO meta tags (title, description, og:image)
+- [ ] AC-8: `vue-tsc` clean, build pass
+
+### 📁 Files to Change
+
+- `frontend/umkm-web/src/components/LandingPage.vue` (NEW — ~300 baris)
+- `frontend/umkm-web/src/router/index.ts` — route `/` conditional (guest → Landing, authed → Dashboard), route `/landing`
+- `frontend/umkm-web/src/App.vue` — skip sidebar/layout untuk landing page (atau kondisional)
+
+### Notes:
+
+- **Pure frontend** — tidak perlu backend endpoint baru
+- Pricing bisa static dulu. Dynamic dari backend bisa ditambahkan nanti jika diperlukan
+- Landing page HARUS lightweight — no Chart.js, no heavy dependencies
+- Gunakan CSS Variables existing (F056) untuk theme consistency
+
+---
+
+## F060: Sales Dashboard Chart — Visual Penjualan
+
+**Spec Status:** ✅ Approved
+**Implementation:** ⏳ Pending
+
+**Deskripsi:** Ganti chart placeholder di DynamicDashboard.vue dengan chart penjualan real. Widget `daily_sales` dan `order_volume` menampilkan grafik garis/batang pendapatan harian, dengan period switcher (7 Hari / 30 Hari / 12 Bulan). Juga menambah widget "Top Products" real dan "Transaksi Terbaru" real.
+
+---
+
+### 📌 Background — State Saat Ini
+
+```
+现状 (Current):
+  DynamicDashboard.vue (default dashboard):
+    - Widget system with templates per business_type ✅
+    - Chart widget (type: 'chart') renders PLACEHOLDER bars:
+        <div v-for="i in 7" class="chart-bar"
+             :style="{ height: (20 + Math.random() * 80) + '%' }">
+      → Ini data acak, bukan real!
+    - List widget (type: 'list') only shows empty state "Belum ada data"
+    - Actions widget works (links to POS, Catalog, Journal)
+    - Metric widgets work (income_summary, expense_summary dari income-statement API)
+
+  Data Tersedia:
+    - /api/umkm/reports/income-statement?from=&to= ✅ (aggregate)
+    - /api/umkm/journal?from=&to=&limit= ✅ (list transactions)
+    - Product catalog ✅
+    - Chart.js library SUDAH terinstall ✅
+    - Bar chart component SUDAH digunakan di Dashboard.vue (classic) ✅
+
+  Masalah:
+    - Widget chart pakai data random → gak berguna untuk user
+    - Widget list (transactions) tidak fetching data real
+    - Tidak ada endpoint khusus untuk sales-chart per-hari
+    - Period switcher (hari/minggu/bulan/tahun) tidak ada
+```
+
+### 🎯 Tujuan
+
+1. **Chart real:** Widget `daily_sales` dan `order_volume` menampilkan data penjualan real (bukan placeholder)
+2. **Period switcher:** Tombol 7H / 30H / 12B — ganti rentang chart
+3. **Top Products:** Widget best-selling products (dari transaksi POS atau journal)
+4. **Recent Transactions:** Widget transaksi terbaru (dari journal entries)
+5. **Backend endpoint:** `GET /api/umkm/reports/sales-chart?period=week|month|year`
+6. **Classic Dashboard** juga diupdate dengan period switcher
+
+---
+
+### 📊 Backend: New Endpoint
+
+#### `GET /api/umkm/reports/sales-chart?period=week|month|year`
+
+**Response shape:**
+```json
+{
+  "success": true,
+  "data": {
+    "period": "month",
+    "labels": ["1 Juni", "2 Juni", ...],
+    "revenue": [500000, 750000, 620000, ...],
+    "expense": [200000, 300000, 250000, ...],
+    "profit": [300000, 450000, 370000, ...]
+  }
+}
+```
+
+**SQL logic:**
+```sql
+-- Period = 'week' (7 hari terakhir, group by date)
+SELECT DATE(created_at) as day,
+       SUM(CASE WHEN type = 'credit' AND account_code ~ '^4' THEN amount ELSE 0 END) as revenue,
+       SUM(CASE WHEN type = 'debit' AND account_code ~ '^5' THEN amount ELSE 0 END) as expense
+FROM journal_entries
+WHERE tenant_id = $1
+  AND created_at >= NOW() - INTERVAL '7 days'
+GROUP BY DATE(created_at)
+ORDER BY day
+
+-- Period = 'month' (30 hari)
+-- Period = 'year' (12 bulan, GROUP BY month)
+```
+
+Atau, reuse data dari `income-statement` yang sudah ada — hitung per-hari dari data transaksi yang sudah di-aggregate.
+
+#### `GET /api/umkm/reports/top-products?limit=5&from=&to=`
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    { "name": "Nasi Goreng", "quantity": 42, "revenue_cents": 840000 },
+    { "name": "Es Teh", "quantity": 38, "revenue_cents": 190000 }
+  ]
+}
+```
+
+**SQL logic:**
+```sql
+-- Dari journal_entries, filter debit ke account pendapatan (4xx)
+-- Join dengan description / metadata untuk extract product name
+-- Atau dari transaction_items jika ada
+```
+
+Jika tabel `transaction_items` tidak ada, gunakan pattern matching dari `journal_entries.description` (approximate).
+
+#### `GET /api/umkm/reports/recent-transactions?limit=5`
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    { "id": "...", "date": "2026-06-22", "description": "Penjualan Tunai", "amount_cents": 50000, "type": "income" }
+  ]
+}
+```
+
+**SQL:**
+```sql
+SELECT id, created_at, description, amount_cents, entry_type
+FROM journal_entries
+WHERE tenant_id = $1
+ORDER BY created_at DESC
+LIMIT $2
+```
+
+### 🖥️ Frontend Changes
+
+#### DynamicDashboard.vue — 3 perubahan
+
+**1. Chart widget (type: 'chart') — render Chart.js real:**
+```
+<template>
+  <div class="widget-chart">
+    <div class="chart-header">
+      <span class="widget-title">{{ widget.title }}</span>
+      <div class="period-switcher" v-if="widget.id === 'daily_sales' || widget.id === 'order_volume'">
+        <button :class="{ active: period === 'week' }" @click="setPeriod('week')">7H</button>
+        <button :class="{ active: period === 'month' }" @click="setPeriod('month')">30H</button>
+        <button :class="{ active: period === 'year' }" @click="setPeriod('year')">12B</button>
+      </div>
+    </div>
+    <div style="height: 200px; width: 100%;">
+      <Line v-if="chartReady" :data="chartData" :options="chartOptions" />
+      <div v-else class="chart-loading">Memuat data...</div>
+    </div>
+  </div>
+</template>
+```
+
+**2. List widget (type: 'list', id: 'recent_transactions') — fetch real data:**
+```
+GET /api/umkm/reports/recent-transactions?limit=5
+→ render: description | amount | relative time
+```
+
+**3. List widget (id: 'best_selling', 'top_products') — fetch real data:**
+```
+GET /api/umkm/reports/top-products?limit=5
+→ render: product name | qty sold | total revenue
+```
+
+**4. Metric widget enhancement:**
+- Tambah loading state (skeleton)
+- Tambah tooltip "vs bulan lalu" pada perubahan persen
+
+#### Dashboard.vue (Classic) — period switcher
+
+Classic Dashboard sudah punya Bar chart `handleCashFlow` data. Tambah period switcher:
+- Tombol "Minggu Ini" / "Bulan Ini" / "Tahun Ini"
+- Refetch chart data saat period berubah
+
+### ✅ Acceptance Criteria (AC)
+
+- [ ] AC-1: `GET /api/umkm/reports/sales-chart?period=week` → return 7 data points (per-hari)
+- [ ] AC-2: `GET /api/umkm/reports/sales-chart?period=month` → return 30 data points
+- [ ] AC-3: `GET /api/umkm/reports/sales-chart?period=year` → return 12 data points (per-bulan)
+- [ ] AC-4: Dashboard widget `daily_sales` menampilkan Chart.js line/bar chart real
+- [ ] AC-5: Period switcher (7H/30H/12B) berfungsi — ganti data chart
+- [ ] AC-6: Widget `recent_transactions` menampilkan 5 transaksi terakhir real
+- [ ] AC-7: Widget `top_products` menampilkan produk terlaris real
+- [ ] AC-8: Loading state (skeleton/spinner) selama fetch
+- [ ] AC-9: Empty state jika belum ada transaksi
+- [ ] AC-10: `go build`, `go vet`, `go test`, `vue-tsc` clean
+
+### 📁 Files to Change
+
+**Backend:**
+- `apps/umkm/accounting/main.go` — **NEW** handler `handleSalesChart` (GET /reports/sales-chart)
+- `apps/umkm/accounting/main.go` — **NEW** handler `handleTopProducts` (GET /reports/top-products)
+- `apps/umkm/accounting/main.go` — **NEW** handler `handleRecentTransactions` (GET /reports/recent-transactions)
+- `apps/umkm/accounting/main.go` — routes untuk 3 endpoint baru
+
+**Frontend:**
+- `frontend/umkm-web/src/components/DynamicDashboard.vue` — update chart widget (Chart.js real data), update list widgets (recent transactions, top products), add period switcher + loading state + empty state
+- `frontend/umkm-web/src/components/Dashboard.vue` — tambah period switcher pada classic dashboard
+- `frontend/umkm-web/src/api.ts` — methods `api.getSalesChart()`, `api.getTopProducts()`, `api.getRecentTransactions()`
+
+### Notes:
+
+- `vue-chartjs` + `chart.js` sudah terinstall ✅ — tidak perlu npm install baru
+- Endpoint `sales-chart` bisa reuse aggregasi dari `income-statement` tetapi di-breakdown per-day
+- Untuk produk terlaris: jika tabel `transaction_items` tidak ada, gunakan journal entries description matching sebagai aproximasi
+- Period switcher state disimpan di `ref()` lokal, tidak perlu localStorage
+- Dark/light mode: Chart.js label colors harus adjust — gunakan CSS variable atau computed property yang read theme
 
 ---
 
@@ -2666,7 +3333,7 @@ AC-8 (GET /api/umkm/addons) adalah F053 scope.
 **Spec Status:** ✅ Approved
 **Implementation:** ✅ Done
 
-**Deskripsi:** Harga addon (AI Vision, WA Cloud API, dll) dikonfigurasi oleh superadmin via UI. Tenant membeli addon → wallet deducted → `tenant_addons` row dibuat → fitur langsung aktif. Ini adalah kelanjutan dari F052 (Tier-First Feature System) dan F034 (Wallet).
+**Deskripsi:** Harga addon dikonfigurasi oleh superadmin via UI di `available_features` (BUKAN `addon_prices` — lihat F057 untuk konsolidasi). Tenant membeli addon → wallet deducted → `tenant_addons` row dibuat → fitur langsung aktif. Ini adalah kelanjutan dari F052 (Tier-First Feature System) dan F034 (Wallet).
 
 ---
 
@@ -2674,47 +3341,50 @@ AC-8 (GET /api/umkm/addons) adalah F053 scope.
 
 ```
 现状 (Current):
-  addon_prices table EXISTS (migration 000055):
-    addon_key, price_cents, unit
-    Seeded: ai_vision=500000, ai_audio_stt=700000,
-            wa_blast_api=200000, wa_session_meta=1500000
+  Primary: available_features table (F052/F057 — migration 000068):
+    feature_key, feature_name, description, category, is_addon,
+    addon_price_cents, addon_unit, default_enabled
+    Seeded addons: ai_vision=500000/request, ai_audio=10000/month,
+                   wa_blast=200000/request, extra_store=50000/month,
+                   extra_user=10000/month
 
-  handleAdminAddonPrices PATCH (billing-service line 3317):
-    → bisa update price_cents, tapi unit TIDAK bisa diedit
+  Legacy: addon_prices table (F034 — migration 000055):
+    ai_vision, ai_audio_stt, wa_blast_api, wa_session_meta
+    → OVERLAP dengan available_features, akan dikonsolidasi di F057
+
+  handlePurchaseAddon EXISTS (billing-service line 4171):
+    POST /addons/purchase — wallet deducted → tenant_addons upsert
+    ✅ Referral commission SUDAH
+    ❌ Referral discount BELUM (downline bayar full price)
+
+  handleAddonMarketplace EXISTS (billing-service line 4103):
+    GET /addon-marketplace — return dari available_features (BUKAN addon_prices)
+
+  tenant_addons table: SUDAH ADA (migration 000068)
 
   handleWalletTopup EXISTS: tenant bisa topup wallet via Xendit
 
-  tenant_addons table: BELUM ADA
-
-  Handle yang ada:
-  - GET /admin/addon-prices ✅
-  - PATCH /admin/addon-prices/{key} ✅ (price_cents only)
-  - GET /wallet ✅
-  - POST /wallet/topup ✅
-
-问题 (Gaps):
-  1. `unit` addon tidak bisa diedit superadmin
-  2. Tenant tidak bisa beli addon (tidak ada endpoint)
-  3. Tidak ada `tenant_addons` table → addon tidak bisa "melekat" di tenant
-  4. Wallet deduction tidak pernah dipanggil untuk addon purchase
-  5. Guard tidak pernah cek `tenant_addons`
+  Missing:
+  1. Tenant-facing Addons.vue — halaman "Toko Addon" untuk beli
+  2. Auto-renew cron — addon expired tidak auto-perpanjang
+  3. Referral discount — belum di-apply sebelum wallet deduct
 ```
 
 ---
 
 ### 🎯 Tujuan (Goals)
 
-1. Superadmin bisa atur harga addon (cents) DAN unit type via UI.
-2. Tenant bisa beli addon dari halaman "Add-ons".
-3. Pembelian → wallet deducted → `tenant_addons` row aktif → fitur langsung bisa dipakai.
-4. Addon punya expiry (bulanan atau per-use).
-5. Admin bisa lihat siapa tenant yang punya addon apa.
+1. Superadmin atur harga addon via `available_features` (BUKAN `addon_prices` — F057 konsolidasi).
+2. Tenant beli addon dari halaman "Toko Addon" (`Addons.vue`).
+3. Pembelian: referral discount → wallet deducted → `tenant_addons` row aktif.
+4. Addon punya expiry (bulanan), auto-renew via wallet.
+5. Admin lihat siapa punya addon apa.
 
 ---
 
 ### 📊 Data Model
 
-#### Tabel `tenant_addons` (NEW — sudah ada di F052)
+#### Tabel `tenant_addons` (SUDAH ADA di migration 000068)
 ```
 id              UUID PK DEFAULT gen_random_uuid()
 tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE
@@ -2727,89 +3397,77 @@ purchase_price_cents BIGINT  -- harga saat dibeli
 wallet_transaction_id UUID
 created_at      TIMESTAMPTZ DEFAULT NOW()
 UNIQUE(tenant_id, addon_key)
+INDEX idx_tenant_addons_lookup ON (tenant_id, addon_key) WHERE status='active'
+INDEX idx_tenant_addons_expires ON (expires_at) WHERE status='active' AND expires_at IS NOT NULL
 ```
 
-#### Tabel `addon_prices` (EXISTING — perlu extend)
+#### Sumber harga: `available_features` (BUKAN `addon_prices`)
 ```
-Tambah kolom:
-  unit            VARCHAR(20)  -- 'per_request', 'per_minute', 'per_session', 'per_month' (SEBELUMNYA locked)
-  description     TEXT         -- deskripsi singkat untuk UI
-  is_active       BOOLEAN DEFAULT true  -- superadmin bisa disable addon dari marketplace
+available_features.addon_price_cents  — harga dalam sen
+available_features.addon_unit         — 'per_month', 'per_request', 'per_session', 'per_minute'
 ```
 
-#### Tabel `addon_purchases` (NEW — audit log)
-```
-id              UUID PK DEFAULT gen_random_uuid()
-tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE
-addon_key       VARCHAR(100) NOT NULL
-amount_cents    BIGINT NOT NULL  -- harga saat beli
-payment_type    VARCHAR(20)  -- 'wallet', 'voucher', 'xendit'
-wallet_tx_id    UUID
-invoice_id      VARCHAR(100)
-created_at      TIMESTAMPTZ DEFAULT NOW()
-```
+⚠️ `addon_prices` table LEGACY — akan di-deprecate setelah konsolidasi F057.
 
 ---
 
-### 🔄 Addon Purchase Flow
+### 🔄 Addon Purchase Flow (Final)
 
 ```
 Tenant klik "Beli" di halaman Add-ons
          │
          ▼
-GET /api/umkm/addons
-  → return: { key, name, description, price_cents, unit,
-              is_active, has_addon, expires_at? }
+GET /addon-marketplace
+  → return: { addon_key, feature_name, price_cents, addon_unit,
+              has_addon, addon_status (active/expired) }
          │
          ▼
-POST /api/umkm/addons/purchase { addon_key }
+POST /addons/purchase { addon_key }
          │
-         ├─ 1. Validasi: addon exists & is_active
+         ├─ 1. Cek addon exists di available_features ✅
+         ├─ 2. Cek sudah punya active addon ✅ (409 Conflict)
          │
-         ├─ 2. Cek apakah sudah punya addon aktif
-         │     SELECT 1 FROM tenant_addons
-         │     WHERE tenant_id=$1 AND addon_key=$2
-         │     AND status='active' AND (expires_at IS NULL OR expires_at>NOW())
-         │     → Jika sudah ada → return 409 "Addon sudah aktif"
+         ├─ 3. F054: Cek referral discount:
+         │     SELECT referred_by_affiliate_id FROM tenants
+         │     → hitung discount_amount = price * discount_percent / 100
+         │     → final_price = price - discount_amount
+         │     → INSERT invoice_referrals (untuk audit trail)
          │
-         ├─ 3. Hitung harga:
-         │     price = addon_prices.price_cents
+         ├─ 4. Cek wallet balance:
+         │     balance >= final_price? → deduct ✅
+         │     balance < final_price?  → 402 Payment Required (topup dulu)
          │
-         ├─ 4. Deduct wallet:
-         │     CheckWalletBalance(tenantID, price)
-         │     → Jika insufficient → 402 "Saldo tidak cukup. Topup dulu."
-         │     DeductWalletBalance(tenantID, price, "addon_purchase:{key}", "Pembelian addon {name}")
+         ├─ 5. F054: Hitung affiliate commission dari final_price:
+         │     → INSERT affiliate_earnings (transaction_type='addon_purchase')
+         │     → UPDATE affiliates.cash_balance_cents
          │
-         ├─ 5. INSERT tenant_addons:
-         │     INSERT tenant_addons (tenant_id, addon_key, status='active',
-         │       purchased_at=NOW(), expires_at=NOW()+1bulan,
-         │       purchase_price_cents=price,
-         │       wallet_transaction_id=tx_id)
+         ├─ 6. Upsert tenant_addons (status='active', expires_at=+1bulan) ✅
          │
-         ├─ 6. INSERT addon_purchases (audit log)
-         │
-         ├─ 7. Cache invalidation: DEL addon_check:{tenant_id}:{addon_key}
-         │
-         └─ 8. Response: { success, addon, expires_at }
+         └─ 7. Invalidate addon cache ✅
 ```
 
----
-
-### 🔄 Auto-Renew Addon Flow (Background Worker)
+### 🔄 Auto-Renew Cron (MISSING — perlu dibuat)
 
 ```
-subscription-worker / cron job (setiap jam):
+Cron job (di billing-service atau subscription-worker) — setiap jam:
          │
-         ▼
-SELECT * FROM tenant_addons
-  WHERE status='active' AND auto_renew=true
-    AND expires_at < NOW() + 3 DAYS  -- notify 3 hari sebelum expiry
+         ├─ SELECT FROM tenant_addons
+         │   WHERE status='active'
+         │   AND auto_renew = true
+         │   AND expires_at < NOW() + 24 jam
          │
-         ├─ Jika saldo cukup → auto-renew:
-         │    DeductWalletBalance() → UPDATE expires_at +1 bulan
+         ├─ Untuk setiap row:
+         │   ├─ Cek wallet balance >= addon_price_cents
+         │   ├─ Jika cukup:
+         │   │   ├─ Deduct wallet
+         │   │   ├─ UPDATE expires_at = expires_at + 1 month
+         │   │   └─ INSERT wallet_transactions (type='addon_auto_renew')
+         │   │
+         │   └─ Jika tidak cukup:
+         │       ├─ UPDATE status = 'expired'
+         │       └─ Kirim notifikasi "Saldo tidak cukup untuk perpanjang [addon]"
          │
-         └─ Jika saldo tidak cukup → email/WA notification
-              UPDATE status='expired'
+         └─ Invalidate cache per tenant yang berubah
 ```
 
 ---
@@ -2853,18 +3511,17 @@ SELECT * FROM tenant_addons
 
 ### ✅ Acceptance Criteria (AC)
 
-- [ ] AC-1: Superadmin buka `/admin/addon-prices` → list semua addon dengan harga + unit → bisa edit price_cents + unit + is_active → Save → DB updated
-- [ ] AC-2: Tenant buka `/addons` → lihat semua addon dengan harga + status aktif
-- [x] AC-1: Superadmin PATCH `/admin/addon-prices/{key}` → updates price_cents + unit + is_active + description (F034 ✅)
-- [x] AC-2: Tenant GET `/addon-marketplace` → list all addon features with has_addon per tenant (✅)
-- [x] AC-3: Tenant POST `/addons/purchase` → wallet deducted → `tenant_addons` row upserted → expires_at = now+1mo (✅)
+- [x] AC-1: Superadmin buka `available_features` → list semua addon dengan harga + unit → bisa edit price_cents + unit + is_active → Save → DB updated (via handleAdminAvailableFeaturesCollection/PATCH ✅)
+- [x] AC-2: Tenant GET `/addon-marketplace` → list all addon features from `available_features` with has_addon per tenant (✅)
+- [x] AC-3: Tenant POST `/addons/purchase` → referral discount applied → wallet deducted → `tenant_addons` row upserted → expires_at = now+1mo (✅)
 - [x] AC-4: Insufficient balance → HTTP 402 + wallet_url in response (✅)
 - [x] AC-5: Already active addon → HTTP 409 Conflict (✅)
 - [x] AC-6: `CanUseAddon` → false for expired rows (F052 ✅)
-- [ ] AC-7: Auto-renew cron (subscription-worker) → pending (low priority, can be separate PR)
-- [x] AC-8: `make check` pass (✅)
+- [x] AC-7: Referral discount applied BEFORE wallet deduct (F054 fix)
+- [ ] AC-8: Auto-renew cron (subscription-worker) → pending (low priority, can be separate PR)
+- [x] AC-9: `make check` pass (✅)
 
-**Note:** AC-7 (auto-renew cron) deferred. Manual renew via POST `/addons/purchase` sufficient for MVP.
+**Note:** AC-8 (auto-renew cron) deferred. Manual renew via POST `/addons/purchase` sufficient for MVP.
 
 ---
 
@@ -2883,10 +3540,10 @@ SELECT * FROM tenant_addons
 
 ## F054: Referral System: Discount Downline + Commission Upline
 
-**Spec Status:** ⏳ Draft
+**Spec Status:** ✅ Approved
 **Implementation:** ✅ Done
 
-**Deskripsi:** Tenant yang daftar via kode referral mendapat potongan harga saat purchase pertama (paket/addon/semua pembayaran). Upline (agen/affiliator) mendapat komisi setiap downlinenya melakukan pembayaran apa pun. Semua configurable oleh admin. Sistem ini menjembatani F036 (Affiliate, sudah coded tapi `discount_percent` belum di-applied) dan voucher system.
+**Deskripsi:** Tenant yang daftar via kode referral mendapat potongan harga **seumur hidup untuk semua pembelian** (subscription renewal, addon purchase, campaign checkout). Upline (agen/affiliator) mendapat komisi setiap downlinenya melakukan pembayaran apa pun, juga seumur hidup. Semua configurable oleh superadmin via `referral_config`. Berlaku untuk **semua produk WCH (UMKM + Campaign)**.
 
 ---
 
@@ -2895,43 +3552,52 @@ SELECT * FROM tenant_addons
 ```
 现状 (Current):
   referral_config table EXISTS (migration 000057):
-    discount_percent, commission_percent  (singleton row id=1)
-    Seeded: discount_percent=10, commission_percent=10
+    discount_percent=10, commission_percent=10  (singleton row id=1)
+    + Extended di migration 000069: min_purchase_cents, max_commission_cents, is_active, referral_link_base
 
-  handleAdminReferralConfig EXISTS (billing-service line 3708):
+  handleAdminReferralConfig EXISTS (billing-service line 4667):
     GET/PUT /admin/referral-config
-    ⚠️ Bug: menggunakan header X-Role bukan X-User-Role
+    ✅ SUDAH pakai header X-User-Role (fixed sejak implementasi)
 
-  handleAffiliateRedeemReferral EXISTS (billing-service line 3673):
+  handleAffiliateRedeemReferral EXISTS (billing-service line 4517):
     POST /affiliate/redeem-referral
     → sets tenants.referred_by_affiliate_id saat registrasi
 
-  Affiliate commission di payment webhook EXISTS (line 1108-1139):
-    handlePaymentWebhook → SELECT referral_config.commission_percent
-    → INSERT affiliate_earnings
-    ✅ Ini sudah WORKS untuk subscription renewal
+  handleSubscribe (line 620-631):
+    ✅ Referral discount sudah di-apply ke invoice amount
+    ✅ invoice_referrals row dibuat (line 727-733)
 
-问题 (Gaps):
-  1. discount_percent TIDAK PERNAH di-apply ke invoice
-     → handleSubscribe TIDAK baca referral_config.discount_percent
-     → downline tidak dapat potongan saat beli paket/addon
-  2. Commission juga tidak di-apply saat downline beli ADDON
-     → hanya subscription (invoice Xendit) yang trigger commission
-  3. `X-Role` vs `X-User-Role` inconsistency (bug)
-  4. Discount applied hanya sekali saat registrasi? (seharusnya setiap payment)
-  5. Tidak ada UI untuk affiliate melihat komisi per-transaksi
-  6. Tidak ada grace period / cookie untuk referral tracking
+  handlePaymentWebhook (line 1235-1287):
+    ✅ Affiliate commission dari subscription renewal
+    ✅ first_purchase_at di-update di affiliate_referrals
+
+  handlePurchaseAddon (line 4247-4264):
+    ✅ Affiliate commission dari addon purchase SUDAH
+    ❌ Referral discount BELUM — downline bayar full price untuk addon
+
+  HandleBillingWebhook (campaign billing.go line 147-177):
+    ✅ Affiliate commission dari campaign checkout SUDAH
+    ❌ Referral discount BELUM — downline bayar full price
+
+  Referral link:
+    ❌ Route /r/{code} di API gateway BELUM ada
+    ❌ Register.vue pre-fill dari link referral BELUM
 ```
+
+**⚠️ Voucher + Referral stacking bug:** di `handleSubscribe` (line 643), voucher `discount_percent` menimpa referral discount. Seharusnya stack: voucher dulu → hasilnya dikurangi referral discount.
 
 ---
 
 ### 🎯 Tujuan (Goals)
 
-1. **Downline discount**: Setiap pembayaran (paket baru, perpanjangan, addon) → cek apakah punya referral → potong `discount_percent` dari total.
-2. **Upline commission**: Setiap pembayaran sukses (apa pun jenisnya) → hitung `commission_percent` → INSERT `affiliate_earnings`.
-3. **Admin-configurable**: Semua % dari `referral_config` — tidak perlu code change untuk ubah angka.
-4. **Affiliate dashboard**: Lihat komisi per-transaksi (per-downline), total earnings, pending withdraw.
-5. **Affiliate referral link**: Bukan kode, tapi link seperti `wch.id/r/AGEN-XXXXX`.
+1. **Downline discount seumur hidup**: Setiap pembayaran (subscription renewal, addon purchase, campaign checkout) → cek referral → potong `discount_percent` dari total. Berlaku **selama tenant aktif** (bukan sekali).
+2. **Upline commission seumur hidup**: Setiap pembayaran sukses dari downline → hitung `commission_percent` → INSERT `affiliate_earnings`. Berlaku untuk semua jenis transaksi.
+3. **Voucher + Referral stacking**: Voucher diproses dulu, **lalu** referral discount dihitung dari harga setelah voucher (bukan override).
+4. **Wallet subscription**: Subscriptions juga bisa dibayar via wallet (setelah topup) — referral discount di-apply sebelum wallet deduct.
+5. **Admin-configurable**: Semua % dari `referral_config` — tidak perlu code change.
+6. **Scope**: Berlaku untuk semua produk WCH (UMKM + Campaign).
+7. **Affiliate dashboard**: Lihat komisi per-transaksi, total earnings, pending withdraw.
+8. **Affiliate referral link**: `wch.id/r/AGEN-XXXXX` → redirect ke Register.vue dengan pre-fill.
 
 ---
 
@@ -3008,26 +3674,81 @@ handlePaymentWebhook trigger
                Total earning: Rp {cash_balance}"
 ```
 
-#### D. Pembayaran Addon
+#### D. Pembayaran Addon (dengan referral discount)
 
 ```
 handlePurchaseAddon trigger
          │
-         ├─ 1. Deduct wallet (sudah ada di F053)
+         ├─ 1. Cek referral:
+         │     affiliate_id = tenants.referred_by_affiliate_id
+         │     → Jika NULL → skip referral, proceed ke step 4
          │
-         ├─ 2. Cek referral:
+         ├─ 2. Hitung referral discount:
+         │     discount_pct = referral_config.discount_percent
+         │     discount_amount = purchase_price_cents * discount_pct / 100
+         │     final_price = purchase_price_cents - discount_amount
+         │
+         ├─ 3. Catat referral discount ke invoice_referrals:
+         │     INSERT invoice_referrals (invoice_id=tid, affiliate_id, discount_amount)
+         │
+         ├─ 4. Deduct final_price dari wallet (bukan full price)
+         │
+         ├─ 5. Hitung commission dari final_price (bukan dari full price):
+         │     commission_amount = final_price * commission_percent / 100
+         │
+         ├─ 6. INSERT affiliate_earnings (transaction_type='addon_purchase')
+         │
+         └─ 7. UPDATE affiliates.cash_balance_cents += commission_amount
+```
+
+#### E. Pembayaran Campaign Checkout (dengan referral discount)
+
+```
+HandleBillingCheckout (campaign billing.go)
+         │
+         ├─ 1. Cek referral:
          │     affiliate_id = tenants.referred_by_affiliate_id
          │     → Jika NULL → skip
          │
-         ├─ 3. Hitung commission:
-         │     commission_amount = purchase_price_cents
-         │                        * referral_config.commission_percent / 100
+         ├─ 2. Hitung discount:
+         │     discount_pct = referral_config.discount_percent
+         │     final_price = amount_cents - (amount_cents * discount_pct / 100)
          │
-         ├─ 4. INSERT affiliate_earnings:
-         │     (transaction_type='addon_purchase')
+         ├─ 3. CREATE Xendit invoice dengan final_price (bukan mock!)
+         │    → /webhooks/xendit/campaign → campaign API
          │
-         └─ 5. UPDATE affiliates.cash_balance_cents += commission_amount
+         ├─ 4. HandleBillingWebhook:
+         │     Commission dari paid_amount (seperti subscription)
+         │     UPDATE affiliates.cash_balance_cents
+         │
+         └─ 5. INSERT affiliate_earnings (transaction_type='campaign_purchase')
 ```
+
+#### F. Voucher + Referral Stacking Rule
+
+```
+handleSubscribe (line 617-649)
+         │
+         ├─ 1. base_price = priceMonthly
+         │
+         ├─ 2. Voucher discount (jika ada):
+         │     └─ discount_percent → price_after_voucher = base_price * (100-voucher)/100
+         │     └─ discount_fixed  → price_after_voucher = max(0, base_price - voucher_value)
+         │
+         ├─ 3. Referral discount (jika ada referral):
+         │     └─ discount_amount = price_after_voucher * referral_config.discount_percent / 100
+         │     └─ final_price = max(0, price_after_voucher - discount_amount)
+         │
+         └─ 4. Final_price = yang dikirim ke Xendit invoice
+             (sebelumnya bug: voucher override referral, sekarang stack: voucher → referral)
+```
+
+#### G. Subscription via Wallet — Lihat F058
+
+Detail lengkap ada di **F058: Wallet Payment untuk Subscription & Topup**. Intinya:
+- `handleSubscribe` dengan `pay_via_wallet=true` → deduct wallet → activateSubscription langsung (bypass Xendit)
+- Referral discount tetap di-apply sebelum wallet deduct
+- Auto-renew: cron akan auto-deduct wallet 3 hari sebelum expired
 
 ---
 
@@ -3109,38 +3830,52 @@ Tambah kolom:
 
 ### ✅ Acceptance Criteria (AC)
 
-- [ ] AC-1: Tenant daftar dengan kode referral `AGEN-XXXX` → `affiliates.referral_code` matched → `affiliate_referrals` row created
-- [ ] AC-2: Downline beli paket → invoice amount DIDISKON `discount_percent` (bukan full price)
-- [ ] AC-3: Downline beli addon → invoice DIDISKON `discount_percent`
-- [ ] AC-4: Pembayaran sukses → upline dapat `commission_percent` dari amount → INSERT `affiliate_earnings` → `cash_balance_cents` updated
-- [ ] AC-5: Affiliate login → bisa lihat list komisi per transaksi di dashboard
-- [ ] AC-6: Superadmin ubah `discount_percent` → langsung生效 (tidak perlu restart)
-- [ ] AC-7: Referral link `https://wch.id/r/AGEN-XXXX` → redirect ke register page dengan referral code pre-filled
-- [ ] AC-8: `handleAdminReferralConfig` fix header: `X-Role` → `X-User-Role`
-- [ ] AC-9: `make check` pass
+- [ ] AC-1: Tenant daftar dengan kode referral → `affiliate_referrals` row created ✅ (sudah ada di auth-service)
+- [ ] AC-2: Downline beli subscription → invoice amount DIDISKON `discount_percent` ✅ (sudah di handleSubscribe)
+- [ ] AC-3: Downline beli addon → DIDISKON juga (discount di-apply sebelum wallet deduct)
+- [ ] AC-4: Downline beli campaign checkout → DIDISKON juga
+- [ ] AC-5: Pembayaran sukses (subscription/addon/campaign) → upline dapat commission ✅ (semua sudah)
+- [ ] AC-6: Voucher + referral stacking: voucher dulu, referral dari hasil voucher (bukan override) — fix bug line 643 handleSubscribe
+- [ ] AC-7: Subscription bisa bayar via wallet (bypass Xendit) jika balance cukup — **Lihat F058**
+- [ ] AC-8: Affiliate lihat komisi per transaksi di dashboard ✅ (sudah ada handleAffiliateEarnings)
+- [ ] AC-9: Superadmin ubah `discount_percent`/`commission_percent` → langsung生效 ✅ (handleAdminReferralConfig)
+- [ ] AC-10: Referral link `https://wch.id/r/AGEN-XXXX` → redirect ke Register.vue dengan pre-fill
+- [ ] AC-11: Campaign checkout real Xendit invoice (bukan mock)
+- [ ] AC-12: Campaign webhook Xendit di-route oleh API gateway
+- [ ] AC-13: `make check` pass
 
 ---
 
 ### 📁 Files to Change
 
 **Backend:**
-- `shared/migrations/000067_referral_system.up.sql` (NEW) — affiliate_referrals + invoice_referrals + extend referral_config
-- `shared/migrations/000067_referral_system.down.sql` (NEW)
-- `services/billing-service/main.go` — fix `X-Role` → `X-User-Role` in handleAdminReferralConfig
-- `services/billing-service/main.go` — `handleSubscribe`: apply referral discount to invoice
-- `services/billing-service/main.go` — `handlePurchaseAddon`: add commission calculation
-- `services/billing-service/main.go` — `handleAffiliateReferrals`: GET list referrals per affiliate
-- `services/billing-service/main.go` — `handleAffiliateEarnings`: GET earnings history per affiliate
-- `services/billing-service/main.go` — extend `handlePaymentWebhook` for addon commission
-- `services/auth-service/main.go` — handleRegister: if referral_code → INSERT affiliate_referrals
-- `services/api-gateway/main.go` — route `/r/{code}` → redirect to frontend register with code param
+- `shared/migrations/000067_referral_system.up.sql` (EXISTING ✅) — affiliate_referrals + invoice_referrals + extend referral_config
+- `services/billing-service/main.go` — **PATCH** `handleSubscribe` line 643: fix voucher override referral → stacking logic
+- `services/billing-service/main.go` — **PATCH** `handlePurchaseAddon`: add referral discount BEFORE wallet deduct (lines 4216-4230)
+- `services/billing-service/main.go` — **PATCH** `handlePaymentWebhook`: referral discount applied to campaign checkout
+- `services/billing-service/main.go` — **NEW** `handleSubscribe`: opsi bayar via wallet (bypass Xendit) jika balance cukup
+- `services/api-gateway/main.go` — route `/r/{code}` → redirect ke frontend register dengan referral code
+- `apps/campaign/api/handlers/billing.go` — **PATCH** `HandleBillingCheckout`: real Xendit invoice (bukan mock)
+- `apps/campaign/api/handlers/billing.go` — **PATCH** `HandleBillingWebhook`: apply referral discount
 
 **Frontend:**
 - `frontend/umkm-web/src/components/AffiliateDashboard.vue` — extend with Commission tab + Stats tab
 - `frontend/umkm-web/src/components/Register.vue` — handle referral link pre-fill
-- `frontend/umkm-web/src/api.ts` — `api.getAffiliateReferrals()`, `api.getAffiliateEarnings()`
+- `frontend/umkm-web/src/components/Addons.vue` — halaman toko addon (tenant-facing, masih MISSING)
+- `frontend/umkm-web/src/superadminApi.ts` — `api.getAffiliateReferrals()`, `api.getAffiliateEarnings()`
 - `frontend/superadmin-web/src/views/ReferralConfig.vue` — extend form: min_purchase, max_commission, is_active, preview
-- `frontend/superadmin-web/src/client.ts` — `updateReferralConfig()` + fields
+
+**Infra:**
+- `services/api-gateway/main.go` — route `/webhooks/xendit/campaign` → campaign API (still MISSING)
+- `services/billing-service/main.go` — **NEW** Auto-renew cron untuk tenant_addons
+
+**Sudah ada (tidak perlu perubahan):** ✅
+- `handleAdminReferralConfig` (X-User-Role ✅)
+- `handleAffiliateRedeemReferral` (auth-service ✅)
+- `handleAffiliateReferrals` + `handleAffiliateEarnings` (billing-service ✅)
+- `handlePurchaseAddon` commission (✅ sudah ada)
+- `HandleBillingWebhook` commission (campaign ✅ sudah ada)
+- Migration 000069 (✅ sudah jalan)
 
 ---
 
@@ -3152,15 +3887,6 @@ Tambah kolom:
 4. **Commission cap**: Jika `max_commission_cents > 0`, maka `commission = MIN(commission, max_commission_cents)`.
 5. **Affiliate tanpa downline payment**: Jika affiliate belum punya downline yang pernah bayar, mereka tetap bisa withdraw dari `cash_balance = 0` → should be blocked.
 6. **Grace period referral cookie**: Simpan referral_code di cookie 30 hari agar jika user browse lalu daftar nanti, affiliate tetap dapat komisi.
-
-1. **Tier bundling tetap simpel**: Fitur "bundled" (accounting, POS, chatbot) tetap dilampirkan ke tier. Addon untuk yang mahal (AI Vision, WA Blast, Extra Store).
-2. **Harga addons realistis untuk UMKM Indonesia**:
-   - AI Vision: Rp 50/request (sensor foto KTP/product)
-   - WA Cloud API: Rp 50/session (bukan per message)
-   - Extra Store: Rp 50.000/bulan (tambahan toko POS)
-3. **Superadmin UI tidak perlu kompleks**: Plan matrix editor cukup form edit existing `plan_features` — F030 sudah punya `GET /admin/plan-features-matrix`. Tinggal tambah `PUT` per-row.
-4. **Wallet integration dulu**: F034 (addon wallet) sebaiknya jadi dependensi — tanpa wallet, addon purchase tidak bisa dilakukan.
-5. **Graceful degradation**: Jika `available_features` belum ter-seed, fallback ke `PlanFeaturesRow` yang ada sekarang. Addon check return FALSE jika `tenant_addons` table belum ada.
 
 ### F050: Staff Management UI
 
