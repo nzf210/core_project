@@ -157,3 +157,5 @@ apply_f*.patch
 apply_*.patch
 frontend/umkm-web/fix-auth.cjs
 frontend/umkm-web/fix-auth.js
+format-phone-patch.txt
+frontend/umkm-web/auth-service

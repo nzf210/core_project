@@ -857,6 +857,14 @@ func handleAddStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Auto-format phone number
+	req.PhoneNumber = strings.TrimSpace(req.PhoneNumber)
+	if strings.HasPrefix(req.PhoneNumber, "0") {
+		req.PhoneNumber = "62" + req.PhoneNumber[1:]
+	} else if strings.HasPrefix(req.PhoneNumber, "+") {
+		req.PhoneNumber = req.PhoneNumber[1:]
+	}
+
 	if req.Username == "" || req.Password == "" || req.Role == "" || req.PhoneNumber == "" {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Missing required fields"})
 		return
