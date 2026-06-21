@@ -850,6 +850,12 @@ func handleAddStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tenantID := claims.TenantID
+	// ONLY owner can add staff
+	if claims.Role != "owner" {
+		writeJSON(w, http.StatusForbidden, Response{Success: false, Message: "Hanya owner yang dapat menambah staff"})
+		return
+	}
+
 
 	var req AddStaffRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

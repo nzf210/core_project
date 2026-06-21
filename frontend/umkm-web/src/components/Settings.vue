@@ -10,7 +10,7 @@
     <!-- Pengaturan Akun -->
     <div class="surface-card animate-fade-in" style="max-width: 600px; padding: 2rem;">
       <h3 style="margin-bottom: 1.5rem;">Pengaturan Akun</h3>
-      <div style="display: flex; flex-direction: column; gap: 1rem;">
+      <div style="display: flex; flex-direction: column; gap: 1rem;" v-if="userRole === 'owner'">
         <div>
           <label class="form-label">Username</label>
           <input type="text" placeholder="Username" v-model="profileForm.username" class="form-control" />
@@ -53,7 +53,7 @@
         </label>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 1rem;">
+      <div style="display: flex; flex-direction: column; gap: 1rem;" v-if="userRole === 'owner'">
         <input type="text" placeholder="Nama Usaha" v-model="profileForm.business_name" class="form-control" />
         <textarea placeholder="Alamat Usaha" v-model="profileForm.business_address" class="form-control" rows="2" />
         <select v-model="profileForm.business_type" class="form-control">
@@ -162,7 +162,7 @@
     <!-- Staff Management -->
     <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
       <h3 style="margin-bottom: 1.5rem;">Pengaturan Pegawai (Kasir)</h3>
-      <div style="display: flex; flex-direction: column; gap: 1rem;">
+      <div style="display: flex; flex-direction: column; gap: 1rem;" v-if="userRole === 'owner'">
         <input type="text" placeholder="Username" v-model="staffForm.username" class="form-control" />
         <input type="email" placeholder="Email" v-model="staffForm.email" class="form-control" />
         <input type="password" placeholder="Password Sementara" v-model="staffForm.password" class="form-control" />
@@ -199,8 +199,7 @@
                 {{ staff.role }}
               </span>
             </div>
-            <div>
-              <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; margin-right: 0.5rem;" @click="openEditStaffModal(staff)">Edit</button>
+            <div v-if="userRole === 'owner'">              <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; margin-right: 0.5rem;" @click="openEditStaffModal(staff)">Edit</button>
               <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" @click="openDeleteStaffModal(staff.id)">Hapus</button>
             </div>
           </div>
