@@ -125,7 +125,7 @@ Format per feature:
 | F056 | Theme Management (Dark/Light/System) | ✅ Approved | ✅ Done | 2026-06-21 |
 | F057 | Superadmin Feature Matrix + Addon Tier Gating | ✅ Approved | ✅ Done | 2026-06-22 |
 | F058 | Wallet Payment untuk Subscription & Topup | ✅ Approved | 🔨 In Progress | 2026-06-22 |
-| F059 | Landing Page — Marketing & Onboarding | ✅ Approved | ⏳ Pending | 2026-06-22 |
+| F059 | Landing Page — Marketing & Onboarding | ✅ Approved | ✅ Done | 2026-06-21 |
 | F060 | Sales Dashboard Chart — Visual Penjualan | ✅ Approved | ⏳ Pending | 2026-06-22 |
 
 ## F056: Theme Management (Dark/Light/System)
@@ -624,20 +624,20 @@ Tab "Transaksi":
 
 ### ✅ Acceptance Criteria (AC)
 
-- [ ] AC-1: Guest buka `/` → lihat landing page (hero, features, pricing, footer)
-- [ ] AC-2: User login buka `/` → redirect ke `/dashboard`
-- [ ] AC-3: "Mulai Gratis" CTA → `/register`
-- [ ] AC-4: Pricing table menampilkan 3 tier (Lite/Pro/Ultimate) — static atau dari backend
-- [ ] AC-5: Responsive — mobile & desktop layout rapi
-- [ ] AC-6: Dark/light mode konsisten dengan F056 theme
-- [ ] AC-7: SEO meta tags (title, description, og:image)
-- [ ] AC-8: `vue-tsc` clean, build pass
+- [x] AC-1: Guest buka `/` → lihat landing page (hero, features, pricing, footer)
+- [x] AC-2: User login buka `/` → redirect ke `/dashboard`
+- [x] AC-3: "Mulai Gratis" CTA → `/register`
+- [x] AC-4: Pricing table menampilkan 3 tier (Lite/Pro/Ultimate) — static
+- [x] AC-5: Responsive — mobile & desktop layout rapi
+- [x] AC-6: Fixed dark theme konsisten dengan F056 dark aesthetic (landing dark-only)
+- [ ] AC-7: SEO meta tags — perlu @unhead/vue atau vueuse-head (pending install)
+- [x] AC-8: `vue-tsc` clean, build pass
 
-### 📁 Files to Change
+### 📁 Files Changed
 
-- `frontend/umkm-web/src/components/LandingPage.vue` (NEW — ~300 baris)
-- `frontend/umkm-web/src/router/index.ts` — route `/` conditional (guest → Landing, authed → Dashboard), route `/landing`
-- `frontend/umkm-web/src/App.vue` — skip sidebar/layout untuk landing page (atau kondisional)
+- `frontend/umkm-web/src/components/LandingPage.vue` (NEW — 500+ baris)
+- `frontend/umkm-web/src/router/index.ts` — route `/` → LandingPage, `meta.landing` guard di `beforeEach`, redirect ke `/dashboard` jika authed
+- `frontend/umkm-web/src/App.vue` — hide sidebar/chrome untuk landing, `landing-mode` class di main
 
 ### Notes:
 

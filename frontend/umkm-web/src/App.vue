@@ -19,7 +19,7 @@
       ☰
     </button>
 
-    <!-- Sidebar -->
+    <!-- Sidebar — hidden on landing page -->
     <AppSidebar
       v-if="isLoggedIn"
       :is-open="isMobileMenuOpen"
@@ -32,10 +32,15 @@
     />
 
     <!-- Main Content -->
-    <main class="app-main" :class="{ 'with-sidebar': isLoggedIn, 'frozen-active': isFrozen }">
-      <div class="container animate-fade-in">
-        <router-view />
-      </div>
+    <main
+      class="app-main"
+      :class="{
+        'with-sidebar': isLoggedIn,
+        'frozen-active': isFrozen,
+        'landing-mode': isLanding
+      }"
+    >
+      <router-view />
     </main>
 
     <Chatbot v-if="isLoggedIn" />
@@ -43,7 +48,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from './api'
 import Chatbot from './components/Chatbot.vue'
@@ -51,6 +56,7 @@ import AppSidebar from './components/AppSidebar.vue'
 import { useTheme } from './composables/useTheme'
 
 const route = useRoute()
+const isLanding = computed(() => route.meta.landing === true)
 
 // Initialize theme globally
 useTheme()
@@ -180,6 +186,12 @@ onMounted(() => {
 
 .app-main.frozen-active {
   padding-top: 4rem;
+}
+
+/* F059: Landing page — full-width, no padding override */
+.app-main.landing-mode {
+  margin-left: 0;
+  padding: 0;
 }
 
 /* Mobile Responsiveness */

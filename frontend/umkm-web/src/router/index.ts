@@ -24,9 +24,12 @@ import ClinicFrontdesk from '../components/ClinicFrontdesk.vue'
 import AffiliateDashboard from '../components/AffiliateDashboard.vue'
 import AffiliateLeaderboard from '../components/AffiliateLeaderboard.vue'
 import Wallet from '../components/Wallet.vue'
+import LandingPage from '../components/LandingPage.vue'
 
 const routes = [
-  { path: '/', component: DynamicDashboard, name: 'Dashboard' },
+  // F059: Landing page for guests, dashboard for authed users
+  { path: '/', component: LandingPage, name: 'Landing', meta: { landing: true } },
+  { path: '/landing', redirect: '/' },
   { path: '/dashboard', component: DynamicDashboard, name: 'DynamicDashboard' },
   { path: '/dashboard-classic', component: Dashboard, name: 'DashboardClassic' },
   { path: '/onboarding', component: Onboarding, name: 'Onboarding' },
@@ -110,11 +113,17 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
+  // F059: If already logged in, redirect from landing page to dashboard
   const token = localStorage.getItem('access_token')
   const tenantId = localStorage.getItem('tenant_id')
   const role = localStorage.getItem('role')
   const isSuperadmin = role === 'superadmin'
   const isLoggedIn = !!(token && tenantId)
+
+  if (to.meta.landing && isLoggedIn) {
+    next({ path: '/dashboard' })
+    return
+  }
 
   if (to.meta.requiresGuest) {
     if (isLoggedIn || isSuperadmin) {
