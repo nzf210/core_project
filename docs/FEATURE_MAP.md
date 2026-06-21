@@ -3105,7 +3105,8 @@ Halaman/Dialog untuk menampilkan daftar karyawan/staff sebuah UMKM dan melakukan
 
 **Acceptance Criteria:**
 - [ ] BE: Endpoint `GET /auth/staff` untuk mendapatkan daftar staff berdasarkan tenant_id.
-- [ ] BE: Endpoint `PUT /auth/staff/{id}` untuk update detail staff.
+- [x] BE: Endpoint `PUT /auth/staff/{id}` untuk update detail staff.
+- [x] BE: Access Control - Hanya Owner dan Admin yang dapat Add/Edit/Delete Staff.
 - [ ] FE: Tabel daftar staff di halaman Settings.
 - [ ] FE: Modal edit staff untuk ubah data.
 

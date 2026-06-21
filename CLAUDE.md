@@ -525,7 +525,7 @@ AI Gateway sudah menangani:
 Sistem memiliki 3 level/jenis user, yaitu:
 1. **Superadmin** (Akses penuh ke dashboard superadmin untuk manajemen tenant & voucher).
 2. **Tenant Owner / Admin** (Pemilik UMKM/Campaign, memiliki kontrol penuh atas resource aplikasinya, menagih/membayar langganan, dan manajemen onboarding).
-3. **Staff / Kasir / Relawan** (Anggota dari tenant yang hanya memiliki akses operasional sesuai role RBAC, tidak bisa mengakses menu billing/langganan).
+3. **Staff / Kasir / Relawan** (Anggota dari tenant yang hanya memiliki akses operasional sesuai role RBAC, tidak bisa mengakses menu billing/langganan, tidak bisa Add/Edit/Delete staff).
 
 *Saran perbaikan:* 
 - Pastikan saat user login, status `onboarding_completed` dan `plan` terbaca dari profil backend lalu disimpan ke `localStorage`. Redirect loop ke halaman payment/onboarding terjadi karena saat login di device baru, flag `onboarding_completed` di `localStorage` kosong, sehingga Router memaksa user aktif masuk ke halaman Onboarding (yang juga merupakan form pemilihan paket).
