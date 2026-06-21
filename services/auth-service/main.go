@@ -26,7 +26,7 @@ import (
 var (
 	usernameRE = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 	emailRE    = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
-	phoneRE    = regexp.MustCompile(`^62[0-9]{9,}$`)
+	phoneRE    = regexp.MustCompile(`^62[0-9]{6,15}$`)
 )
 
 var telegramBotToken string
@@ -885,6 +885,7 @@ func handleAddStaff(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Password minimal 6 karakter"})
 		return
 	}
+	fmt.Println("DEBUG PHONE NUMBER:", req.PhoneNumber)
 	if !phoneRE.MatchString(req.PhoneNumber) {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Nomor HP harus diawali 62, contoh: 62812..."})
 		return
