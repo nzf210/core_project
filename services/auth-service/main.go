@@ -14,12 +14,19 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"core_project/shared/sdk/config"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
+)
+
+var (
+	usernameRE = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+	emailRE    = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
+	phoneRE    = regexp.MustCompile(`^62[0-9]{9,}$`)
 )
 
 var telegramBotToken string
@@ -852,6 +859,26 @@ func handleAddStaff(w http.ResponseWriter, r *http.Request) {
 
 	if req.Username == "" || req.Password == "" || req.Role == "" || req.PhoneNumber == "" {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Missing required fields"})
+		return
+	}
+	if len(req.Username) < 3 {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Username minimal 3 karakter"})
+		return
+	}
+	if !usernameRE.MatchString(req.Username) {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Username hanya boleh huruf, angka, dan underscore"})
+		return
+	}
+	if req.Email != "" && !emailRE.MatchString(req.Email) {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Format email tidak valid"})
+		return
+	}
+	if len(req.Password) < 6 {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Password minimal 6 karakter"})
+		return
+	}
+	if !phoneRE.MatchString(req.PhoneNumber) {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Nomor HP harus diawali 62, contoh: 62812..."})
 		return
 	}
 

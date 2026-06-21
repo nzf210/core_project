@@ -302,7 +302,7 @@
 
     <!-- Custom Toast -->
     <Teleport to="body">
-      <div v-if="toast.visible" :class="['toast-notification', `toast-${toast.type}`]">
+      <div v-if="toast.visible" :class="['toast-notification', `toast-${toast.type}`, { fading: toast.fading }]">
         {{ toast.message }}
       </div>
     </Teleport>
@@ -323,10 +323,15 @@ const loadingQris = ref(false)
 const reportEnabled = ref(false)
 const reportTime = ref('07:00')
 
-const toast = ref({ visible: false, message: '', type: 'success' })
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+const toast = ref({ visible: false, message: '', type: 'success', fading: false })
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-  toast.value = { visible: true, message, type }
-  setTimeout(() => { toast.value.visible = false }, 3000)
+  if (toastTimer) clearTimeout(toastTimer)
+  toast.value = { visible: true, message, type, fading: false }
+  toastTimer = setTimeout(() => {
+    toast.value.fading = true            // trigger fade-out
+    setTimeout(() => { toast.value.visible = false }, 350)
+  }, 3000)
 }
 
 // Profile Form
@@ -481,7 +486,7 @@ const openEditStaffModal = (staff: any) => {
 
 const handleUpdateStaff = async () => {
   if (!editStaffForm.value.username) {
-    alert('Username tidak boleh kosong');
+    showToast('Username tidak boleh kosong', 'error');
     return;
   }
 
@@ -489,14 +494,14 @@ const handleUpdateStaff = async () => {
   try {
     const res = await authApi.updateStaff(editStaffForm.value);
     if (res.success) {
-      alert('Pegawai berhasil diperbarui');
+      showToast('Pegawai berhasil diperbarui', 'success');
       showEditStaffModal.value = false;
       fetchStaffList();
     } else {
-      alert(res.message || 'Gagal memperbarui pegawai');
+      showToast(res.message || 'Gagal memperbarui pegawai', 'error');
     }
   } catch (error: any) {
-    alert(error.message || 'Terjadi kesalahan jaringan');
+    showToast(error.message || 'Terjadi kesalahan jaringan', 'error');
   } finally {
     loadingUpdateStaff.value = false;
   }
@@ -508,13 +513,13 @@ const handleDeleteStaff = async (id: string) => {
   try {
     const res = await authApi.deleteStaff(id);
     if (res.success) {
-      alert('Pegawai berhasil dihapus');
+      showToast('Pegawai berhasil dihapus', 'success');
       fetchStaffList();
     } else {
-      alert(res.message || 'Gagal menghapus pegawai');
+      showToast(res.message || 'Gagal menghapus pegawai', 'error');
     }
   } catch (error: any) {
-    alert(error.message || 'Terjadi kesalahan jaringan');
+    showToast(error.message || 'Terjadi kesalahan jaringan', 'error');
   }
 }
 
@@ -536,13 +541,15 @@ const handleAddStaff = async () => {
       role: staffForm.value.role || 'kasir',
       phoneNumber: staffForm.value.phoneNumber,
     })
-    if (data.success) {
-      showToast('Pegawai berhasil ditambahkan!')
+    if (data?.success) {
+      showToast('Pegawai berhasil ditambahkan')
       staffForm.value = { username: '', email: '', password: '', phoneNumber: '', role: 'kasir' }
+      fetchStaffList()
     } else {
-      showToast(data.message || 'Gagal menambahkan pegawai', 'error')
+      showToast(data?.message || 'Gagal menambahkan pegawai', 'error')
     }
   } catch (err) {
+    console.error('Add staff error:', err)
     showToast('Kesalahan jaringan', 'error')
   } finally {
     loadingStaff.value = false
@@ -771,21 +778,7 @@ onMounted(() => {
   font-family: inherit;
 }
 
-.toast-notification {
-  padding: 0.875rem 1.25rem;
-  border-radius: var(--radius-md);
-  font-weight: 500;
-  box-shadow: var(--shadow-lg);
-}
-
-.toast-success {
-  background-color: #10b981;
-}
-
-.toast-error {
-  background: #ef4444;
-  color: white;
-}
+/* Toast styles are in main.css — do not duplicate here */
 
 .switch {
   position: relative;

@@ -246,12 +246,25 @@ input:checked + .slider::before { transform: translateX(20px); }
   position: fixed; top: 1.25rem; right: 1.25rem;
   padding: 0.875rem 1.25rem; border-radius: var(--radius-md);
   color: #fff; font-weight: 500; font-size: 0.875rem; z-index: 2147483647;
-  animation: slideIn 0.3s cubic-bezier(0.16,1,0.3,1); box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg);
   max-width: calc(100vw - 2.5rem);
+  /* fade in */
+  animation: toastIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards;
 }
 .toast-success { background: var(--success); }
 .toast-error   { background: var(--danger); }
-@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+@keyframes toastIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);   opacity: 1; }
+}
+
+.toast-notification.fading {
+  animation: toastOut 0.35s ease forwards !important;
+}
+@keyframes toastOut {
+  to { opacity: 0; transform: translateX(100%); }
+}
 
 /* Modal */
 .modal-overlay,
