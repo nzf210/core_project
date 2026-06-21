@@ -536,10 +536,9 @@ export const authApi = {
     return res.json()
   },
   async deleteStaff(id: string) {
-    const res = await fetch(`${API_BASE}/auth/staff/delete`, {
+    const res = await fetch(`${API_BASE}/auth/staff/delete?id=${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: headers(),
-      body: JSON.stringify({ id }),
     })
     return res.json()
   },

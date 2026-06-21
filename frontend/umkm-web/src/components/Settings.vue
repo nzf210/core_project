@@ -201,7 +201,7 @@
             </div>
             <div>
               <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; margin-right: 0.5rem;" @click="openEditStaffModal(staff)">Edit</button>
-              <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" @click="handleDeleteStaff(staff.id)">Hapus</button>
+              <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" @click="openDeleteStaffModal(staff.id)">Hapus</button>
             </div>
           </div>
           <div style="font-size: 0.9rem; opacity: 0.8;">
@@ -306,6 +306,22 @@
         {{ toast.message }}
       </div>
     </Teleport>
+
+    <!-- Delete Confirmation Modal -->
+    <Teleport to="body">
+      <div v-if="showDeleteModal" class="modal-overlay" @click.self="showDeleteModal = false">
+        <div class="modal-content glass-card animate-fade-in" style="max-width: 360px; width: 90%; text-align: center;">
+          <h3 style="margin-bottom: 0.5rem;">Hapus Pegawai?</h3>
+          <p style="opacity: 0.7; margin-bottom: 1.5rem;">Tindakan ini tidak dapat dibatalkan.</p>
+          <div style="display: flex; gap: 1rem; justify-content: center;">
+            <button class="btn btn-secondary" @click="showDeleteModal = false" :disabled="loadingDeleteStaff">Batal</button>
+            <button class="btn btn-danger" @click="confirmDeleteStaff" :disabled="loadingDeleteStaff">
+              {{ loadingDeleteStaff ? 'Menghapus...' : 'Hapus' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -325,6 +341,10 @@ const reportTime = ref('07:00')
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 const toast = ref({ visible: false, message: '', type: 'success', fading: false })
+
+const showDeleteModal = ref(false)
+const deleteTargetId = ref('')
+const loadingDeleteStaff = ref(false)
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
   if (toastTimer) clearTimeout(toastTimer)
   toast.value = { visible: true, message, type, fading: false }
@@ -507,19 +527,26 @@ const handleUpdateStaff = async () => {
   }
 }
 
-const handleDeleteStaff = async (id: string) => {
-  if (!confirm('Yakin ingin menghapus pegawai ini?')) return;
+const openDeleteStaffModal = (id: string) => {
+  deleteTargetId.value = id
+  showDeleteModal.value = true
+}
 
+const confirmDeleteStaff = async () => {
+  loadingDeleteStaff.value = true
   try {
-    const res = await authApi.deleteStaff(id);
+    const res = await authApi.deleteStaff(deleteTargetId.value)
     if (res.success) {
-      showToast('Pegawai berhasil dihapus', 'success');
-      fetchStaffList();
+      showToast('Pegawai berhasil dihapus', 'success')
+      showDeleteModal.value = false
+      fetchStaffList()
     } else {
-      showToast(res.message || 'Gagal menghapus pegawai', 'error');
+      showToast(res.message || 'Gagal menghapus pegawai', 'error')
     }
   } catch (error: any) {
-    showToast(error.message || 'Terjadi kesalahan jaringan', 'error');
+    showToast(error.message || 'Terjadi kesalahan jaringan', 'error')
+  } finally {
+    loadingDeleteStaff.value = false
   }
 }
 
