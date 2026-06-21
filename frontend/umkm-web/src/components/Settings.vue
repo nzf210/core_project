@@ -43,7 +43,7 @@
       <div class="profile-logo-section" style="margin-bottom: 1.5rem; text-align: center;">
         <div class="logo-preview"
           style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; margin: 0 auto 0.5rem; border: 2px solid var(--border-color);">
-          <img v-if="profileForm.logo_url" :src="profileForm.logo_url" alt="Logo"
+          <img v-if="profileForm.logo_url" :src="profileForm.logo_url.startsWith('http') ? profileForm.logo_url : API_BASE + profileForm.logo_url + '?t=' + Date.now()" alt="Logo"
             style="width: 100%; height: 100%; object-fit: cover;" />
           <span v-else style="font-size: 2rem; color: var(--text-secondary);">S</span>
         </div>

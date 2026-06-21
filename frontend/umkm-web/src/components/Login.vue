@@ -11,10 +11,9 @@
       <div class="auth-form-wrapper glass-card animate-fade-in">
         <div
           style="margin-bottom: 2rem; display: flex; flex-direction: column; align-items: center; text-align: center;">
-          <img v-if="logoUrl" :src="API_BASE + logoUrl" alt="Logo"
+          <img v-if="logoUrl" :src="logoUrl.startsWith('http') ? logoUrl : API_BASE + logoUrl + '?t=' + Date.now()" alt="Logo"
             style="max-height: 80px; margin-bottom: 1rem; border-radius: var(--radius-sm);" />
-          <h2 style="margin: 0; margin-bottom: 0.5rem;">{{ businessName === 'WCH UMKM' ? 'Selamat Datang Kembali' :
-            'Selamat Datang di ' + businessName }}</h2>
+          <h2 style="margin: 0; margin-bottom: 0.5rem;">Selamat Datang Kembali</h2>
           <p class="text-muted">Masuk ke dashboard keuangan Anda</p>
         </div>
 

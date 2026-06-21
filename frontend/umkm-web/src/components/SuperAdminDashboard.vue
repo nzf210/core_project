@@ -278,7 +278,7 @@
         <div class="logo-upload-section">
           <div class="logo-preview">
             <img v-if="editLogoPreview" :src="editLogoPreview" alt="Logo preview" />
-            <img v-else-if="editForm.logo_url" :src="API_BASE + editForm.logo_url + '?t=' + Date.now()"
+            <img v-else-if="editForm.logo_url" :src="editForm.logo_url.startsWith('http') ? editForm.logo_url : API_BASE + editForm.logo_url + '?t=' + Date.now()"
               alt="Current logo" />
             <div v-else class="logo-placeholder">No Logo</div>
           </div>
