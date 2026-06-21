@@ -24,12 +24,8 @@
       <!-- Step 1: Pilih Jenis Usaha (tanpa gate) -->
       <div v-if="currentStep === 1" class="step-content">
         <div class="business-types-grid">
-          <div
-            v-for="bt in businessTypes"
-            :key="bt.id"
-            :class="['bt-card', selectedType === bt.id ? 'selected' : '']"
-            @click="selectType(bt.id)"
-          >
+          <div v-for="bt in businessTypes" :key="bt.id" :class="['bt-card', selectedType === bt.id ? 'selected' : '']"
+            @click="selectType(bt.id)">
             <div class="bt-icon">{{ bt.icon }}</div>
             <div class="bt-name">{{ bt.name }}</div>
             <div class="bt-desc">{{ bt.description }}</div>
@@ -49,7 +45,8 @@
         </div>
         <div class="form-group">
           <label>Alamat Usaha (opsional)</label>
-          <textarea v-model="businessAddress" placeholder="Alamat lengkap usaha" class="input-field" rows="2"></textarea>
+          <textarea v-model="businessAddress" placeholder="Alamat lengkap usaha" class="input-field"
+            rows="2"></textarea>
         </div>
         <div class="form-group">
           <label>Nomor WhatsApp (untuk notifikasi)</label>
@@ -81,7 +78,8 @@
             <button :class="['tab-btn', activationTab === 'buy' ? 'active' : '']" @click="activationTab = 'buy'">
               Beli Paket
             </button>
-            <button :class="['tab-btn', activationTab === 'voucher' ? 'active' : '']" @click="activationTab = 'voucher'">
+            <button :class="['tab-btn', activationTab === 'voucher' ? 'active' : '']"
+              @click="activationTab = 'voucher'">
               Masukkan Voucher
             </button>
           </div>
@@ -90,20 +88,26 @@
           <div v-if="activationTab === 'buy'" class="activation-panel">
             <!-- Billing cycle toggle -->
             <div class="billing-toggle">
-              <button :class="['toggle-btn', billingCycle === 'monthly' ? 'active' : '']" @click="billingCycle = 'monthly'">Bulanan</button>
-              <button :class="['toggle-btn', billingCycle === 'yearly' ? 'active' : '']" @click="billingCycle = 'yearly'">Tahunan <span class="save-badge">Hemat</span></button>
+              <button :class="['toggle-btn', billingCycle === 'monthly' ? 'active' : '']"
+                @click="billingCycle = 'monthly'">Bulanan</button>
+              <button :class="['toggle-btn', billingCycle === 'yearly' ? 'active' : '']"
+                @click="billingCycle = 'yearly'">Tahunan <span class="save-badge">Hemat</span></button>
             </div>
+
+            <!-- F058: Wallet balance indicator -->
+            <div v-if="walletBalance > 0" class="wallet-indicator">
+              <span class="wallet-icon">💳</span>
+              <span>Saldo Wallet: <strong>Rp {{ (walletBalance / 100).toLocaleString('id-ID') }}</strong></span>
+            </div>
+
             <div class="plan-selector">
-              <div
-                v-for="plan in plans"
-                :key="plan.id"
-                :class="['plan-card', selectedPlan === plan.id ? 'selected' : '']"
-                @click="selectedPlan = plan.id"
-              >
+              <div v-for="plan in plans" :key="plan.id"
+                :class="['plan-card', selectedPlan === plan.id ? 'selected' : '']" @click="selectedPlan = plan.id">
                 <div class="plan-badge" v-if="plan.sort_order === 2">Populer</div>
                 <div class="plan-name">{{ plan.name }}</div>
                 <div class="plan-price">
-                  <span v-if="billingCycle === 'monthly'">Rp {{ formatPrice(plan.price_monthly) }}<span>/bulan</span></span>
+                  <span v-if="billingCycle === 'monthly'">Rp {{ formatPrice(plan.price_monthly)
+                  }}<span>/bulan</span></span>
                   <span v-else>Rp {{ formatPrice(plan.price_yearly) }}<span>/tahun</span></span>
                 </div>
                 <ul class="plan-features">
@@ -111,8 +115,25 @@
                 </ul>
               </div>
             </div>
+
+            <!-- F058: Wallet payment option -->
+            <div v-if="walletBalance > 0" class="wallet-pay-option">
+              <label class="pay-radio">
+                <input type="radio" :value="false" v-model="payViaWallet" />
+                <span>Xendit (Transfer Bank / QRIS / EWallet)</span>
+              </label>
+              <label class="pay-radio">
+                <input type="radio" :value="true" v-model="payViaWallet" />
+                <span>Bayar dari Wallet (Rp {{((walletBalance >= (plans.find(p => p.id === selectedPlan)?.price_monthly
+                  || 0)) ? ((plans.find(p => p.id === selectedPlan)?.price_monthly / 100).toLocaleString('id-ID')) :
+                  '0')
+                  }})</span>
+              </label>
+            </div>
+
             <button class="btn btn-primary btn-large" :disabled="isActivating" @click="buyPackage">
               <span v-if="isActivating">Memproses...</span>
+              <span v-else-if="payViaWallet">Beli Paket — Bayar dari Wallet</span>
               <span v-else>Beli Paket — Bayar Sekarang</span>
             </button>
             <p v-if="paymentInfo" class="payment-info">
@@ -124,13 +145,8 @@
           <!-- Masukkan Voucher -->
           <div v-if="activationTab === 'voucher'" class="activation-panel">
             <div class="voucher-input-group">
-              <input
-                v-model="voucherCode"
-                type="text"
-                placeholder="Kode voucher / referral agen (AGEN-XXX)"
-                class="input-field"
-                @keyup.enter="redeemVoucher"
-              />
+              <input v-model="voucherCode" type="text" placeholder="Kode voucher / referral agen (AGEN-XXX)"
+                class="input-field" @keyup.enter="redeemVoucher" />
               <button class="btn btn-primary" :disabled="!voucherCode || isActivating" @click="redeemVoucher">
                 <span v-if="isActivating">...</span>
                 <span v-else>Aktivasi</span>
@@ -181,6 +197,8 @@ const activationError = ref('')
 const activationSuccess = ref('')
 const voucherCode = ref('')
 const paymentInfo = ref('')
+const walletBalance = ref(0)
+const payViaWallet = ref(false)
 const plans = ref<any[]>([])
 
 const iconMap: Record<string, string> = {
@@ -237,6 +255,15 @@ const loadPlans = async () => {
   }
 }
 
+const loadWalletBalance = async () => {
+  try {
+    const data: any = await api.get('/wallet')
+    if (data?.data?.balance_cents != null) {
+      walletBalance.value = data.data.balance_cents
+    }
+  } catch { /* silent */ }
+}
+
 const checkActivation = async () => {
   try {
     const data = await api.get('/subscription')
@@ -286,7 +313,11 @@ const buyPackage = async () => {
   activationError.value = ''
   paymentInfo.value = ''
   try {
-    const data = await api.post('/subscribe', { plan_id: selectedPlan.value, billing_cycle: billingCycle.value })
+    const data: any = await api.post('/subscribe', {
+      plan_id: selectedPlan.value,
+      billing_cycle: billingCycle.value,
+      pay_via_wallet: payViaWallet.value,
+    })
     if (data.status >= 400) {
       activationError.value = data.message || 'Gagal membuat invoice'
       return
@@ -351,7 +382,7 @@ const goToDashboard = () => {
 }
 
 onMounted(async () => {
-  await Promise.all([loadBusinessTypes(), loadPlans()])
+  await Promise.all([loadBusinessTypes(), loadPlans(), loadWalletBalance()])
 })
 </script>
 
@@ -688,7 +719,7 @@ onMounted(async () => {
   margin-bottom: 0.5rem;
 }
 
-.activation-banner > p {
+.activation-banner>p {
   color: #94a3b8;
   margin-bottom: 1.5rem;
 }
@@ -840,5 +871,49 @@ onMounted(async () => {
   padding: 1px 6px;
   font-size: 0.7rem;
   font-weight: 700;
+}
+
+.wallet-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.88rem;
+  color: #86efac;
+}
+
+.wallet-pay-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.pay-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.pay-radio:has(input:checked) {
+  border-color: #22c55e;
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.06);
+}
+
+.pay-radio input {
+  accent-color: #22c55e;
+  cursor: pointer;
 }
 </style>

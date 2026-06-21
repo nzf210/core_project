@@ -35,6 +35,7 @@ import (
 type SubscribeReq struct {
 	PlanID      string `json:"plan_id"`
 	VoucherCode string `json:"voucher_code,omitempty"`
+	PayViaWallet bool   `json:"pay_via_wallet"` // F058: pay subscription via wallet
 }
 
 type VoucherRedeemReq struct {
@@ -646,6 +647,58 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 			referralDiscountAmount = finalPrice * int64(discountPct) / 100
 			finalPrice = maxInt64(0, finalPrice-referralDiscountAmount)
 		}
+	}
+
+	// ── F058: Pay via wallet ──
+	if req.PayViaWallet && finalPrice > 0 {
+		if !auth.CheckWalletBalance(ctx, tenantID, finalPrice) {
+			var balance int64
+			_ = DB.QueryRow(ctx, "SELECT COALESCE(balance_cents,0) FROM wallet_credits WHERE tenant_id=$1", tenantID).Scan(&balance)
+			response.JSON(w, http.StatusPaymentRequired, "Saldo wallet tidak cukup", map[string]interface{}{
+				"required_cents": finalPrice,
+				"balance_cents":  balance,
+				"topup_url":     "/wallet",
+			})
+			return
+		}
+
+		// Deduct wallet
+		ref := fmt.Sprintf("subscription:%s:%d", req.PlanID, time.Now().Unix())
+		desc := fmt.Sprintf("Pembayaran langganan %s via Wallet", planName)
+		if err := auth.DeductWalletBalance(ctx, tenantID, finalPrice, ref, desc); err != nil {
+			slog.Error("Wallet deduct failed for subscription", "tenant_id", tenantID, "error", err)
+			response.Error(w, http.StatusInternalServerError, "Gagal memproses pembayaran wallet", nil)
+			return
+		}
+
+		// Activate directly
+		validityDays := 30
+		if req.VoucherCode != "" {
+			_ = DB.QueryRow(ctx, "SELECT validity_days FROM voucher_codes WHERE code=$1", req.VoucherCode).Scan(&validityDays)
+		}
+		activateSubscription(ctx, tenantID, req.PlanID, planName, validityDays, "wallet", nil, "")
+
+		// F054: Affiliate commission (from final_price)
+		if referredByAffiliateID != nil && referralDiscountAmount >= 0 {
+			var commRate float64
+			_ = DB.QueryRow(ctx, `SELECT COALESCE(commission_rate_percent,0) FROM referral_config WHERE id=1`).Scan(&commRate)
+			if commRate > 0 {
+				comm := float64(finalPrice) * commRate / 100
+				_, _ = DB.Exec(ctx, `
+					INSERT INTO affiliate_earnings (affiliate_id,tenant_id,invoice_id,amount_cents,commission_rate_percent,transaction_type,description)
+					VALUES ($1,$2,$3,$4,$5,'subscription',$6)
+				`, *referredByAffiliateID, tenantID, ref, int64(comm), commRate, desc)
+			}
+		}
+
+		slog.Info("Subscription paid via wallet", "tenant_id", tenantID, "plan", req.PlanID, "amount", finalPrice)
+		response.JSON(w, http.StatusOK, "Subscription activated via wallet", map[string]interface{}{
+			"status":        "activated",
+			"payment_method": "wallet",
+			"plan_id":       req.PlanID,
+			"amount_charged": finalPrice,
+		})
+		return
 	}
 
 	// Generate Xendit invoice
