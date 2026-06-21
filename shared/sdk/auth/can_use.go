@@ -106,13 +106,49 @@ func CanUseFeature(ctx context.Context, tenantID, featureKey string) (bool, stri
 	return false, fmt.Sprintf("Fitur %s tidak tersedia di paket %s.", name, GetTenantPlan(ctx, tenantID))
 }
 
+// tierPriority returns numeric priority for tier comparison.
+// Higher = more capable. Used for min_tier enforcement.
+func tierPriority(tier string) int {
+	switch tier {
+	case "superadmin":
+		return 100
+	case "ultimate":
+		return 4
+	case "pro":
+		return 3
+	case "lite":
+		return 2
+	default: // inactive, unknown
+		return 0
+	}
+}
+
 // CanUseAddon checks if a tenant has an active addon.
-// Returns (allowed, error).
+// If the addon has a min_tier requirement in plan_features, the tenant's
+// plan tier must meet or exceed it before checking tenant_addons.
 func CanUseAddon(ctx context.Context, tenantID, addonKey string) (bool, error) {
 	if db.Pool == nil {
 		return false, nil
 	}
 
+	// 1. Check min_tier requirement
+	tenantTier := GetTenantPlan(ctx, tenantID)
+	if tierPriority(tenantTier) == 0 {
+		return false, nil // inactive or unknown
+	}
+
+	var minTier *string
+	err := db.Pool.QueryRow(ctx,
+		`SELECT min_tier FROM plan_features
+		 WHERE plan_id = $1 AND feature_key = $2 AND min_tier IS NOT NULL`,
+		tenantTier, addonKey).Scan(&minTier)
+	if err == nil && minTier != nil {
+		if tierPriority(tenantTier) < tierPriority(*minTier) {
+			return false, nil // tenant tier too low to even purchase this addon
+		}
+	}
+
+	// 2. Check active tenant_addons purchase
 	cacheKey := "addon_check:" + tenantID + ":" + addonKey
 	if cache.Client != nil {
 		if val, err := cache.Client.Get(ctx, cacheKey).Result(); err == nil && val == "1" {
@@ -121,7 +157,7 @@ func CanUseAddon(ctx context.Context, tenantID, addonKey string) (bool, error) {
 	}
 
 	var exists bool
-	err := db.Pool.QueryRow(ctx,
+	err = db.Pool.QueryRow(ctx,
 		`SELECT EXISTS(
 			SELECT 1 FROM tenant_addons
 			WHERE tenant_id = $1 AND addon_key = $2

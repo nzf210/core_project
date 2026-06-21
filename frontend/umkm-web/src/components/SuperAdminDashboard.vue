@@ -144,6 +144,9 @@
           <button class="btn" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); padding: 0.35rem 0.75rem; font-size: 0.8rem; margin-right: 0.5rem;" @click="openAddonEditor">
             Kelola Add-on
           </button>
+          <button class="btn" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 0.35rem 0.75rem; font-size: 0.8rem;" @click="openFeatureMatrix">
+            Feature Matrix
+          </button>
           <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" @click="fetchTenants"
             :disabled="loadingTenants">
             {{ loadingTenants ? '...' : 'Refresh' }}
@@ -667,6 +670,77 @@
       </div>
     </div>
 
+    <!-- F057: Feature Matrix Modal -->
+    <div v-if="showFeatureMatrix" class="modal-overlay" @click.self="showFeatureMatrix = false">
+      <div class="modal-card" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+        <h3 style="margin: 0 0 0.25rem 0;">Feature Matrix</h3>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+          Toggle fitur per paket. Perubahan langsung aktif.
+        </p>
+
+        <div v-if="featureMatrixLoading" style="text-align:center; padding:2rem;">Memuat...</div>
+        <div v-else>
+          <!-- Feature Matrix Table -->
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.8rem;">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                  <th style="text-align:left; padding:0.5rem 0.75rem; position:sticky; left:0; background:var(--bg); min-width:160px;">Fitur</th>
+                  <th v-for="pid in featureMatrixPlanIds" :key="pid" style="text-align:center; padding:0.5rem 0.5rem; min-width:80px;">
+                    {{ featureMatrixPlans[pid]?.plan_name || pid }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <template v-for="key in featureMatrixOrder" :key="key">
+                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:0.5rem 0.75rem; position:sticky; left:0; background:var(--bg);">
+                      <span :style="{ color: isAddonFeature(key) ? '#f59e0b' : '#60a5fa' }">{{ key }}</span>
+                    </td>
+                    <td v-for="pid in featureMatrixPlanIds" :key="pid" style="text-align:center; padding:0.5rem 0.25rem;">
+                      <input
+                        type="checkbox"
+                        :checked="getFeatureEnabled(pid, key)"
+                        @change="toggleFeature(pid, key, $event)"
+                        style="cursor:pointer; width:16px; height:16px;"
+                        :title="`${featureMatrixPlans[pid]?.plan_name}: ${key}`"
+                      />
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
+          <hr style="border-color:var(--border-color); margin:1.5rem 0;" />
+
+          <!-- Addon Gating Section -->
+          <h4 style="margin:0 0 0.75rem 0; color:var(--text-secondary);">Addon Gating — Minimum Tier untuk Membeli</h4>
+          <div v-if="addonGatingLoading" style="text-align:center; padding:1rem;">Memuat...</div>
+          <div v-else style="display:flex; flex-direction:column; gap:0.5rem;">
+            <div v-for="addon in addonGatingList" :key="addon.feature_key" style="display:flex; align-items:center; gap:0.75rem; padding:0.5rem; background:rgba(255,255,255,0.03); border-radius:6px;">
+              <span style="min-width:120px; font-size:0.8rem; color:#f59e0b;">{{ addon.feature_key }}</span>
+              <span style="flex:1; font-size:0.8rem;">{{ addon.feature_name }}</span>
+              <select
+                :value="addon.min_tier || ''"
+                @change="saveAddonMinTier(addon.feature_key, ($event.target as HTMLSelectElement).value)"
+                style="padding:0.25rem 0.5rem; border-radius:4px; background:var(--bg); border:1px solid var(--border-color); color:var(--text); font-size:0.8rem; min-width:100px;"
+              >
+                <option value="">Semua tier</option>
+                <option value="lite">Lite+</option>
+                <option value="pro">Pro+</option>
+                <option value="ultimate">Ultimate only</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1.5rem;">
+          <button class="btn btn-secondary" @click="showFeatureMatrix = false">Tutup</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast -->
     <Teleport to="body">
       <div v-if="toast.visible" :class="['toast-notification', `toast-${toast.type}`]" :style="{ top: toastTop + 'px' }">
@@ -741,10 +815,21 @@ const showVoucherListModal = ref(false)
 const showPlanEditor = ref(false)
 const showAddonEditor = ref(false)
 
+// F057: Feature Matrix
+const showFeatureMatrix = ref(false)
+const featureMatrixLoading = ref(false)
+const featureMatrixPlans = ref<Record<string, any>>({})
+const featureMatrixPlanIds = ref<string[]>([])
+const featureMatrixOrder = ref<string[]>([])
+const featureMatrixData = ref<Record<string, Record<string, any>>>({})
+const addonGatingLoading = ref(false)
+const addonGatingList = ref<any[]>([])
+
 watch(showGenerateVoucherModal, (v) => { if (v) openModal(); else closeModal(); });
 watch(showVoucherListModal, (v) => { if (v) openModal(); else closeModal(); });
 watch(showPlanEditor, (v) => { if (v) openModal(); else closeModal(); });
 watch(showAddonEditor, (v) => { if (v) openModal(); else closeModal(); });
+watch(showFeatureMatrix, (v) => { if (v) { openModal(); loadFeatureMatrix(); } else closeModal(); });
 
 const businessTypes = [
   { id: 'umum', name: 'Umum / General' },
@@ -1311,6 +1396,78 @@ const savePlanPrices = async () => {
     planError.value = 'Kesalahan jaringan'
   } finally {
     savingPlans.value = false
+  }
+}
+
+// F057: Feature Matrix
+const openFeatureMatrix = async () => {
+  showFeatureMatrix.value = true
+}
+
+const loadFeatureMatrix = async () => {
+  featureMatrixLoading.value = true
+  addonGatingLoading.value = true
+  try {
+    const [matrixRes, addonRes] = await Promise.all([
+      superadminApi.getFeatureMatrix(),
+      superadminApi.getAddonGating(),
+    ])
+    if (matrixRes?.success) {
+      featureMatrixPlans.value = matrixRes.data?.plans || {}
+      featureMatrixPlanIds.value = matrixRes.data?.plan_ids || []
+      featureMatrixOrder.value = matrixRes.data?.feature_order || []
+      featureMatrixData.value = matrixRes.data?.matrix || {}
+    }
+    if (addonRes?.success) {
+      addonGatingList.value = addonRes.data || []
+    }
+  } catch (e) {
+    console.error('Failed to load feature matrix', e)
+  } finally {
+    featureMatrixLoading.value = false
+    addonGatingLoading.value = false
+  }
+}
+
+const getFeatureEnabled = (planId: string, featureKey: string): boolean => {
+  return featureMatrixData.value[planId]?.[featureKey]?.is_enabled ?? false
+}
+
+const isAddonFeature = (key: string): boolean => {
+  return ['ai_vision', 'ai_audio', 'wa_blast', 'extra_store', 'extra_user'].includes(key)
+}
+
+const toggleFeature = async (planId: string, featureKey: string, event: Event) => {
+  const target = event.target as HTMLInputElement
+  const newVal = target.checked
+  // Optimistic update
+  if (!featureMatrixData.value[planId]) featureMatrixData.value[planId] = {}
+  featureMatrixData.value[planId][featureKey] = { ...featureMatrixData.value[planId][featureKey], is_enabled: newVal }
+  try {
+    await superadminApi.toggleFeature({ plan_id: planId, feature_key: featureKey, is_enabled: newVal })
+  } catch (e) {
+    // Revert on failure
+    if (featureMatrixData.value[planId]) {
+      featureMatrixData.value[planId][featureKey] = { ...featureMatrixData.value[planId][featureKey], is_enabled: !newVal }
+    }
+    target.checked = !newVal
+    showToast('Gagal toggle fitur', 'error')
+  }
+}
+
+const saveAddonMinTier = async (featureKey: string, minTier: string) => {
+  const addon = addonGatingList.value.find(a => a.feature_key === featureKey)
+  if (!addon) return
+  try {
+    await superadminApi.updateAddonGating({
+      feature_key: featureKey,
+      min_tier: minTier || undefined,
+      default_enabled: addon.default_enabled || [],
+    })
+    addon.min_tier = minTier || null
+    showToast('Addon gating disimpan')
+  } catch (e) {
+    showToast('Gagal menyimpan addon gating', 'error')
   }
 }
 

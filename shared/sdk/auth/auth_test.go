@@ -196,3 +196,36 @@ func TestIncrementUsage_NoCache(t *testing.T) {
 	// Should not panic when cache client is nil
 	IncrementUsage("t1", "transactions", 1)
 }
+
+func TestTierPriority(t *testing.T) {
+	tests := []struct {
+		tier          string
+		expectedValue int
+	}{
+		{"superadmin", 100},
+		{"ultimate", 4},
+		{"pro", 3},
+		{"lite", 2},
+		{"inactive", 0},
+		{"unknown", 0},
+		{"", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tier, func(t *testing.T) {
+			got := tierPriority(tt.tier)
+			if got != tt.expectedValue {
+				t.Errorf("tierPriority(%q) = %d, want %d", tt.tier, got, tt.expectedValue)
+			}
+		})
+	}
+}
+
+func TestTierPriority_Ordering(t *testing.T) {
+	// Verify higher tier always has greater priority
+	tiers := []string{"inactive", "lite", "pro", "ultimate", "superadmin"}
+	for i := 0; i < len(tiers)-1; i++ {
+		if tierPriority(tiers[i]) >= tierPriority(tiers[i+1]) {
+			t.Errorf("tierPriority(%q) should be < tierPriority(%q)", tiers[i], tiers[i+1])
+		}
+	}
+}

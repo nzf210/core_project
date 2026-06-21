@@ -379,6 +379,10 @@ func main() {
 	mux.Handle("/admin/plan-features", auth.Middleware(http.HandlerFunc(handleAdminPlanFeaturesCollection)))
 	mux.Handle("/admin/plan-features/", auth.Middleware(http.HandlerFunc(handleAdminPlanFeaturesItem)))
 	mux.Handle("/admin/plan-features-matrix/", auth.Middleware(http.HandlerFunc(handleAdminPlanFeaturesMatrix)))
+	mux.Handle("/admin/available-features", auth.Middleware(http.HandlerFunc(handleAdminAvailableFeaturesCollection)))
+	mux.Handle("/admin/available-features/", auth.Middleware(http.HandlerFunc(handleAdminAvailableFeaturesItem)))
+	mux.Handle("/admin/feature-matrix", auth.Middleware(http.HandlerFunc(handleAdminFeatureMatrix)))
+	mux.Handle("/admin/addon-gating", auth.Middleware(http.HandlerFunc(handleAdminAddonGating)))
 	mux.Handle("/admin/voucher-programs", auth.Middleware(http.HandlerFunc(handleAdminVoucherProgramsCollection)))
 	mux.Handle("/admin/voucher-analytics", auth.Middleware(http.HandlerFunc(handleAdminVoucherAnalytics)))
 
@@ -2155,6 +2159,377 @@ func deletePlanFeature(w http.ResponseWriter, r *http.Request, id string) {
 	slog.Info("Plan feature deleted", "id", id)
 	response.JSON(w, http.StatusOK, "Feature deleted", nil)
 }
+
+// ─────────────────────────────────────────────
+// F057: Superadmin Feature & Addon Matrix UI
+// ─────────────────────────────────────────────
+
+// Routes — add after existing admin routes
+// mux.Handle("/admin/available-features", ...)
+// mux.Handle("/admin/available-features/", ...)
+// mux.Handle("/admin/feature-matrix", ...)
+// mux.Handle("/admin/addon-gating", ...)
+
+func handleAdminAvailableFeaturesCollection(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+	if r.Method == http.MethodGet {
+		rows, err := DB.Query(r.Context(), `
+			SELECT feature_key, feature_name, description, category,
+			       is_addon, default_enabled, addon_price_cents, addon_unit
+			FROM available_features ORDER BY is_addon, feature_key
+		`)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to list features", err)
+			return
+		}
+		defer rows.Close()
+		var items []map[string]interface{}
+		for rows.Next() {
+			var key, name, desc, cat, unit string
+			var isAddon bool
+			var defaultEnabled []string
+			var price int64
+			if rows.Scan(&key, &name, &desc, &cat, &isAddon, &defaultEnabled, &price, &unit) == nil {
+				items = append(items, map[string]interface{}{
+					"feature_key":       key,
+					"feature_name":      name,
+					"description":       desc,
+					"category":          cat,
+					"is_addon":          isAddon,
+					"default_enabled":   defaultEnabled,
+					"addon_price_cents": price,
+					"addon_unit":        unit,
+				})
+			}
+		}
+		response.JSON(w, http.StatusOK, "ok", items)
+		return
+	}
+	if r.Method == http.MethodPost {
+		var req struct {
+			FeatureKey      string   `json:"feature_key"`
+			FeatureName     string   `json:"feature_name"`
+			Description     string   `json:"description"`
+			Category        string   `json:"category"`
+			IsAddon         bool     `json:"is_addon"`
+			DefaultEnabled  []string `json:"default_enabled"`
+			AddonPriceCents int64    `json:"addon_price_cents"`
+			AddonUnit       string   `json:"addon_unit"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			response.Error(w, http.StatusBadRequest, "Invalid request", err)
+			return
+		}
+		if req.FeatureKey == "" || req.FeatureName == "" || req.Category == "" {
+			response.Error(w, http.StatusBadRequest, "feature_key, feature_name, category required", nil)
+			return
+		}
+		_, err := DB.Exec(r.Context(), `
+			INSERT INTO available_features (feature_key, feature_name, description, category, is_addon, default_enabled, addon_price_cents, addon_unit)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+			ON CONFLICT (feature_key) DO UPDATE SET
+				feature_name=EXCLUDED.feature_name, description=EXCLUDED.description,
+				category=EXCLUDED.category, is_addon=EXCLUDED.is_addon,
+				default_enabled=EXCLUDED.default_enabled,
+				addon_price_cents=EXCLUDED.addon_price_cents, addon_unit=EXCLUDED.addon_unit
+		`, req.FeatureKey, req.FeatureName, req.Description, req.Category,
+			req.IsAddon, req.DefaultEnabled, req.AddonPriceCents, req.AddonUnit)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to save feature", err)
+			return
+		}
+		auth.InvalidateFeatureDefCache(r.Context(), req.FeatureKey)
+		response.JSON(w, http.StatusOK, "Feature saved", nil)
+		return
+	}
+	response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+}
+
+func handleAdminAvailableFeaturesItem(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+	key := strings.TrimPrefix(r.URL.Path, "/admin/available-features/")
+	if key == "" {
+		response.Error(w, http.StatusBadRequest, "Feature key required", nil)
+		return
+	}
+	if r.Method == http.MethodPatch {
+		var req struct {
+			FeatureName     *string  `json:"feature_name,omitempty"`
+			Description     *string  `json:"description,omitempty"`
+			Category        *string  `json:"category,omitempty"`
+			IsAddon         *bool    `json:"is_addon,omitempty"`
+			DefaultEnabled  []string `json:"default_enabled"`
+			AddonPriceCents *int64   `json:"addon_price_cents,omitempty"`
+			AddonUnit       *string  `json:"addon_unit,omitempty"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			response.Error(w, http.StatusBadRequest, "Invalid request", err)
+			return
+		}
+		updates, args, idx := []string{}, []any{}, 1
+		if req.FeatureName != nil {
+			updates = append(updates, fmt.Sprintf("feature_name=$%d", idx)); args = append(args, *req.FeatureName); idx++
+		}
+		if req.Description != nil {
+			updates = append(updates, fmt.Sprintf("description=$%d", idx)); args = append(args, *req.Description); idx++
+		}
+		if req.Category != nil {
+			updates = append(updates, fmt.Sprintf("category=$%d", idx)); args = append(args, *req.Category); idx++
+		}
+		if req.IsAddon != nil {
+			updates = append(updates, fmt.Sprintf("is_addon=$%d", idx)); args = append(args, *req.IsAddon); idx++
+		}
+		if req.DefaultEnabled != nil {
+			updates = append(updates, fmt.Sprintf("default_enabled=$%d", idx)); args = append(args, req.DefaultEnabled); idx++
+		}
+		if req.AddonPriceCents != nil {
+			updates = append(updates, fmt.Sprintf("addon_price_cents=$%d", idx)); args = append(args, *req.AddonPriceCents); idx++
+		}
+		if req.AddonUnit != nil {
+			updates = append(updates, fmt.Sprintf("addon_unit=$%d", idx)); args = append(args, *req.AddonUnit); idx++
+		}
+		if len(updates) == 0 {
+			response.JSON(w, http.StatusOK, "No updates applied", nil)
+			return
+		}
+		args = append(args, key)
+		query := fmt.Sprintf("UPDATE available_features SET %s WHERE feature_key=$%d", strings.Join(updates, ", "), idx)
+		_, err := DB.Exec(r.Context(), query, args...)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to update", err)
+			return
+		}
+		auth.InvalidateFeatureDefCache(r.Context(), key)
+		response.JSON(w, http.StatusOK, "Feature updated", nil)
+		return
+	}
+	if r.Method == http.MethodDelete {
+		_, err := DB.Exec(r.Context(), "DELETE FROM available_features WHERE feature_key=$1", key)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to delete", err)
+			return
+		}
+		auth.InvalidateFeatureDefCache(r.Context(), key)
+		response.JSON(w, http.StatusOK, "Feature deleted", nil)
+		return
+	}
+	response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+}
+
+// handleAdminFeatureMatrix returns all plans × all features as a toggle matrix.
+func handleAdminFeatureMatrix(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		rows, err := DB.Query(r.Context(), `
+			SELECT pf.plan_id, pf.feature_key, pf.feature_name, pf.is_enabled,
+			       pf.feature_value, pf.min_tier,
+			       sp.name as plan_name, sp.sort_order
+			FROM plan_features pf
+			JOIN saas_plans sp ON sp.id = pf.plan_id
+			ORDER BY sp.sort_order, pf.feature_key
+		`)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to load matrix", err)
+			return
+		}
+		defer rows.Close()
+
+		type planRow struct {
+			PlanID   string `json:"plan_id"`
+			PlanName string `json:"plan_name"`
+		}
+		planMap := map[string]planRow{}
+		// matrix: plan_id → feature_key → feature row
+		matrix := map[string]map[string]map[string]interface{}{}
+
+		featureOrder := []string{} // dedup preserve order
+		seenFeature := map[string]bool{}
+
+		for rows.Next() {
+			var planID, key, name, value, minTier, planName string
+			var enabled bool
+			var sortOrder int
+			if rows.Scan(&planID, &key, &name, &enabled, &value, &minTier, &planName, &sortOrder) == nil {
+				if _, ok := matrix[planID]; !ok {
+					matrix[planID] = map[string]map[string]interface{}{}
+					planMap[planID] = planRow{PlanID: planID, PlanName: planName}
+				}
+				matrix[planID][key] = map[string]interface{}{
+					"feature_key":   key,
+					"feature_name":  name,
+					"is_enabled":    enabled,
+					"feature_value": value,
+					"min_tier":      minTier,
+				}
+				if !seenFeature[key] {
+					seenFeature[key] = true
+					featureOrder = append(featureOrder, key)
+				}
+			}
+		}
+
+		// Build ordered plans list
+		planIDs := []string{}
+		rows2, _ := DB.Query(r.Context(), "SELECT id, name FROM saas_plans WHERE is_active=true ORDER BY sort_order")
+		if rows2 != nil {
+			defer rows2.Close()
+			for rows2.Next() {
+				var id, nm string
+				rows2.Scan(&id, &nm)
+				planIDs = append(planIDs, id)
+			}
+		}
+
+		response.JSON(w, http.StatusOK, "ok", map[string]interface{}{
+			"plans":          planMap,
+			"plan_ids":       planIDs,
+			"feature_order":  featureOrder,
+			"matrix":         matrix,
+		})
+		return
+	}
+
+	if r.Method == http.MethodPatch {
+		// Body: { plan_id, feature_key, is_enabled }
+		var req struct {
+			PlanID     string `json:"plan_id"`
+			FeatureKey string `json:"feature_key"`
+			IsEnabled  bool   `json:"is_enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			response.Error(w, http.StatusBadRequest, "Invalid request", err)
+			return
+		}
+		if req.PlanID == "" || req.FeatureKey == "" {
+			response.Error(w, http.StatusBadRequest, "plan_id and feature_key required", nil)
+			return
+		}
+		_, err := DB.Exec(r.Context(), `
+			INSERT INTO plan_features (plan_id, feature_key, is_enabled)
+			VALUES ($1,$2,$3)
+			ON CONFLICT (plan_id, feature_key) DO UPDATE SET is_enabled=EXCLUDED.is_enabled
+		`, req.PlanID, req.FeatureKey, req.IsEnabled)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to toggle feature", err)
+			return
+		}
+		// Invalidate all plan feature caches for this tier
+		if cache.Client != nil {
+			cache.Client.Del(r.Context(), "plan_features:"+req.PlanID)
+		}
+		auth.InvalidateFeatureDefCache(r.Context(), req.FeatureKey)
+		response.JSON(w, http.StatusOK, "Feature toggled", nil)
+		return
+	}
+	response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+}
+
+// handleAdminAddonGating GET/PATCH: manage per-addon min_tier requirement.
+func handleAdminAddonGating(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("X-User-Role")
+	if role != "superadmin" {
+		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		rows, err := DB.Query(r.Context(), `
+			SELECT af.feature_key, af.feature_name, af.is_addon,
+			       af.default_enabled, af.addon_price_cents, af.addon_unit,
+			       pf.min_tier
+			FROM available_features af
+			LEFT JOIN plan_features pf ON pf.plan_id = 'lite' AND pf.feature_key = af.feature_key
+			WHERE af.is_addon = true
+			ORDER BY af.feature_key
+		`)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to load addon gating", err)
+			return
+		}
+		defer rows.Close()
+		var items []map[string]interface{}
+		for rows.Next() {
+			var key, name, unit, minTier string
+			var isAddon bool
+			var defaultEnabled []string
+			var price int64
+			if rows.Scan(&key, &name, &isAddon, &defaultEnabled, &price, &unit, &minTier) == nil {
+				items = append(items, map[string]interface{}{
+					"feature_key":       key,
+					"feature_name":      name,
+					"is_addon":          isAddon,
+					"default_enabled":   defaultEnabled,
+					"addon_price_cents": price,
+					"addon_unit":        unit,
+					"min_tier":          minTier,
+				})
+			}
+		}
+		response.JSON(w, http.StatusOK, "ok", items)
+		return
+	}
+
+	if r.Method == http.MethodPatch {
+		var req struct {
+			FeatureKey     string  `json:"feature_key"`
+			MinTier        *string `json:"min_tier"`        // nil = no minimum (any tier can buy)
+			DefaultEnabled []string `json:"default_enabled"` // tiers that bundle this addon by default
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			response.Error(w, http.StatusBadRequest, "Invalid request", err)
+			return
+		}
+		if req.FeatureKey == "" {
+			response.Error(w, http.StatusBadRequest, "feature_key required", nil)
+			return
+		}
+		// Update available_features.default_enabled
+		_, err := DB.Exec(r.Context(), `
+			UPDATE available_features SET default_enabled=$1 WHERE feature_key=$2
+		`, req.DefaultEnabled, req.FeatureKey)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to update default_enabled", err)
+			return
+		}
+		// Set min_tier in plan_features for all plans that have this addon row
+		if req.MinTier != nil && *req.MinTier != "" {
+			_, err = DB.Exec(r.Context(), `
+				UPDATE plan_features SET min_tier=$1 WHERE feature_key=$2 AND min_tier IS NULL
+			`, *req.MinTier, req.FeatureKey)
+		} else {
+			_, err = DB.Exec(r.Context(), `
+				UPDATE plan_features SET min_tier=NULL WHERE feature_key=$1
+			`, req.FeatureKey)
+		}
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to update min_tier", err)
+			return
+		}
+		auth.InvalidateFeatureDefCache(r.Context(), req.FeatureKey)
+		if cache.Client != nil {
+			for _, p := range []string{"lite", "pro", "ultimate"} {
+				cache.Client.Del(r.Context(), "plan_features:"+p)
+			}
+		}
+		response.JSON(w, http.StatusOK, "Addon gating updated", nil)
+		return
+	}
+	response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+}
+
 // ─────────────────────────────────────────────
 // Voucher Link Redemption (link-based, signed token)
 // 1 link = 1 klaim. Token = JWT signed with cfg.JWTSecret.

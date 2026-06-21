@@ -192,4 +192,63 @@ export const superadminApi = {
     return res.json()
   },
 
+  // F057: Feature Matrix & Addon Gating
+  async getFeatureMatrix() {
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/feature-matrix`)
+    return res.json()
+  },
+
+  async toggleFeature(data: { plan_id: string; feature_key: string; is_enabled: boolean }) {
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/feature-matrix`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  },
+
+  async getAvailableFeatures() {
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/available-features`)
+    return res.json()
+  },
+
+  async upsertAvailableFeature(data: Record<string, any>) {
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/available-features`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  },
+
+  async updateAvailableFeature(featureKey: string, data: Record<string, any>) {
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/available-features/${encodeURIComponent(featureKey)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  },
+
+  async deleteAvailableFeature(featureKey: string) {
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/available-features/${encodeURIComponent(featureKey)}`, {
+      method: 'DELETE',
+    })
+    return res.json()
+  },
+
+  async getAddonGating() {
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/addon-gating`)
+    return res.json()
+  },
+
+  async updateAddonGating(data: { feature_key: string; min_tier?: string; default_enabled: string[] }) {
+    const res = await authFetch(`${API_BASE}/api/superadmin/billing/addon-gating`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  },
+
 }

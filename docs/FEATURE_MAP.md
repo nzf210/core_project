@@ -123,6 +123,72 @@ Format per feature:
 | F054 | Referral System: Discount Downline + Commission Upline | ✅ Approved | ✅ Done | 2026-06-20 |
 | F055 | Force Password Change (Reset Default + Wajib Ganti) | ✅ Approved | ✅ Done | 2026-06-20 |
 | F056 | Theme Management (Dark/Light/System) | ✅ Approved | ✅ Done | 2026-06-21 |
+| F057 | Superadmin Feature Matrix + Addon Tier Gating | ✅ Approved | ✅ Done | 2026-06-21 |
+
+## F056: Theme Management (Dark/Light/System)
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Deskripsi:** Fitur perpindahan tema (Dark, Light, System Default) di UMKM frontend menggunakan CSS Variables di `:root` dan class `.theme-light`.
+
+---
+
+## F057: Superadmin Feature Matrix + Addon Tier Gating
+**Spec Status:** ✅ Approved
+**Implementation:** 🔨 In Progress
+
+**Deskripsi:** Superadmin bisa mengatur feature per tier (toggle is_enabled per plan × feature) dan addon gating (set `min_tier` — tier minimum yang dibutuhkan untuk membeli addon). Enforcement BE membaca `min_tier` saat `CanUseAddon()`.
+
+**Spec (Opsi C — Hybrid):**
+
+### Backend Enforcement
+- `CanUseAddon()` di `shared/sdk/auth/can_use.go` — baca `min_tier` dari `plan_features`, enforce tier priority sebelum check `tenant_addons`
+- `tierPriority()` — helper: superadmin=100, ultimate=4, pro=3, lite=2, inactive=0
+
+### Superadmin BE Endpoints (billing-service)
+| Method | Path | Deskripsi |
+|:-------|:-----|:----------|
+| `GET` | `/admin/feature-matrix` | Return full matrix: plans × features (is_enabled, min_tier, feature_value) |
+| `PATCH` | `/admin/feature-matrix` | Toggle `is_enabled` per plan × feature (upsert) |
+| `GET` | `/admin/available-features` | List semua feature/addon registry |
+| `POST` | `/admin/available-features` | Upsert feature/addon definition |
+| `PATCH` | `/admin/available-features/{key}` | Partial update feature metadata |
+| `DELETE` | `/admin/available-features/{key}` | Delete feature dari registry |
+| `GET` | `/admin/addon-gating` | List addon + min_tier + default_enabled |
+| `PATCH` | `/admin/addon-gating` | Update min_tier + default_enabled per addon |
+
+### Frontend UI (SuperAdminDashboard.vue)
+- Tombol "Feature Matrix" di header card daftar tenant
+- Modal dengan tabel matrix: baris = feature keys, kolom = paket (lite/pro/ultimate)
+- Toggle checkbox per cell → PATCH langsung saat diklik (optimistic update)
+- Section kedua: addon gating — select `min_tier` per addon
+- Sesi ended: Tutup modal → semua cache invalidation berjalan di BE
+
+### Cache Invalidation
+- Toggle feature → `cache.Client.Del("plan_features:"+planID)` + `auth.InvalidateFeatureDefCache(featureKey)`
+- Update addon gating → invalidates all plan tiers + feature def cache
+
+**Acceptance Criteria (AC):**
+- [x] AC-1: `CanUseAddon()` enforce `min_tier` — tenant tier < min_tier → false (即使有tenant_addons purchase)
+- [x] AC-2: Superadmin toggle feature is_enabled → instant cache invalidation
+- [x] AC-3: Superadmin set addon `min_tier` → BE enforcement update langsung
+- [x] AC-4: Feature Matrix UI — checkbox toggle per cell
+- [x] AC-5: Addon Gating UI — select min_tier per addon
+- [x] AC-6: `go build ./...` clean ✅ (2026-06-21)
+
+**Files Changed:**
+- `shared/sdk/auth/can_use.go` — `tierPriority()` + `min_tier` enforcement in `CanUseAddon()`
+- `services/billing-service/main.go` — 4 new handlers: `handleAdminAvailableFeaturesCollection`, `handleAdminAvailableFeaturesItem`, `handleAdminFeatureMatrix`, `handleAdminAddonGating` + 4 new routes
+- `frontend/umkm-web/src/superadminApi.ts` — 7 new API methods
+- `frontend/umkm-web/src/components/SuperAdminDashboard.vue` — Feature Matrix modal + state + logic
+- `docs/FEATURE_MAP.md` — F057 entry
+
+**Notes:**
+- `available_features` registry + `plan_features` toggle matrix = clean separation between "apa yang ada" vs "siapa dapat apa"
+- `min_tier` sudah ada di schema (migration 000068), enforcement baru diaktifkan di F057
+- Addon gating per tier: tidak semua addon bisa dibeli oleh semua tier (misal: wa_blast hanya untuk pro+)
+
+---
 
 ## F056: Theme Management (Dark/Light/System)
 **Spec Status:** ✅ Approved
