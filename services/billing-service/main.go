@@ -3860,6 +3860,8 @@ func startPendingCleanupWorker(ctx context.Context) {
 // ─────────────────────────────────────────────
 
 // GET /admin/addon-prices — list all addon price configs (superadmin)
+// handleAdminAddonPrices GET: F057 AC-4 consolidated — reads from available_features.
+// Legacy addon_prices table is kept for backward compat but no longer written to.
 func handleAdminAddonPrices(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
@@ -3871,23 +3873,40 @@ func handleAdminAddonPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	rows, err := DB.Query(ctx, `SELECT addon_key, price_cents, unit, description, is_active FROM addon_prices ORDER BY addon_key`)
+	rows, err := DB.Query(ctx, `
+		SELECT feature_key, feature_name, description, category,
+		       is_addon, addon_price_cents, addon_unit, default_enabled
+		FROM available_features
+		WHERE is_addon = true
+		ORDER BY feature_key
+	`)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to query addon prices", err)
 		return
 	}
 	defer rows.Close()
 	type ap struct {
-		Key         string `json:"addon_key"`
-		Price       int64  `json:"price_cents"`
-		Unit        string `json:"unit"`
-		Description string `json:"description"`
-		IsActive    bool   `json:"is_active"`
+		Key         string   `json:"addon_key"`
+		Name        string   `json:"feature_name"`
+		Price       int64    `json:"price_cents"`
+		Unit        string   `json:"unit"`
+		Description string   `json:"description"`
+		IsActive    bool     `json:"is_active"`
+		DefaultEna  []string `json:"default_enabled"`
 	}
 	var list []ap
 	for rows.Next() {
 		var a ap
-		if rows.Scan(&a.Key, &a.Price, &a.Unit, &a.Description, &a.IsActive) == nil {
+		var price int64
+		var unit, desc string
+		var defaultEna []string
+		var category string
+		var isAddon bool
+		if rows.Scan(&a.Key, &a.Name, &desc, &category, &isAddon, &price, &unit, &defaultEna) == nil {
+			a.Price = price
+			a.Unit = unit
+			a.Description = desc
+			a.DefaultEna = defaultEna
 			list = append(list, a)
 		}
 	}
@@ -3945,7 +3964,7 @@ func handleAdminAddonPricesItem(w http.ResponseWriter, r *http.Request) {
 		argIdx++
 	}
 	args = append(args, key)
-	query := fmt.Sprintf("UPDATE addon_prices SET %s WHERE addon_key = $%d", setParts, argIdx)
+	query := fmt.Sprintf("UPDATE available_features SET %s WHERE feature_key = $%d", setParts, argIdx)
 	_, err := DB.Exec(ctx, query, args...)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Update failed", err)
@@ -4302,19 +4321,18 @@ func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
 		 VALUES ($1, $2, 'active', NOW(), $3, $4)
 		 ON CONFLICT (tenant_id, addon_key)
 		 DO UPDATE SET status='active', purchased_at=NOW(), expires_at=$3, purchase_price_cents=$4`,
-		tenantID, req.AddonKey, expiresAt, price)
+		tenantID, req.AddonKey, expiresAt, addonFinalPrice)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to activate addon", err)
 		return
 	}
 
-	// 7. F054: Affiliate commission for addon purchases
-	_ = DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&refAid)
-	if refAid != nil && price > 0 {
+	// 7. F054: Affiliate commission for addon purchases — from actual paid amount (addonFinalPrice)
+	if refAid != nil && addonFinalPrice > 0 {
 		var cpct float64
 		_ = DB.QueryRow(ctx, `SELECT COALESCE(commission_percent,0) FROM referral_config WHERE id=1`).Scan(&cpct)
 		if cpct > 0 {
-			comm := price * int64(cpct) / 100
+			comm := addonFinalPrice * int64(cpct) / 100
 			if comm > 0 {
 				txID := "addon:" + req.AddonKey + ":" + uuid.NewString()[:8]
 				_, _ = DB.Exec(ctx,
