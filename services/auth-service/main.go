@@ -1142,6 +1142,14 @@ func handleUploadProfileLogo(w http.ResponseWriter, r *http.Request) {
 		outExt = ".webp"
 	}
 
+	// Delete existing old files with different extensions before writing new one
+	oldExts := []string{".png", ".jpg", ".jpeg", ".webp"}
+	for _, e := range oldExts {
+		if e != outExt {
+			os.Remove(filepath.Join(uploadDir, "logos", claims.TenantID+e))
+		}
+	}
+
 	filename := claims.TenantID + outExt
 	outPath := filepath.Join(uploadDir, "logos", filename)
 	dst, err := os.Create(outPath)
@@ -2197,6 +2205,14 @@ func handleUploadTenantLogo(w http.ResponseWriter, r *http.Request) {
 		outExt = ".jpg"
 	case ".webp":
 		outExt = ".webp"
+	}
+
+	// Delete existing old files with different extensions before writing new one
+	oldExts := []string{".png", ".jpg", ".jpeg", ".webp"}
+	for _, e := range oldExts {
+		if e != outExt {
+			os.Remove(filepath.Join(uploadDir, "logos", tenantID+e))
+		}
 	}
 
 	filename := tenantID + outExt

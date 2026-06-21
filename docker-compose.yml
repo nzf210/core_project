@@ -43,6 +43,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: wch-api-gateway
+    volumes:
+      - ./uploads:/app/uploads
     command:
       - api-gateway
     environment:
@@ -73,6 +75,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: wch-auth-service
+    volumes:
+      - ./uploads:/app/uploads
     command:
       - auth-service
     environment:
