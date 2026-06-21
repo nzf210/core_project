@@ -543,3 +543,37 @@ export const authApi = {
     return res.json()
   },
 }
+
+// F060: Sales Dashboard Chart API
+export interface SalesChartData {
+  period: string
+  labels: string[]
+  revenue: number[]
+  expense: number[]
+  profit: number[]
+}
+
+export interface TopProduct {
+  name: string
+  revenue_cents: number
+  transaction_count: number
+}
+
+export interface RecentTransaction {
+  id: string
+  date: string
+  description: string
+  amount_cents: number
+}
+
+export const reportsApi = {
+  async getSalesChart(period: 'week' | 'month' | 'year' = 'week') {
+    return api.get(`/api/umkm/reports/sales-chart?period=${period}`)
+  },
+  async getTopProducts(limit = 5) {
+    return api.get(`/api/umkm/reports/top-products?limit=${limit}`)
+  },
+  async getRecentTransactions(limit = 5) {
+    return api.get(`/api/umkm/reports/recent-transactions?limit=${limit}`)
+  },
+}

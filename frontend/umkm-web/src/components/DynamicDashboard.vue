@@ -51,25 +51,66 @@
           </div>
         </div>
 
-        <!-- Chart placeholder -->
+        <!-- F060: Real Chart.js chart -->
         <div v-else-if="widget.type === 'chart'" class="widget-chart">
-          <div class="chart-placeholder">
-            <div v-for="i in 7" :key="i" class="chart-bar" :style="{ height: (20 + Math.random() * 80) + '%' }"></div>
-          </div>
-          <div class="chart-labels">
-            <span v-for="d in ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']" :key="d">{{ d }}</span>
-          </div>
-        </div>
-
-        <!-- List widget -->
-        <div v-else-if="widget.type === 'list' || widget.type === 'table'" class="widget-list">
-          <div v-if="widgetData[widget.id]?.items?.length" class="list-items">
-            <div v-for="(item, idx) in widgetData[widget.id].items.slice(0, 5)" :key="idx" class="list-item">
-              <span class="item-label">{{ item.label }}</span>
-              <span class="item-value">{{ item.value }}</span>
+          <!-- Period switcher -->
+          <div class="chart-header-row">
+            <div class="period-switcher">
+              <button v-for="p in periods" :key="p" :class="{ active: period === p }" @click="setPeriod(p)">
+                {{ periodLabels[p] }}
+              </button>
             </div>
           </div>
-          <div v-else class="empty-state">Belum ada data</div>
+          <!-- Loading -->
+          <div v-if="chartLoading" class="chart-loading">
+            <div class="loading-spinner"></div>
+          </div>
+          <!-- Chart -->
+          <div v-else-if="chartReady" class="chart-wrap">
+            <Bar :data="chartData" :options="chartOptions" />
+          </div>
+          <!-- Empty -->
+          <div v-else class="empty-state">Belum ada data penjualan</div>
+        </div>
+
+        <!-- F060: Real List widget (recent transactions, top products) -->
+        <div v-else-if="widget.type === 'list'" class="widget-list">
+          <!-- Recent transactions -->
+          <div v-if="widget.id === 'recent_transactions'">
+            <div v-if="recentTxLoading" class="list-loading">
+              <span class="loading-dot" v-for="n in 5" :key="n"></span>
+            </div>
+            <div v-else-if="recentTransactions.length" class="list-items">
+              <div v-for="tx in recentTransactions" :key="tx.id" class="list-item">
+                <span class="item-label">{{ tx.description || 'Transaksi' }}</span>
+                <span class="item-value">{{ formatCurrency(tx.amount_cents) }}</span>
+              </div>
+            </div>
+            <div v-else class="empty-state">Belum ada transaksi</div>
+          </div>
+          <!-- Top products -->
+          <div v-else-if="widget.id === 'top_products' || widget.id === 'best_selling' || widget.id === 'popular_items'">
+            <div v-if="topProductsLoading" class="list-loading">
+              <span class="loading-dot" v-for="n in 5" :key="n"></span>
+            </div>
+            <div v-else-if="topProducts.length" class="list-items">
+              <div v-for="(prod, idx) in topProducts" :key="idx" class="list-item">
+                <span class="item-label">{{ prod.name }}</span>
+                <span class="item-value">{{ formatCurrency(prod.revenue_cents) }}</span>
+              </div>
+            </div>
+            <div v-else class="empty-state">Belum ada data produk</div>
+          </div>
+          <!-- Generic list fallback -->
+          <div v-else>
+            <div v-if="widgetData[widget.id]?.items?.length" class="list-items">
+              <div v-for="(item, idx) in widgetData[widget.id].items.slice(0, 5)" :key="idx" class="list-item">
+                <span class="item-label">{{ item.label }}</span>
+                <span class="item-value">{{ item.value }}</span>
+              </div>
+            </div>
+            <div v-else class="empty-state">Belum ada data</div>
+          </div>
         </div>
 
         <!-- Actions widget -->
@@ -102,9 +143,62 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { api } from '../api'
+import { Bar } from 'vue-chartjs'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js'
+import { api, reportsApi } from '../api'
+import type { TopProduct, RecentTransaction } from '../api'
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 const router = useRouter()
+
+// F060: Chart state
+const period = ref<'week' | 'month' | 'year'>('week')
+const periods = ['week', 'month', 'year'] as const
+const periodLabels: Record<string, string> = { week: '7H', month: '30H', year: '12B' }
+const chartLoading = ref(false)
+const chartReady = ref(false)
+const chartData = ref({ labels: [] as string[], datasets: [] as any[] })
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx: any) => ' Rp ' + (ctx.raw / 1000).toFixed(0) + 'K',
+      },
+    },
+  },
+  scales: {
+    x: {
+      grid: { color: 'rgba(255,255,255,0.04)' },
+      ticks: { color: '#64748b', font: { size: 10 } },
+    },
+    y: {
+      grid: { color: 'rgba(255,255,255,0.04)' },
+      ticks: {
+        color: '#64748b',
+        font: { size: 10 },
+        callback: (v: any) => 'Rp ' + (v / 1000).toFixed(0) + 'K',
+      },
+    },
+  },
+}
+
+// F060: Real list data
+const topProducts = ref<TopProduct[]>([])
+const recentTransactions = ref<RecentTransaction[]>([])
+const topProductsLoading = ref(false)
+const recentTxLoading = ref(false)
 
 const businessName = ref('')
 const businessType = ref('umum')
@@ -242,6 +336,11 @@ const syncData = async () => {
     loading.value = false
   }
 
+  // F060: Fetch sales chart + top products + recent transactions
+  fetchSalesChart()
+  fetchTopProducts()
+  fetchRecentTransactions()
+
   // Check WA Setup Status
   try {
     const waRes = await api.getWASetup()
@@ -269,6 +368,77 @@ const upgradePlan = (targetPlan: string) => {
   plan.value = targetPlan
   showUpgrade.value = false
   localStorage.setItem('plan', targetPlan)
+}
+
+// F060: Sales Chart
+const fetchSalesChart = async () => {
+  chartLoading.value = true
+  try {
+    const res = await reportsApi.getSalesChart(period.value)
+    if (res.success && res.data) {
+      const d = res.data
+      chartData.value = {
+        labels: d.labels,
+        datasets: [
+          {
+            label: 'Pendapatan',
+            data: d.revenue,
+            backgroundColor: 'rgba(59, 130, 246, 0.7)',
+            borderRadius: 4,
+          },
+          {
+            label: 'Pengeluaran',
+            data: d.expense,
+            backgroundColor: 'rgba(239, 68, 68, 0.6)',
+            borderRadius: 4,
+          },
+        ],
+      }
+      chartReady.value = true
+    } else {
+      chartReady.value = false
+    }
+  } catch (e) {
+    console.error('Sales chart error:', e)
+    chartReady.value = false
+  } finally {
+    chartLoading.value = false
+  }
+}
+
+const setPeriod = (p: 'week' | 'month' | 'year') => {
+  period.value = p
+  fetchSalesChart()
+}
+
+// F060: Top Products
+const fetchTopProducts = async () => {
+  topProductsLoading.value = true
+  try {
+    const res = await reportsApi.getTopProducts(5)
+    if (res.success && Array.isArray(res.data)) {
+      topProducts.value = res.data
+    }
+  } catch (e) {
+    console.warn('Top products error:', e)
+  } finally {
+    topProductsLoading.value = false
+  }
+}
+
+// F060: Recent Transactions
+const fetchRecentTransactions = async () => {
+  recentTxLoading.value = true
+  try {
+    const res = await reportsApi.getRecentTransactions(5)
+    if (res.success && Array.isArray(res.data)) {
+      recentTransactions.value = res.data
+    }
+  } catch (e) {
+    console.warn('Recent transactions error:', e)
+  } finally {
+    recentTxLoading.value = false
+  }
 }
 
 onMounted(() => {
@@ -439,8 +609,91 @@ onMounted(() => {
 .metric-change.negative { color: #ef4444; }
 
 .widget-chart {
-  height: 180px;
+  height: 200px;
+  display: flex;
+  flex-direction: column;
 }
+
+.chart-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+  flex-shrink: 0;
+}
+
+.period-switcher {
+  display: flex;
+  gap: 0.25rem;
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.period-switcher button {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.period-switcher button.active {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.period-switcher button:not(.active):hover {
+  color: #e2e8f0;
+  background: rgba(255,255,255,0.06);
+}
+
+.chart-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.chart-loading,
+.list-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 6px;
+}
+
+.loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(59,130,246,0.15);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-dot {
+  width: 8px;
+  height: 8px;
+  background: #3b82f6;
+  border-radius: 50%;
+  opacity: 0.4;
+  animation: pulse-dot 1s ease infinite;
+}
+
+.loading-dot:nth-child(2) { animation-delay: 0.15s; }
+.loading-dot:nth-child(3) { animation-delay: 0.3s; }
+.loading-dot:nth-child(4) { animation-delay: 0.45s; }
+.loading-dot:nth-child(5) { animation-delay: 0.6s; }
 
 .chart-placeholder {
   display: flex;

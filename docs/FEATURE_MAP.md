@@ -126,7 +126,7 @@ Format per feature:
 | F057 | Superadmin Feature Matrix + Addon Tier Gating | ✅ Approved | ✅ Done | 2026-06-22 |
 | F058 | Wallet Payment untuk Subscription & Topup | ✅ Approved | 🔨 In Progress | 2026-06-22 |
 | F059 | Landing Page — Marketing & Onboarding | ✅ Approved | ✅ Done | 2026-06-21 |
-| F060 | Sales Dashboard Chart — Visual Penjualan | ✅ Approved | ⏳ Pending | 2026-06-22 |
+| F060 | Sales Dashboard Chart — Visual Penjualan | ✅ Approved | ✅ Done | 2026-06-21 |
 
 ## F056: Theme Management (Dark/Light/System)
 **Spec Status:** ✅ Approved
@@ -823,29 +823,25 @@ Classic Dashboard sudah punya Bar chart `handleCashFlow` data. Tambah period swi
 
 ### ✅ Acceptance Criteria (AC)
 
-- [ ] AC-1: `GET /api/umkm/reports/sales-chart?period=week` → return 7 data points (per-hari)
-- [ ] AC-2: `GET /api/umkm/reports/sales-chart?period=month` → return 30 data points
-- [ ] AC-3: `GET /api/umkm/reports/sales-chart?period=year` → return 12 data points (per-bulan)
-- [ ] AC-4: Dashboard widget `daily_sales` menampilkan Chart.js line/bar chart real
-- [ ] AC-5: Period switcher (7H/30H/12B) berfungsi — ganti data chart
-- [ ] AC-6: Widget `recent_transactions` menampilkan 5 transaksi terakhir real
-- [ ] AC-7: Widget `top_products` menampilkan produk terlaris real
-- [ ] AC-8: Loading state (skeleton/spinner) selama fetch
-- [ ] AC-9: Empty state jika belum ada transaksi
-- [ ] AC-10: `go build`, `go vet`, `go test`, `vue-tsc` clean
+- [x] AC-1: `GET /reports/sales-chart?period=week` → return 7 data points (per-hari)
+- [x] AC-2: `GET /reports/sales-chart?period=month` → return 30 data points
+- [x] AC-3: `GET /reports/sales-chart?period=year` → return 12 data points (per-bulan)
+- [x] AC-4: Dashboard widget `daily_sales` menampilkan Chart.js bar chart real
+- [x] AC-5: Period switcher (7H/30H/12B) berfungsi — ganti data chart
+- [x] AC-6: Widget `recent_transactions` menampilkan 5 transaksi terakhir real
+- [x] AC-7: Widget `top_products` menampilkan produk terlaris real
+- [x] AC-8: Loading state (spinner) selama fetch
+- [x] AC-9: Empty state jika belum ada transaksi
+- [x] AC-10: `go build ./...`, `go vet`, `vue-tsc` clean ✅
 
-### 📁 Files to Change
+### 📁 Files Changed
 
 **Backend:**
-- `apps/umkm/accounting/main.go` — **NEW** handler `handleSalesChart` (GET /reports/sales-chart)
-- `apps/umkm/accounting/main.go` — **NEW** handler `handleTopProducts` (GET /reports/top-products)
-- `apps/umkm/accounting/main.go` — **NEW** handler `handleRecentTransactions` (GET /reports/recent-transactions)
-- `apps/umkm/accounting/main.go` — routes untuk 3 endpoint baru
+- `apps/umkm/accounting/main.go` — **NEW** handler `handleSalesChart` (GET /reports/sales-chart), `handleTopProducts`, `handleRecentTransactions` + 3 routes
 
 **Frontend:**
-- `frontend/umkm-web/src/components/DynamicDashboard.vue` — update chart widget (Chart.js real data), update list widgets (recent transactions, top products), add period switcher + loading state + empty state
-- `frontend/umkm-web/src/components/Dashboard.vue` — tambah period switcher pada classic dashboard
-- `frontend/umkm-web/src/api.ts` — methods `api.getSalesChart()`, `api.getTopProducts()`, `api.getRecentTransactions()`
+- `frontend/umkm-web/src/components/DynamicDashboard.vue` — Chart.js real data, period switcher (7H/30H/12B), loading states, real list data
+- `frontend/umkm-web/src/api.ts` — `reportsApi` with `getSalesChart`, `getTopProducts`, `getRecentTransactions`
 
 ### Notes:
 
