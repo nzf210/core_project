@@ -160,8 +160,8 @@
     </div>
 
     <!-- Staff Management -->
-    <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
-      <h3 style="margin-bottom: 1.5rem;">Pengaturan Pegawai (Kasir)</h3>
+    <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;" v-if="userRole === 'owner' || userRole === 'admin'">
+      <h3 style="margin-bottom: 1.5rem;" v-if="userRole === 'owner' || userRole === 'admin'">Pengaturan Pegawai (Kasir)</h3>
       <div style="display: flex; flex-direction: column; gap: 1rem;" v-if="userRole === 'owner' || userRole === 'admin'">
         <input type="text" placeholder="Username" v-model="staffForm.username" class="form-control" />
         <input type="email" placeholder="Email" v-model="staffForm.email" class="form-control" />
@@ -479,7 +479,7 @@ const loadingUpdateStaff = ref(false)
 const userRole = computed(() => localStorage.getItem('role') || '')
 
 const fetchStaffList = async () => {
-  if (userRole.value === 'kasir') return;
+  
   loadingStaffList.value = true;
   try {
     const res = await authApi.getStaffList();
