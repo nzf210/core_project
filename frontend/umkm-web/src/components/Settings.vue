@@ -105,7 +105,7 @@
     <div v-if="isSuperadmin" class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
       <h3 style="margin-bottom: 1.5rem;">📊 Quota Usage (Superadmin)</h3>
       <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-        Inspect quota counters and plan limits for any tenant. Endpoint: <code>/api/superadmin/billing/admin/quota/{tenant_id}</code>
+        Inspect quota counters and plan limits for any tenant. Endpoint: <code>/api/superadmin/billing/quota/{tenant_id}</code>
       </p>
 
       <div class="flex gap-2" style="margin-bottom: 1rem;">

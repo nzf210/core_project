@@ -409,10 +409,10 @@ export const api = {
   },
 
   // Quota usage (F025, Task 2.9) — superadmin-only dashboard endpoint
-  // GET /api/superadmin/billing/admin/quota/{tenant_id}
+  // GET /api/superadmin/billing/quota/{tenant_id}
   // (api-gateway strips /api/superadmin/billing, forwards to billing-service /admin/quota/{id})
   async getQuotaUsage(tenantId: string) {
-    const res = await fetch(`${API_BASE}/api/superadmin/billing/admin/quota/${tenantId}`, {
+    const res = await fetch(`${API_BASE}/api/superadmin/billing/quota/${tenantId}`, {
       method: 'GET',
       headers: headers(),
     })
@@ -514,10 +514,10 @@ export interface QuotaUsage {
 }
 
 // Typed convenience wrapper around api.getQuotaUsage.
-// Returns null if the request fails or returns success:false (e.g. 403 for non-superadmin).
+// Returns null if the request fails or returns non-200 status.
 export async function getQuotaUsage(tenantId: string): Promise<QuotaUsage | null> {
   const res = await api.getQuotaUsage(tenantId)
-  if (res && res.success && res.data) return res.data as QuotaUsage
+  if (res && res.status === 200 && res.data) return res.data as QuotaUsage
   return null
 }
 

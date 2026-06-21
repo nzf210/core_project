@@ -1906,6 +1906,7 @@ func handleFaqsGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reqHTTP.Header.Set("Content-Type", "application/json")
+	reqHTTP.Header.Set("X-Tenant-ID", tenantID)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(reqHTTP)
@@ -3538,6 +3539,7 @@ func handleChatbotConfigTest(w http.ResponseWriter, r *http.Request) {
 	})
 	aiReq, _ := http.NewRequestWithContext(r.Context(), "POST", AIGatewayURL, bytes.NewBuffer(aiReqBody))
 	aiReq.Header.Set("Content-Type", "application/json")
+	aiReq.Header.Set("X-Tenant-ID", tenantID)
 	client := &http.Client{Timeout: 25 * time.Second}
 	aiResp, err := client.Do(aiReq)
 	if err != nil {

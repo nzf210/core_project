@@ -282,6 +282,7 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 
 	aiReqHTTP, _ := http.NewRequestWithContext(ctx, "POST", AIGatewayURL, bytes.NewBuffer(jsonBody))
 	aiReqHTTP.Header.Set("Content-Type", "application/json")
+	aiReqHTTP.Header.Set("X-Tenant-ID", tenantID)
 
 	aiClient := &http.Client{Timeout: 30 * time.Second}
 	aiRespHTTP, err := aiClient.Do(aiReqHTTP)
@@ -742,6 +743,7 @@ func processChatJob(job ChatJob) {
 	jsonBody, _ := json.Marshal(aiReqBody)
 	aiReqHTTP, _ := http.NewRequestWithContext(ctx, "POST", AIGatewayURL, bytes.NewBuffer(jsonBody))
 	aiReqHTTP.Header.Set("Content-Type", "application/json")
+	aiReqHTTP.Header.Set("X-Tenant-ID", tenantID)
 
 	aiRespHTTP, err := http.DefaultClient.Do(aiReqHTTP)
 	if err == nil {

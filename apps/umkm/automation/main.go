@@ -96,6 +96,7 @@ func handleMonthlyReport(tenantID string) {
 
 	req, _ := http.NewRequestWithContext(ctx, "POST", AIGatewayURL, bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", tenantID)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)

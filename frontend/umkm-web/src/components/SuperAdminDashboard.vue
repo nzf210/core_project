@@ -141,6 +141,9 @@
           <button class="btn" style="background: rgba(168, 85, 247, 0.15); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.3); padding: 0.35rem 0.75rem; font-size: 0.8rem; margin-right: 0.5rem;" @click="openPlanEditor">
             Kelola Paket
           </button>
+          <button class="btn" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); padding: 0.35rem 0.75rem; font-size: 0.8rem; margin-right: 0.5rem;" @click="openAddonEditor">
+            Kelola Add-on
+          </button>
           <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" @click="fetchTenants"
             :disabled="loadingTenants">
             {{ loadingTenants ? '...' : 'Refresh' }}
@@ -163,7 +166,16 @@
           </thead>
           <tbody>
             <tr v-for="t in tenants" :key="t.id">
-              <td><strong>{{ t.name }}</strong></td>
+              <td>
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <strong>{{ t.name }}</strong>
+                  <button class="btn-edit" style="padding: 0.15rem 0.3rem; opacity: 0.6;" @click="copyToClipboard(t.id)" title="Copy Tenant ID">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                </div>
+              </td>
               <td>{{ t.owner_username || '-' }}</td>
               <td>{{ t.owner_phone || '-' }}</td>
               <td>{{ t.user_count ?? 0 }}</td>
@@ -539,6 +551,59 @@
       </div>
     </div>
 
+    <!-- Modal Kelola Add-on -->
+    <div v-if="showAddonEditor" class="modal-overlay" @click.self="showAddonEditor = false">
+      <div class="modal-card" style="max-width: 600px;">
+        <h3 style="margin: 0 0 0.25rem 0;">Kelola Harga Add-on</h3>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem;">
+          Ubah harga fitur add-on untuk marketplace wallet.
+        </p>
+
+        <div v-if="loadingAddons" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+          Memuat data add-on...
+        </div>
+        <div v-else style="max-height: 60vh; overflow-y: auto; padding-right: 0.5rem;">
+          <div v-for="addon in addonOptions" :key="addon.addon_key" class="form-group" style="background: var(--surface-0); border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+              <div style="font-weight: 600; text-transform: uppercase;">{{ addon.addon_key.replace(/_/g, ' ') }}</div>
+              <label style="display: flex; align-items: center; gap: 0.5rem; margin: 0; font-size: 0.85rem; font-weight: 400;">
+                <input type="checkbox" v-model="addon.is_active" /> Aktif
+              </label>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+              <div>
+                <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Harga (Rp)</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 0.85rem;">Rp</span>
+                  <input v-model.number="addon.price" type="number" class="form-control" style="padding-left: 2rem;" />
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Unit (mis: bulan, trx)</label>
+                <input v-model="addon.unit" type="text" class="form-control" />
+              </div>
+            </div>
+            <div style="margin-top: 0.75rem;">
+              <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Deskripsi</label>
+              <input v-model="addon.description" type="text" class="form-control" />
+            </div>
+          </div>
+
+          <div v-if="addonSaveMsg" :style="{ color: addonSaveMsg.includes('gagal') ? '#ef4444' : '#10b981', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }">
+            {{ addonSaveMsg }}
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+          <button class="btn btn-secondary" @click="showAddonEditor = false">Tutup</button>
+          <button class="btn btn-primary" @click="saveAddons" :disabled="loadingAddons || savingAddons">
+            {{ savingAddons ? 'Menyimpan...' : 'Simpan Perubahan' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal Paket Langganan (Edit Harga) -->
     <div v-if="showPlanEditor" class="modal-overlay" @click.self="showPlanEditor = false">
       <div class="modal-card" style="max-width: 520px;">
@@ -674,10 +739,12 @@ watch(deleteTarget, (v) => { if (v) openModal(); else closeModal(); });
 const showGenerateVoucherModal = ref(false)
 const showVoucherListModal = ref(false)
 const showPlanEditor = ref(false)
+const showAddonEditor = ref(false)
 
 watch(showGenerateVoucherModal, (v) => { if (v) openModal(); else closeModal(); });
 watch(showVoucherListModal, (v) => { if (v) openModal(); else closeModal(); });
 watch(showPlanEditor, (v) => { if (v) openModal(); else closeModal(); });
+watch(showAddonEditor, (v) => { if (v) openModal(); else closeModal(); });
 
 const businessTypes = [
   { id: 'umum', name: 'Umum / General' },
@@ -1068,12 +1135,12 @@ const executeGenerateVoucher = async () => {
   }
 }
 
-const copyToClipboard = async (text: string) => {
+const copyToClipboard = async (text: string, msg?: string) => {
   try {
     await navigator.clipboard.writeText(text)
-    showToast('Kode voucher berhasil disalin!', 'success')
+    showToast(msg || 'Berhasil disalin!', 'success')
   } catch {
-    showToast('Gagal menyalin kode voucher', 'error')
+    showToast('Gagal menyalin', 'error')
   }
 }
 
@@ -1135,6 +1202,56 @@ const fetchVoucherList = async () => {
     voucherList.value = []
   } finally {
     loadingVoucherList.value = false
+  }
+}
+
+// Add-on state & functions
+const loadingAddons = ref(false)
+const savingAddons = ref(false)
+const addonOptions = ref<any[]>([])
+const addonSaveMsg = ref('')
+
+const openAddonEditor = async () => {
+  showAddonEditor.value = true
+  addonSaveMsg.value = ''
+  loadingAddons.value = true
+  try {
+    const data = await superadminApi.getAddonPrices()
+    if (data && data.success) {
+      addonOptions.value = (data.data || []).map((a: any) => ({
+        ...a,
+        price: Math.round((a.price_cents || 0) / 100)
+      }))
+    } else {
+      addonSaveMsg.value = data?.message || 'Gagal memuat add-on'
+    }
+  } catch (e) {
+    addonSaveMsg.value = 'Kesalahan jaringan memuat add-on'
+  } finally {
+    loadingAddons.value = false
+  }
+}
+
+const saveAddons = async () => {
+  savingAddons.value = true
+  addonSaveMsg.value = ''
+  let hasError = false
+  try {
+    for (const addon of addonOptions.value) {
+      const payload = {
+        price_cents: Math.round((addon.price || 0) * 100),
+        unit: addon.unit,
+        description: addon.description,
+        is_active: addon.is_active
+      }
+      const result = await superadminApi.updateAddonPrice(addon.addon_key, payload)
+      if (!result.success) hasError = true
+    }
+    addonSaveMsg.value = hasError ? 'Beberapa perubahan gagal disimpan' : 'Semua perubahan berhasil disimpan'
+  } catch (e) {
+    addonSaveMsg.value = 'Kesalahan jaringan saat menyimpan'
+  } finally {
+    savingAddons.value = false
   }
 }
 
