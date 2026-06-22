@@ -69,6 +69,8 @@ services:
         condition: service_started
       campaign-api:
         condition: service_started
+      billing-service:
+        condition: service_started
     restart: unless-stopped
   auth-service:
     build:

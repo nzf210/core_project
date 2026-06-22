@@ -147,7 +147,7 @@ async function loadConfig() {
   errorMsg.value = ''
   try {
     const data = await request('/admin/referral-config')
-    if (data.success && data.data) {
+    if (data.data) {
       config.value = {
         discount_percent: data.data.discount_percent ?? 10,
         commission_percent: data.data.commission_percent ?? 10,
@@ -180,11 +180,9 @@ async function handleSave() {
         is_active: config.value.is_active,
       }),
     })
-    if (data.success) {
-      successMsg.value = 'Konfigurasi berhasil disimpan!'
+    if (data.status === 200 || data.message) {
+      successMsg.value = data.message || 'Konfigurasi berhasil disimpan!'
       setTimeout(() => successMsg.value = '', 3000)
-    } else {
-      errorMsg.value = data.message || 'Gagal menyimpan'
     }
   } catch (e: any) {
     errorMsg.value = e?.message || 'Gagal menyimpan'

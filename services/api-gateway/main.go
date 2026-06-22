@@ -73,8 +73,14 @@ func main() {
 	mux.Handle("/webhooks/n8n/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks", newProxy(getTarget("n8n", "5678")))))
 
 	// Superadmin routes — protected with auth + role check
-	mux.Handle("/api/superadmin/", auth.Middleware(http.StripPrefix("/api/superadmin", newTenantProxy(getTarget("auth-service", "8001")+"/superadmin"))))
+	// F044: Campaign Licenses routes — must come BEFORE catch-all /api/superadmin/ to avoid 404
+	mux.Handle("/api/superadmin/licenses", auth.Middleware(http.StripPrefix("/api/superadmin", newTenantProxy(getTarget("billing-service", "8003")+"/admin"))))
+	mux.Handle("/api/superadmin/licenses/", auth.Middleware(http.StripPrefix("/api/superadmin", newTenantProxy(getTarget("billing-service", "8003")+"/admin"))))
 	mux.Handle("/api/superadmin/billing/", auth.Middleware(http.StripPrefix("/api/superadmin/billing", newTenantProxy(getTarget("billing-service", "8003")+"/admin"))))
+	// Login endpoint — NO auth middleware (otherwise login itself requires auth!)
+	mux.Handle("/api/superadmin/login", http.StripPrefix("/api/superadmin", newTenantProxy(getTarget("auth-service", "8001")+"/superadmin")))
+	// Catch-all superadmin routes — must be LAST
+	mux.Handle("/api/superadmin/", auth.Middleware(http.StripPrefix("/api/superadmin", newTenantProxy(getTarget("auth-service", "8001")+"/superadmin"))))
 	mux.Handle("/api/superadmin/n8n/", auth.Middleware(http.StripPrefix("/api/superadmin/n8n", n8nProxy(getTarget("n8n", "5678")))))
 
 	// Profile routes — user can edit own profile
