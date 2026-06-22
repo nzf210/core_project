@@ -3119,10 +3119,10 @@ func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		rows.Close()
 	}
 
-	// Active subscriptions by plan
+	// Active subscriptions by plan (using tenants table for source of truth of active plans)
 	planRows, _ := DB.Query(ctx, `
-		SELECT plan_id, COUNT(*) FROM tenant_subscriptions
-		WHERE status = 'active' GROUP BY plan_id
+		SELECT plan, COUNT(*) FROM tenants
+		WHERE is_frozen = false GROUP BY plan
 	`)
 	subsByPlan := map[string]int{}
 	if planRows != nil {
