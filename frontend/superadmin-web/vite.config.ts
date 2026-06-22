@@ -11,6 +11,7 @@ export default defineConfig({
       '/admin': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/admin/, '/api/superadmin/billing')
       },
       // Proxy /api/* → api-gateway
       '/api': {

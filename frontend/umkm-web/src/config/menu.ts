@@ -49,6 +49,7 @@ export const menuConfig: MenuGroup[] = [
       { label: 'Agen Afiliasi', to: '/affiliate', icon: '🤝' },
       { label: 'Pengaturan', to: '/settings', icon: '⚙️' },
       { label: 'Wallet', to: '/wallet', icon: '💳', roles: ['owner', 'admin', 'superadmin'] },
+      { label: 'Add-ons', to: '/addons', icon: '⚙️' },
     ],
   },
   {

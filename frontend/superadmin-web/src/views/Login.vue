@@ -26,7 +26,7 @@ async function handleLogin() {
       error.value = data.message || 'Login gagal'
       return
     }
-    const token = data.data?.access_token || data.access_token
+    const token = data.data?.accessToken || data.accessToken || data.data?.access_token || data.access_token
     if (!token) {
       error.value = 'Token tidak ditemukan dalam response'
       return

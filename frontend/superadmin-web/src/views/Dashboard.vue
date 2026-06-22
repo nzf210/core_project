@@ -21,6 +21,28 @@ onMounted(async () => {
 function formatRupiah(sen: number) {
   return 'Rp ' + (sen / 100).toLocaleString('id-ID')
 }
+
+async function impersonateTenant(tenantId: string) {
+  if (!confirm('Login sebagai tenant ini? Tab baru akan dibuka.')) return
+  try {
+    const res = await fetch(`/api/superadmin/tenants/${tenantId}/impersonate`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Impersonate failed')
+
+    sessionStorage.setItem('superadmin_token', localStorage.getItem('access_token') || '')
+
+    const url = new URL(window.location.origin.replace('superadmin', 'app'))
+    url.searchParams.set('impersonate_token', data.data.access_token)
+    window.open(url.toString(), '_blank')
+
+    alert(`Login sebagai ${data.data.tenant.business_name} berhasil. Cek tab baru.`)
+  } catch (err: any) {
+    alert(err.message || 'Impersonate failed')
+  }
+}
 </script>
 
 <template>
@@ -100,7 +122,7 @@ function formatRupiah(sen: number) {
         <h2>Recent Frozen Accounts (top 10)</h2>
         <table>
           <thead>
-            <tr><th>Tenant</th><th>Plan</th><th>Expired At</th><th>Frozen At</th></tr>
+            <tr><th>Tenant</th><th>Plan</th><th>Expired At</th><th>Frozen At</th><th>Actions</th></tr>
           </thead>
           <tbody>
             <tr v-for="t in data.recent_frozen" :key="t.id">
@@ -108,9 +130,12 @@ function formatRupiah(sen: number) {
               <td><code>{{ t.plan }}</code></td>
               <td>{{ t.expired_at || '-' }}</td>
               <td>{{ t.frozen_at || '-' }}</td>
+              <td>
+                <button class="btn-impersonate" @click="impersonateTenant(t.id)">🔓 Login Sebagai</button>
+              </td>
             </tr>
             <tr v-if="data.recent_frozen.length === 0">
-              <td colspan="4" class="empty">No frozen accounts</td>
+              <td colspan="5" class="empty">No frozen accounts</td>
             </tr>
           </tbody>
         </table>
@@ -134,4 +159,19 @@ h1 { font-size: 24px; margin-bottom: 4px; }
 .loading, .error { padding: 40px; text-align: center; color: var(--muted); }
 .error { color: var(--danger); }
 .empty { text-align: center; color: var(--muted); padding: 20px; }
+.btn-impersonate {
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.btn-impersonate:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
 </style>

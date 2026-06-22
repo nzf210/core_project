@@ -242,7 +242,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useHead } from '@unhead/vue'
+
+useHead({
+  title: 'WCH Platform — Kasir, Pembukuan & AI Chatbot untuk UMKM Indonesia',
+  meta: [
+    { name: 'description', content: 'WCH Platform adalah all-in-one aplikasi kasir, pembukuan double-entry, dan AI Customer Service untuk UMKM Indonesia. Mulai gratis, upgrade kapan saja.' },
+    { property: 'og:title', content: 'WCH Platform — Kasir, Pembukuan & AI Chatbot' },
+    { property: 'og:description', content: 'All-in-one aplikasi kasir, pembukuan double-entry, dan AI chatbot untuk UMKM Indonesia. Gratis selamanya.' },
+    { property: 'og:type', content: 'website' },
+    { name: 'twitter:card', content: 'summary_large_image' },
+    { name: 'twitter:title', content: 'WCH Platform — Kasir, Pembukuan & AI Chatbot' },
+    { name: 'twitter:description', content: 'All-in-one aplikasi kasir, pembukuan, dan AI chatbot untuk UMKM Indonesia.' },
+    { name: 'robots', content: 'index, follow' },
+  ],
+  link: [
+    { rel: 'canonical', href: 'https://wch.id' },
+  ],
+})
 
 const mobileOpen = ref(false)
 

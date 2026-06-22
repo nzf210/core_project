@@ -24,6 +24,7 @@ import ClinicFrontdesk from '../components/ClinicFrontdesk.vue'
 import AffiliateDashboard from '../components/AffiliateDashboard.vue'
 import AffiliateLeaderboard from '../components/AffiliateLeaderboard.vue'
 import Wallet from '../components/Wallet.vue'
+import Addons from '../components/Addons.vue'
 import LandingPage from '../components/LandingPage.vue'
 
 const routes = [
@@ -59,6 +60,8 @@ const routes = [
   { path: '/affiliate', component: AffiliateDashboard, name: 'AffiliateDashboard' },
   { path: '/leaderboard', component: AffiliateLeaderboard, name: 'AffiliateLeaderboard', meta: { public: true } },
   { path: '/wallet', component: Wallet, name: 'Wallet' },
+  // F053: Addon marketplace page
+  { path: '/addons', component: Addons, name: 'Addons' },
 ]
 
 const router = createRouter({
@@ -107,6 +110,34 @@ async function fetchAndSyncMe(): Promise<any | null> {
 }
 
 router.beforeEach(async (to, _from, next) => {
+  // F058: Impersonate auto-login via query param
+  const impersonateToken = to.query.impersonate_token as string | undefined
+  if (impersonateToken) {
+    try {
+      const res = await fetch('/api/auth/validate', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${impersonateToken}` }
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        localStorage.setItem('access_token', impersonateToken)
+        localStorage.setItem('tenant_id', data.data.tenant_id)
+        localStorage.setItem('user_id', data.data.user_id)
+        localStorage.setItem('role', data.data.role)
+        if (data.data.impersonated_by) {
+          sessionStorage.setItem('impersonated_by', data.data.impersonated_by)
+        }
+        // Sync onboarding/plan/frozen state
+        await fetchAndSyncMe()
+        // Redirect to dashboard, strip query param
+        next({ path: '/dashboard', replace: true })
+        return
+      }
+    } catch (err) {
+      console.error('Impersonate auto-login failed:', err)
+    }
+  }
+
   // Public routes — no auth required
   if (to.meta.public) {
     next()

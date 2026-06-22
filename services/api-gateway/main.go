@@ -86,6 +86,17 @@ func main() {
 	mux.Handle("/api/umkm/business/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/umkm/business", newTenantProxy(getTarget("umkm-business", "9005"))))))
 	mux.Handle("/api/umkm/automation/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/umkm/automation", newTenantProxy(getTarget("umkm-automation", "8203"))))))
 	mux.Handle("/api/umkm/chat", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/umkm", newTenantProxy(getTarget("umkm-chatbot", "8203")))))))
+	// F053: Addon marketplace & purchase — proxied to billing-service (handlers at root level)
+	mux.Handle("/api/umkm/addon-marketplace", auth.Middleware(tenantRateLimitMiddleware(
+		http.StripPrefix("/api/umkm/addon-marketplace", newTenantProxy(getTarget("billing-service", "8003")+"/addon-marketplace")),
+	)))
+	mux.Handle("/api/umkm/addons/purchase", auth.Middleware(tenantRateLimitMiddleware(
+		http.StripPrefix("/api/umkm/addons/purchase", newTenantProxy(getTarget("billing-service", "8003")+"/addons/purchase")),
+	)))
+	mux.Handle("/api/umkm/addons", auth.Middleware(tenantRateLimitMiddleware(
+		http.StripPrefix("/api/umkm/addons", newTenantProxy(getTarget("billing-service", "8003")+"/addons")),
+	)))
+
 	mux.Handle("/api/umkm/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/umkm", newTenantProxy(getTarget("umkm-accounting", "8201")))))))
 	mux.Handle("/api/campaign/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/campaign", newTenantProxy(getTarget("campaign-api", "9002")))))))
 	mux.Handle("/api/billing/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/billing", newTenantProxy(getTarget("billing-service", "8003"))))))

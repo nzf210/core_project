@@ -775,6 +775,35 @@ Payment Webhook Callback
 
 ---
 
+## 🔓 Superadmin Impersonate + Grafana Monitoring (F058)
+
+**Superadmin dapat login sebagai tenant owner** untuk troubleshooting tanpa password tenant:
+
+| Endpoint | Method | Deskripsi |
+|:---------|:-------|:----------|
+| `/api/superadmin/tenants/{id}/impersonate` | POST | Generate JWT token `role: owner` + `impersonated_by` audit trail |
+
+**Flow:**
+1. Superadmin click button "🔓 Login Sebagai" di Tenant Management table
+2. Backend query owner tenant → generate JWT (12h expiry)
+3. Frontend open `app.example.com?impersonate_token=<token>` di tab baru
+4. Umkm-web auto-login dengan token tersebut (future: deteksi query param)
+
+**Grafana Monitoring Link:**
+- Navbar superadmin → "📊 Monitoring (Grafana)" → `target="_blank"` ke Grafana dashboard
+- URL: `VITE_GRAFANA_URL` env var (default: `http://localhost:3001`)
+- Level 1 integration — external link, no auth sharing
+- Superadmin login Grafana separately (credential: `admin`/`admin` atau env var)
+
+**Future enhancements:**
+- Level 2: Embed Grafana via `<iframe>` (butuh `GF_SECURITY_ALLOW_EMBEDDING=true`)
+- Level 3: Backend `/api/superadmin/metrics` → pull dari Grafana API → render Chart.js
+- Restore flow: Button "Kembali ke Superadmin" di umkm-web saat impersonated
+
+**Files:** `services/auth-service/impersonate.go`, `services/api-gateway/main.go`, `frontend/superadmin-web/src/views/TenantManagement.vue`, `frontend/superadmin-web/src/App.vue`
+
+---
+
 ## 🔧 Known Issues & Fixes (2026-06-14 Session)
 
 ### Fix 1: journal_entries.metadata Column Missing
