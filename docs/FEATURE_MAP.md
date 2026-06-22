@@ -357,25 +357,24 @@ Tanpa kondisi `AND min_tier IS NULL` — agar bisa raise maupun lower tier kapan
   handleSubscribe (line 577-767):
     ✅ Referral discount applied
     ✅ Voucher handling
-    ❌ Wallet bypass: final_price > 0 → selalu CREATE Xendit invoice
-    ❌ Tidak ada opsi "bayar dari wallet" untuk subscription
+    ✅ Wallet bypass: pay_via_wallet=true → deduct wallet → activateSubscription langsung
 
   handlePaymentWebhook (line 1020-1330):
     ✅ Deteksi wallet topup via -wallet-topup- external_id
     ✅ Overpayment → kelebihan masuk wallet
-    ❌ Tidak handle subscription-via-wallet (karena handleSubscribe belum kirim wallet payment)
+    ✅ Handle subscription-via-wallet (wallet payment path)
 
   Addon purchase (handlePurchaseAddon):
     ✅ Wallet deduction SUDAH
     ✅ Referral commission SUDAH
-    ❌ Referral discount BELUM
+    ✅ Referral discount applied (F054 fix)
 
 问题 (Gaps):
-  1. Subscription selalu lewat Xendit — tidak bisa pakai wallet
-  2. Tidak ada transaksi type 'subscription' di wallet_transactions
-  3. Frontend tidak ada indikator wallet balance saat checkout subscription
-  4. Auto-deduct: tenant bisa milih "bayar dari wallet" otomatis tiap bulan (auto-renew pake wallet)
-  5. Referral discount hanya untuk subscription Xendit — kalau wallet bypass, discount harus tetap jalan
+  1. ✅ Subscription bisa lewat Xendit atau wallet
+  2. ✅ Transaksi type 'subscription' di wallet_transactions
+  3. ✅ Frontend ada indikator wallet balance saat checkout subscription
+  4. Auto-deduct: deferred — manual renew via POST /addons/purchase cukup untuk MVP
+  5. ✅ Referral discount untuk semua payment method (Xendit & wallet)
 ```
 
 ---
@@ -3447,7 +3446,7 @@ AC-8 (GET /api/umkm/addons) adalah F053 scope.
   handlePurchaseAddon EXISTS (billing-service line 4171):
     POST /addons/purchase — wallet deducted → tenant_addons upsert
     ✅ Referral commission SUDAH
-    ❌ Referral discount BELUM (downline bayar full price)
+    ✅ Referral discount applied (F054 fix)
 
   handleAddonMarketplace EXISTS (billing-service line 4103):
     GET /addon-marketplace — return dari available_features (BUKAN addon_prices)
@@ -3456,10 +3455,10 @@ AC-8 (GET /api/umkm/addons) adalah F053 scope.
 
   handleWalletTopup EXISTS: tenant bisa topup wallet via Xendit
 
-  Missing:
-  1. Tenant-facing Addons.vue — halaman "Toko Addon" untuk beli
-  2. Auto-renew cron — addon expired tidak auto-perpanjang
-  3. Referral discount — belum di-apply sebelum wallet deduct
+  Addons.vue: SUDAH ADA (frontend/umkm-web/src/components/Addons.vue)
+
+  Deferred:
+  1. Auto-renew cron — manual renew via POST /addons/purchase cukup untuk MVP
 ```
 
 ---
@@ -3584,7 +3583,7 @@ Cron job (di billing-service atau subscription-worker) — setiap jam:
 │  │ Foto KTP, Produk     │  │ Voice note → teks    │     │
 │  │ Rp 5.000/request    │  │ Rp 10.000/menit      │     │
 │  │                      │  │                      │     │
-│  │ ✅ Aktif (23 hari)  │  │ ❌ Tidak aktif       │     │
+│  │ ✅ Aktif (23 hari)  │  │ ⏳ Akan expired       │     │
 │  │ [Kelola]            │  │ [Beli Rp 10.000]     │     │
 │  └──────────────────────┘  └──────────────────────┘     │
 └─────────────────────────────────────────────────────────────┘
@@ -3666,18 +3665,18 @@ Cron job (di billing-service atau subscription-worker) — setiap jam:
 
   handlePurchaseAddon (line 4247-4264):
     ✅ Affiliate commission dari addon purchase SUDAH
-    ❌ Referral discount BELUM — downline bayar full price untuk addon
+    ✅ Referral discount applied — downline dapat potongan referral
 
   HandleBillingWebhook (campaign billing.go line 147-177):
     ✅ Affiliate commission dari campaign checkout SUDAH
-    ❌ Referral discount BELUM — downline bayar full price
+    ✅ Referral discount applied via HandleBillingCheckout
 
   Referral link:
-    ❌ Route /r/{code} di API gateway BELUM ada
-    ❌ Register.vue pre-fill dari link referral BELUM
+    ✅ Route /r/{code} di API gateway ✅ (api-gateway/main.go)
+    ✅ Register.vue pre-fill dari link referral ✅
 ```
 
-**⚠️ Voucher + Referral stacking bug:** di `handleSubscribe` (line 643), voucher `discount_percent` menimpa referral discount. Seharusnya stack: voucher dulu → hasilnya dikurangi referral discount.
+**Voucher + Referral stacking:** sudah fix di `handleSubscribe` (line 643) — voucher discount applied dulu, lalu referral discount dihitung dari harga setelah voucher.
 
 ---
 

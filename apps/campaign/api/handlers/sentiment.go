@@ -90,8 +90,6 @@ func HandleSentimentIssues(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// AI NLP Processing via Gateway
-		// TODO: Use internal Discovery URL
-		chatURL := "http://localhost:8002/v1/chat"
 		systemMsg := `Ekstrak keluhan utama dari pesan warga ini menjadi 1-3 kata (extracted_issue), beri nilai sentimen -1.0 (sangat buruk/marah) hingga 1.0 (sangat baik), dan urgency (high/medium/low). Kembalikan dalam JSON: {"extracted_issue": "...", "sentiment": -0.8, "urgency": "high"}`
 
 		payload := map[string]interface{}{
@@ -101,7 +99,7 @@ func HandleSentimentIssues(w http.ResponseWriter, r *http.Request) {
 		}
 		body, _ := json.Marshal(payload)
 
-		httpReq, _ := http.NewRequest("POST", chatURL, bytes.NewBuffer(body))
+		httpReq, _ := http.NewRequest("POST", chatGatewayURL, bytes.NewBuffer(body))
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("X-Tenant-ID", tenantID)
 

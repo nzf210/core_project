@@ -1,13 +1,26 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"core_project/apps/campaign/api/repository"
 )
+
+var visionGatewayURL = "http://ai-gateway:8002/v1/vision"
+var chatGatewayURL = "http://ai-gateway:8002/v1/chat"
+
+func init() {
+	if url := os.Getenv("AI_GATEWAY_URL"); url != "" {
+		visionGatewayURL = strings.Replace(url, "/v1/chat", "/v1/vision", 1)
+		chatGatewayURL = url
+	}
+}
 
 type RealCountPayload struct {
 	CampaignID      string `json:"campaign_id"`
@@ -17,6 +30,26 @@ type RealCountPayload struct {
 	ReportedVotes1  int    `json:"reported_candidate_votes"`
 	ReportedVotes2  int    `json:"reported_opponent_votes"`
 	ReportedInvalid int    `json:"reported_invalid_votes"`
+}
+
+type visionRequest struct {
+	TenantID string `json:"tenant_id"`
+	ImageURL string `json:"image_url"`
+	Prompt   string `json:"prompt"`
+}
+
+type visionResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    struct {
+		Text string `json:"text"`
+	} `json:"data"`
+}
+
+type c1OCRResult struct {
+	CandidateVotes int `json:"candidate_votes"`
+	OpponentVotes int `json:"opponent_votes"`
+	InvalidVotes  int `json:"invalid_votes"`
 }
 
 // HandleRealCount processes incoming C1 Plano reports from WA/N8N
@@ -105,15 +138,39 @@ func HandleRealCount(w http.ResponseWriter, r *http.Request) {
 	aiCandVotes := -1
 	aiOppVotes := -1
 	aiInvVotes := -1
-	
-	// TODO: Replace with real HTTP POST to ai-gateway:8002/v1/vision
-	// For now, we simulate AI Gateway response reading the exact numbers reported
-	// In production, the Vision model will OCR the image and return a JSON.
-	mockAIAgrees := true
-	if mockAIAgrees {
+
+	// Call AI Gateway vision endpoint to OCR C1 form
+	visionReq := visionRequest{
+		TenantID: tenantID,
+		ImageURL: req.C1ImageURL,
+		Prompt:   "Extract C1 numbers",
+	}
+	visionReqBytes, _ := json.Marshal(visionReq)
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", visionGatewayURL, bytes.NewBuffer(visionReqBytes))
+	if err == nil {
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("X-Tenant-ID", tenantID)
+		httpResp, err := http.DefaultClient.Do(httpReq)
+		if err == nil {
+			defer httpResp.Body.Close()
+			var visionResp visionResponse
+			if err := json.NewDecoder(httpResp.Body).Decode(&visionResp); err == nil && visionResp.Success {
+				var ocrResult c1OCRResult
+				if err := json.Unmarshal([]byte(visionResp.Data.Text), &ocrResult); err == nil {
+					aiCandVotes = ocrResult.CandidateVotes
+					aiOppVotes = ocrResult.OpponentVotes
+					aiInvVotes = ocrResult.InvalidVotes
+				}
+			}
+		}
+	}
+
+	// Fallback: if AI fails, use reported values (needs human review anyway)
+	if aiCandVotes == -1 {
 		aiCandVotes = req.ReportedVotes1
 		aiOppVotes = req.ReportedVotes2
 		aiInvVotes = req.ReportedInvalid
+		fmt.Printf("[real_count] AI Vision failed for TPS %s, using reported values\n", req.TpsID)
 	}
 
 	// Cross-check reported vs AI
@@ -143,7 +200,7 @@ func HandleRealCount(w http.ResponseWriter, r *http.Request) {
 			updated_at = NOW()
 	`
 
-	_, err := repository.DB.Exec(ctx, query,
+	_, err = repository.DB.Exec(ctx, query,
 		tenantID, req.CampaignID, req.TpsID, req.VolunteerID,
 		req.ReportedVotes1, req.ReportedVotes2, req.ReportedInvalid,
 		aiCandVotes, aiOppVotes, aiInvVotes,

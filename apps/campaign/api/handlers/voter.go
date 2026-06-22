@@ -1,13 +1,13 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"log/slog"
+	"net/http"
 	"regexp"
-	"bytes"
 
 	"core_project/apps/campaign/api/repository"
 )
@@ -283,15 +283,13 @@ func HandleKTPScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Call AI Gateway Vision OCR
-	// TODO: Replace with real service discovery / config URL
-	visionURL := "http://localhost:8002/v1/vision"
 	visionPayload := map[string]string{
 		"image_url": req.ImageURL,
 		"prompt":    "Extract KTP data",
 	}
 	body, _ := json.Marshal(visionPayload)
 	
-	resp, err := http.Post(visionURL, "application/json", bytes.NewBuffer(body))
+	resp, err := http.Post(visionGatewayURL, "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "AI Gateway unreachable"})
 		return
