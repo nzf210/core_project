@@ -1,25 +1,36 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { ref, onMounted, watch } from 'vue'
+import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
 import { isAuthed, getRole, logout } from './api/client'
 
 const router = useRouter()
+const route = useRoute()
+const authed = ref(isAuthed())
 const role = ref(getRole())
 
+watch(
+  () => route.path,
+  () => {
+    authed.value = isAuthed()
+    role.value = getRole()
+  }
+)
+
 onMounted(() => {
-  if (!isAuthed()) {
+  if (!authed.value) {
     router.push('/login')
   }
 })
 
 function doLogout() {
   logout()
+  authed.value = false
   router.push('/login')
 }
 </script>
 
 <template>
-  <div v-if="isAuthed()">
+  <div v-if="authed">
     <header class="topbar">
       <div class="brand">⚡ WCH Superadmin</div>
       <nav>
