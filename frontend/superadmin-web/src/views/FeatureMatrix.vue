@@ -38,7 +38,7 @@ async function load() {
   try {
     const [plansRes, matrixRes, gatingRes] = await Promise.all([
       request('/admin/plans'),
-      request('/admin/feature-matrix'),
+      request('/admin/plan-features'),
       request('/admin/addon-gating'),
     ])
 
