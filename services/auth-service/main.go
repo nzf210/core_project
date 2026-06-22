@@ -892,7 +892,6 @@ func handleAddStaff(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Password minimal 6 karakter"})
 		return
 	}
-	fmt.Println("DEBUG PHONE NUMBER:", req.PhoneNumber)
 	if !phoneRE.MatchString(req.PhoneNumber) {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Nomor HP harus diawali 62, contoh: 62812..."})
 		return

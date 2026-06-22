@@ -384,6 +384,7 @@ services:
     command:
       - billing-service
     environment:
+      - APP_ENV=production
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=${DB_USER:-postgres}

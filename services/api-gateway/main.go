@@ -65,6 +65,8 @@ func main() {
 	// - wa-gateway: POST /webhooks/wa/{message.status,device.status} (whatsmeow internal)
 	// - wa-cloud-api: POST /webhooks/wa-cloud (Meta Cloud API callbacks)
 	// - n8n:    POST /webhooks/n8n/{workflow_name}  (custom workflow trigger)
+	// F054: Campaign webhook — must be BEFORE the catch-all /webhooks/xendit/ route
+	mux.Handle("/webhooks/xendit/campaign/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks/xendit/campaign", newProxy(getTarget("campaign-api", "9002")+"/billing/webhook"))))
 	mux.Handle("/webhooks/xendit/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks", newProxy(getTarget("billing-service", "8003")))))
 	mux.Handle("/webhooks/wa/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks", newProxy(getTarget("wa-gateway", "8202")))))
 	mux.Handle("/webhooks/wa-cloud/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks/wa-cloud", newProxy(getTarget("wa-cloud-api", "8210")+"/webhook"))))

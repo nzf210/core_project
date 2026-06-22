@@ -92,7 +92,7 @@ Format per feature:
 | F022 | Excel/Google Sheet Import & Export | ✅ Approved | ✅ Done | 2026-06-14 |
 | F023 | FAQ Bot AI — Edit & Generate | ✅ Approved | ✅ Done | 2026-06-14 |
 | F024 | Paid-Only Enforcement (Hardening) | ✅ Approved | ✅ Done | 2026-06-14 |
-| F025 | Tier Restrictions Overhaul + AI Multimodal | ✅ Approved | ✅ Done (Phase 3 mocked) | 2026-06-22 |
+| F025 | Tier Restrictions Overhaul + AI Multimodal | ✅ Approved | ✅ Done | 2026-06-22 |
 | F026 | N8N Notification Webhooks & Workflows | ✅ Approved | ✅ Done | 2026-06-14 |
 | F027 | Core Business Flow Fixes & Optimizations | ✅ Approved | ✅ Done | 2026-06-14 |
 | F029 | Dynamic Multimodal Guardrails | ✅ Approved | ✅ Done | 2026-06-14 |
@@ -257,22 +257,9 @@ curl -X POST http://localhost:8010/api/auth/validate \
 
 **Deskripsi:** Superadmin bisa mengatur feature per tier (toggle is_enabled per plan × feature) dan addon gating (set `min_tier` — tier minimum yang dibutuhkan untuk membeli addon). Enforcement BE membaca `min_tier` saat `CanUseAddon()`.
 
-**⚠️ KNOWN ISSUE — Dual Data Source Addon:** Ada 2 tabel addon yang tumpang tindih:
-- `available_features` (F052/F057 — primary) — berisi: `ai_vision`, `ai_audio`, `wa_blast`, `extra_store`, `extra_user`
-- `addon_prices` (F034 legacy) — berisi: `ai_vision`, `ai_audio_stt`, `wa_blast_api`, `wa_session_meta`
-- **Overlap:** `ai_vision` ada di kedua tabel.
-- **Dampak:**
-  1. Addon gating, feature matrix, dan marketplace hanya baca `available_features` → addon legacy (`ai_audio_stt`, `wa_blast_api`, `wa_session_meta`) **tidak muncul** di matrix/gating/marketplace
-  2. Harga bisa berbeda antara 2 sumber
-- **Solusi:** Konsolidasi migration — INSERT addon legacy ke `available_features`, lalu deprecate endpoint `handleAdminAddonPrices` (arahkan superadmin UI ke available_features)
+**✅ RESOLVED — Dual Data Source Addon:** Konsolidasi selesai via migration 000079. Semua addon legacy (`ai_audio_stt` → `ai_audio`, `wa_blast_api` → `wa_blast`, `wa_session_meta` → `wa_meta_session`) sudah dipindah ke `available_features`. `addon_prices` di-read-only. `quota_mw.go` sudah query `available_features` (fix 2026-06-22).
 
-**⚠️ KNOWN ISSUE — PATCH min_tier Bug:**
-Di `handleAdminAddonGating` (line 2508-2511), query UPDATE punya `WHERE min_tier IS NULL`:
-```sql
-UPDATE plan_features SET min_tier=$1 WHERE feature_key=$2 AND min_tier IS NULL
-```
-Akibatnya: jika `min_tier` sudah di-set "lite" lalu diganti "pro", query tidak mengupdate apapun karena `min_tier` tidak NULL.
-**Fix:** Hapus `AND min_tier IS NULL` — UPDATE tanpa kondisi itu.
+**✅ RESOLVED — PATCH min_tier Bug:** Fix di `billing-service/main.go` line 2567-2576 — hapus `AND min_tier IS NULL` agar UPDATE unconditional (fix 2026-06-22)
 
 **Spec (Opsi C — Hybrid):**
 
@@ -3946,8 +3933,8 @@ Tambah kolom:
 - [x] AC-8: Affiliate lihat komisi per transaksi di dashboard ✅ (sudah ada handleAffiliateEarnings)
 - [x] AC-9: Superadmin ubah `discount_percent`/`commission_percent` → langsung生效 ✅ (handleAdminReferralConfig)
 - [x] AC-10: Referral link `https://wch.id/r/AGEN-XXXX` → redirect ke Register.vue dengan pre-fill ✅ (api-gateway handleReferralLinkRedirect + Register.vue pre-fill)
-- [x] AC-11: Campaign checkout real Xendit invoice — deferred (arsitektur lebih besar, perlu scoping terpisah).
-- [x] AC-12: Campaign webhook `/webhooks/xendit/campaign/` → campaign API — deferred (dependen pada AC-11).
+- [x] AC-11: Campaign checkout real Xendit invoice ✅ (di-handle oleh HandleBillingCheckout, real API call + dev mock fallback)
+- [x] AC-12: Campaign webhook `/webhooks/xendit/campaign/` → campaign API ✅ (route di api-gateway + X-Callback-Token validation)
 - [x] AC-13: `make check` pass
 
 ---

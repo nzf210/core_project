@@ -282,6 +282,13 @@ func handleHealthStatus(w http.ResponseWriter, r *http.Request) {
 		{"notification-service", "8005"},
 	}
 
+	getTargetURL := func(svcName, port, endpoint string) string {
+		if os.Getenv("APP_ENV") == "production" {
+			return fmt.Sprintf("http://%s:%s%s", svcName, port, endpoint)
+		}
+		return fmt.Sprintf("http://localhost:%s%s", port, endpoint)
+	}
+
 	_, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
@@ -292,7 +299,7 @@ func handleHealthStatus(w http.ResponseWriter, r *http.Request) {
 		sh := svcHealth{Name: svc.name, Port: svc.port}
 
 		// Try metrics endpoint first (WA Gateway & Chatbot have it)
-		metricsURL := fmt.Sprintf("http://localhost:%s/metrics", svc.port)
+		metricsURL := getTargetURL(svc.name, svc.port, "/metrics")
 		client := &http.Client{Timeout: 3 * time.Second}
 
 		if resp, err := client.Get(metricsURL); err == nil && resp.StatusCode < 500 {
@@ -303,7 +310,7 @@ func handleHealthStatus(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			// Fallback to health endpoint
-			healthURL := fmt.Sprintf("http://localhost:%s/healthz", svc.port)
+			healthURL := getTargetURL(svc.name, svc.port, "/health")
 			if resp, err := client.Get(healthURL); err == nil {
 				defer resp.Body.Close()
 				if resp.StatusCode == http.StatusOK {

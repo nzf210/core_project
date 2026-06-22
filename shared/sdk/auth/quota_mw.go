@@ -11,15 +11,14 @@ import (
 )
 
 // AddonPricePerUnit returns the price in cents for an addon feature.
-// Returns 0 if not an addon or not found in addon_prices.
+// Returns 0 if not an addon or not found in available_features.
 func AddonPricePerUnit(ctx context.Context, addonKey string) int64 {
 	if db.Pool == nil {
 		return 0
 	}
 	var price int64
-	// addon_prices.unit is used as the unit for per-{request/minute/session} charging
 	_ = db.Pool.QueryRow(ctx,
-		"SELECT price_cents FROM addon_prices WHERE addon_key = $1 AND is_active = true",
+		"SELECT addon_price_cents FROM available_features WHERE feature_key = $1 AND is_addon = true",
 		addonKey).Scan(&price)
 	return price
 }
