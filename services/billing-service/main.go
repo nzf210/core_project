@@ -1979,10 +1979,10 @@ func handleAdminPlanFeaturesMatrix(w http.ResponseWriter, r *http.Request) {
 	// GET — return current numeric limits for this plan
 	if r.Method == http.MethodGet {
 		row := DB.QueryRow(r.Context(), `
-			SELECT max_users, max_transactions, max_ai_text, max_ai_vision,
-				   max_ai_audio_minutes, max_image_gen, max_products, max_customers,
-				   max_storage_mb, api_rate_limit_per_min, data_retention_months
-			FROM saas_plans WHERE id = $1
+			SELECT COALESCE(MAX(max_users), 0), COALESCE(MAX(max_transactions), 0), COALESCE(MAX(max_ai_text), 0), COALESCE(MAX(max_ai_vision), 0),
+				   COALESCE(MAX(max_ai_audio_minutes), 0), COALESCE(MAX(max_image_gen), 0), COALESCE(MAX(max_products), 0), COALESCE(MAX(max_customers), 0),
+				   COALESCE(MAX(max_storage_mb), 0), COALESCE(MAX(api_rate_limit_per_min), 0), COALESCE(MAX(data_retention_months), 0)
+			FROM plan_features WHERE plan_id = $1
 		`, planID)
 		var m struct {
 			MaxUsers            int `json:"max_users"`
@@ -2045,7 +2045,7 @@ func handleAdminPlanFeaturesMatrix(w http.ResponseWriter, r *http.Request) {
 	}
 
 	args = append(args, planID)
-	query := fmt.Sprintf("UPDATE saas_plans SET %s WHERE id = $%d", strings.Join(updates, ", "), idx)
+	query := fmt.Sprintf("UPDATE plan_features SET %s WHERE plan_id = $%d", strings.Join(updates, ", "), idx)
 	if _, err := DB.Exec(r.Context(), query, args...); err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to update matrix", err)
 		return
