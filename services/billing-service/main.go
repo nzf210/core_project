@@ -2478,8 +2478,8 @@ func handleAdminFeatureMatrix(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_, err := DB.Exec(r.Context(), `
-			INSERT INTO plan_features (plan_id, feature_key, is_enabled)
-			VALUES ($1,$2,$3)
+			INSERT INTO plan_features (plan_id, feature_key, feature_name, feature_value, is_enabled)
+			VALUES ($1, $2, $2, 'yes', $3)
 			ON CONFLICT (plan_id, feature_key) DO UPDATE SET is_enabled=EXCLUDED.is_enabled
 		`, req.PlanID, req.FeatureKey, req.IsEnabled)
 		if err != nil {
