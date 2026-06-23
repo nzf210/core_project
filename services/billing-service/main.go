@@ -600,6 +600,35 @@ func handleValidateVoucher(w http.ResponseWriter, r *http.Request) {
 // Protected: Subscribe
 // ─────────────────────────────────────────────
 
+func checkSufficientBalance(ctx context.Context, tenantID string, price int64, w http.ResponseWriter) bool {
+	var refAid *int
+	_ = DB.QueryRow(ctx, querySelectAffiliateID, tenantID).Scan(&refAid)
+	if refAid != nil {
+		var dpct float64
+		_ = DB.QueryRow(ctx, `SELECT COALESCE(discount_percent,0) FROM referral_config WHERE id=1`).Scan(&dpct)
+		if dpct > 0 {
+			discount := int64(float64(price) * (dpct / 100.0))
+			price -= discount
+		}
+	}
+
+	if price > 0 {
+		if !auth.CheckWalletBalance(ctx, tenantID, price) {
+			
+			var balance int64
+			_ = DB.QueryRow(ctx, "SELECT balance_rupiah FROM wallet_credits WHERE tenant_id = $1", tenantID).Scan(&balance)
+
+			response.JSON(w, http.StatusPaymentRequired, "Saldo wallet tidak cukup", map[string]interface{}{
+				"required_cents": price,
+				"balance_cents":  balance,
+				"topup_url":      walletEndpoint,
+			})
+			return false
+		}
+	}
+	return true
+}
+
 func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
@@ -1095,6 +1124,38 @@ func handleListTickets(w http.ResponseWriter, r *http.Request) {
 // Payment Webhook (Xendit callback)
 // ─────────────────────────────────────────────
 
+func verifyWebhookToken(ctx context.Context, tenantID, callbackToken string) bool {
+	if callbackToken == "" {
+		return true // No token provided, assume insecure env or checked elsewhere (though usually required)
+	}
+	dbToken, err := getTenantXenditWebhookToken(ctx, tenantID)
+	if err == nil && dbToken != "" {
+		if callbackToken != dbToken {
+			return false
+		}
+	} else if envToken := os.Getenv("XENDIT_WEBHOOK_TOKEN"); envToken != "" {
+		if callbackToken != envToken {
+			return false
+		}
+	}
+	return true
+}
+
+func extractTenantIDFromExternalID(externalID string) string {
+	if strings.Contains(externalID, "-wallet-topup-") {
+		parts := strings.Split(externalID, "-wallet-topup-")
+		if len(parts) == 2 {
+			return parts[1]
+		}
+	} else {
+		parts := strings.Split(externalID, "|")
+		if len(parts) >= 2 {
+			return parts[1]
+		}
+	}
+	return ""
+}
+
 func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1406,6 +1467,28 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 // ─────────────────────────────────────────────
 // Core: Activate Subscription + Generate Ticket
 // ─────────────────────────────────────────────
+
+func updateTenantPlanDetails(ctx context.Context, tenantID, planID string, expiresAt time.Time, isLifetime bool) error {
+	var updateQuery string
+	if isLifetime {
+		updateQuery = `UPDATE tenants SET plan = $1, current_plan_expires_at = NULL, updated_at = NOW() WHERE id = $2`
+		_, err := DB.Exec(ctx, updateQuery, planID, tenantID)
+		return err
+	}
+	
+	var currentExpiresAt *time.Time
+	_ = DB.QueryRow(ctx, `SELECT current_plan_expires_at FROM tenants WHERE id = $1`, tenantID).Scan(&currentExpiresAt)
+	
+	newExpiresAt := expiresAt
+	if currentExpiresAt != nil && currentExpiresAt.After(time.Now()) {
+		duration := expiresAt.Sub(time.Now())
+		newExpiresAt = currentExpiresAt.Add(duration)
+	}
+
+	updateQuery = `UPDATE tenants SET plan = $1, current_plan_expires_at = $2, updated_at = NOW() WHERE id = $3`
+	_, err := DB.Exec(ctx, updateQuery, planID, newExpiresAt, tenantID)
+	return err
+}
 
 func activateSubscription(ctx context.Context, tenantID, planID, planName string, validityDays int, activatedBy string, voucherCodeID *string, systemVoucherCode string) string {
 	now := time.Now()
@@ -3648,10 +3731,38 @@ func handleAdminDeleteVoucher(w http.ResponseWriter, r *http.Request) {
 // PATCH: activate/freeze/delete tenant
 // ─────────────────────────────────────────────
 
+func getTenantVouchers(ctx context.Context, tenantID string) []map[string]interface{} {
+	vrows, _ := DB.Query(ctx, `
+		SELECT id, plan_id, validity_days, remaining_days, redeemed_at, is_system_generated, source_voucher_code
+		FROM voucher_subscriptions WHERE tenant_id = $1 AND remaining_days > 0
+		ORDER BY remaining_days DESC
+	`, tenantID)
+	vouchers := []map[string]interface{}{}
+	if vrows != nil {
+		for vrows.Next() {
+			var vid, pid, srcCode string
+			var vd, rd int
+			var redeemedAt time.Time
+			var isSysGen bool
+			if vrows.Scan(&vid, &pid, &vd, &rd, &redeemedAt, &isSysGen, &srcCode) == nil {
+				vouchers = append(vouchers, map[string]interface{}{
+					"id":                   vid,
+					"plan_id":              pid,
+					"validity_days":        vd,
+					"remaining_days":       rd,
+					"redeemed_at":          redeemedAt.Format(time.RFC3339),
+					"is_system_generated":  isSysGen,
+					"source_voucher_code":  srcCode,
+				})
+			}
+		}
+		vrows.Close()
+	}
+	return vouchers
+}
+
 func handleAdminTenantItem(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
-	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+	if !isSuperadmin(w, r) {
 		return
 	}
 
@@ -3701,33 +3812,7 @@ func handleAdminTenantItem(w http.ResponseWriter, r *http.Request) {
 			tenant["xendit_merchant_id"] = *merchantID
 		}
 
-		// Active vouchers for this tenant
-		vrows, _ := DB.Query(ctx, `
-			SELECT id, plan_id, validity_days, remaining_days, redeemed_at, is_system_generated, source_voucher_code
-			FROM voucher_subscriptions WHERE tenant_id = $1 AND remaining_days > 0
-			ORDER BY remaining_days DESC
-		`, tenantID)
-		vouchers := []map[string]interface{}{}
-		if vrows != nil {
-			for vrows.Next() {
-				var vid, pid, srcCode string
-				var vd, rd int
-				var redeemedAt time.Time
-				var isSysGen bool
-				if vrows.Scan(&vid, &pid, &vd, &rd, &redeemedAt, &isSysGen, &srcCode) == nil {
-					vouchers = append(vouchers, map[string]interface{}{
-						"id":                   vid,
-						"plan_id":              pid,
-						"validity_days":        vd,
-						"remaining_days":       rd,
-						"redeemed_at":          redeemedAt.Format(time.RFC3339),
-						"is_system_generated":  isSysGen,
-						"source_voucher_code":  srcCode,
-					})
-				}
-			}
-			vrows.Close()
-		}
+		vouchers := getTenantVouchers(ctx, tenantID)
 
 		// Subscription info
 		var subStatus string
