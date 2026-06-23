@@ -28,9 +28,23 @@ import (
 	invoice "github.com/xendit/xendit-go/v6/invoice"
 )
 
+const (
+	walletEndpoint         = "/wallet"
+	querySelectAffiliateID = "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1"
+)
+
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
+
+func isSuperadmin(w http.ResponseWriter, r *http.Request) bool {
+	if r.Header.Get(response.XUserRole) != "superadmin" {
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
+		return false
+	}
+	return true
+}
+
 
 type SubscribeReq struct {
 	PlanID      string `json:"plan_id"`
@@ -419,7 +433,7 @@ func main() {
 	// F034: Add-on Wallet & Pricing
 	mux.Handle("/admin/addon-prices", auth.Middleware(http.HandlerFunc(handleAdminAddonPrices)))
 	mux.Handle("/admin/addon-prices/", auth.Middleware(http.HandlerFunc(handleAdminAddonPricesItem)))
-	mux.Handle("/wallet", auth.Middleware(http.HandlerFunc(handleWallet)))
+	mux.Handle(walletEndpoint, auth.Middleware(http.HandlerFunc(handleWallet)))
 	mux.Handle("/wallet/topup", auth.Middleware(http.HandlerFunc(handleWalletTopup)))
 
 	// F053: Addon Purchase Flow
@@ -460,7 +474,7 @@ func main() {
 
 func handleListPlans(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -513,7 +527,7 @@ func handleListPlans(w http.ResponseWriter, r *http.Request) {
 
 func handleValidateVoucher(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -588,19 +602,19 @@ func handleValidateVoucher(w http.ResponseWriter, r *http.Request) {
 
 func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
 	tenantID, ok := r.Context().Value(auth.TenantIDKey).(string)
 	if !ok || tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing Tenant ID", nil)
+		response.Error(w, http.StatusUnauthorized, response.MissingTenantID, nil)
 		return
 	}
 
 	var req SubscribeReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request body", nil)
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, nil)
 		return
 	}
 
@@ -650,7 +664,7 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	// ── F054: Referral discount (stacked on post-voucher price) ──
 	var referredByAffiliateID *int
 	var referralDiscountAmount int64
-	DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&referredByAffiliateID)
+	DB.QueryRow(ctx, querySelectAffiliateID, tenantID).Scan(&referredByAffiliateID)
 	if referredByAffiliateID != nil {
 		var discountPct float64
 		_ = DB.QueryRow(ctx, `SELECT COALESCE(discount_percent,0) FROM referral_config WHERE id=1`).Scan(&discountPct)
@@ -668,7 +682,7 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusPaymentRequired, "Saldo wallet tidak cukup", map[string]interface{}{
 				"required_cents": finalPrice,
 				"balance_cents":  balance,
-				"topup_url":     "/wallet",
+				"topup_url":     walletEndpoint,
 			})
 			return
 		}
@@ -836,13 +850,13 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 func handleGetSubscription(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
 	tenantID, ok := r.Context().Value(auth.TenantIDKey).(string)
 	if !ok || tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing Tenant ID", nil)
+		response.Error(w, http.StatusUnauthorized, response.MissingTenantID, nil)
 		return
 	}
 
@@ -915,19 +929,19 @@ func handleGetSubscription(w http.ResponseWriter, r *http.Request) {
 
 func handleRedeemVoucher(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
 	tenantID, ok := r.Context().Value(auth.TenantIDKey).(string)
 	if !ok || tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing Tenant ID", nil)
+		response.Error(w, http.StatusUnauthorized, response.MissingTenantID, nil)
 		return
 	}
 
 	var req VoucherRedeemReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request body", nil)
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, nil)
 		return
 	}
 
@@ -1018,13 +1032,13 @@ func handleRedeemVoucher(w http.ResponseWriter, r *http.Request) {
 
 func handleListTickets(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
 	tenantID, ok := r.Context().Value(auth.TenantIDKey).(string)
 	if !ok || tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing Tenant ID", nil)
+		response.Error(w, http.StatusUnauthorized, response.MissingTenantID, nil)
 		return
 	}
 
@@ -1300,7 +1314,7 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	// F054: AFFILIATE COMMISSION LOGIC (lifetime)
 	// ─────────────────────────────────────────────
 	var referredByID *int
-	DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&referredByID)
+	DB.QueryRow(ctx, querySelectAffiliateID, tenantID).Scan(&referredByID)
 	if referredByID != nil {
 		var commissionPct float64
 		var minPurchaseCents, maxCommissionCents int64
@@ -1788,7 +1802,7 @@ func handleAdminListPlans(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -1833,7 +1847,7 @@ func handleAdminUpdatePlan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodPut {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -1845,7 +1859,7 @@ func handleAdminUpdatePlan(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdatePlanReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request body", nil)
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, nil)
 		return
 	}
 
@@ -1940,7 +1954,7 @@ func handleAdminPlanFeaturesCollection(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		createPlanFeature(w, r)
 	default:
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 	}
 }
 
@@ -1963,7 +1977,7 @@ func handleAdminPlanFeaturesItem(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		deletePlanFeature(w, r, id)
 	default:
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 	}
 }
 
@@ -2013,13 +2027,13 @@ func handleAdminPlanFeaturesMatrix(w http.ResponseWriter, r *http.Request) {
 
 	// PATCH — update numeric limits (columns are in saas_plans table)
 	if r.Method != http.MethodPatch {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
 	var req map[string]int
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request body", err)
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 		return
 	}
 
@@ -2310,7 +2324,7 @@ func handleAdminAvailableFeaturesCollection(w http.ResponseWriter, r *http.Reque
 		response.JSON(w, http.StatusOK, "Feature saved", nil)
 		return
 	}
-	response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 }
 
 func handleAdminAvailableFeaturesItem(w http.ResponseWriter, r *http.Request) {
@@ -2385,7 +2399,7 @@ func handleAdminAvailableFeaturesItem(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, http.StatusOK, "Feature deleted", nil)
 		return
 	}
-	response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 }
 
 // handleAdminFeatureMatrix returns all plans × all features as a toggle matrix.
@@ -2498,7 +2512,7 @@ func handleAdminFeatureMatrix(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, http.StatusOK, "Feature toggled", nil)
 		return
 	}
-	response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 }
 
 // handleAdminAddonGating GET/PATCH: manage per-addon min_tier requirement.
@@ -2591,7 +2605,7 @@ func handleAdminAddonGating(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, http.StatusOK, "Addon gating updated", nil)
 		return
 	}
-	response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 }
 
 // ─────────────────────────────────────────────
@@ -2636,7 +2650,7 @@ func hashToken(token string) string {
 
 func handleRedeemVoucherLink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -2884,7 +2898,7 @@ func handleAdminGenerateVoucherLinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -2985,7 +2999,7 @@ func handleAdminListVoucherLinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -3062,7 +3076,7 @@ func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -3212,7 +3226,7 @@ func handleAdminVoucherProgramsCollection(w http.ResponseWriter, r *http.Request
 	case http.MethodPost:
 		createVoucherProgram(w, r)
 	default:
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 	}
 }
 
@@ -3262,7 +3276,7 @@ func listVoucherPrograms(w http.ResponseWriter, r *http.Request) {
 func createVoucherProgram(w http.ResponseWriter, r *http.Request) {
 	var req CreateVoucherProgramReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request body", err)
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 		return
 	}
 
@@ -3311,7 +3325,7 @@ func handleAdminVoucherAnalytics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -3407,13 +3421,13 @@ func handleAdminGenerateVouchers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
 	var req GenerateVouchersReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request body", err)
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 		return
 	}
 	if req.PlanID == "" || req.ValidityDays <= 0 || req.Quantity <= 0 || req.Quantity > 1000 {
@@ -3495,7 +3509,7 @@ func handleAdminVouchers(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		handleAdminDeleteVoucher(w, r)
 	default:
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 	}
 }
 
@@ -3511,7 +3525,7 @@ func handleAdminListVouchers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -3596,7 +3610,7 @@ func handleAdminDeleteVoucher(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodDelete {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -3728,7 +3742,7 @@ func handleAdminTenantItem(w http.ResponseWriter, r *http.Request) {
 			Action string `json:"action"` // "activate", "freeze", "delete"
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			response.Error(w, http.StatusBadRequest, "Invalid request body", err)
+			response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 			return
 		}
 
@@ -3753,7 +3767,7 @@ func handleAdminTenantItem(w http.ResponseWriter, r *http.Request) {
 		}
 
 	default:
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 	}
 }
 
@@ -3875,7 +3889,7 @@ func startPendingCleanupWorker(ctx context.Context) {
 // Legacy addon_prices table is kept for backward compat but no longer written to.
 func handleAdminAddonPrices(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	role := r.Header.Get("X-User-Role")
@@ -3932,7 +3946,7 @@ func handleAdminAddonPricesItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPatch {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	key := strings.TrimPrefix(r.URL.Path, "/admin/addon-prices/")
@@ -3987,7 +4001,7 @@ func handleAdminAddonPricesItem(w http.ResponseWriter, r *http.Request) {
 // GET /wallet — get current tenant wallet balance + transactions
 func handleWallet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	tenantID := r.Header.Get("X-Tenant-ID")
@@ -4033,7 +4047,7 @@ func handleWallet(w http.ResponseWriter, r *http.Request) {
 // POST /wallet/topup — create Xendit invoice for wallet topup
 func handleWalletTopup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	// FIX #3: Use X-Tenant-ID (consistent with all other handlers), not X-User-Id
@@ -4117,7 +4131,7 @@ func handleAdminQuotaUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -4185,12 +4199,12 @@ func handleAdminQuotaUsage(w http.ResponseWriter, r *http.Request) {
 // GET /addon-marketplace
 func handleAddonMarketplace(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing X-Tenant-ID", nil)
+		response.Error(w, http.StatusUnauthorized, response.MissingXTenantID, nil)
 		return
 	}
 	ctx := r.Context()
@@ -4253,12 +4267,12 @@ func handleAddonMarketplace(w http.ResponseWriter, r *http.Request) {
 // POST /addons/purchase
 func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing X-Tenant-ID", nil)
+		response.Error(w, http.StatusUnauthorized, response.MissingXTenantID, nil)
 		return
 	}
 	ctx := r.Context()
@@ -4299,7 +4313,7 @@ func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
 	// 3. Deduct wallet (after referral discount)
 	var addonFinalPrice = price
 	var refAid *int
-	_ = DB.QueryRow(ctx, "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1", tenantID).Scan(&refAid)
+	_ = DB.QueryRow(ctx, querySelectAffiliateID, tenantID).Scan(&refAid)
 	if refAid != nil {
 		var dpct float64
 		_ = DB.QueryRow(ctx, `SELECT COALESCE(discount_percent,0) FROM referral_config WHERE id=1`).Scan(&dpct)
@@ -4311,7 +4325,7 @@ func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
 	if addonFinalPrice > 0 {
 		if !auth.CheckWalletBalance(ctx, tenantID, addonFinalPrice) {
 			response.JSON(w, http.StatusPaymentRequired, "Insufficient wallet balance. Please top up.", map[string]any{
-				"wallet_url": "/wallet",
+				"wallet_url": walletEndpoint,
 			})
 			return
 		}
@@ -4368,12 +4382,12 @@ func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
 // GET /addons — list tenant's active (and recent) addons
 func handleMyAddons(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing X-Tenant-ID", nil)
+		response.Error(w, http.StatusUnauthorized, response.MissingXTenantID, nil)
 		return
 	}
 	ctx := r.Context()
@@ -4427,7 +4441,7 @@ func handleMyAddons(w http.ResponseWriter, r *http.Request) {
 
 func handleAffiliateLeaderboard(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -4475,7 +4489,7 @@ func handleAffiliateLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 func handleAffiliateProfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	userID := r.Header.Get("X-User-Id")
@@ -4544,7 +4558,7 @@ func handleAffiliateProfile(w http.ResponseWriter, r *http.Request) {
 
 func handleAffiliateRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	userID := r.Header.Get("X-User-Id")
@@ -4568,7 +4582,7 @@ func handleAffiliateRegister(w http.ResponseWriter, r *http.Request) {
 
 func handleAffiliateWithdraw(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	userID := r.Header.Get("X-User-Id")
@@ -4608,12 +4622,12 @@ func handleAffiliateWithdraw(w http.ResponseWriter, r *http.Request) {
 
 func handleAffiliateRedeemReferral(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	tenantID, ok := r.Context().Value(auth.TenantIDKey).(string)
 	if !ok || tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing Tenant ID", nil)
+		response.Error(w, http.StatusUnauthorized, response.MissingTenantID, nil)
 		return
 	}
 
@@ -4661,7 +4675,7 @@ func handleAffiliateRedeemReferral(w http.ResponseWriter, r *http.Request) {
 
 func handleAffiliateReferrals(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	userID := r.Header.Get("X-User-Id")
@@ -4707,7 +4721,7 @@ func handleAffiliateReferrals(w http.ResponseWriter, r *http.Request) {
 
 func handleAffiliateEarnings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 	userID := r.Header.Get("X-User-Id")
@@ -4834,7 +4848,7 @@ func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
 		})
 
 	default:
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 	}
 }
 
@@ -4850,7 +4864,7 @@ func handleAdminLicenses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -4927,7 +4941,7 @@ func handleAdminGenerateLicenses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
