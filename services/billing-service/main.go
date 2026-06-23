@@ -2731,124 +2731,111 @@ func hashToken(token string) string {
 	return hex.EncodeToString(h[:])
 }
 
-func handleRedeemVoucherLink(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
-		return
-	}
+type voucherLinkClaims struct {
+	ProgramID      string
+	PlanID         string
+	DurationMonths int
+}
 
-	var req VoucherLinkRedeemReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request", err)
-		return
-	}
-	if req.Token == "" || req.TenantID == "" {
-		response.Error(w, http.StatusBadRequest, "token and tenant_id are required", nil)
-		return
-	}
-
-	// 1. Verify JWT signature & extract claims
-	cfg := config.GlobalConfig
-	secret := []byte(cfg.JWTSecret)
-	parsed, err := jwt.Parse(req.Token, func(t *jwt.Token) (interface{}, error) {
+func parseVoucherLinkToken(token string, secret string) (voucherLinkClaims, error) {
+	var result voucherLinkClaims
+	parsed, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method")
 		}
-		return secret, nil
+		return []byte(secret), nil
 	})
 	if err != nil || !parsed.Valid {
-		response.Error(w, http.StatusBadRequest, "Invalid or expired voucher link", nil)
-		return
+		return result, fmt.Errorf("invalid or expired voucher link")
 	}
-	claims, _ := parsed.Claims.(jwt.MapClaims)
+	claims, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok {
+		return result, fmt.Errorf("invalid claims")
+	}
 	programID, _ := claims["program_id"].(string)
 	planID, _ := claims["plan_id"].(string)
 	durationMonthsF, _ := claims["duration_months"].(float64)
 	durationMonths := int(durationMonthsF)
 	if programID == "" || planID == "" {
-		response.Error(w, http.StatusBadRequest, "Malformed voucher link", nil)
-		return
+		return result, fmt.Errorf("malformed voucher link")
 	}
+	result.ProgramID = programID
+	result.PlanID = planID
+	result.DurationMonths = durationMonths
+	return result, nil
+}
 
-	ctx := r.Context()
-	tokenHash := hashToken(req.Token)
+type voucherLinkDB struct {
+	ID         string
+	ProgramID  string
+	ExpiresAt  time.Time
+	RedeemedBy *string
+	RedeemedAt *time.Time
+	IsActive   bool
+}
 
-	// 2. Lookup link in DB
-	var (
-		linkID string
-		linkProgramID string
-		linkExpiresAt time.Time
-		redeemedBy *string
-		redeemedAt *time.Time
-		isActive bool
-	)
-	err = DB.QueryRow(ctx, `
+func lookupVoucherLink(ctx context.Context, tokenHash string) (voucherLinkDB, error) {
+	var link voucherLinkDB
+	err := DB.QueryRow(ctx, `
 		SELECT id, program_id, expires_at, redeemed_by, redeemed_at, is_active
 		FROM voucher_links WHERE token_hash = $1
-	`, tokenHash).Scan(&linkID, &linkProgramID, &linkExpiresAt, &redeemedBy, &redeemedAt, &isActive)
-	if err != nil {
-		response.Error(w, http.StatusBadRequest, "Voucher link not found", nil)
-		return
-	}
-	if !isActive {
-		response.Error(w, http.StatusBadRequest, "Voucher link has been deactivated", nil)
-		return
-	}
-	if redeemedBy != nil {
-		response.Error(w, http.StatusBadRequest, "Voucher link already redeemed", nil)
-		return
-	}
-	if time.Now().After(linkExpiresAt) {
-		response.Error(w, http.StatusBadRequest, "Voucher link has expired", nil)
-		return
-	}
-	if linkProgramID != programID {
-		response.Error(w, http.StatusBadRequest, "Token/program mismatch", nil)
-		return
-	}
+	`, tokenHash).Scan(&link.ID, &link.ProgramID, &link.ExpiresAt, &link.RedeemedBy, &link.RedeemedAt, &link.IsActive)
+	return link, err
+}
 
-	// 3. Lookup program & plan
-	var (
-		planName string
-		programDuration int
-		maxUsesPerTenant int
-	)
-	err = DB.QueryRow(ctx, `
+func validateVoucherLink(link voucherLinkDB, programID string) error {
+	if !link.IsActive {
+		return fmt.Errorf("voucher link has been deactivated")
+	}
+	if link.RedeemedBy != nil {
+		return fmt.Errorf("voucher link already redeemed")
+	}
+	if time.Now().After(link.ExpiresAt) {
+		return fmt.Errorf("voucher link has expired")
+	}
+	if link.ProgramID != programID {
+		return fmt.Errorf("token/program mismatch")
+	}
+	return nil
+}
+
+type voucherProgramInfo struct {
+	PlanName         string
+	ProgramDuration  int
+	MaxUsesPerTenant int
+}
+
+func lookupVoucherProgramInfo(ctx context.Context, planID, programID string) (voucherProgramInfo, error) {
+	var info voucherProgramInfo
+	err := DB.QueryRow(ctx, `
 		SELECT sp.name, COALESCE(vp.duration_months, 1), COALESCE(vp.max_uses_per_tenant, 1)
 		FROM voucher_programs vp
 		JOIN saas_plans sp ON sp.id = $1
 		WHERE vp.id = $2 AND vp.is_active = true
-	`, planID, programID).Scan(&planName, &programDuration, &maxUsesPerTenant)
-	if err != nil {
-		response.Error(w, http.StatusBadRequest, "Program inactive or not found", nil)
-		return
-	}
-	if durationMonths == 0 {
-		durationMonths = programDuration
-	}
+	`, planID, programID).Scan(&info.PlanName, &info.ProgramDuration, &info.MaxUsesPerTenant)
+	return info, err
+}
 
-	// 4. Check max_uses_per_tenant (default 1)
+func checkVoucherUsageQuota(ctx context.Context, programID, tenantID string, maxUsesPerTenant int) error {
 	var usesByTenant int
-	DB.QueryRow(ctx, `
+	err := DB.QueryRow(ctx, `
 		SELECT COUNT(*) FROM voucher_links
 		WHERE program_id = $1 AND redeemed_by = $2
-	`, programID, req.TenantID).Scan(&usesByTenant)
-	if usesByTenant >= maxUsesPerTenant {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": "Voucher quota per tenant exceeded",
-			"data":    map[string]interface{}{"max_uses_per_tenant": maxUsesPerTenant},
-		})
-		return
+	`, programID, tenantID).Scan(&usesByTenant)
+	if err != nil {
+		return err
 	}
+	if usesByTenant >= maxUsesPerTenant {
+		return fmt.Errorf("Voucher quota per tenant exceeded")
+	}
+	return nil
+}
 
-	// 5. Begin tx: mark link redeemed, activate/extend subscription
+
+func processVoucherRedemptionTx(ctx context.Context, req VoucherLinkRedeemReq, linkDB voucherLinkDB, claims *voucherLinkClaims, progInfo voucherProgramInfo, durationMonths int, r *http.Request) (time.Time, string, error) {
 	tx, err := DB.Begin(ctx)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "Failed to start tx", err)
-		return
+		return time.Time{}, "", fmt.Errorf("failed to start tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -2856,27 +2843,20 @@ func handleRedeemVoucherLink(w http.ResponseWriter, r *http.Request) {
 		UPDATE voucher_links
 		SET redeemed_by = $1, redeemed_at = NOW(), is_active = false, ip_address = $2, user_agent = $3
 		WHERE id = $4 AND is_active = true AND redeemed_by IS NULL
-	`, req.TenantID, r.RemoteAddr, r.UserAgent(), linkID)
+	`, req.TenantID, r.RemoteAddr, r.UserAgent(), linkDB.ID)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "Failed to redeem link", err)
-		return
+		return time.Time{}, "", fmt.Errorf("failed to redeem link: %w", err)
 	}
 
-	// Increment uses_count on program
-	_, _ = tx.Exec(ctx, `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`, programID)
+	_, _ = tx.Exec(ctx, `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`, claims.ProgramID)
 
-	// Extend or activate subscription
-	// If existing subscription active, extend period_end. Otherwise create new.
 	var existingPeriodEnd *time.Time
 	var existingStatus string
-	err = tx.QueryRow(ctx, `
-		SELECT current_period_end, status FROM tenant_subscriptions WHERE tenant_id = $1
-	`, req.TenantID).Scan(&existingPeriodEnd, &existingStatus)
+	_ = tx.QueryRow(ctx, `SELECT current_period_end, status FROM tenant_subscriptions WHERE tenant_id = $1`, req.TenantID).Scan(&existingPeriodEnd, &existingStatus)
 
 	now := time.Now()
 	var newPeriodEnd time.Time
 	if existingPeriodEnd != nil && existingStatus == "active" && existingPeriodEnd.After(now) {
-		// Extend
 		newPeriodEnd = existingPeriodEnd.AddDate(0, durationMonths, 0)
 	} else {
 		newPeriodEnd = now.AddDate(0, durationMonths, 0)
@@ -2895,23 +2875,19 @@ func handleRedeemVoucherLink(w http.ResponseWriter, r *http.Request) {
 			frozen_at = NULL,
 			frozen_reason = NULL,
 			updated_at = NOW()
-	`, req.TenantID, planID, planID, newPeriodEnd, durationMonths*30)
+	`, req.TenantID, claims.PlanID, claims.PlanID, newPeriodEnd, durationMonths*30)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "Failed to update subscription", err)
-		return
+		return time.Time{}, "", fmt.Errorf("failed to update subscription: %w", err)
 	}
 
-	// Update tenants table (un-freeze, set plan, set expires)
 	_, err = tx.Exec(ctx, `
 		UPDATE tenants SET plan = $1, is_frozen = false, frozen_at = NULL, current_plan_expires_at = $2
 		WHERE id = $3
-	`, planID, newPeriodEnd, req.TenantID)
+	`, claims.PlanID, newPeriodEnd, req.TenantID)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "Failed to update tenant", err)
-		return
+		return time.Time{}, "", fmt.Errorf("failed to update tenant: %w", err)
 	}
 
-	// Generate ticket
 	ticketNumber := generateTicketNumber()
 	var ticketID string
 	err = tx.QueryRow(ctx, `
@@ -2926,35 +2902,106 @@ func handleRedeemVoucherLink(w http.ResponseWriter, r *http.Request) {
 			activated_at = NOW(),
 			updated_at = NOW()
 		RETURNING id
-	`, req.TenantID, planID, planName, ticketNumber, newPeriodEnd).Scan(&ticketID)
+	`, req.TenantID, claims.PlanID, progInfo.PlanName, ticketNumber, newPeriodEnd).Scan(&ticketID)
 	if err != nil {
 		slog.Warn("Failed to create ticket", "error", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.Error(w, http.StatusInternalServerError, "Failed to commit", err)
+		return time.Time{}, "", fmt.Errorf("failed to commit: %w", err)
+	}
+	return newPeriodEnd, ticketNumber, nil
+}
+
+func handleRedeemVoucherLink(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
+	var req VoucherLinkRedeemReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		return
+	}
+	if req.Token == "" || req.TenantID == "" {
+		response.Error(w, http.StatusBadRequest, "token and tenant_id are required", nil)
+		return
+	}
+
+	// 1. Verify JWT signature & extract claims
+	claims, err := parseVoucherLinkToken(req.Token, config.GlobalConfig.JWTSecret)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	ctx := r.Context()
+	tokenHash := hashToken(req.Token)
+
+	// 2. Lookup link in DB
+	linkDB, err := lookupVoucherLink(ctx, tokenHash)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "Voucher link not found", nil)
+		return
+	}
+	if err := validateVoucherLink(linkDB, claims.ProgramID); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	// 3. Lookup program & plan
+	progInfo, err := lookupVoucherProgramInfo(ctx, claims.PlanID, claims.ProgramID)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "Program inactive or not found", nil)
+		return
+	}
+
+	durationMonths := claims.DurationMonths
+	if durationMonths == 0 {
+		durationMonths = progInfo.ProgramDuration
+	}
+
+	// 4. Check max_uses_per_tenant (default 1)
+	if err := checkVoucherUsageQuota(ctx, claims.ProgramID, req.TenantID, progInfo.MaxUsesPerTenant); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Voucher quota per tenant exceeded",
+			"data":    map[string]interface{}{"max_uses_per_tenant": progInfo.MaxUsesPerTenant},
+		})
+		return
+	}
+
+	// 5. Begin tx: mark link redeemed, activate/extend subscription
+	newPeriodEnd, ticketNumber, err := processVoucherRedemptionTx(ctx, req, linkDB, &claims, progInfo, durationMonths, r)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error(), nil)
+		return
+	}
+	
+	now := time.Now()
+
 	// Sync Redis cache so quota gates read the correct plan tier.
-	auth.SetTenantPlan(ctx, req.TenantID, planID)
+	auth.SetTenantPlan(ctx, req.TenantID, claims.PlanID)
 
 	// Async notification
 	go sendTicketNotifications(req.TenantID, TicketPayload{
 		TicketNumber:  ticketNumber,
-		PlanName:      planName,
-		PlanID:        planID,
+		PlanName:      progInfo.PlanName,
+		PlanID:        claims.PlanID,
 		ActivatedAt:   now.Format("02 Jan 2006, 15:04 WIB"),
 		ExpiresAt:     newPeriodEnd.Format("02 Jan 2006, 15:04 WIB"),
 		AmountPaid:    0,
 		PaymentMethod: "voucher",
 	})
 
-	slog.Info("Voucher link redeemed", "tenant_id", req.TenantID, "plan", planID, "duration_months", durationMonths, "new_expires", newPeriodEnd)
+	slog.Info("Voucher link redeemed", "tenant_id", req.TenantID, "plan", claims.PlanID, "duration_months", durationMonths, "new_expires", newPeriodEnd)
 
 	response.JSON(w, http.StatusOK, "Voucher redeemed successfully", VoucherLinkRedeemResp{
-		PlanID:         planID,
-		PlanName:       planName,
+		PlanID:         claims.PlanID,
+		PlanName:       progInfo.PlanName,
 		ActivatedAt:    now.Format(time.RFC3339),
 		ExpiresAt:      newPeriodEnd.Format(time.RFC3339),
 		DurationMonths: durationMonths,
@@ -4349,6 +4396,61 @@ func handleAddonMarketplace(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, "Addon marketplace", map[string]any{"addons": items})
 }
 
+func getAddonPrice(ctx context.Context, addonKey string) (int64, string, error) {
+	var price int64
+	var unit string
+	err := DB.QueryRow(ctx,
+		`SELECT addon_price_cents, addon_unit FROM available_features
+		 WHERE feature_key = $1 AND is_addon = true`,
+		addonKey).Scan(&price, &unit)
+	return price, unit, err
+}
+
+func checkAddonExists(ctx context.Context, tenantID, addonKey string) error {
+	var existingStatus string
+	return DB.QueryRow(ctx,
+		`SELECT status FROM tenant_addons
+		 WHERE tenant_id = $1 AND addon_key = $2
+		   AND status = 'active'
+		   AND (expires_at IS NULL OR expires_at > NOW())`,
+		tenantID, addonKey).Scan(&existingStatus)
+}
+
+func calculateAddonFinalPrice(ctx context.Context, tenantID string, basePrice int64) (int64, *int) {
+	var refAid *int
+	_ = DB.QueryRow(ctx, querySelectAffiliateID, tenantID).Scan(&refAid)
+	if refAid == nil {
+		return basePrice, nil
+	}
+	var dpct float64
+	_ = DB.QueryRow(ctx, `SELECT COALESCE(discount_percent,0) FROM referral_config WHERE id=1`).Scan(&dpct)
+	if dpct > 0 {
+		disc := basePrice * int64(dpct) / 100
+		return maxInt64(0, basePrice-disc), refAid
+	}
+	return basePrice, refAid
+}
+
+func processAffiliateCommission(ctx context.Context, tenantID, addonKey string, finalPrice int64, refAid *int) {
+	if refAid == nil || finalPrice <= 0 {
+		return
+	}
+	var cpct float64
+	_ = DB.QueryRow(ctx, `SELECT COALESCE(commission_percent,0) FROM referral_config WHERE id=1`).Scan(&cpct)
+	if cpct <= 0 {
+		return
+	}
+	comm := finalPrice * int64(cpct) / 100
+	if comm > 0 {
+		txID := "addon:" + addonKey + ":" + uuid.NewString()[:8]
+		_, _ = DB.Exec(ctx,
+			`INSERT INTO affiliate_earnings (affiliate_id,tenant_id,invoice_id,amount_cents,commission_rate_percent,transaction_type,description)
+			 VALUES ($1,$2,$3,$4,$5,'addon_purchase',$6)`,
+			*refAid, tenantID, txID, comm, int(cpct), "Addon: "+addonKey)
+		_, _ = DB.Exec(ctx, `UPDATE affiliates SET cash_balance_cents = cash_balance_cents + $1 WHERE id = $2`, comm, *refAid)
+	}
+}
+
 // POST /addons/purchase
 func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -4371,42 +4473,21 @@ func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1. Verify addon exists and is active
-	var price int64
-	var unit string
-	err := DB.QueryRow(ctx,
-		`SELECT addon_price_cents, addon_unit FROM available_features
-		 WHERE feature_key = $1 AND is_addon = true`,
-		req.AddonKey).Scan(&price, &unit)
+	price, _, err := getAddonPrice(ctx, req.AddonKey)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "Addon not found", nil)
 		return
 	}
 
 	// 2. Check if already has active addon
-	var existingStatus string
-	err = DB.QueryRow(ctx,
-		`SELECT status FROM tenant_addons
-		 WHERE tenant_id = $1 AND addon_key = $2
-		   AND status = 'active'
-		   AND (expires_at IS NULL OR expires_at > NOW())`,
-		tenantID, req.AddonKey).Scan(&existingStatus)
-	if err == nil {
+	if err := checkAddonExists(ctx, tenantID, req.AddonKey); err == nil {
 		response.Error(w, http.StatusConflict, "Addon already active", nil)
 		return
 	}
 
 	// 3. Deduct wallet (after referral discount)
-	var addonFinalPrice = price
-	var refAid *int
-	_ = DB.QueryRow(ctx, querySelectAffiliateID, tenantID).Scan(&refAid)
-	if refAid != nil {
-		var dpct float64
-		_ = DB.QueryRow(ctx, `SELECT COALESCE(discount_percent,0) FROM referral_config WHERE id=1`).Scan(&dpct)
-		if dpct > 0 {
-			disc := price * int64(dpct) / 100
-			addonFinalPrice = maxInt64(0, price-disc)
-		}
-	}
+	addonFinalPrice, refAid := calculateAddonFinalPrice(ctx, tenantID, price)
+
 	if addonFinalPrice > 0 {
 		if !auth.CheckWalletBalance(ctx, tenantID, addonFinalPrice) {
 			response.JSON(w, http.StatusPaymentRequired, "Insufficient wallet balance. Please top up.", map[string]any{
@@ -4438,21 +4519,7 @@ func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 7. F054: Affiliate commission for addon purchases — from actual paid amount (addonFinalPrice)
-	if refAid != nil && addonFinalPrice > 0 {
-		var cpct float64
-		_ = DB.QueryRow(ctx, `SELECT COALESCE(commission_percent,0) FROM referral_config WHERE id=1`).Scan(&cpct)
-		if cpct > 0 {
-			comm := addonFinalPrice * int64(cpct) / 100
-			if comm > 0 {
-				txID := "addon:" + req.AddonKey + ":" + uuid.NewString()[:8]
-				_, _ = DB.Exec(ctx,
-					`INSERT INTO affiliate_earnings (affiliate_id,tenant_id,invoice_id,amount_cents,commission_rate_percent,transaction_type,description)
-					 VALUES ($1,$2,$3,$4,$5,'addon_purchase',$6)`,
-					*refAid, tenantID, txID, comm, int(cpct), "Addon: "+req.AddonKey)
-				_, _ = DB.Exec(ctx, `UPDATE affiliates SET cash_balance_cents = cash_balance_cents + $1 WHERE id = $2`, comm, *refAid)
-			}
-		}
-	}
+	processAffiliateCommission(ctx, tenantID, req.AddonKey, addonFinalPrice, refAid)
 
 	// 6. Invalidate addon cache
 	auth.InvalidateAddonCache(ctx, tenantID, req.AddonKey)
