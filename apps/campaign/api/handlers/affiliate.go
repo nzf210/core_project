@@ -70,7 +70,7 @@ func HandleCampaignAffiliateLeaderboard(w http.ResponseWriter, r *http.Request) 
 		SELECT 
 			u.full_name, 
 			COUNT(DISTINCT ae.tenant_id) as total_closing, 
-			SUM(ae.amount_cents) as total_revenue
+			SUM(ae.amount_rupiah) as total_revenue
 		FROM affiliate_earnings ae
 		JOIN affiliates a ON ae.affiliate_id = a.id
 		JOIN users u ON a.user_id = u.id
@@ -87,7 +87,7 @@ func HandleCampaignAffiliateLeaderboard(w http.ResponseWriter, r *http.Request) 
 	type Leader struct {
 		Name         string `json:"name"`
 		TotalClosing int    `json:"total_closing"`
-		TotalRevenue int64  `json:"total_revenue_cents"`
+		TotalRevenue int64  `json:"total_revenue_rupiah"`
 	}
 	var leaders []Leader
 	for rows.Next() {

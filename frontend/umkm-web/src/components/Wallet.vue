@@ -9,7 +9,7 @@
         <span class="currency">Rp</span>
         <span class="amount">{{ formattedBalance }}</span>
       </div>
-      <p class="balance-subtitle">{{ walletData.balance_cents }} sen</p>
+      <p class="balance-subtitle">{{ walletData.balance_rupiah }} sen</p>
     </div>
 
     <!-- Top-up Section -->
@@ -92,7 +92,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../api'
 
-const walletData = ref<any>({ balance_cents: 0, transactions: [] })
+const walletData = ref<any>({ balance_rupiah: 0, transactions: [] })
 const loadingWallet = ref(false)
 const loadingTopup = ref(false)
 const loadingMore = ref(false)
@@ -101,8 +101,8 @@ const topupError = ref('')
 const topupInvoiceUrl = ref('')
 
 const formattedBalance = computed(() => {
-  const cents = walletData.value.balance_cents || 0
-  return (cents / 100).toLocaleString('id-ID')
+  const rupiah = walletData.value.balance_rupiah || 0
+  return (rupiah ).toLocaleString('id-ID')
 })
 
 const loadWallet = async () => {
@@ -113,11 +113,11 @@ const loadWallet = async () => {
     if (data.success && data.data) {
       walletData.value = data.data
     } else {
-      walletData.value = { balance_cents: 0, transactions: [] }
+      walletData.value = { balance_rupiah: 0, transactions: [] }
     }
   } catch (e: any) {
     topupError.value = e.message || 'Gagal memuat wallet'
-    walletData.value = { balance_cents: 0, transactions: [] }
+    walletData.value = { balance_rupiah: 0, transactions: [] }
   } finally {
     loadingWallet.value = false
   }
@@ -149,8 +149,8 @@ const handleTopup = async () => {
   }
 }
 
-const formatRupiah = (cents: number) => {
-  return (cents / 100).toLocaleString('id-ID')
+const formatRupiah = (rupiah: number) => {
+  return (rupiah ).toLocaleString('id-ID')
 }
 
 const formatDate = (time: string) => {

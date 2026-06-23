@@ -24,7 +24,7 @@ func HandleSuperadminGenerateLicense(w http.ResponseWriter, r *http.Request) {
 		BaseQuota    int      `json:"base_quota"`
 		Addons       []string `json:"addons"`
 		Tokens       int      `json:"tokens"`
-		PriceCents   int64    `json:"price_cents"`
+		PriceRupiah   int64    `json:"price_rupiah"`
 	}
 
 	var req Request
@@ -37,11 +37,11 @@ func HandleSuperadminGenerateLicense(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 	query := `
-		INSERT INTO campaign_licenses (license_key, election_type, base_quota, addons, wargame_tokens, price_cents)
+		INSERT INTO campaign_licenses (license_key, election_type, base_quota, addons, wargame_tokens, price_rupiah)
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 	_, err := repository.DB.Exec(ctx, query,
-		strings.ToUpper(req.LicenseKey), req.ElectionType, req.BaseQuota, string(addonsJSON), req.Tokens, req.PriceCents)
+		strings.ToUpper(req.LicenseKey), req.ElectionType, req.BaseQuota, string(addonsJSON), req.Tokens, req.PriceRupiah)
 
 	if err != nil {
 		slog.Error("Failed to create license", "key", req.LicenseKey, "error", err)
@@ -49,7 +49,7 @@ func HandleSuperadminGenerateLicense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("License generated", "key", req.LicenseKey, "price_cents", req.PriceCents, "addons", req.Addons)
+	slog.Info("License generated", "key", req.LicenseKey, "price_rupiah", req.PriceRupiah, "addons", req.Addons)
 	WriteJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Message: "License generated successfully",
@@ -79,7 +79,7 @@ func HandleListLicenses(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		SELECT license_key, election_type, base_quota, addons, wargame_tokens,
-		       price_cents, is_used, used_by_tenant, used_at, created_at
+		       price_rupiah, is_used, used_by_tenant, used_at, created_at
 		FROM campaign_licenses
 		WHERE ($1 = '' OR is_used = $1::boolean)
 		ORDER BY created_at DESC
@@ -99,7 +99,7 @@ func HandleListLicenses(w http.ResponseWriter, r *http.Request) {
 		BaseQuota    int     `json:"base_quota"`
 		Addons       string  `json:"addons"`
 		WargameTokens int    `json:"wargame_tokens"`
-		PriceCents   int64   `json:"price_cents"`
+		PriceRupiah   int64   `json:"price_rupiah"`
 		IsUsed       bool    `json:"is_used"`
 		UsedByTenant *string `json:"used_by_tenant,omitempty"`
 		UsedAt       *string `json:"used_at,omitempty"`
@@ -112,7 +112,7 @@ func HandleListLicenses(w http.ResponseWriter, r *http.Request) {
 		var usedByTenant *string
 		var usedAt *string
 		if err := rows.Scan(&lc.LicenseKey, &lc.ElectionType, &lc.BaseQuota, &lc.Addons,
-			&lc.WargameTokens, &lc.PriceCents, &lc.IsUsed, &usedByTenant, &usedAt, &lc.CreatedAt); err == nil {
+			&lc.WargameTokens, &lc.PriceRupiah, &lc.IsUsed, &usedByTenant, &usedAt, &lc.CreatedAt); err == nil {
 			lc.UsedByTenant = usedByTenant
 			lc.UsedAt = usedAt
 			licenses = append(licenses, lc)

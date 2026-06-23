@@ -424,11 +424,11 @@ export const api = {
     const res = await fetch(`${API_BASE}/api/billing/wallet`, { headers: headers() })
     return res.json()
   },
-  async topupWallet(amountCents: number) {
+  async topupWallet(amountRupiah: number) {
     const res = await fetch(`${API_BASE}/api/billing/wallet/topup`, {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ amount_cents: amountCents })
+      body: JSON.stringify({ amount_rupiah: amountRupiah })
     })
     return res.json()
   },
@@ -446,11 +446,11 @@ export const api = {
     const res = await fetch(`${API_BASE}/affiliate/register`, { method: 'POST', headers: headers() })
     return res.json()
   },
-  async withdrawAffiliate(amountCents: number) {
+  async withdrawAffiliate(amountRupiah: number) {
     const res = await fetch(`${API_BASE}/affiliate/withdraw`, {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ amount_cents: amountCents })
+      body: JSON.stringify({ amount_rupiah: amountRupiah })
     })
     return res.json()
   },
@@ -555,7 +555,7 @@ export interface SalesChartData {
 
 export interface TopProduct {
   name: string
-  revenue_cents: number
+  revenue_rupiah: number
   transaction_count: number
 }
 
@@ -563,7 +563,7 @@ export interface RecentTransaction {
   id: string
   date: string
   description: string
-  amount_cents: number
+  amount_rupiah: number
 }
 
 export const reportsApi = {

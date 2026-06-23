@@ -1376,7 +1376,7 @@ const openAddonEditor = async () => {
     const gatingMap = new Map(gating.map((g: any) => [g.feature_key, g]))
     addonOptions.value = features.map((a: any) => ({
       ...a,
-      price: Math.round((a.addon_price_cents || 0) / 100),
+      price: Math.round((a.addon_price_rupiah || 0) ),
       min_tier: (gatingMap.get(a.feature_key) as any)?.min_tier || ''
     }))
     if (!featuresRes.success) addonSaveMsg.value = featuresRes?.message || 'Gagal memuat features'
@@ -1397,7 +1397,7 @@ const createAddon = async () => {
     const result = await superadminApi.upsertAvailableFeature({
       ...newAddon.value,
       is_addon: true,
-      addon_price_cents: 0,
+      addon_price_rupiah: 0,
       addon_unit: 'month',
       default_enabled: [],
     })
@@ -1446,7 +1446,7 @@ const saveAddons = async () => {
       const payload = {
         feature_name: addon.feature_name,
         description: addon.description,
-        addon_price_cents: Math.round((addon.price || 0) * 100),
+        addon_price_rupiah: Math.round((addon.price || 0) * 100),
         addon_unit: addon.unit || 'month',
       }
       const r1 = await superadminApi.updateAvailableFeature(addon.addon_key, payload)
@@ -1477,8 +1477,8 @@ const openPlanEditor = async () => {
     if (plans && Array.isArray(plans)) {
       editablePlans.value = plans.map((p: any) => ({
         ...p,
-        price_monthly_display: Math.round((p.price_monthly || 0) / 100),
-        price_yearly_display: Math.round((p.price_yearly || 0) / 100),
+        price_monthly_display: Math.round((p.price_monthly || 0) ),
+        price_yearly_display: Math.round((p.price_yearly || 0) ),
       }))
     } else {
       planError.value = 'Gagal memuat daftar paket'

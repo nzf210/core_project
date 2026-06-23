@@ -42,7 +42,7 @@
             min="0" step="1000"
             class="input"
             placeholder="0"
-            @input="config.min_purchase_cents = minPurchaseRp * 100"
+            @input="config.min_purchase_rupiah = minPurchaseRp"
           />
           <span class="hint">Transaksi di bawah nilai ini tidak menghasilkan komisi (0 = semua)</span>
         </div>
@@ -56,7 +56,7 @@
             min="0" step="1000"
             class="input"
             placeholder="0 = unlimited"
-            @input="config.max_commission_cents = maxCommissionRp * 100"
+            @input="config.max_commission_rupiah = maxCommissionRp"
           />
           <span class="hint">Batas maksimal komisi per transaksi (0 = unlimited)</span>
         </div>
@@ -91,9 +91,9 @@
           <span class="preview-value commission">
             Rp {{ formatRp(Math.min(
               (100000 - 100000 * config.discount_percent / 100) * config.commission_percent / 100,
-              config.max_commission_cents > 0 ? config.max_commission_cents : Infinity
+              config.max_commission_rupiah > 0 ? config.max_commission_rupiah : Infinity
             )) }}
-            <span v-if="config.max_commission_cents > 0" class="capped">(capped Rp {{ formatRp(config.max_commission_cents) }})</span>
+            <span v-if="config.max_commission_rupiah > 0" class="capped">(capped Rp {{ formatRp(config.max_commission_rupiah) }})</span>
           </span>
         </div>
       </div>
@@ -121,16 +121,16 @@ const successMsg = ref('')
 interface ReferralConfig {
   discount_percent: number
   commission_percent: number
-  min_purchase_cents: number
-  max_commission_cents: number
+  min_purchase_rupiah: number
+  max_commission_rupiah: number
   is_active: boolean
 }
 
 const config = ref<ReferralConfig>({
   discount_percent: 10,
   commission_percent: 10,
-  min_purchase_cents: 0,
-  max_commission_cents: 0,
+  min_purchase_rupiah: 0,
+  max_commission_rupiah: 0,
   is_active: true,
 })
 
@@ -151,12 +151,12 @@ async function loadConfig() {
       config.value = {
         discount_percent: data.data.discount_percent ?? 10,
         commission_percent: data.data.commission_percent ?? 10,
-        min_purchase_cents: data.data.min_purchase_cents ?? 0,
-        max_commission_cents: data.data.max_commission_cents ?? 0,
+        min_purchase_rupiah: data.data.min_purchase_rupiah ?? 0,
+        max_commission_rupiah: data.data.max_commission_rupiah ?? 0,
         is_active: data.data.is_active ?? true,
       }
-      minPurchaseRp.value = config.value.min_purchase_cents / 100
-      maxCommissionRp.value = config.value.max_commission_cents / 100
+      minPurchaseRp.value = config.value.min_purchase_rupiah
+      maxCommissionRp.value = config.value.max_commission_rupiah
     }
   } catch (e: any) {
     errorMsg.value = e?.message || 'Gagal memuat konfigurasi'
@@ -175,8 +175,8 @@ async function handleSave() {
       body: JSON.stringify({
         discount_percent: config.value.discount_percent,
         commission_percent: config.value.commission_percent,
-        min_purchase_cents: config.value.min_purchase_cents,
-        max_commission_cents: config.value.max_commission_cents,
+        min_purchase_rupiah: config.value.min_purchase_rupiah,
+        max_commission_rupiah: config.value.max_commission_rupiah,
         is_active: config.value.is_active,
       }),
     })

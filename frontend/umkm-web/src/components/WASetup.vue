@@ -83,11 +83,11 @@
           <div v-if="waSetupState.cloud_api.active" style="margin-top: 1rem; background: var(--bg-primary); padding: 1rem; border-radius: 0.5rem;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
               <span>Kredit Tersedia:</span>
-              <strong style="color: var(--success);">Rp {{ formatPrice(waSetupState.cloud_api.credit_balance_cents) }}</strong>
+              <strong style="color: var(--success);">Rp {{ formatPrice(waSetupState.cloud_api.credit_balance_rupiah) }}</strong>
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span>Pemakaian Bulan Ini:</span>
-              <strong style="color: var(--warning);">Rp {{ formatPrice(waSetupState.cloud_api.credit_used_cents) }}</strong>
+              <strong style="color: var(--warning);">Rp {{ formatPrice(waSetupState.cloud_api.credit_used_rupiah) }}</strong>
             </div>
             <button class="btn btn-secondary" style="margin-top: 1rem; width: 100%;">Top Up Kredit</button>
           </div>
@@ -419,11 +419,11 @@ const waSetupState = ref({
   wa_provider_preference: 'auto',
   can_use_cloud_api: false,
   whatsmeow: { connected: false, status: 'disconnected' },
-  cloud_api: { active: false, credit_balance_cents: 0, credit_used_cents: 0 }
+  cloud_api: { active: false, credit_balance_rupiah: 0, credit_used_rupiah: 0 }
 })
 
 const formatPrice = (sen: number) => {
-  return (sen / 100).toLocaleString('id-ID')
+  return (sen ).toLocaleString('id-ID')
 }
 
 // --- AI CONFIG STATE ---

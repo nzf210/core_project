@@ -1228,7 +1228,7 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 	var addons []string
 	rows, err := DB.Query(ctx, `
 		SELECT DISTINCT reference FROM wallet_transactions
-		WHERE tenant_id = $1 AND reference LIKE 'wa_session_meta%' AND amount_cents < 0
+		WHERE tenant_id = $1 AND reference LIKE 'wa_session_meta%' AND amount_rupiah < 0
 		LIMIT 1
 	`, tenantID)
 	if err == nil {

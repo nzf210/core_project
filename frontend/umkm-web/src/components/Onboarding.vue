@@ -97,7 +97,7 @@
             <!-- F058: Wallet balance indicator -->
             <div v-if="walletBalance > 0" class="wallet-indicator">
               <span class="wallet-icon">💳</span>
-              <span>Saldo Wallet: <strong>Rp {{ (walletBalance / 100).toLocaleString('id-ID') }}</strong></span>
+              <span>Saldo Wallet: <strong>Rp {{ (walletBalance ).toLocaleString('id-ID') }}</strong></span>
             </div>
 
             <div class="plan-selector">
@@ -125,7 +125,7 @@
               <label class="pay-radio">
                 <input type="radio" :value="true" v-model="payViaWallet" />
                 <span>Bayar dari Wallet (Rp {{((walletBalance >= (plans.find(p => p.id === selectedPlan)?.price_monthly
-                  || 0)) ? ((plans.find(p => p.id === selectedPlan)?.price_monthly / 100).toLocaleString('id-ID')) :
+                  || 0)) ? ((plans.find(p => p.id === selectedPlan)?.price_monthly ).toLocaleString('id-ID')) :
                   '0')
                   }})</span>
               </label>
@@ -258,8 +258,8 @@ const loadPlans = async () => {
 const loadWalletBalance = async () => {
   try {
     const data: any = await api.get('/wallet')
-    if (data?.data?.balance_cents != null) {
-      walletBalance.value = data.data.balance_cents
+    if (data?.data?.balance_rupiah != null) {
+      walletBalance.value = data.data.balance_rupiah
     }
   } catch { /* silent */ }
 }
@@ -283,7 +283,7 @@ const getTypeName = (id: string) => {
 }
 
 const formatPrice = (sen: number) => {
-  const rp = sen / 100
+  const rp = sen 
   if (rp >= 1_000_000) return (rp / 1_000_000).toFixed(1) + 'jt'
   if (rp >= 1000) return Math.round(rp / 1000) + 'rb'
   return rp

@@ -19,7 +19,7 @@ onMounted(async () => {
 })
 
 function formatRupiah(sen: number) {
-  return 'Rp ' + (sen / 100).toLocaleString('id-ID')
+  return 'Rp ' + sen.toLocaleString('id-ID')
 }
 
 async function impersonateTenant(tenantId: string) {

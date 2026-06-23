@@ -38,7 +38,7 @@
           <div class="meta">
             <span>{{ leader.total_closing }} closing</span>
             <span class="dot">·</span>
-            <span class="revenue">Rp {{ formatRupiah(leader.total_revenue_cents) }}</span>
+            <span class="revenue">Rp {{ formatRupiah(leader.total_revenue_rupiah) }}</span>
           </div>
         </div>
 
@@ -61,23 +61,23 @@ import { api } from '../api'
 interface Leader {
   name: string
   total_closing: number
-  total_revenue_cents: number
+  total_revenue_rupiah: number
 }
 
 const loading = ref(true)
 const errorMsg = ref('')
 const leaders = ref<Leader[]>([])
 
-function formatRupiah(cents: number): string {
-  const rp = Math.floor(cents / 100)
+function formatRupiah(rupiah: number): string {
+  const rp = Math.floor(rupiah)
   return rp.toLocaleString('id-ID')
 }
 
 function barWidth(leader: Leader): string {
   if (leaders.value.length === 0) return '0%'
-  const max = leaders.value[0].total_revenue_cents
+  const max = leaders.value[0].total_revenue_rupiah
   if (max === 0) return '0%'
-  const pct = (leader.total_revenue_cents / max) * 100
+  const pct = (leader.total_revenue_rupiah / max) * 100
   return Math.max(pct, 5) + '%'  // min 5% biar keliatan
 }
 

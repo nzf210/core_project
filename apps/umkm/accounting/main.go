@@ -629,7 +629,7 @@ func handleTopProducts(w http.ResponseWriter, r *http.Request) {
 	query := `
 		SELECT
 			REGEXP_REPLACE(e.description, 'Penjualan\s*-\s*', '', 'i') AS product_name,
-			SUM(l.credit - l.debit) AS revenue_cents,
+			SUM(l.credit - l.debit) AS revenue_rupiah,
 			COUNT(*) AS transaction_count
 		FROM journal_entries e
 		JOIN journal_lines l ON l.entry_id = e.id
@@ -638,7 +638,7 @@ func handleTopProducts(w http.ResponseWriter, r *http.Request) {
 		  AND c.type = 'revenue'
 		  AND e.description ILIKE 'Penjualan%%'
 		GROUP BY REGEXP_REPLACE(e.description, 'Penjualan\s*-\s*', '', 'i')
-		ORDER BY revenue_cents DESC
+		ORDER BY revenue_rupiah DESC
 		LIMIT $2`
 
 	rows, err := DB.Query(ctx, query, tenantID, limit)
@@ -655,7 +655,7 @@ func handleTopProducts(w http.ResponseWriter, r *http.Request) {
 		if rows.Scan(&name, &revenue, &count) == nil && revenue > 0 {
 			products = append(products, map[string]interface{}{
 				"name":                strings.TrimSpace(name),
-				"revenue_cents":      revenue,
+				"revenue_rupiah":      revenue,
 				"transaction_count":   count,
 			})
 		}
@@ -683,7 +683,7 @@ func handleRecentTransactions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	query := `
 		SELECT e.id, e.created_at, e.description,
-			COALESCE(SUM(l.credit - l.debit), 0) AS amount_cents
+			COALESCE(SUM(l.credit - l.debit), 0) AS amount_rupiah
 		FROM journal_entries e
 		JOIN journal_lines l ON l.entry_id = e.id
 		JOIN chart_of_accounts c ON l.account_id = c.id
@@ -703,12 +703,12 @@ func handleRecentTransactions(w http.ResponseWriter, r *http.Request) {
 		ID          string    `json:"id"`
 		Date        time.Time `json:"date"`
 		Description string    `json:"description"`
-		AmountCents int64     `json:"amount_cents"`
+		AmountRupiah int64     `json:"amount_rupiah"`
 	}
 	var txs []txResult
 	for rows.Next() {
 		var tx txResult
-		if rows.Scan(&tx.ID, &tx.Date, &tx.Description, &tx.AmountCents) == nil {
+		if rows.Scan(&tx.ID, &tx.Date, &tx.Description, &tx.AmountRupiah) == nil {
 			txs = append(txs, tx)
 		}
 	}
@@ -3497,8 +3497,8 @@ func handleWASetup(w http.ResponseWriter, r *http.Request) {
 	// Check cloud_api credentials + credit balance
 	var cloudAPIStatus struct {
 		Active     bool   `json:"active"`
-		CreditUsed int64  `json:"credit_used_cents"` // in cents
-		CreditBal  int64  `json:"credit_balance_cents"`
+		CreditUsed int64  `json:"credit_used_rupiah"` // in rupiah
+		CreditBal  int64  `json:"credit_balance_rupiah"`
 		LastSync   string `json:"last_sync_at"`
 	}
 	var hasCloudAPI bool
@@ -4543,16 +4543,16 @@ func handleBalanceSheetPDF(w http.ResponseWriter, r *http.Request) {
 
 // formatIDR formats integer sen to Indonesian Rupiah style: "Rp 1.234.567"
 // (no decimal, dot as thousands separator, no sen — UMKM style).
-func formatIDR(cents int64) string {
+func formatIDR(rupiah int64) string {
 	negative := ""
-	abs := cents
+	abs := rupiah
 	if abs < 0 {
 		negative = "("
-		cents = -cents
-		abs = cents
+		rupiah = -rupiah
+		abs = rupiah
 	}
 	// Convert sen to rupiah (divide by 100) — but spec says no sen, so we
-	// just present cents/100 with 0 decimals. If amount is in raw rupiah
+	// just present rupiah/100 with 0 decimals. If amount is in raw rupiah
 	// (not sen), comment out the /100. Convention check: we treat values
 	// as raw rupiah integer (not sen) since cash flow numbers are in IDR.
 	s := strconv.FormatInt(abs, 10)
@@ -4927,10 +4927,10 @@ func handleExportProducts(w http.ResponseWriter, r *http.Request) {
 	if format == "" {
 		format = "xlsx"
 	}
-	headers := []string{"name", "sku", "category", "price_cents", "stock", "description", "image_url"}
+	headers := []string{"name", "sku", "category", "price_rupiah", "stock", "description", "image_url"}
 	var rows [][]string
 	if DB != nil {
-		dbRows, err := DB.Query(r.Context(), `SELECT name, sku, category, price_cents, stock, description, image_url FROM products WHERE tenant_id = $1 ORDER BY name`, tenantID)
+		dbRows, err := DB.Query(r.Context(), `SELECT name, sku, category, price_rupiah, stock, description, image_url FROM products WHERE tenant_id = $1 ORDER BY name`, tenantID)
 		if err == nil {
 			defer dbRows.Close()
 			for dbRows.Next() {
@@ -5024,7 +5024,7 @@ func handleImportTemplate(w http.ResponseWriter, r *http.Request) {
 	entity := r.URL.Query().Get("entity")
 	templates := map[string][][]string{
 		"products": {
-			{"name", "sku", "category", "price_cents", "stock", "description", "image_url"},
+			{"name", "sku", "category", "price_rupiah", "stock", "description", "image_url"},
 			{"Contoh Produk", "SKU-001", "Makanan", "15000", "50", "Contoh deskripsi", ""},
 		},
 		"contacts": {
@@ -5032,7 +5032,7 @@ func handleImportTemplate(w http.ResponseWriter, r *http.Request) {
 			{"Contoh Pelanggan", "6281234567890", "contoh@email.com", "customer", ""},
 		},
 		"journal": {
-			{"date", "description", "reference", "debit_account_code", "credit_account_code", "amount_cents"},
+			{"date", "description", "reference", "debit_account_code", "credit_account_code", "amount_rupiah"},
 			{"2026-01-15", "Penjualan tunai", "BATCH-001", "100", "400", "100000"},
 		},
 	}
@@ -5061,7 +5061,7 @@ func handleImportProducts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idx := indexHeaders(headers)
-	requiredCols := []string{"name", "sku", "price_cents"}
+	requiredCols := []string{"name", "sku", "price_rupiah"}
 	for _, c := range requiredCols {
 		if _, ok := idx[c]; !ok {
 			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Kolom wajib hilang: " + c})
@@ -5082,7 +5082,7 @@ func handleImportProducts(w http.ResponseWriter, r *http.Request) {
 		}
 		name := get("name")
 		sku := get("sku")
-		priceStr := get("price_cents")
+		priceStr := get("price_rupiah")
 		if name == "" || sku == "" {
 			skipped++
 			errs = append(errs, map[string]interface{}{"row": rowIdx, "error": "name atau sku kosong"})
@@ -5091,7 +5091,7 @@ func handleImportProducts(w http.ResponseWriter, r *http.Request) {
 		price, _ := strconv.ParseInt(priceStr, 10, 64)
 		if price < 0 {
 			skipped++
-			errs = append(errs, map[string]interface{}{"row": rowIdx, "error": "price_cents tidak valid"})
+			errs = append(errs, map[string]interface{}{"row": rowIdx, "error": "price_rupiah tidak valid"})
 			continue
 		}
 		stock, _ := strconv.ParseInt(get("stock"), 10, 64)
@@ -5101,12 +5101,12 @@ func handleImportProducts(w http.ResponseWriter, r *http.Request) {
 
 		// Upsert
 		_, err := DB.Exec(r.Context(), `
-			INSERT INTO products (tenant_id, name, sku, category, price_cents, stock, description, image_url)
+			INSERT INTO products (tenant_id, name, sku, category, price_rupiah, stock, description, image_url)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (tenant_id, sku) DO UPDATE SET
 				name = EXCLUDED.name,
 				category = EXCLUDED.category,
-				price_cents = EXCLUDED.price_cents,
+				price_rupiah = EXCLUDED.price_rupiah,
 				stock = EXCLUDED.stock,
 				description = EXCLUDED.description,
 				image_url = EXCLUDED.image_url
@@ -5203,7 +5203,7 @@ func handleImportJournal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	idx := indexHeaders(headers)
-	for _, c := range []string{"date", "description", "debit_account_code", "credit_account_code", "amount_cents"} {
+	for _, c := range []string{"date", "description", "debit_account_code", "credit_account_code", "amount_rupiah"} {
 		if _, ok := idx[c]; !ok {
 			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Kolom wajib hilang: " + c})
 			return
@@ -5241,10 +5241,10 @@ func handleImportJournal(w http.ResponseWriter, r *http.Request) {
 			importErrs = append(importErrs, map[string]interface{}{"row": rowIdx, "error": "date tidak valid"})
 			continue
 		}
-		amount, _ := strconv.ParseInt(get("amount_cents"), 10, 64)
+		amount, _ := strconv.ParseInt(get("amount_rupiah"), 10, 64)
 		if amount <= 0 {
 			skipped++
-			importErrs = append(importErrs, map[string]interface{}{"row": rowIdx, "error": "amount_cents harus > 0"})
+			importErrs = append(importErrs, map[string]interface{}{"row": rowIdx, "error": "amount_rupiah harus > 0"})
 			continue
 		}
 		ref := get("reference")

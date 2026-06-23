@@ -3,8 +3,8 @@ CREATE TABLE affiliates (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     referral_code VARCHAR(30) UNIQUE NOT NULL,
     bank_info JSONB,
-    cash_balance_cents BIGINT NOT NULL DEFAULT 0,
-    total_earnings_cents BIGINT NOT NULL DEFAULT 0,
+    cash_balance_rupiah BIGINT NOT NULL DEFAULT 0,
+    total_earnings_rupiah BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -17,7 +17,7 @@ CREATE TABLE affiliate_earnings (
     affiliate_id INT NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     invoice_id VARCHAR(100) NOT NULL,
-    amount_cents BIGINT NOT NULL,
+    amount_rupiah BIGINT NOT NULL,
     commission_rate_percent INT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -25,7 +25,7 @@ CREATE TABLE affiliate_earnings (
 CREATE TABLE affiliate_withdrawals (
     id SERIAL PRIMARY KEY,
     affiliate_id INT NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
-    amount_cents BIGINT NOT NULL,
+    amount_rupiah BIGINT NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending, approved, rejected
     admin_note TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

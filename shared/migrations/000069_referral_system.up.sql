@@ -25,8 +25,8 @@ CREATE TABLE IF NOT EXISTS invoice_referrals (
 CREATE INDEX IF NOT EXISTS idx_invoice_referrals_affiliate ON invoice_referrals(affiliate_id);
 
 -- 3. Extend referral_config with new columns
-ALTER TABLE referral_config ADD COLUMN IF NOT EXISTS min_purchase_cents   BIGINT  DEFAULT 0;
-ALTER TABLE referral_config ADD COLUMN IF NOT EXISTS max_commission_cents BIGINT  DEFAULT 0;
+ALTER TABLE referral_config ADD COLUMN IF NOT EXISTS min_purchase_rupiah   BIGINT  DEFAULT 0;
+ALTER TABLE referral_config ADD COLUMN IF NOT EXISTS max_commission_rupiah BIGINT  DEFAULT 0;
 ALTER TABLE referral_config ADD COLUMN IF NOT EXISTS is_active             BOOLEAN DEFAULT true;
 ALTER TABLE referral_config ADD COLUMN IF NOT EXISTS referral_link_base    VARCHAR(255) DEFAULT 'wch.id/r';
 

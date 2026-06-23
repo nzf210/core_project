@@ -20,7 +20,7 @@ type FeatureDef struct {
 	Category       string
 	IsAddon       bool
 	DefaultEnabled []string
-	PriceCents    int64
+	PriceRupiah    int64
 	Unit          string
 }
 
@@ -44,10 +44,10 @@ func GetFeatureDef(ctx context.Context, featureKey string) (*FeatureDef, error) 
 	var defaultEnabled []string
 	err := db.Pool.QueryRow(ctx,
 		`SELECT feature_key, feature_name, description, category, is_addon,
-		        default_enabled, addon_price_cents, addon_unit
+		        default_enabled, addon_price_rupiah, addon_unit
 		 FROM available_features WHERE feature_key = $1`, featureKey).Scan(
 		&fd.Key, &fd.Name, &fd.Description, &fd.Category,
-		&fd.IsAddon, &defaultEnabled, &fd.PriceCents, &fd.Unit,
+		&fd.IsAddon, &defaultEnabled, &fd.PriceRupiah, &fd.Unit,
 	)
 	if err != nil {
 		return nil, nil

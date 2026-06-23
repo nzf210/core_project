@@ -95,11 +95,11 @@ func HandleBillingCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var priceCents int64
+	var priceRupiah int64
 	if req.OrderType == "wargame_token" {
-		priceCents = 100_000 * int64(req.Quantity)
+		priceRupiah = 100_000 * int64(req.Quantity)
 	} else if req.OrderType == "intelligence_pack" {
-		priceCents = 5_000_000 * int64(req.Quantity)
+		priceRupiah = 5_000_000 * int64(req.Quantity)
 	} else {
 		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid order type"})
 		return
@@ -131,8 +131,8 @@ func HandleBillingCheckout(w http.ResponseWriter, r *http.Request) {
 		).Scan(&referralDiscountPct)
 	}
 
-	referralDiscountAmount := int64(float64(priceCents) * referralDiscountPct / 100)
-	finalPrice := priceCents - referralDiscountAmount
+	referralDiscountAmount := int64(float64(priceRupiah) * referralDiscountPct / 100)
+	finalPrice := priceRupiah - referralDiscountAmount
 
 	// Get Xendit client
 	xClient, errXc := getTenantXenditClient(ctx, tenantID)
@@ -147,9 +147,9 @@ func HandleBillingCheckout(w http.ResponseWriter, r *http.Request) {
 			paymentURL = fmt.Sprintf("https://checkout.xendit.co/web/%s", externalID)
 			_, _ = repository.DB.Exec(ctx, `
 				INSERT INTO campaign_billing_orders
-					(tenant_id, campaign_id, order_type, amount_cents, quantity, invoice_url, xendit_invoice_id, status, referral_discount_cents, final_amount_cents)
+					(tenant_id, campaign_id, order_type, amount_rupiah, quantity, invoice_url, xendit_invoice_id, status, referral_discount_rupiah, final_amount_rupiah)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)
-			`, tenantID, req.CampaignID, req.OrderType, priceCents, req.Quantity,
+			`, tenantID, req.CampaignID, req.OrderType, priceRupiah, req.Quantity,
 				paymentURL, invoiceID, referralDiscountAmount, finalPrice)
 		} else {
 			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Payment provider not configured"})
@@ -182,9 +182,9 @@ func HandleBillingCheckout(w http.ResponseWriter, r *http.Request) {
 
 		_, dbErr := repository.DB.Exec(ctx, `
 			INSERT INTO campaign_billing_orders
-				(tenant_id, campaign_id, order_type, amount_cents, quantity, invoice_url, xendit_invoice_id, status, referral_discount_cents, final_amount_cents)
+				(tenant_id, campaign_id, order_type, amount_rupiah, quantity, invoice_url, xendit_invoice_id, status, referral_discount_rupiah, final_amount_rupiah)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)
-		`, tenantID, req.CampaignID, req.OrderType, priceCents, req.Quantity,
+		`, tenantID, req.CampaignID, req.OrderType, priceRupiah, req.Quantity,
 			paymentURL, invoiceID, referralDiscountAmount, finalPrice)
 		if dbErr != nil {
 			slog.Warn("Failed to save campaign order to DB", "error", dbErr)
@@ -328,13 +328,13 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 			if commission > 0 {
 				tx.Exec(ctx, `
 					UPDATE affiliates
-					SET cash_balance_cents = cash_balance_cents + $1,
-						total_earnings_cents = total_earnings_cents + $1,
+					SET cash_balance_rupiah = cash_balance_rupiah + $1,
+						total_earnings_rupiah = total_earnings_rupiah + $1,
 						updated_at = NOW()
 					WHERE id = $2
 				`, commission, *referredByID)
 				tx.Exec(ctx, `
-					INSERT INTO affiliate_earnings (affiliate_id, tenant_id, invoice_id, amount_cents, commission_rate_percent)
+					INSERT INTO affiliate_earnings (affiliate_id, tenant_id, invoice_id, amount_rupiah, commission_rate_percent)
 					VALUES ($1, $2, $3, $4, $5)
 				`, *referredByID, tenantID, payload.ID, commission, int(commissionPct))
 			}

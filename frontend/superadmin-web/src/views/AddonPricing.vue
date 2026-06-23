@@ -8,7 +8,7 @@ interface AddonFeature {
   description: string
   category: string
   is_addon: boolean
-  addon_price_cents: number
+  addon_price_rupiah: number
   addon_unit: string
   default_enabled: boolean
   is_active?: boolean
@@ -22,16 +22,16 @@ const successMsg = ref('')
 
 const UNITS = ['per_request', 'per_month', 'per_minute', 'per_session', 'per_user']
 
-function formatPrice(cents: number): string {
-  return 'Rp ' + (cents / 100).toLocaleString('id-ID')
+function formatPrice(rupiah: number): string {
+  return 'Rp ' + rupiah.toLocaleString('id-ID')
 }
 
-function priceToRupiah(cents: number): number {
-  return cents / 100
+function priceToRupiah(rupiah: number): number {
+  return rupiah
 }
 
-function rupiahToCents(rp: number): number {
-  return Math.round(rp * 100)
+function rupiahToRupiah(rp: number): number {
+  return Math.round(rp)
 }
 
 async function load() {
@@ -54,7 +54,7 @@ async function saveAddon(addon: AddonFeature) {
     await request(`/admin/available-features/${addon.feature_key}`, {
       method: 'PATCH',
       body: JSON.stringify({
-        addon_price_cents: addon.addon_price_cents,
+        addon_price_rupiah: addon.addon_price_rupiah,
         addon_unit: addon.addon_unit,
         description: addon.description,
         default_enabled: addon.default_enabled,
@@ -74,14 +74,14 @@ const priceDisplay = ref<Record<string, number>>({})
 
 function initPriceDisplay() {
   addons.value.forEach(a => {
-    priceDisplay.value[a.feature_key] = priceToRupiah(a.addon_price_cents)
+    priceDisplay.value[a.feature_key] = priceToRupiah(a.addon_price_rupiah)
   })
 }
 
 function onPriceInput(addon: AddonFeature, val: string) {
   const n = parseFloat(val) || 0
   priceDisplay.value[addon.feature_key] = n
-  addon.addon_price_cents = rupiahToCents(n)
+  addon.addon_price_rupiah = rupiahToRupiah(n)
 }
 
 onMounted(async () => {
@@ -133,7 +133,7 @@ onMounted(async () => {
                 step="1000"
                 placeholder="0"
               />
-              <span class="price-preview">= {{ formatPrice(addon.addon_price_cents) }}</span>
+              <span class="price-preview">= {{ formatPrice(addon.addon_price_rupiah) }}</span>
             </label>
 
             <label>

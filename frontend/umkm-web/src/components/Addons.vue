@@ -74,7 +74,7 @@
         <div class="addon-pricing">
           <div class="price-main">
             <span class="price-currency">Rp</span>
-            <span class="price-value">{{ formatRupiah(addon.price_cents) }}</span>
+            <span class="price-value">{{ formatRupiah(addon.price_rupiah) }}</span>
           </div>
           <div class="price-unit">{{ formatUnit(addon.addon_unit) }}</div>
           <div v-if="addon.has_addon && addon.expires_at" class="expires-info">
@@ -121,12 +121,12 @@
           <h3>Beli Add-on</h3>
           <div class="confirm-detail">
             <span class="confirm-name">{{ confirmAddon.feature_name }}</span>
-            <span class="confirm-price">Rp {{ formatRupiah(confirmAddon.price_cents) }}</span>
+            <span class="confirm-price">Rp {{ formatRupiah(confirmAddon.price_rupiah) }}</span>
           </div>
           <p class="confirm-subtitle">
             Saldo wallet Anda: <strong>Rp {{ formattedWalletBalance }}</strong>
           </p>
-          <div v-if="walletBalanceCents < confirmAddon.price_cents" class="balance-warning">
+          <div v-if="walletBalanceRupiah < confirmAddon.price_rupiah" class="balance-warning">
             ⚠️ Saldo tidak cukup.
             <button class="link-btn" @click="$router.push('/wallet'); confirmAddon = null">
               Top-up wallet →
@@ -138,12 +138,12 @@
           <div class="modal-actions">
             <button class="btn btn-ghost" @click="confirmAddon = null">Batal</button>
             <button
-              v-if="walletBalanceCents >= confirmAddon.price_cents"
+              v-if="walletBalanceRupiah >= confirmAddon.price_rupiah"
               class="btn btn-primary"
               @click="executePurchase"
               :disabled="purchasing === confirmAddon.addon_key"
             >
-              {{ purchasing === confirmAddon.addon_key ? 'Memproses...' : `Beli — Rp ${formatRupiah(confirmAddon.price_cents)}` }}
+              {{ purchasing === confirmAddon.addon_key ? 'Memproses...' : `Beli — Rp ${formatRupiah(confirmAddon.price_rupiah)}` }}
             </button>
           </div>
         </div>
@@ -161,12 +161,12 @@ interface AddonItem {
   feature_name: string
   description: string
   category: string
-  price_cents: number
+  price_rupiah: number
   addon_unit: string
   has_addon: boolean
   addon_status?: string
   expires_at?: string
-  purchase_price_cents?: number
+  purchase_price_rupiah?: number
 }
 
 const marketplace = ref<AddonItem[]>([])
@@ -194,9 +194,9 @@ const filteredAddons = computed(() =>
 )
 
 const formattedWalletBalance = computed(() =>
-  (walletBalance.value / 100).toLocaleString('id-ID')
+  (walletBalance.value ).toLocaleString('id-ID')
 )
-const walletBalanceCents = computed(() => walletBalance.value)
+const walletBalanceRupiah = computed(() => walletBalance.value)
 
 const getAddonIcon = (key: string): string => {
   const map: Record<string, string> = {
@@ -210,8 +210,8 @@ const getAddonIcon = (key: string): string => {
   return map[key] || '⚙️'
 }
 
-const formatRupiah = (cents: number): string =>
-  (cents / 100).toLocaleString('id-ID')
+const formatRupiah = (rupiah: number): string =>
+  (rupiah ).toLocaleString('id-ID')
 
 const formatUnit = (unit: string): string => {
   const map: Record<string, string> = {
@@ -263,7 +263,7 @@ const loadWallet = async () => {
   try {
     const res = await api.getWallet()
     if (res.success && res.data) {
-      walletBalance.value = res.data.balance_cents || 0
+      walletBalance.value = res.data.balance_rupiah || 0
     }
   } catch { /* silent */ }
 }

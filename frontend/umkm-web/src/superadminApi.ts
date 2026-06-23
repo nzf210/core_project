@@ -183,7 +183,7 @@ export const superadminApi = {
     return res.json()
   },
 
-  async updateAddonPrice(addonKey: string, data: { price_cents?: number; unit?: string; is_active?: boolean; description?: string }) {
+  async updateAddonPrice(addonKey: string, data: { price_rupiah?: number; unit?: string; is_active?: boolean; description?: string }) {
     const res = await authFetch(`${API_BASE}/api/superadmin/billing/addon-prices/${encodeURIComponent(addonKey)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

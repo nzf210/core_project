@@ -361,6 +361,7 @@ tenant_c → wa-003 (qr_pending)
 | Uang/Harga | `int64` satuan **sen** (1 rupiah = 100 sen) | ❌ `float64` |
 | UUID | `github.com/google/uuid` | ❌ Auto-increment integer |
 | Error Handling | `return error` eksplisit | ❌ `panic()` di luar main |
+| Ukuran File | **BE Max 450 baris (Cek SonarQube)** per file | ❌ File monolithic besar |
 | AI/LLM | Via `services/ai-gateway` | ❌ Panggil MiniMax/OpenAI langsung dari `apps/` |
 
 ### Pola Kode Handler
@@ -580,6 +581,8 @@ Card "Voucher Billing" di `frontend/umkm-web/src/components/SuperAdminDashboard.
 7. ❌ **JANGAN** gunakan string concatenation di SQL query
 8. ❌ **JANGAN** `panic()` di luar fungsi `main()`
 9. ❌ **JANGAN** implement fitur yang belum di-approve di FEATURE_MAP.md
+10. ❌ \*\*JANGAN\*\* biarkan file BE (Golang) melebihi \*\*450 baris\*\* (Berdasarkan SonarQube rule). Pecah kode jika sudah mendekati batas ini!
+11. ❌ **JANGAN** biarkan file FE (Vue) melebihi **500 baris**. Buat reusable component terpisah!
 
 ---
 
@@ -848,3 +851,19 @@ Payment Webhook Callback
 - `GetTenantPlan()` akan refactored untuk fallback ke DB di versi berikutnya
 ### Frontend CSS
 - **WAJIB**: Edit `frontend/umkm-web/src/assets/main.css` untuk merubah gaya CSS utama (termasuk .modal-overlay, .modal-content). File `style.css` hanya legacy/secondary.
+
+## 🛡️ Standar SonarQube
+
+**Semua kode (BE dan FE) WAJIB mengikuti standar coding SonarQube:**
+
+1. **Maintainability:**
+   - Cyclomatic Complexity rendah (hindari nested if/for berlebihan).
+   - Maksimal 450 baris per file untuk Go (BE).
+   - Maksimal 500 baris per file untuk Vue (FE).
+2. **Reliability:**
+   - Tangani semua  di Go. Jangan  kecuali terpaksa.
+   - Hindari memory leak (tutup koneksi DB, Response Body, dll).
+3. **Security:**
+   - Gunakan parameterized query untuk mencegah SQL Injection.
+   - Enkripsi data sensitif (password, NIK, dll).
+

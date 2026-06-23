@@ -104,15 +104,15 @@ const withdrawSuccess = ref('')
 const isAffiliate = ref(false)
 const affiliateId = ref(0)
 const referralCode = ref('')
-const balance = ref(0)         // in cents
-const totalEarnings = ref(0)   // in cents
+const balance = ref(0)         // in rupiah
+const totalEarnings = ref(0)   // in rupiah
 const withdrawAmount = ref<number | null>(null)
 
 const copyTooltip = ref('Copy')
 const copyIcon = ref('📋')
 
-function formatRupiah(cents: number): string {
-  const rp = Math.floor(cents / 100)
+function formatRupiah(rupiah: number): string {
+  const rp = Math.floor(rupiah)
   return rp.toLocaleString('id-ID')
 }
 
@@ -129,8 +129,8 @@ async function loadProfile() {
       if (d.is_affiliate) {
         affiliateId.value = d.affiliate_id || 0
         referralCode.value = d.referral_code || ''
-        balance.value = d.cash_balance_cents || 0
-        totalEarnings.value = d.total_earnings_cents || 0
+        balance.value = d.cash_balance_rupiah || 0
+        totalEarnings.value = d.total_earnings_rupiah || 0
       }
     }
   } catch (e: any) {
@@ -166,9 +166,9 @@ async function handleWithdraw() {
   withdrawError.value = ''
   withdrawSuccess.value = ''
   try {
-    // API takes cents, user inputs rupiah
-    const cents = withdrawAmount.value * 100
-    const res = await api.withdrawAffiliate(cents)
+    // API takes rupiah, user inputs rupiah
+    const rupiah = withdrawAmount.value * 100
+    const res = await api.withdrawAffiliate(rupiah)
     if (res && res.status >= 200 && res.status < 300) {
       withdrawSuccess.value = 'Permintaan tarik dana berhasil! Diproses dalam 1-3 hari kerja.'
       withdrawAmount.value = null

@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS available_features (
     category            VARCHAR(50) NOT NULL,  -- 'core', 'ai', 'wa', 'storage'
     is_addon            BOOLEAN NOT NULL DEFAULT false,
     default_enabled     VARCHAR(20)[] DEFAULT '{}',  -- tier list where enabled by default
-    addon_price_cents   BIGINT DEFAULT 0,
+    addon_price_rupiah   BIGINT DEFAULT 0,
     addon_unit          VARCHAR(20) DEFAULT 'per_month',  -- per_month/per_request/per_minute/per_session
     created_at          TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
@@ -21,7 +21,7 @@ CREATE INDEX IF NOT EXISTS idx_available_features_category ON available_features
 CREATE INDEX IF NOT EXISTS idx_available_features_is_addon ON available_features(is_addon) WHERE is_addon = true;
 
 -- Seed bundled features (is_addon=FALSE — bundled per tier)
-INSERT INTO available_features (feature_key, feature_name, category, is_addon, default_enabled, addon_price_cents, addon_unit)
+INSERT INTO available_features (feature_key, feature_name, category, is_addon, default_enabled, addon_price_rupiah, addon_unit)
 VALUES
     ('accounting',       'Double-Entry Accounting',      'core',    false, ARRAY['lite','pro','ultimate'],    0, NULL),
     ('pos',              'Point of Sale',                'core',    false, ARRAY['lite','pro','ultimate'],    0, NULL),
@@ -38,7 +38,7 @@ VALUES
 ON CONFLICT (feature_key) DO NOTHING;
 
 -- Seed addon features (is_addon=TRUE — berbayar per wallet)
-INSERT INTO available_features (feature_key, feature_name, category, is_addon, default_enabled, addon_price_cents, addon_unit)
+INSERT INTO available_features (feature_key, feature_name, category, is_addon, default_enabled, addon_price_rupiah, addon_unit)
 VALUES
     ('ai_vision',        'AI Vision (Foto KTP/Produk)',  'ai',      true,  NULL,   500000,  'per_request'),
     ('ai_audio',         'AI Audio (Voice Note)',        'ai',      true,  NULL,   1000000, 'per_month'),
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS tenant_addons (
     purchased_at            TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     expires_at              TIMESTAMPTZ,  -- NULL = unlimited/permanent
     auto_renew              BOOLEAN NOT NULL DEFAULT true,
-    purchase_price_cents    BIGINT DEFAULT 0,
+    purchase_price_rupiah    BIGINT DEFAULT 0,
     wallet_transaction_id    UUID,
     created_at              TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (tenant_id, addon_key)

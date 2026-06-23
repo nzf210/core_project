@@ -80,7 +80,7 @@ const usageChartData = () => ({
         </div>
         <div class="metric-card">
           <div class="metric-label">Redemption Rate</div>
-          <div class="metric-value">{{ ((analytics.total_redeemed || 0) / (analytics.total_generated || 1) * 100).toFixed(1) }}%</div>
+          <div class="metric-value">{{ ((analytics.total_redeemed || 0) / (analytics.total_generated || 1)).toFixed(1) }}%</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">Revenue Impact</div>

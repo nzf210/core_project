@@ -34,15 +34,15 @@ CREATE TABLE bots (
     is_paper_trading BOOLEAN NOT NULL DEFAULT true,  -- paper trading mode
     -- DCA Configuration
     dca_interval VARCHAR(20),               -- 'hourly', 'daily', 'weekly', 'monthly'
-    dca_amount_per_order BIGINT DEFAULT 0,  -- amount in USDT cents (x100)
+    dca_amount_per_order BIGINT DEFAULT 0,  -- amount in USDT rupiah (x100)
     -- Grid Configuration
-    grid_lower_price BIGINT DEFAULT 0,      -- lower price bound in USDT cents
-    grid_upper_price BIGINT DEFAULT 0,      -- upper price bound in USDT cents
+    grid_lower_price BIGINT DEFAULT 0,      -- lower price bound in USDT rupiah
+    grid_upper_price BIGINT DEFAULT 0,      -- upper price bound in USDT rupiah
     grid_count INT DEFAULT 0,               -- number of grid levels
-    grid_investment BIGINT DEFAULT 0,       -- total grid investment in USDT cents
+    grid_investment BIGINT DEFAULT 0,       -- total grid investment in USDT rupiah
     -- Aggregated Stats
-    total_invested BIGINT NOT NULL DEFAULT 0,   -- total invested in USDT cents
-    total_profit BIGINT NOT NULL DEFAULT 0,     -- realized profit in USDT cents
+    total_invested BIGINT NOT NULL DEFAULT 0,   -- total invested in USDT rupiah
+    total_profit BIGINT NOT NULL DEFAULT 0,     -- realized profit in USDT rupiah
     total_trades INT NOT NULL DEFAULT 0,
     last_executed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -58,10 +58,10 @@ CREATE TABLE bot_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     bot_id UUID NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
     side VARCHAR(4) NOT NULL,               -- 'buy' or 'sell'
-    price BIGINT NOT NULL,                  -- price in USDT cents (x100)
+    price BIGINT NOT NULL,                  -- price in USDT rupiah (x100)
     quantity BIGINT NOT NULL,               -- quantity in satoshi-level (x10^8)
-    total BIGINT NOT NULL,                  -- total cost in USDT cents
-    fee BIGINT NOT NULL DEFAULT 0,          -- fee in USDT cents
+    total BIGINT NOT NULL,                  -- total cost in USDT rupiah
+    fee BIGINT NOT NULL DEFAULT 0,          -- fee in USDT rupiah
     exchange_order_id VARCHAR(100),         -- ID from exchange (null for paper trades)
     status VARCHAR(20) NOT NULL DEFAULT 'pending',  -- 'pending', 'filled', 'failed', 'cancelled'
     is_paper BOOLEAN NOT NULL DEFAULT true, -- whether this is a simulated trade

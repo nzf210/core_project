@@ -10,7 +10,7 @@ import (
 	"core_project/shared/sdk/response"
 )
 
-// AddonPricePerUnit returns the price in cents for an addon feature.
+// AddonPricePerUnit returns the price in rupiah for an addon feature.
 // Returns 0 if not an addon or not found in available_features.
 func AddonPricePerUnit(ctx context.Context, addonKey string) int64 {
 	if db.Pool == nil {
@@ -18,7 +18,7 @@ func AddonPricePerUnit(ctx context.Context, addonKey string) int64 {
 	}
 	var price int64
 	_ = db.Pool.QueryRow(ctx,
-		"SELECT addon_price_cents FROM available_features WHERE feature_key = $1 AND is_addon = true",
+		"SELECT addon_price_rupiah FROM available_features WHERE feature_key = $1 AND is_addon = true",
 		addonKey).Scan(&price)
 	return price
 }

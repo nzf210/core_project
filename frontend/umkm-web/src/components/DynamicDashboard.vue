@@ -83,7 +83,7 @@
             <div v-else-if="recentTransactions.length" class="list-items">
               <div v-for="tx in recentTransactions" :key="tx.id" class="list-item">
                 <span class="item-label">{{ tx.description || 'Transaksi' }}</span>
-                <span class="item-value">{{ formatCurrency(tx.amount_cents) }}</span>
+                <span class="item-value">{{ formatCurrency(tx.amount_rupiah) }}</span>
               </div>
             </div>
             <div v-else class="empty-state">Belum ada transaksi</div>
@@ -96,7 +96,7 @@
             <div v-else-if="topProducts.length" class="list-items">
               <div v-for="(prod, idx) in topProducts" :key="idx" class="list-item">
                 <span class="item-label">{{ prod.name }}</span>
-                <span class="item-value">{{ formatCurrency(prod.revenue_cents) }}</span>
+                <span class="item-value">{{ formatCurrency(prod.revenue_rupiah) }}</span>
               </div>
             </div>
             <div v-else class="empty-state">Belum ada data produk</div>
