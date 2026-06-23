@@ -31,6 +31,12 @@ import (
 const (
 	walletEndpoint         = "/wallet"
 	querySelectAffiliateID = "SELECT referred_by_affiliate_id FROM tenants WHERE id = $1"
+	queryAffiliateUserID   = "SELECT id FROM affiliates WHERE user_id = $1"
+	keyPlanFeatures        = "plan_features:"
+	errNotAffiliate        = "Not an affiliate"
+	keyWalletTopup         = "-wallet-topup-"
+	timeFormatWIB          = "02 Jan 2006, 15:04 WIB"
+	errDB                  = "DB error"
 )
 
 // ─────────────────────────────────────────────
@@ -179,7 +185,7 @@ type cachedTenant struct {
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(response.ContentType, response.ApplicationJSON)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
@@ -1142,8 +1148,8 @@ func verifyWebhookToken(ctx context.Context, tenantID, callbackToken string) boo
 }
 
 func extractTenantIDFromExternalID(externalID string) string {
-	if strings.Contains(externalID, "-wallet-topup-") {
-		parts := strings.Split(externalID, "-wallet-topup-")
+	if strings.Contains(externalID, keyWalletTopup) {
+		parts := strings.Split(externalID, keyWalletTopup)
 		if len(parts) == 2 {
 			return parts[1]
 		}
@@ -1176,8 +1182,8 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	//   Invoice: "INV-{uuid}|{tenantID}"
 	//   Topup:   "{uuid}-wallet-topup-{tenantID}"
 	var tenantID string
-	if strings.Contains(externalID, "-wallet-topup-") {
-		parts := strings.Split(externalID, "-wallet-topup-")
+	if strings.Contains(externalID, keyWalletTopup) {
+		parts := strings.Split(externalID, keyWalletTopup)
 		if len(parts) == 2 {
 			tenantID = parts[1]
 		}
@@ -1220,8 +1226,8 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	paidAmountCents := int64(paidAmountFloat)
 
 	// --- HANDLE WALLET TOPUP INVOICE ---
-	if strings.Contains(externalID, "-wallet-topup-") {
-		topupParts := strings.Split(externalID, "-wallet-topup-")
+	if strings.Contains(externalID, keyWalletTopup) {
+		topupParts := strings.Split(externalID, keyWalletTopup)
 		if len(topupParts) == 2 {
 			wTenantID := topupParts[1]
 			if status == "EXPIRED" {
@@ -1248,7 +1254,7 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 			// Process topup transaction
 			tx, err := DB.Begin(r.Context())
 			if err != nil {
-				http.Error(w, "DB error", http.StatusInternalServerError)
+				http.Error(w, errDB, http.StatusInternalServerError)
 				return
 			}
 			defer tx.Rollback(r.Context())
@@ -1611,7 +1617,7 @@ func activateSubscription(ctx context.Context, tenantID, planID, planName string
 		TenantName:    "",
 		PlanName:      planName,
 		PlanID:        planID,
-		ActivatedAt:   now.Format("02 Jan 2006, 15:04 WIB"),
+		ActivatedAt:   now.Format(timeFormatWIB),
 		ExpiresAt:     fmt.Sprintf("%d hari dari sekarang", validityDays),
 		AmountPaid:    0,
 		PaymentMethod: activatedBy,
@@ -1878,9 +1884,9 @@ func maxInt64(a, b int64) int64 {
 // ─────────────────────────────────────────────
 
 func handleAdminListPlans(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -1923,9 +1929,9 @@ type UpdatePlanReq struct {
 }
 
 func handleAdminUpdatePlan(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -2025,9 +2031,9 @@ type PlanFeatureReq struct {
 }
 
 func handleAdminPlanFeaturesCollection(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -2042,9 +2048,9 @@ func handleAdminPlanFeaturesCollection(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAdminPlanFeaturesItem(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -2065,9 +2071,9 @@ func handleAdminPlanFeaturesItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAdminPlanFeaturesMatrix(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -2210,7 +2216,7 @@ func listPlanFeatures(w http.ResponseWriter, r *http.Request) {
 func createPlanFeature(w http.ResponseWriter, r *http.Request) {
 	var req PlanFeatureReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 		return
 	}
 	if req.PlanID == "" || req.FeatureKey == "" || req.FeatureName == "" {
@@ -2263,7 +2269,7 @@ func updatePlanFeature(w http.ResponseWriter, r *http.Request, id string) {
 		IsEnabled    *bool   `json:"is_enabled,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 		return
 	}
 
@@ -2332,9 +2338,9 @@ func deletePlanFeature(w http.ResponseWriter, r *http.Request, id string) {
 // mux.Handle("/admin/addon-gating", ...)
 
 func handleAdminAvailableFeaturesCollection(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 	if r.Method == http.MethodGet {
@@ -2382,7 +2388,7 @@ func handleAdminAvailableFeaturesCollection(w http.ResponseWriter, r *http.Reque
 			AddonUnit       string   `json:"addon_unit"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			response.Error(w, http.StatusBadRequest, "Invalid request", err)
+			response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 			return
 		}
 		if req.FeatureKey == "" || req.FeatureName == "" || req.Category == "" {
@@ -2411,9 +2417,9 @@ func handleAdminAvailableFeaturesCollection(w http.ResponseWriter, r *http.Reque
 }
 
 func handleAdminAvailableFeaturesItem(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 	key := strings.TrimPrefix(r.URL.Path, "/admin/available-features/")
@@ -2432,7 +2438,7 @@ func handleAdminAvailableFeaturesItem(w http.ResponseWriter, r *http.Request) {
 			AddonUnit       *string  `json:"addon_unit,omitempty"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			response.Error(w, http.StatusBadRequest, "Invalid request", err)
+			response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 			return
 		}
 		updates, args, idx := []string{}, []any{}, 1
@@ -2487,9 +2493,9 @@ func handleAdminAvailableFeaturesItem(w http.ResponseWriter, r *http.Request) {
 
 // handleAdminFeatureMatrix returns all plans × all features as a toggle matrix.
 func handleAdminFeatureMatrix(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -2571,7 +2577,7 @@ func handleAdminFeatureMatrix(w http.ResponseWriter, r *http.Request) {
 			IsEnabled  bool   `json:"is_enabled"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			response.Error(w, http.StatusBadRequest, "Invalid request", err)
+			response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 			return
 		}
 		if req.PlanID == "" || req.FeatureKey == "" {
@@ -2600,9 +2606,9 @@ func handleAdminFeatureMatrix(w http.ResponseWriter, r *http.Request) {
 
 // handleAdminAddonGating GET/PATCH: manage per-addon min_tier requirement.
 func handleAdminAddonGating(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -2650,7 +2656,7 @@ func handleAdminAddonGating(w http.ResponseWriter, r *http.Request) {
 			DefaultEnabled []string `json:"default_enabled"` // tiers that bundle this addon by default
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			response.Error(w, http.StatusBadRequest, "Invalid request", err)
+			response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 			return
 		}
 		if req.FeatureKey == "" {
@@ -2921,7 +2927,7 @@ func handleRedeemVoucherLink(w http.ResponseWriter, r *http.Request) {
 
 	var req VoucherLinkRedeemReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 		return
 	}
 	if req.Token == "" || req.TenantID == "" {
@@ -2964,7 +2970,7 @@ func handleRedeemVoucherLink(w http.ResponseWriter, r *http.Request) {
 
 	// 4. Check max_uses_per_tenant (default 1)
 	if err := checkVoucherUsageQuota(ctx, claims.ProgramID, req.TenantID, progInfo.MaxUsesPerTenant); err != nil {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(response.ContentType, response.ApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -2991,8 +2997,8 @@ func handleRedeemVoucherLink(w http.ResponseWriter, r *http.Request) {
 		TicketNumber:  ticketNumber,
 		PlanName:      progInfo.PlanName,
 		PlanID:        claims.PlanID,
-		ActivatedAt:   now.Format("02 Jan 2006, 15:04 WIB"),
-		ExpiresAt:     newPeriodEnd.Format("02 Jan 2006, 15:04 WIB"),
+		ActivatedAt:   now.Format(timeFormatWIB),
+		ExpiresAt:     newPeriodEnd.Format(timeFormatWIB),
 		AmountPaid:    0,
 		PaymentMethod: "voucher",
 	})
@@ -3022,9 +3028,9 @@ type GenerateVoucherLinksReq struct {
 }
 
 func handleAdminGenerateVoucherLinks(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -3034,7 +3040,7 @@ func handleAdminGenerateVoucherLinks(w http.ResponseWriter, r *http.Request) {
 
 	var req GenerateVoucherLinksReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 		return
 	}
 	if req.ProgramID == "" || req.Count <= 0 || req.Count > 1000 {
@@ -3123,9 +3129,9 @@ func handleAdminGenerateVoucherLinks(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAdminListVoucherLinks(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -3200,9 +3206,9 @@ type pgxRows interface {
 // ─────────────────────────────────────────────
 
 func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -3344,9 +3350,9 @@ type CreateVoucherProgramReq struct {
 }
 
 func handleAdminVoucherProgramsCollection(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -3448,9 +3454,9 @@ func createVoucherProgram(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAdminVoucherAnalytics(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -3545,9 +3551,9 @@ type GenerateVouchersReq struct {
 }
 
 func handleAdminGenerateVouchers(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -3649,9 +3655,9 @@ func handleAdminVouchers(w http.ResponseWriter, r *http.Request) {
 // ─────────────────────────────────────────────
 
 func handleAdminListVouchers(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -3734,9 +3740,9 @@ func handleAdminListVouchers(w http.ResponseWriter, r *http.Request) {
 // ─────────────────────────────────────────────
 
 func handleAdminDeleteVoucher(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 	if r.Method != http.MethodDelete {
@@ -3911,9 +3917,9 @@ func handleAdminTenantItem(w http.ResponseWriter, r *http.Request) {
 // ─────────────────────────────────────────────
 
 func handleAdminCleanupPending(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -4024,9 +4030,9 @@ func handleAdminAddonPrices(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 	ctx := r.Context()
@@ -4072,9 +4078,9 @@ func handleAdminAddonPrices(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /admin/addon-prices/{key} — update one addon price (superadmin)
 func handleAdminAddonPricesItem(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 	if r.Method != http.MethodPatch {
@@ -4136,7 +4142,7 @@ func handleWallet(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		response.Error(w, http.StatusUnauthorized, "Missing tenant", nil)
 		return
@@ -4183,7 +4189,7 @@ func handleWalletTopup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// FIX #3: Use X-Tenant-ID (consistent with all other handlers), not X-User-Id
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		response.Error(w, http.StatusUnauthorized, "Missing tenant", nil)
 		return
@@ -4200,7 +4206,7 @@ func handleWalletTopup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// FIX #4: Use UUID for external_id (unpredictable, not UnixNano)
 	invoiceReq := invoice.CreateInvoiceRequest{
-		ExternalId:     uuid.NewString() + "-wallet-topup-" + tenantID,
+		ExternalId:     uuid.NewString() + keyWalletTopup + tenantID,
 		Amount:         float64(req.AmountCents),
 		Description:    &desc,
 		Currency:       &curr,
@@ -4257,9 +4263,9 @@ func cleanupPendingTenants(ctx context.Context) {
 // ─────────────────────────────────────────────
 
 func handleAdminQuotaUsage(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -4334,7 +4340,7 @@ func handleAddonMarketplace(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		response.Error(w, http.StatusUnauthorized, response.MissingXTenantID, nil)
 		return
@@ -4457,7 +4463,7 @@ func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		response.Error(w, http.StatusUnauthorized, response.MissingXTenantID, nil)
 		return
@@ -4537,7 +4543,7 @@ func handleMyAddons(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		response.Error(w, http.StatusUnauthorized, response.MissingXTenantID, nil)
 		return
@@ -4644,14 +4650,14 @@ func handleAffiliateProfile(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
-	userID := r.Header.Get("X-User-Id")
+	userID := r.Header.Get(response.XUserID)
 	
 	var affID int
 	var refCode string
 	var balance, earnings int64
 	err := DB.QueryRow(context.Background(), "SELECT id, referral_code, cash_balance_cents, total_earnings_cents FROM affiliates WHERE user_id = $1", userID).Scan(&affID, &refCode, &balance, &earnings)
 	if err != nil {
-		response.JSON(w, http.StatusOK, "Not an affiliate", map[string]interface{}{"is_affiliate": false})
+		response.JSON(w, http.StatusOK, errNotAffiliate, map[string]interface{}{"is_affiliate": false})
 		return
 	}
 
@@ -4713,10 +4719,10 @@ func handleAffiliateRegister(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
-	userID := r.Header.Get("X-User-Id")
+	userID := r.Header.Get(response.XUserID)
 
 	var existing int
-	DB.QueryRow(context.Background(), "SELECT id FROM affiliates WHERE user_id = $1", userID).Scan(&existing)
+	DB.QueryRow(context.Background(), queryAffiliateUserID, userID).Scan(&existing)
 	if existing > 0 {
 		response.Error(w, http.StatusBadRequest, "Already registered", nil)
 		return
@@ -4737,7 +4743,7 @@ func handleAffiliateWithdraw(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
-	userID := r.Header.Get("X-User-Id")
+	userID := r.Header.Get(response.XUserID)
 
 	var req struct {
 		AmountCents int64 `json:"amount_cents"`
@@ -4750,7 +4756,7 @@ func handleAffiliateWithdraw(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tx, err := DB.Begin(ctx)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "DB error", err)
+		response.Error(w, http.StatusInternalServerError, errDB, err)
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -4800,7 +4806,7 @@ func handleAffiliateRedeemReferral(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := DB.Begin(r.Context())
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "DB error", err)
+		response.Error(w, http.StatusInternalServerError, errDB, err)
 		return
 	}
 	defer tx.Rollback(r.Context())
@@ -4830,13 +4836,13 @@ func handleAffiliateReferrals(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
-	userID := r.Header.Get("X-User-Id")
+	userID := r.Header.Get(response.XUserID)
 	ctx := r.Context()
 
 	var affID int
-	err := DB.QueryRow(ctx, "SELECT id FROM affiliates WHERE user_id = $1", userID).Scan(&affID)
+	err := DB.QueryRow(ctx, queryAffiliateUserID, userID).Scan(&affID)
 	if err != nil {
-		response.JSON(w, http.StatusOK, "Not an affiliate", map[string]interface{}{"referrals": []interface{}{}})
+		response.JSON(w, http.StatusOK, errNotAffiliate, map[string]interface{}{"referrals": []interface{}{}})
 		return
 	}
 
@@ -4876,13 +4882,13 @@ func handleAffiliateEarnings(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
-	userID := r.Header.Get("X-User-Id")
+	userID := r.Header.Get(response.XUserID)
 	ctx := r.Context()
 
 	var affID int
-	err := DB.QueryRow(ctx, "SELECT id FROM affiliates WHERE user_id = $1", userID).Scan(&affID)
+	err := DB.QueryRow(ctx, queryAffiliateUserID, userID).Scan(&affID)
 	if err != nil {
-		response.JSON(w, http.StatusOK, "Not an affiliate", map[string]interface{}{"earnings": []interface{}{}})
+		response.JSON(w, http.StatusOK, errNotAffiliate, map[string]interface{}{"earnings": []interface{}{}})
 		return
 	}
 
@@ -4923,9 +4929,9 @@ func handleAffiliateEarnings(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -5009,9 +5015,9 @@ func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
 // ─────────────────────────────────────────────
 
 func handleAdminLicenses(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -5086,9 +5092,9 @@ func handleAdminLicenses(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAdminGenerateLicenses(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get("X-User-Role")
+	role := r.Header.Get(response.XUserRole)
 	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, "Superadmin only", nil)
+		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
 		return
 	}
 
@@ -5106,7 +5112,7 @@ func handleAdminGenerateLicenses(w http.ResponseWriter, r *http.Request) {
 		ProgramName  string `json:"program_name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 		return
 	}
 
