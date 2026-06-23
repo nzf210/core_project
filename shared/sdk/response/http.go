@@ -14,8 +14,9 @@ type APIResponse struct {
 
 func JSON(w http.ResponseWriter, status int, message string, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(APIResponse{
+	_ = json.NewEncoder(w).Encode(APIResponse{
 		Status:  status,
 		Message: message,
 		Data:    data,
@@ -24,6 +25,7 @@ func JSON(w http.ResponseWriter, status int, message string, data interface{}) {
 
 func Error(w http.ResponseWriter, status int, message string, err error) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	
 	errStr := ""
@@ -31,7 +33,7 @@ func Error(w http.ResponseWriter, status int, message string, err error) {
 		errStr = err.Error()
 	}
 
-	json.NewEncoder(w).Encode(APIResponse{
+	_ = json.NewEncoder(w).Encode(APIResponse{
 		Status:  status,
 		Message: message,
 		Error:   errStr,

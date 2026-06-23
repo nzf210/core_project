@@ -110,10 +110,10 @@ func TestBuildTicketMessage(t *testing.T) {
 
 func TestN8NStatus_DefaultValues(t *testing.T) {
 	status := N8NStatus{
-		Status:         "unknown",
-		Version:        "unknown",
+		Status:          "unknown",
+		Version:         "unknown",
 		ActiveWorkflows: 0,
-		QueueMode:      false,
+		QueueMode:       false,
 	}
 	if status.Status != "unknown" {
 		t.Errorf("default status should be unknown, got %q", status.Status)
