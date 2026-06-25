@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
+	"core_project/shared/sdk/migrate"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 
-	"core_project/shared/sdk/migrate"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

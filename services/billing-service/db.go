@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"core_project/shared/sdk/config"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

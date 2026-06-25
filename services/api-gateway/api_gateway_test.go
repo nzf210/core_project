@@ -14,19 +14,19 @@ import (
 
 func TestCORSMiddleware(t *testing.T) {
 	tests := []struct {
-		name           string
-		origin         string
-		wantOrigin     string
-		wantMethods    string
-		wantHeaders    string
+		name        string
+		origin      string
+		wantOrigin  string
+		wantMethods string
+		wantHeaders string
 	}{
 		{
-			name:        "with specific origin",
+			name:       "with specific origin",
 			origin:     "https://app.wch.id",
 			wantOrigin: "https://app.wch.id",
 		},
 		{
-			name:        "without origin",
+			name:       "without origin",
 			origin:     "",
 			wantOrigin: "*",
 		},
@@ -129,7 +129,7 @@ func TestContainsSubstring(t *testing.T) {
 		want   bool
 	}{
 		{"Hello World", "World", true},
-		{"Hello World", "world", true},   // case-insensitive
+		{"Hello World", "world", true}, // case-insensitive
 		{"Hello World", "FOO", false},
 		{"", "test", false},
 		{"test", "", true},
@@ -240,4 +240,3 @@ func TestMutexExists(t *testing.T) {
 		t.Log("Mutex initialized to zero value (valid)")
 	}
 }
-

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -65,11 +65,11 @@ func initRedis() *redis.Client {
 	defer cancel()
 
 	if err := client.Ping(ctx).Err(); err != nil {
-		log.Printf("Warning: Redis not available for distributed coordination: %v", err)
+		slog.Warn("Redis not available for distributed coordination", "error", err)
 		return nil
 	}
 
-	log.Printf("Connected to Redis for distributed session coordination")
+	slog.Info("Connected to Redis for distributed session coordination")
 	return client
 }
 

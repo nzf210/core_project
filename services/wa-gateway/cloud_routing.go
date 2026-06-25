@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 )
@@ -98,6 +98,6 @@ func routeToCloudAPI(tenantID, target, message, msgType string) (string, error) 
 		waMsgID = id
 	}
 
-	log.Printf("Routed message via Cloud API for tenant %s, wa_msg_id=%s", tenantID, waMsgID)
+	slog.Info("Routed message via Cloud API", "tenant_id", tenantID, "wa_msg_id", waMsgID)
 	return waMsgID, nil
 }

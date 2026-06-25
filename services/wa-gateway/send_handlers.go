@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"go.mau.fi/whatsmeow"
@@ -68,16 +68,16 @@ func setupSendHandler() {
 				return
 			}
 			if forceCloud {
-				log.Printf("Cloud API failed (forced) for tenant %s: %v", tenantID, err)
+				slog.Error("Cloud API failed (forced)", "tenant_id", tenantID, "error", err)
 				http.Error(w, fmt.Sprintf(`{"error":"Cloud API failed: %v"}`, err), http.StatusBadGateway)
 				return
 			}
 			if r.Header.Get("X-Message-Type") == "broadcast" {
-				log.Printf("Cloud API failed for broadcast, blocking fallback to QR for tenant %s: %v", tenantID, err)
+				slog.Error("Cloud API failed for broadcast, blocking fallback", "tenant_id", tenantID, "error", err)
 				http.Error(w, fmt.Sprintf(`{"error":"Broadcast must use Cloud API, setup required or insufficient balance: %v"}`, err), http.StatusPaymentRequired)
 				return
 			}
-			log.Printf("Cloud API failed, falling back to whatsmeow for tenant %s: %v", tenantID, err)
+			slog.Info("Cloud API failed, falling back to whatsmeow", "tenant_id", tenantID, "error", err)
 		}
 
 		if !rateLimiter.Allow(tenantID) {
@@ -123,14 +123,14 @@ func setupSendHandler() {
 		if mediaURL != "" {
 			resp, err := http.Get(mediaURL)
 			if err != nil {
-				log.Printf("[Tenant %s] Failed to download media %s: %v", tenantID, mediaURL, err)
+				slog.Error("Failed to download media", "tenant_id", tenantID, "media_url", mediaURL, "error", err)
 				http.Error(w, `{"error":"Failed to download media"}`, http.StatusInternalServerError)
 				return
 			}
 			defer resp.Body.Close()
 			mediaData, err := io.ReadAll(resp.Body)
 			if err != nil {
-				log.Printf("[Tenant %s] Failed to read media: %v", tenantID, err)
+				slog.Error("Failed to read media", "tenant_id", tenantID, "error", err)
 				http.Error(w, `{"error":"Failed to read media"}`, http.StatusInternalServerError)
 				return
 			}
@@ -144,7 +144,7 @@ func setupSendHandler() {
 
 			uploadResp, err := client.Upload(context.Background(), mediaData, whatsmeow.MediaDocument)
 			if err != nil {
-				log.Printf("[Tenant %s] Failed to upload media to WA: %v", tenantID, err)
+				slog.Error("Failed to upload media to WA", "tenant_id", tenantID, "error", err)
 				http.Error(w, `{"error":"Failed to upload media"}`, http.StatusInternalServerError)
 				return
 			}
@@ -171,7 +171,7 @@ func setupSendHandler() {
 
 		_, err = client.SendMessage(context.Background(), jid, msg)
 		if err != nil {
-			log.Printf("[Tenant %s] Failed to send message to %s: %v", tenantID, jid.String(), err)
+			slog.Error("Failed to send message", "tenant_id", tenantID, "target", jid.String(), "error", err)
 			http.Error(w, `{"error":"Failed to send message"}`, http.StatusInternalServerError)
 			return
 		}

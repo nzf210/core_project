@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"core_project/shared/sdk/config"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -18,7 +19,7 @@ var (
 func initDB(cfg *config.Config) error {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		cfg.DB.User, cfg.DB.Password, cfg.DB.Host, cfg.DB.Port, cfg.DB.Name, cfg.DB.SSLMode)
-	
+
 	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
 		return fmt.Errorf("unable to connect to database: %w", err)
@@ -29,7 +30,7 @@ func initDB(cfg *config.Config) error {
 	}
 
 	DB = pool
-	log.Println("✅ Connected to PostgreSQL")
+	slog.Info("✅ Connected to PostgreSQL")
 	return nil
 }
 
@@ -45,6 +46,6 @@ func initRedis(cfg *config.Config) error {
 	}
 
 	Redis = client
-	log.Println("✅ Connected to Redis")
+	slog.Info("✅ Connected to Redis")
 	return nil
 }

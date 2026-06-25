@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -61,7 +61,7 @@ func setupQRHandler(container *sqlstore.Container) {
 
 		qrChan, _ := client.GetQRChannel(context.Background())
 		if err := client.Connect(); err != nil {
-			log.Printf("Failed to connect for QR: %v", err)
+			slog.Error("Failed to connect for QR", "error", err)
 			http.Error(w, `{"error":"failed to connect"}`, http.StatusInternalServerError)
 			return
 		}
@@ -96,7 +96,7 @@ func setupQRHandler(container *sqlstore.Container) {
 				}(client, tenantID)
 				return
 			}
-			log.Printf("QR channel event: %s", evt.Event)
+			slog.Info("QR channel event", "event", evt.Event)
 		}
 	})
 }

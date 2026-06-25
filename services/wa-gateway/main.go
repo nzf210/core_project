@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"net/http"
 	"os"
@@ -164,7 +164,8 @@ func main() {
 	dbLog := waLog.Stdout("Database", "WARN", true)
 	container, err := sqlstore.New(context.Background(), "postgres", dbURI, dbLog)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		slog.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer container.Close()
 
@@ -172,11 +173,11 @@ func main() {
 	if err == nil {
 		_, err = db.Exec(`CREATE TABLE IF NOT EXISTS wa_tenant_sessions (tenant_id TEXT PRIMARY KEY, jid VARCHAR NOT NULL)`)
 		if err != nil {
-			log.Printf("Failed to create wa_tenant_sessions: %v", err)
+			slog.Error("Failed to create wa_tenant_sessions", "error", err)
 		}
 		db.Exec(`ALTER TABLE wa_tenant_sessions ALTER COLUMN tenant_id TYPE TEXT`)
 	} else {
-		log.Printf("Failed to open DB for mapping: %v", err)
+		slog.Error("Failed to open DB for mapping", "error", err)
 	}
 
 	setContainer(container)
@@ -190,13 +191,13 @@ func main() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		<-sigChan
-		log.Printf("Shutting down WA Gateway (instance %s)...", instanceID)
+		slog.Info("Shutting down WA Gateway", "instance_id", instanceID)
 		cancel()
 
 		clientMu.Lock()
 		for tenantID, client := range clientMap {
 			client.Disconnect()
-			log.Printf("Disconnected tenant %s", tenantID)
+			slog.Info("Disconnected tenant", "tenant_id", tenantID)
 		}
 		clientMu.Unlock()
 
@@ -212,9 +213,14 @@ func main() {
 	}()
 
 	port := ":8202"
-	log.Printf("WA Gateway running on port %s (instance: %s)", port, instanceID)
-	log.Printf("Active WhatsApp sessions: %d", len(clientMap))
-	log.Fatal(http.ListenAndServe(port, corsMiddleware(http.DefaultServeMux)))
+	slog.Info("WA Gateway running", "port", port, "instance_id", instanceID)
+	slog.Info("Active WhatsApp sessions", "count", len(clientMap))
+	go func() {
+		if err := http.ListenAndServe(port, corsMiddleware(http.DefaultServeMux)); err != nil {
+			slog.Error("WA Gateway server error", "error", err)
+			os.Exit(1)
+		}
+	}()
 }
 
 func corsMiddleware(next http.Handler) http.Handler {

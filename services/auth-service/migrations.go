@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"core_project/shared/sdk/migrate"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

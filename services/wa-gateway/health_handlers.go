@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -112,7 +112,7 @@ func restoreSessions(ctx context.Context, container *sqlstore.Container) {
 
 	rows, err := db.Query(`SELECT tenant_id, jid FROM wa_tenant_sessions`)
 	if err != nil {
-		log.Printf("Failed to query sessions: %v", err)
+		slog.Error("Failed to query sessions", "error", err)
 		return
 	}
 	defer rows.Close()
@@ -124,7 +124,7 @@ func restoreSessions(ctx context.Context, container *sqlstore.Container) {
 		}
 
 		if owned, _ := AcquireSessionLock(ctx, tID); !owned {
-			log.Printf("Session for tenant %s owned by another instance, skipping", tID)
+			slog.Info("Session for tenant owned by another instance, skipping", "tenant_id", tID)
 			continue
 		}
 
@@ -137,9 +137,9 @@ func restoreSessions(ctx context.Context, container *sqlstore.Container) {
 				clientMu.Lock()
 				clientMap[tID] = client
 				clientMu.Unlock()
-				log.Printf("Restored session for tenant %s", tID)
+				slog.Info("Restored session for tenant", "tenant_id", tID)
 			} else {
-				log.Printf("Failed to restore session for tenant %s: %v", tID, err)
+				slog.Error("Failed to restore session for tenant", "tenant_id", tID, "error", err)
 				ReleaseSessionLock(ctx, tID)
 			}
 		}

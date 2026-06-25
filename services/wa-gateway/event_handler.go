@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"sync"
@@ -66,7 +66,7 @@ func eventHandler(tenantID string, evt interface{}) {
 					if err := os.WriteFile(filePath, data, 0644); err == nil {
 						msgType = "image"
 						mediaPath = filePath
-						log.Printf("[Tenant %s] Downloaded image to %s", tenantID, filePath)
+						slog.Info("Downloaded image", "tenant_id", tenantID, "path", filePath)
 					}
 				}
 			}
@@ -83,13 +83,13 @@ func eventHandler(tenantID string, evt interface{}) {
 					if err := os.WriteFile(filePath, data, 0644); err == nil {
 						msgType = "audio"
 						mediaPath = filePath
-						log.Printf("[Tenant %s] Downloaded audio to %s", tenantID, filePath)
+						slog.Info("Downloaded audio", "tenant_id", tenantID, "path", filePath)
 					}
 				}
 			}
 		}
 
-		log.Printf("[Tenant %s] Received %s message from %s", tenantID, msgType, senderJID)
+		slog.Info("Received message", "tenant_id", tenantID, "msg_type", msgType, "sender", senderJID)
 
 		payload := map[string]interface{}{
 			"sender":     senderJID,
@@ -110,13 +110,13 @@ func eventHandler(tenantID string, evt interface{}) {
 		webhookURL := chatbotURL + "/webhook/wa?tenant_id=" + tenantID
 		resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonBody))
 		if err != nil {
-			log.Printf("Failed to forward message to chatbot: %v", err)
+			slog.Error("Failed to forward message to chatbot", "error", err)
 		} else {
 			resp.Body.Close()
 		}
 
 	case *events.Connected:
-		log.Printf("[Tenant %s] Connected to WhatsApp!", tenantID)
+		slog.Info("Connected to WhatsApp", "tenant_id", tenantID)
 		clientMu.RLock()
 		c := clientMap[tenantID]
 		clientMu.RUnlock()
