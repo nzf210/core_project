@@ -24,56 +24,54 @@ func HandleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method == http.MethodGet {
-		rows, err := repository.DB.Query(context.Background(),
-			"SELECT id, campaign_id, name, event_date, COALESCE(location, '') FROM events WHERE tenant_id = $1", tenantID)
-		if err != nil {
-			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Database error"})
-			return
-		}
-		defer rows.Close()
+	switch r.Method {
+	case http.MethodGet:
+		listEvents(w, tenantID)
+	case http.MethodPost:
+		createEvent(w, r, tenantID)
+	default:
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+	}
+}
 
-		var events []Event
-		for rows.Next() {
-			var e Event
-			if err := rows.Scan(&e.ID, &e.CampaignID, &e.Name, &e.EventDate, &e.Location); err == nil {
-				events = append(events, e)
-			}
-		}
+func listEvents(w http.ResponseWriter, tenantID string) {
+	rows, err := repository.DB.Query(context.Background(),
+		"SELECT id, campaign_id, name, event_date, COALESCE(location, '') FROM events WHERE tenant_id = $1", tenantID)
+	if err != nil {
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Database error"})
+		return
+	}
+	defer rows.Close()
 
-		if events == nil {
-			events = []Event{}
+	var events []Event
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.CampaignID, &e.Name, &e.EventDate, &e.Location); err == nil {
+			events = append(events, e)
 		}
+	}
+	WriteJSON(w, http.StatusOK, APIResponse{Success: true, Data: events})
+}
 
-		WriteJSON(w, http.StatusOK, APIResponse{Success: true, Data: events})
+func createEvent(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var req struct {
+		CampaignID string    `json:"campaign_id"`
+		Name       string    `json:"name"`
+		EventDate  time.Time `json:"event_date"`
+		Location   string    `json:"location"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request payload"})
 		return
 	}
 
-	if r.Method == http.MethodPost {
-		var req struct {
-			CampaignID string    `json:"campaign_id"`
-			Name       string    `json:"name"`
-			EventDate  time.Time `json:"event_date"`
-			Location   string    `json:"location"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request payload"})
-			return
-		}
-
-		var id string
-		err := repository.DB.QueryRow(context.Background(),
-			"INSERT INTO events (tenant_id, campaign_id, name, event_date, location) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-			tenantID, req.CampaignID, req.Name, req.EventDate, req.Location).Scan(&id)
-		
-		if err != nil {
-			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create event"})
-			return
-		}
-
-		WriteJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Event created", Data: map[string]string{"id": id}})
+	var id string
+	err := repository.DB.QueryRow(context.Background(),
+		"INSERT INTO events (tenant_id, campaign_id, name, event_date, location) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+		tenantID, req.CampaignID, req.Name, req.EventDate, req.Location).Scan(&id)
+	if err != nil {
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create event"})
 		return
 	}
-
-	WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+	WriteJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Event created", Data: map[string]string{"id": id}})
 }

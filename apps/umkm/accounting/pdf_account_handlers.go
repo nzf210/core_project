@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -9,6 +10,16 @@ import (
 	"time"
 
 	"github.com/jung-kurt/gofpdf"
+)
+
+const (
+	layoutDateISO        = "2006-01-02"
+	layoutDateDisplay   = "2 January 2006"
+	layoutDateTimeFull  = "2 January 2006 15:04 MST"
+	errPDFGenFailed     = "PDF generation failed"
+	errMissingParamsInc = "Missing X-Tenant-ID, from, or to"
+	errMissingParamsBal = "Missing X-Tenant-ID or date"
+	tidakAda             = "(tidak ada)"
 )
 
 func pdfHeader(businessName, title, period string) *gofpdf.Fpdf {
@@ -24,7 +35,7 @@ func pdfHeader(businessName, title, period string) *gofpdf.Fpdf {
 	pdf.SetFont("Arial", "", 10)
 	pdf.Cell(0, 5, period)
 	pdf.Ln(5)
-	pdf.Cell(0, 5, "Dicetak: "+time.Now().Format("2 January 2006 15:04 MST"))
+	pdf.Cell(0, 5, "Dicetak: "+time.Now().Format(layoutDateTimeFull))
 	pdf.Ln(8)
 	return pdf
 }
@@ -85,24 +96,30 @@ func handleIncomeStatementPDF(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
 	if tenantID == "" || from == "" || to == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID, from, or to"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingParamsInc})
 		return
 	}
-	businessName := "UMKM WCH"
-	var bn *string
-	DB.QueryRow(r.Context(), `SELECT COALESCE(business_name, name) FROM tenants WHERE id = $1`, tenantID).Scan(&bn)
-	if bn != nil {
-		businessName = *bn
-	}
+	businessName := getTenantBusinessName(r.Context(), tenantID)
+	revRows, expRows, revenue, expense := queryIncomeData(r.Context(), tenantID, from, to)
+	netIncome := revenue - expense
+	renderIncomeStatementPDF(w, businessName, from, to, revRows, expRows, revenue, expense, netIncome)
+}
 
-	type row struct {
-		Typ     string
-		Name    string
-		Balance int64
+func getTenantBusinessName(ctx context.Context, tenantID string) string {
+	var name *string
+	DB.QueryRow(ctx, `SELECT COALESCE(business_name, name) FROM tenants WHERE id = $1`, tenantID).Scan(&name)
+	if name != nil {
+		return *name
 	}
+	return "UMKM WCH"
+}
+
+type incomeRow struct{ Typ, Name string; Balance int64 }
+
+func queryIncomeData(ctx context.Context, tenantID, from, to string) ([]incomeRow, []incomeRow, int64, int64) {
 	var revenue, expense int64
-	var revRows, expRows []row
-	rows, err := DB.Query(r.Context(), `
+	var revRows, expRows []incomeRow
+	rows, err := DB.Query(ctx, `
 		SELECT c.type, c.name, SUM(l.credit - l.debit) as balance
 		FROM journal_lines l
 		JOIN journal_entries e ON l.entry_id = e.id
@@ -119,56 +136,57 @@ func handleIncomeStatementPDF(w http.ResponseWriter, r *http.Request) {
 				if t == "expense" {
 					b = -b
 					expense += b
-					expRows = append(expRows, row{Typ: t, Name: n, Balance: b})
+					expRows = append(expRows, incomeRow{Typ: t, Name: n, Balance: b})
 				} else {
 					revenue += b
-					revRows = append(revRows, row{Typ: t, Name: n, Balance: b})
+					revRows = append(revRows, incomeRow{Typ: t, Name: n, Balance: b})
 				}
 			}
 		}
 	}
-	netIncome := revenue - expense
-	fromDate, _ := time.Parse("2006-01-02", from)
-	toDate, _ := time.Parse("2006-01-02", to)
-	pdf := pdfHeader(businessName, "Laporan Laba Rugi",
-		fmt.Sprintf("Periode: %s – %s", fromDate.Format("2 January 2006"), toDate.Format("2 January 2006")))
+	return revRows, expRows, revenue, expense
+}
 
-	section := func(title string) {
+func renderIncomeStatementPDF(w http.ResponseWriter, businessName, from, to string, revRows, expRows []incomeRow, revenue, expense, netIncome int64) {
+	fromDate, _ := time.Parse(layoutDateISO, from)
+	toDate, _ := time.Parse(layoutDateISO, to)
+	pdf := pdfHeader(businessName, "Laporan Laba Rugi",
+		fmt.Sprintf("Periode: %s – %s", fromDate.Format(layoutDateDisplay), toDate.Format(layoutDateDisplay)))
+	pdfLineItem := func(label string, amount int64) {
+		pdf.Cell(110, 5, "  "+label)
+		pdf.CellFormat(60, 5, formatIDR(amount), "", 0, "R", false, 0, "")
+		pdf.Ln(5)
+	}
+	pdfSection := func(title string) {
 		pdf.SetFont("Arial", "B", 11)
 		pdf.Cell(0, 7, title)
 		pdf.Ln(7)
 		pdf.SetFont("Arial", "", 10)
 	}
-	totalLine := func(label string, amount int64) {
+	pdfTotal := func(label string, amount int64) {
 		pdf.SetFont("Arial", "B", 10)
 		pdf.Cell(110, 6, label)
 		pdf.CellFormat(60, 6, formatIDR(amount), "", 0, "R", false, 0, "")
 		pdf.Ln(6)
 		pdf.SetFont("Arial", "", 10)
 	}
-	itemLine := func(label string, amount int64) {
-		pdf.Cell(110, 5, "  "+label)
-		pdf.CellFormat(60, 5, formatIDR(amount), "", 0, "R", false, 0, "")
-		pdf.Ln(5)
-	}
-
-	section("PENDAPATAN")
+	pdfSection("PENDAPATAN")
 	for _, r := range revRows {
-		itemLine(r.Name, r.Balance)
+		pdfLineItem(r.Name, r.Balance)
 	}
 	if len(revRows) == 0 {
-		itemLine("(tidak ada)", 0)
+		pdfLineItem(tidakAda, 0)
 	}
-	totalLine("Total Pendapatan", revenue)
+	pdfTotal("Total Pendapatan", revenue)
 	pdf.Ln(3)
-	section("BEBAN")
+	pdfSection("BEBAN")
 	for _, r := range expRows {
-		itemLine(r.Name, -r.Balance)
+		pdfLineItem(r.Name, -r.Balance)
 	}
 	if len(expRows) == 0 {
-		itemLine("(tidak ada)", 0)
+		pdfLineItem(tidakAda, 0)
 	}
-	totalLine("Total Beban", -expense)
+	pdfTotal("Total Beban", -expense)
 	pdf.Ln(3)
 	pdf.SetFont("Arial", "B", 12)
 	pdf.Cell(110, 8, "LABA / (RUGI) BERSIH")
@@ -180,24 +198,20 @@ func handleBalanceSheetPDF(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("X-Tenant-ID")
 	date := r.URL.Query().Get("date")
 	if tenantID == "" || date == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID or date"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingParamsBal})
 		return
 	}
-	businessName := "UMKM WCH"
-	var bn *string
-	DB.QueryRow(r.Context(), `SELECT COALESCE(business_name, name) FROM tenants WHERE id = $1`, tenantID).Scan(&bn)
-	if bn != nil {
-		businessName = *bn
-	}
+	businessName := getTenantBusinessName(r.Context(), tenantID)
+	assetRows, liabRows, eqRows, assets, liab, equity := queryBalanceData(r.Context(), tenantID, date)
+	renderBalanceSheetPDF(w, businessName, date, assetRows, liabRows, eqRows, assets, liab, equity)
+}
 
-	type row struct {
-		Typ     string
-		Name    string
-		Balance int64
-	}
+type balanceRow struct{ Typ, Name string; Balance int64 }
+
+func queryBalanceData(ctx context.Context, tenantID, date string) ([]balanceRow, []balanceRow, []balanceRow, int64, int64, int64) {
 	var assets, liab, equity int64
-	var assetRows, liabRows, eqRows []row
-	rows, err := DB.Query(r.Context(), `
+	var assetRows, liabRows, eqRows []balanceRow
+	rows, err := DB.Query(ctx, `
 		SELECT c.type, c.name, SUM(l.debit - l.credit) as balance
 		FROM journal_lines l
 		JOIN journal_entries e ON l.entry_id = e.id
@@ -213,71 +227,75 @@ func handleBalanceSheetPDF(w http.ResponseWriter, r *http.Request) {
 			if err := rows.Scan(&t, &n, &b); err == nil {
 				switch t {
 				case "liability":
-					b = -b
+					liabRows = append(liabRows, balanceRow{Typ: t, Name: n, Balance: b})
 					liab += b
-					liabRows = append(liabRows, row{Typ: t, Name: n, Balance: b})
 				case "equity":
-					b = -b
+					eqRows = append(eqRows, balanceRow{Typ: t, Name: n, Balance: b})
 					equity += b
-					eqRows = append(eqRows, row{Typ: t, Name: n, Balance: b})
 				default:
+					assetRows = append(assetRows, balanceRow{Typ: t, Name: n, Balance: b})
 					assets += b
-					assetRows = append(assetRows, row{Typ: t, Name: n, Balance: b})
 				}
 			}
 		}
 	}
-	dateParsed, _ := time.Parse("2006-01-02", date)
-	pdf := pdfHeader(businessName, "Neraca (Balance Sheet)",
-		fmt.Sprintf("Per tanggal: %s", dateParsed.Format("2 January 2006")))
+	return assetRows, liabRows, eqRows, assets, liab, equity
+}
 
-	section := func(title string) {
+func renderBalanceSheetPDF(w http.ResponseWriter, businessName, date string, assetRows, liabRows, eqRows []balanceRow, assets, liab, equity int64) {
+	dateParsed, _ := time.Parse(layoutDateISO, date)
+	pdf := pdfHeader(businessName, "Neraca (Balance Sheet)",
+		fmt.Sprintf("Per tanggal: %s", dateParsed.Format(layoutDateDisplay)))
+	pdfLine := func(label string, amount int64) {
+		pdf.Cell(110, 5, "  "+label)
+		pdf.CellFormat(60, 5, formatIDR(amount), "", 0, "R", false, 0, "")
+		pdf.Ln(5)
+	}
+	pdfSection := func(title string) {
 		pdf.SetFont("Arial", "B", 11)
 		pdf.Cell(0, 7, title)
 		pdf.Ln(7)
 		pdf.SetFont("Arial", "", 10)
 	}
-	totalLine := func(label string, amount int64) {
+	pdfTotal := func(label string, amount int64) {
 		pdf.SetFont("Arial", "B", 10)
 		pdf.Cell(110, 6, label)
 		pdf.CellFormat(60, 6, formatIDR(amount), "", 0, "R", false, 0, "")
 		pdf.Ln(6)
 		pdf.SetFont("Arial", "", 10)
 	}
-	itemLine := func(label string, amount int64) {
-		pdf.Cell(110, 5, "  "+label)
-		pdf.CellFormat(60, 5, formatIDR(amount), "", 0, "R", false, 0, "")
-		pdf.Ln(5)
-	}
-
-	section("ASET")
+	pdfSection("ASET")
 	for _, r := range assetRows {
-		itemLine(r.Name, r.Balance)
+		pdfLine(r.Name, r.Balance)
 	}
 	if len(assetRows) == 0 {
-		itemLine("(tidak ada)", 0)
+		pdfLine(tidakAda, 0)
 	}
-	totalLine("Total Aset", assets)
+	pdfTotal("Total Aset", assets)
 	pdf.Ln(3)
-	section("LIABILITAS")
+	pdfSection("LIABILITAS")
 	for _, r := range liabRows {
-		itemLine(r.Name, -r.Balance)
+		pdfLine(r.Name, -r.Balance)
 	}
 	if len(liabRows) == 0 {
-		itemLine("(tidak ada)", 0)
+		pdfLine(tidakAda, 0)
 	}
-	totalLine("Total Liabilitas", -liab)
+	pdfTotal("Total Liabilitas", -liab)
 	pdf.Ln(3)
-	section("EKUITAS")
+	pdfSection("EKUITAS")
 	for _, r := range eqRows {
-		itemLine(r.Name, -r.Balance)
+		pdfLine(r.Name, -r.Balance)
 	}
 	if len(eqRows) == 0 {
-		itemLine("(tidak ada)", 0)
+		pdfLine(tidakAda, 0)
 	}
-	totalLine("Total Ekuitas", -equity)
+	pdfTotal("Total Ekuitas", -equity)
 	pdf.Ln(5)
+	pdfSummaryBalanceSheet(pdf, assets, liab, equity)
+	pdfRespond(w, pdf, fmt.Sprintf("neraca_%s", date))
+}
 
+func pdfSummaryBalanceSheet(pdf *gofpdf.Fpdf, assets, liab, equity int64) {
 	pdf.SetFont("Arial", "B", 11)
 	pdf.Cell(0, 7, "RINGKASAN")
 	pdf.Ln(7)
@@ -291,12 +309,9 @@ func handleBalanceSheetPDF(w http.ResponseWriter, r *http.Request) {
 	if assets != (liab + equity) {
 		pdf.SetTextColor(220, 38, 38)
 		pdf.Cell(0, 6, fmt.Sprintf("Neraca tidak balance — selisih %s", formatIDR(assets-(liab+equity))))
-		pdf.SetTextColor(0, 0, 0)
 	} else {
 		pdf.SetTextColor(16, 185, 129)
 		pdf.Cell(0, 6, "Neraca balance")
-		pdf.SetTextColor(0, 0, 0)
 	}
-
-	pdfRespond(w, pdf, fmt.Sprintf("neraca_%s", date))
+	pdf.SetTextColor(0, 0, 0)
 }

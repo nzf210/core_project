@@ -1,12 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+)
+
+const (
+	errDBNotInitInternal = "DB not initialized"
+	errDBInternal        = "DB error"
 )
 
 
@@ -18,13 +24,13 @@ func handleInternalScheduledReports(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if DB == nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB not initialized"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: errDBNotInitInternal})
 		return
 	}
 
 	rows, err := DB.Query(r.Context(), "SELECT id, name, wa_number FROM tenants WHERE report_enabled = true AND report_time = $1", timeParam)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: errDBInternal})
 		return
 	}
 	defer rows.Close()
@@ -61,7 +67,7 @@ func handleInternalReportsSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if DB == nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB not initialized"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: errDBNotInitInternal})
 		return
 	}
 
@@ -79,7 +85,7 @@ func handleInternalReportsSummary(w http.ResponseWriter, r *http.Request) {
 	`
 	rows, err := DB.Query(r.Context(), query, tenantID, startOfDay)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: errDBInternal})
 		return
 	}
 	defer rows.Close()
@@ -118,7 +124,7 @@ func handleAutomations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if DB == nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB not initialized"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: errDBNotInitInternal})
 		return
 	}
 
@@ -126,194 +132,179 @@ func handleAutomations(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		rows, err := DB.Query(ctx, `SELECT id, type, name, enabled, cron_expression, config, target_wa, last_run_at, created_at FROM tenant_automations WHERE tenant_id = $1 ORDER BY created_at DESC`, tenantID)
-		if err != nil {
-			slog.Error("Failed to query tenant_automations", "error", err, "tenant_id", tenantID)
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
-			return
-		}
-		defer rows.Close()
-
-		var results []map[string]interface{}
-		for rows.Next() {
-			var id, typ, name, cronExpr string
-			var enabled bool
-			var configJSON []byte
-			var targetWA *string
-			var lastRunAt *time.Time
-			var createdAt time.Time
-			if err := rows.Scan(&id, &typ, &name, &enabled, &cronExpr, &configJSON, &targetWA, &lastRunAt, &createdAt); err == nil {
-				var cfg map[string]interface{}
-				json.Unmarshal(configJSON, &cfg)
-				if cfg == nil {
-					cfg = map[string]interface{}{}
-				}
-				tw := ""
-				if targetWA != nil {
-					tw = *targetWA
-				}
-				var lra string
-				if lastRunAt != nil {
-					lra = lastRunAt.Format(time.RFC3339)
-				}
-				results = append(results, map[string]interface{}{
-					"id":              id,
-					"type":            typ,
-					"name":            name,
-					"enabled":         enabled,
-					"cron_expression": cronExpr,
-					"config":          cfg,
-					"target_wa":       tw,
-					"last_run_at":     lra,
-					"created_at":      createdAt.Format(time.RFC3339),
-				})
-			}
-		}
-		if results == nil {
-			results = []map[string]interface{}{}
-		}
-
-		// Also get plan info for limit display
-		var plan string
-		DB.QueryRow(ctx, "SELECT plan FROM tenants WHERE id = $1", tenantID).Scan(&plan)
-		limit := getAutomationLimit(plan)
-
-		writeJSON(w, http.StatusOK, APIResponse{
-			Success: true,
-			Data: map[string]interface{}{
-				"automations": results,
-				"plan":        plan,
-				"limit":       limit,
-				"count":       len(results),
-			},
-		})
-
+		listAutomationsGET(w, ctx, tenantID)
 	case http.MethodPost:
-		// Check plan limit
-		var plan string
-		DB.QueryRow(ctx, "SELECT plan FROM tenants WHERE id = $1", tenantID).Scan(&plan)
-		limit := getAutomationLimit(plan)
-
-		var currentCount int
-		DB.QueryRow(ctx, "SELECT COUNT(*) FROM tenant_automations WHERE tenant_id = $1", tenantID).Scan(&currentCount)
-
-		if currentCount >= limit {
-			msg := "Paket Anda tidak mendukung fitur automasi. Upgrade ke paket Lite atau lebih tinggi."
-			if limit > 0 {
-				msg = fmt.Sprintf("Batas automasi untuk paket %s adalah %d. Hapus automasi lama atau upgrade paket.", plan, limit)
-			}
-			writeJSON(w, http.StatusForbidden, APIResponse{Message: msg})
-			return
-		}
-
-		var req struct {
-			Type           string                 `json:"type"`
-			Name           string                 `json:"name"`
-			CronExpression string                 `json:"cron_expression"`
-			Config         map[string]interface{} `json:"config"`
-			TargetWA       string                 `json:"target_wa"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
-			return
-		}
-		if req.Type == "" || req.Name == "" || req.CronExpression == "" {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "type, name, dan cron_expression wajib diisi"})
-			return
-		}
-
-		configJSON, _ := json.Marshal(req.Config)
-		if req.Config == nil {
-			configJSON = []byte("{}")
-		}
-
-		var id string
-		err := DB.QueryRow(ctx,
-			"INSERT INTO tenant_automations (tenant_id, type, name, cron_expression, config, target_wa) VALUES ($1, $2, $3, $4, $5, NULLIF($6, '')) RETURNING id",
-			tenantID, req.Type, req.Name, req.CronExpression, configJSON, req.TargetWA).Scan(&id)
-		if err != nil {
-			slog.Error("Failed to create automation", "error", err)
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal membuat automasi"})
-			return
-		}
-		writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Automasi berhasil dibuat", Data: map[string]string{"id": id}})
-
+		listAutomationsPOST(w, r, ctx, tenantID)
 	case http.MethodPut:
-		automationID := r.URL.Query().Get("id")
-		if automationID == "" {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing id"})
-			return
-		}
-		var req struct {
-			Name           string                 `json:"name"`
-			Enabled        *bool                  `json:"enabled"`
-			CronExpression string                 `json:"cron_expression"`
-			Config         map[string]interface{} `json:"config"`
-			TargetWA       string                 `json:"target_wa"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
-			return
-		}
-
-		// Build dynamic update
-		sets := []string{"updated_at = NOW()"}
-		args := []interface{}{}
-		argIdx := 1
-
-		if req.Name != "" {
-			sets = append(sets, fmt.Sprintf("name = $%d", argIdx))
-			args = append(args, req.Name)
-			argIdx++
-		}
-		if req.Enabled != nil {
-			sets = append(sets, fmt.Sprintf("enabled = $%d", argIdx))
-			args = append(args, *req.Enabled)
-			argIdx++
-		}
-		if req.CronExpression != "" {
-			sets = append(sets, fmt.Sprintf("cron_expression = $%d", argIdx))
-			args = append(args, req.CronExpression)
-			argIdx++
-		}
-		if req.Config != nil {
-			configJSON, _ := json.Marshal(req.Config)
-			sets = append(sets, fmt.Sprintf("config = $%d", argIdx))
-			args = append(args, configJSON)
-			argIdx++
-		}
-		if req.TargetWA != "" {
-			sets = append(sets, fmt.Sprintf("target_wa = $%d", argIdx))
-			args = append(args, req.TargetWA)
-			argIdx++
-		}
-
-		query := fmt.Sprintf("UPDATE tenant_automations SET %s WHERE id = $%d AND tenant_id = $%d",
-			strings.Join(sets, ", "), argIdx, argIdx+1)
-		args = append(args, automationID, tenantID)
-
-		_, err := DB.Exec(ctx, query, args...)
-		if err != nil {
-			slog.Error("Failed to update automation", "error", err)
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal mengupdate automasi"})
-			return
-		}
-		writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Automasi berhasil diupdate"})
-
+		listAutomationsPUT(w, r, ctx, tenantID)
 	case http.MethodDelete:
-		automationID := r.URL.Query().Get("id")
-		if automationID == "" {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing id"})
-			return
-		}
-		_, err := DB.Exec(ctx, "DELETE FROM tenant_automations WHERE id = $1 AND tenant_id = $2", automationID, tenantID)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal menghapus automasi"})
-			return
-		}
-		writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Automasi berhasil dihapus"})
-
+		listAutomationsDELETE(w, r, ctx, tenantID)
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
 	}
+}
+
+func listAutomationsGET(w http.ResponseWriter, ctx context.Context, tenantID string) {
+	rows, err := DB.Query(ctx, `SELECT id, type, name, enabled, cron_expression, config, target_wa, last_run_at, created_at FROM tenant_automations WHERE tenant_id = $1 ORDER BY created_at DESC`, tenantID)
+	if err != nil {
+		slog.Error("Failed to query tenant_automations", "error", err, "tenant_id", tenantID)
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: errDBInternal})
+		return
+	}
+	defer rows.Close()
+
+	var results []map[string]any
+	for rows.Next() {
+		var id, typ, name, cronExpr string
+		var enabled bool
+		var configJSON []byte
+		var targetWA *string
+		var lastRunAt *time.Time
+		var createdAt time.Time
+		if err := rows.Scan(&id, &typ, &name, &enabled, &cronExpr, &configJSON, &targetWA, &lastRunAt, &createdAt); err == nil {
+			var cfg map[string]any
+			json.Unmarshal(configJSON, &cfg)
+			if cfg == nil {
+				cfg = map[string]any{}
+			}
+			tw := ""
+			if targetWA != nil {
+				tw = *targetWA
+			}
+			lra := ""
+			if lastRunAt != nil {
+				lra = lastRunAt.Format(time.RFC3339)
+			}
+			results = append(results, map[string]any{
+				"id": id, "type": typ, "name": name, "enabled": enabled,
+				"cron_expression": cronExpr, "config": cfg, "target_wa": tw,
+				"last_run_at": lra, "created_at": createdAt.Format(time.RFC3339),
+			})
+		}
+	}
+	if results == nil {
+		results = []map[string]any{}
+	}
+	var plan string
+	DB.QueryRow(ctx, "SELECT plan FROM tenants WHERE id = $1", tenantID).Scan(&plan)
+	limit := getAutomationLimit(plan)
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: map[string]any{
+		"automations": results, "plan": plan, "limit": limit, "count": len(results),
+	}})
+}
+
+func listAutomationsPOST(w http.ResponseWriter, r *http.Request, ctx context.Context, tenantID string) {
+	var plan string
+	DB.QueryRow(ctx, "SELECT plan FROM tenants WHERE id = $1", tenantID).Scan(&plan)
+	limit := getAutomationLimit(plan)
+
+	var currentCount int
+	DB.QueryRow(ctx, "SELECT COUNT(*) FROM tenant_automations WHERE tenant_id = $1", tenantID).Scan(&currentCount)
+
+	if currentCount >= limit {
+		msg := "Paket Anda tidak mendukung fitur automasi. Upgrade ke paket Lite atau lebih tinggi."
+		if limit > 0 {
+			msg = fmt.Sprintf("Batas automasi untuk paket %s adalah %d. Hapus automasi lama atau upgrade paket.", plan, limit)
+		}
+		writeJSON(w, http.StatusForbidden, APIResponse{Message: msg})
+		return
+	}
+
+	var req struct {
+		Type           string         `json:"type"`
+		Name           string         `json:"name"`
+		CronExpression string         `json:"cron_expression"`
+		Config         map[string]any `json:"config"`
+		TargetWA       string         `json:"target_wa"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+		return
+	}
+	if req.Type == "" || req.Name == "" || req.CronExpression == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "type, name, dan cron_expression wajib diisi"})
+		return
+	}
+
+	configJSON, _ := json.Marshal(req.Config)
+	if req.Config == nil {
+		configJSON = []byte("{}")
+	}
+
+	var id string
+	err := DB.QueryRow(ctx,
+		"INSERT INTO tenant_automations (tenant_id, type, name, cron_expression, config, target_wa) VALUES ($1, $2, $3, $4, $5, NULLIF($6, '')) RETURNING id",
+		tenantID, req.Type, req.Name, req.CronExpression, configJSON, req.TargetWA).Scan(&id)
+	if err != nil {
+		slog.Error("Failed to create automation", "error", err)
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal membuat automasi"})
+		return
+	}
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Automasi berhasil dibuat", Data: map[string]string{"id": id}})
+}
+
+func listAutomationsPUT(w http.ResponseWriter, r *http.Request, ctx context.Context, tenantID string) {
+	automationID := r.URL.Query().Get("id")
+	if automationID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing id"})
+		return
+	}
+	var req struct {
+		Name           string         `json:"name"`
+		Enabled        *bool         `json:"enabled"`
+		CronExpression string         `json:"cron_expression"`
+		Config         map[string]any `json:"config"`
+		TargetWA       string         `json:"target_wa"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+		return
+	}
+
+	sets := []string{"updated_at = NOW()"}
+	args := []any{}
+	argIdx := 1
+
+	if req.Name != "" {
+		sets = append(sets, fmt.Sprintf("name = $%d", argIdx)); args = append(args, req.Name); argIdx++
+	}
+	if req.Enabled != nil {
+		sets = append(sets, fmt.Sprintf("enabled = $%d", argIdx)); args = append(args, *req.Enabled); argIdx++
+	}
+	if req.CronExpression != "" {
+		sets = append(sets, fmt.Sprintf("cron_expression = $%d", argIdx)); args = append(args, req.CronExpression); argIdx++
+	}
+	if req.Config != nil {
+		configJSON, _ := json.Marshal(req.Config)
+		sets = append(sets, fmt.Sprintf("config = $%d", argIdx)); args = append(args, configJSON); argIdx++
+	}
+	if req.TargetWA != "" {
+		sets = append(sets, fmt.Sprintf("target_wa = $%d", argIdx)); args = append(args, req.TargetWA); argIdx++
+	}
+
+	query := fmt.Sprintf("UPDATE tenant_automations SET %s WHERE id = $%d AND tenant_id = $%d",
+		strings.Join(sets, ", "), argIdx, argIdx+1)
+	args = append(args, automationID, tenantID)
+
+	_, err := DB.Exec(ctx, query, args...)
+	if err != nil {
+		slog.Error("Failed to update automation", "error", err)
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal mengupdate automasi"})
+		return
+	}
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Automasi berhasil diupdate"})
+}
+
+func listAutomationsDELETE(w http.ResponseWriter, r *http.Request, ctx context.Context, tenantID string) {
+	automationID := r.URL.Query().Get("id")
+	if automationID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing id"})
+		return
+	}
+	_, err := DB.Exec(ctx, "DELETE FROM tenant_automations WHERE id = $1 AND tenant_id = $2", automationID, tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal menghapus automasi"})
+		return
+	}
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Automasi berhasil dihapus"})
 }

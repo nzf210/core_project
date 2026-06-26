@@ -11,6 +11,21 @@ import (
 	invoice "github.com/xendit/xendit-go/v6/invoice"
 )
 
+type CheckoutItem struct {
+	ProductID string `json:"product_id"`
+	Quantity  int    `json:"quantity"`
+	Price     int64  `json:"price"`
+}
+
+type cashCheckoutParams struct {
+	tenantID        string
+	dateStr         string
+	description     string
+	reference       string
+	itemsJSON       []byte
+	realTotalAmount int64
+	items           []CheckoutItem
+}
 
 func handleCheckout(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("X-Tenant-ID")
@@ -21,12 +36,8 @@ func handleCheckout(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		var req struct {
-			PaymentMethod string `json:"payment_method"` // "cash" or "qris"
-			Items         []struct {
-				ProductID string `json:"product_id"`
-				Quantity  int    `json:"quantity"`
-				Price     int64  `json:"price"` // frontend sends integer price in IDR
-			} `json:"items"`
+			PaymentMethod string         `json:"payment_method"`
+			Items         []CheckoutItem `json:"items"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request"})
@@ -39,18 +50,13 @@ func handleCheckout(w http.ResponseWriter, r *http.Request) {
 		}
 
 		ctx := r.Context()
-		handleCheckoutPostRequest(w, r, ctx, tenantID, req.PaymentMethod, req.Items)
+		handleCheckoutPostRequest(w, ctx, tenantID, req.PaymentMethod, req.Items)
 	} else {
 		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
 	}
 }
-type CheckoutItem struct {
-	ProductID string `json:"product_id"`
-	Quantity  int    `json:"quantity"`
-	Price     int64  `json:"price"`
-}
 
-func handleCheckoutPostRequest(w http.ResponseWriter, r *http.Request, ctx context.Context, tenantID, paymentMethod string, items []struct{ProductID string "json:\"product_id\""; Quantity int "json:\"quantity\""; Price int64 "json:\"price\""}) {
+func handleCheckoutPostRequest(w http.ResponseWriter, ctx context.Context, tenantID, paymentMethod string, items []CheckoutItem) {
 	var xenditApiKey *string
 	err := DB.QueryRow(ctx, "SELECT xendit_api_key FROM tenants WHERE id = $1", tenantID).Scan(&xenditApiKey)
 	if err != nil {
@@ -67,7 +73,7 @@ func handleCheckoutPostRequest(w http.ResponseWriter, r *http.Request, ctx conte
 	for _, item := range items {
 		totalAmount += item.Price * int64(item.Quantity)
 	}
-	realTotalAmount := totalAmount * 100 // convert IDR to cents
+	realTotalAmount := totalAmount * 100
 
 	if !validateCheckoutStock(w, ctx, tenantID, items) {
 		return
@@ -77,9 +83,7 @@ func handleCheckoutPostRequest(w http.ResponseWriter, r *http.Request, ctx conte
 	description := "Penjualan via " + paymentMethod
 	reference := "INV-" + time.Now().Format("060102150405")
 
-	itemsJSON, _ := json.Marshal(map[string]interface{}{
-		"items": items,
-	})
+	itemsJSON, _ := json.Marshal(map[string]any{"items": items})
 
 	status := "paid"
 	if paymentMethod == "qris" {
@@ -98,10 +102,18 @@ func handleCheckoutPostRequest(w http.ResponseWriter, r *http.Request, ctx conte
 		return
 	}
 
-	handleCheckoutCash(w, ctx, tenantID, dateStr, description, reference, itemsJSON, realTotalAmount, items)
+	handleCheckoutCash(w, ctx, cashCheckoutParams{
+		tenantID:        tenantID,
+		dateStr:         dateStr,
+		description:     description,
+		reference:       reference,
+		itemsJSON:       itemsJSON,
+		realTotalAmount: realTotalAmount,
+		items:           items,
+	})
 }
 
-func validateCheckoutStock(w http.ResponseWriter, ctx context.Context, tenantID string, items []struct{ProductID string "json:\"product_id\""; Quantity int "json:\"quantity\""; Price int64 "json:\"price\""}) bool {
+func validateCheckoutStock(w http.ResponseWriter, ctx context.Context, tenantID string, items []CheckoutItem) bool {
 	for _, item := range items {
 		var stock, price int64
 		err := DB.QueryRow(ctx, "SELECT stock, price FROM products WHERE id = $1 AND tenant_id = $2", item.ProductID, tenantID).Scan(&stock, &price)
@@ -113,7 +125,7 @@ func validateCheckoutStock(w http.ResponseWriter, ctx context.Context, tenantID 
 			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Stok tidak mencukupi untuk beberapa produk"})
 			return false
 		}
-		if price != item.Price*100 { // Convert IDR to Cents for comparison
+		if price != item.Price*100 {
 			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Harga produk tidak sesuai master data"})
 			return false
 		}
@@ -136,7 +148,7 @@ func handleCheckoutXendit(w http.ResponseWriter, ctx context.Context, xenditApiK
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"success":   true,
 		"message":   "Menunggu pembayaran via Xendit",
 		"status":    "pending",
@@ -145,7 +157,7 @@ func handleCheckoutXendit(w http.ResponseWriter, ctx context.Context, xenditApiK
 	})
 }
 
-func handleCheckoutCash(w http.ResponseWriter, ctx context.Context, tenantID, dateStr, description, reference string, itemsJSON []byte, realTotalAmount int64, items []struct{ProductID string "json:\"product_id\""; Quantity int "json:\"quantity\""; Price int64 "json:\"price\""}) {
+func handleCheckoutCash(w http.ResponseWriter, ctx context.Context, params cashCheckoutParams) {
 	tx, err := DB.Begin(ctx)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
@@ -156,33 +168,30 @@ func handleCheckoutCash(w http.ResponseWriter, ctx context.Context, tenantID, da
 	var entryID string
 	err = tx.QueryRow(ctx,
 		"INSERT INTO journal_entries (tenant_id, date, description, reference, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-		tenantID, dateStr, description, reference, itemsJSON).Scan(&entryID)
+		params.tenantID, params.dateStr, params.description, params.reference, params.itemsJSON).Scan(&entryID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create entry"})
 		return
 	}
 
-	// Insert Debit Line
 	_, err = tx.Exec(ctx,
 		"INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0)",
-		entryID, "1000", realTotalAmount) // 1000 = Kas
+		entryID, "1000", params.realTotalAmount)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create line"})
 		return
 	}
 
-	// Insert Credit Line
 	_, err = tx.Exec(ctx,
 		"INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)",
-		entryID, "4000", realTotalAmount) // 4000 = Pendapatan
+		entryID, "4000", params.realTotalAmount)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create line"})
 		return
 	}
 
-	// Deduct stock
-	for _, item := range items {
-		_, err = tx.Exec(ctx, "UPDATE products SET stock = stock - $1 WHERE id = $2 AND tenant_id = $3", item.Quantity, item.ProductID, tenantID)
+	for _, item := range params.items {
+		_, err = tx.Exec(ctx, "UPDATE products SET stock = stock - $1 WHERE id = $2 AND tenant_id = $3", item.Quantity, item.ProductID, params.tenantID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to update stock"})
 			return
@@ -198,8 +207,8 @@ func handleCheckoutCash(w http.ResponseWriter, ctx context.Context, tenantID, da
 	writeJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Message: "Checkout berhasil dicatat",
-		Data: map[string]interface{}{
-			"reference": reference,
+		Data: map[string]any{
+			"reference": params.reference,
 		},
 	})
 }

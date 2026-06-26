@@ -30,16 +30,18 @@ func atomicAddInt64(addr *int64, val int64) {
 	atomic.AddInt64(addr, val)
 }
 
+const waGatewayDefault = "http://wa-gateway:8202"
+
 var AIGatewayURL = "http://localhost:8002/v1/chat"
 var AccountingURL = "http://localhost:8201"
-var WAGatewayURL = "http://wa-gateway:8202"
+var WAGatewayURL = waGatewayDefault
 var redisClient *redis.Client
 
 // waSendURL returns the full URL for posting a WhatsApp message to wa-gateway.
 func waSendURL() string {
 	base := WAGatewayURL
 	if base == "" {
-		base = "http://wa-gateway:8202"
+		base = waGatewayDefault
 	}
 	return base + "/api/wa/send"
 }

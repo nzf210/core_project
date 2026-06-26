@@ -2,86 +2,98 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 )
 
+const (
+	headerTenantIDFaq = "X-Tenant-ID"
+	errMethodNotAllowedFaq = "Method not allowed"
+)
 
 func handleFaqs(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantIDFaq)
 	ctx := r.Context()
 
-	if r.Method == http.MethodGet {
-		rows, err := DB.Query(ctx, "SELECT id, question, answer FROM tenant_faqs WHERE tenant_id = $1 ORDER BY created_at ASC", tenantID)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
-			return
-		}
-		defer rows.Close()
+	switch r.Method {
+	case http.MethodGet:
+		listFaqs(w, ctx, tenantID)
+	case http.MethodPost:
+		createFaq(w, r, ctx, tenantID)
+	case http.MethodPut:
+		updateFaq(w, r, ctx, tenantID)
+	case http.MethodDelete:
+		deleteFaq(w, r, ctx, tenantID)
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: errMethodNotAllowedFaq})
+	}
+}
 
-		var faqs []map[string]string
-		for rows.Next() {
-			var id, question, answer string
-			if err := rows.Scan(&id, &question, &answer); err == nil {
-				faqs = append(faqs, map[string]string{"id": id, "question": question, "answer": answer})
-			}
-		}
-		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: faqs})
+func listFaqs(w http.ResponseWriter, ctx context.Context, tenantID string) {
+	rows, err := DB.Query(ctx, "SELECT id, question, answer FROM tenant_faqs WHERE tenant_id = $1 ORDER BY created_at ASC", tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
 		return
 	}
+	defer rows.Close()
 
-	if r.Method == http.MethodPost {
-		var req struct {
-			Question string `json:"question"`
-			Answer   string `json:"answer"`
+	faqs := []map[string]string{}
+	for rows.Next() {
+		var id, question, answer string
+		if err := rows.Scan(&id, &question, &answer); err == nil {
+			faqs = append(faqs, map[string]string{"id": id, "question": question, "answer": answer})
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid input"})
-			return
-		}
-		var newID string
-		err := DB.QueryRow(ctx, "INSERT INTO tenant_faqs (tenant_id, question, answer) VALUES ($1, $2, $3) RETURNING id", tenantID, req.Question, req.Answer).Scan(&newID)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Insert error"})
-			return
-		}
-		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: map[string]string{"id": newID}})
+	}
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: faqs})
+}
+
+func createFaq(w http.ResponseWriter, r *http.Request, ctx context.Context, tenantID string) {
+	var req struct {
+		Question string `json:"question"`
+		Answer   string `json:"answer"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid input"})
 		return
 	}
-
-	if r.Method == http.MethodPut {
-		var req struct {
-			ID       string `json:"id"`
-			Question string `json:"question"`
-			Answer   string `json:"answer"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid input"})
-			return
-		}
-		if req.ID == "" {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing id"})
-			return
-		}
-		_, err := DB.Exec(ctx, "UPDATE tenant_faqs SET question = $1, answer = $2, updated_at = NOW() WHERE id = $3 AND tenant_id = $4", req.Question, req.Answer, req.ID, tenantID)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Update error"})
-			return
-		}
-		writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "FAQ updated"})
+	var newID string
+	err := DB.QueryRow(ctx, "INSERT INTO tenant_faqs (tenant_id, question, answer) VALUES ($1, $2, $3) RETURNING id", tenantID, req.Question, req.Answer).Scan(&newID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Insert error"})
 		return
 	}
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: map[string]string{"id": newID}})
+}
 
-	if r.Method == http.MethodDelete {
-		id := r.URL.Query().Get("id")
-		DB.Exec(ctx, "DELETE FROM tenant_faqs WHERE id = $1 AND tenant_id = $2", id, tenantID)
-		writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Deleted"})
+func updateFaq(w http.ResponseWriter, r *http.Request, ctx context.Context, tenantID string) {
+	var req struct {
+		ID       string `json:"id"`
+		Question string `json:"question"`
+		Answer   string `json:"answer"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid input"})
 		return
 	}
+	if req.ID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing id"})
+		return
+	}
+	_, err := DB.Exec(ctx, "UPDATE tenant_faqs SET question = $1, answer = $2, updated_at = NOW() WHERE id = $3 AND tenant_id = $4", req.Question, req.Answer, req.ID, tenantID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Update error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "FAQ updated"})
+}
 
-	writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+func deleteFaq(w http.ResponseWriter, r *http.Request, ctx context.Context, tenantID string) {
+	id := r.URL.Query().Get("id")
+	DB.Exec(ctx, "DELETE FROM tenant_faqs WHERE id = $1 AND tenant_id = $2", id, tenantID)
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Deleted"})
 }
 
 func handleFaqsGenerate(w http.ResponseWriter, r *http.Request) {
@@ -89,15 +101,14 @@ func handleFaqsGenerate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
 		return
 	}
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantIDFaq)
 
-	// Get tenant profile
 	var tenantName string
 	DB.QueryRow(r.Context(), "SELECT name FROM tenants WHERE id = $1", tenantID).Scan(&tenantName)
 
 	prompt := fmt.Sprintf("Buatkan 3 pertanyaan FAQ dan jawabannya untuk toko bernama '%s'. Outputkan HANYA dalam format JSON array seperti: [{\"question\": \"...\", \"answer\": \"...\"}] tanpa markdown tambahan.", tenantName)
 
-	aiReqBody := map[string]interface{}{
+	aiReqBody := map[string]any{
 		"provider":   "minimax",
 		"message":    prompt,
 		"system_msg": "Anda adalah asisten pembuat FAQ.",
@@ -111,7 +122,7 @@ func handleFaqsGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("X-Tenant-ID", tenantID)
+	reqHTTP.Header.Set(headerTenantIDFaq, tenantID)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(reqHTTP)
@@ -132,7 +143,6 @@ func handleFaqsGenerate(w http.ResponseWriter, r *http.Request) {
 
 	var generated []map[string]string
 	if err := json.Unmarshal([]byte(aiResp.Text), &generated); err != nil {
-		// Fallback to simple parse or default if AI returned malformed JSON
 		generated = []map[string]string{
 			{"question": "Berapa jam operasional toko?", "answer": "Kami buka dari jam 08:00 pagi hingga 20:00 malam."},
 		}

@@ -2,24 +2,45 @@
   <div class="voters">
     <h3 style="margin-bottom: 1rem; color: var(--text-secondary)">Pendaftaran Pemilih Baru</h3>
     <form @submit.prevent="addVoter" class="flex flex-col gap-4" style="max-width: 500px; margin-bottom: 2rem;">
-      <input v-model="form.nik" placeholder="NIK (Akan Dienkripsi)" required class="input-field" />
-      <input v-model="form.name" placeholder="Nama Lengkap" required class="input-field" />
-      <input v-model="form.address" placeholder="Alamat Lengkap" required class="input-field" />
-      <input v-model="form.phone" placeholder="Nomor Telepon" required class="input-field" />
-      <select v-model="form.status" required class="input-field">
-        <option value="" disabled>-- Pilih Status --</option>
-        <option value="uncontacted">Belum Dihubungi</option>
-        <option value="undecided">Belum Ada Pilihan (Potensi)</option>
-        <option value="supported">Pendukung</option>
-        <option value="rejected">Menolak</option>
-      </select>
-      <select v-model="form.potential_level" class="input-field">
-        <option value="" disabled>-- Potensi Suara --</option>
-        <option value="high">Pasti (High)</option>
-        <option value="medium">Ragu (Medium)</option>
-        <option value="low">Lemah (Low)</option>
-      </select>
-      <input v-model="form.competitor_support" placeholder="Mendukung Calon Lain (Sebutkan jika ada)" class="input-field" />
+      <div>
+        <label for="voter-nik" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">NIK</label>
+        <input id="voter-nik" v-model="form.nik" placeholder="NIK (Akan Dienkripsi)" required class="input-field" />
+      </div>
+      <div>
+        <label for="voter-name" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Nama Lengkap</label>
+        <input id="voter-name" v-model="form.name" placeholder="Nama Lengkap" required class="input-field" />
+      </div>
+      <div>
+        <label for="voter-address" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Alamat</label>
+        <input id="voter-address" v-model="form.address" placeholder="Alamat Lengkap" required class="input-field" />
+      </div>
+      <div>
+        <label for="voter-phone" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Nomor Telepon</label>
+        <input id="voter-phone" v-model="form.phone" placeholder="Nomor Telepon" required class="input-field" />
+      </div>
+      <div>
+        <label for="voter-status" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Status</label>
+        <select id="voter-status" v-model="form.status" required class="input-field">
+          <option value="" disabled>-- Pilih Status --</option>
+          <option value="uncontacted">Belum Dihubungi</option>
+          <option value="undecided">Belum Ada Pilihan (Potensi)</option>
+          <option value="supported">Pendukung</option>
+          <option value="rejected">Menolak</option>
+        </select>
+      </div>
+      <div>
+        <label for="voter-potential" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Potensi Suara</label>
+        <select id="voter-potential" v-model="form.potential_level" class="input-field">
+          <option value="" disabled>-- Potensi Suara --</option>
+          <option value="high">Pasti (High)</option>
+          <option value="medium">Ragu (Medium)</option>
+          <option value="low">Lemah (Low)</option>
+        </select>
+      </div>
+      <div>
+        <label for="voter-competitor" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Calon Lain</label>
+        <input id="voter-competitor" v-model="form.competitor_support" placeholder="Mendukung Calon Lain (Sebutkan jika ada)" class="input-field" />
+      </div>
       <button type="submit" class="btn-primary" style="align-self: flex-start;">Registrasi Pemilih</button>
     </form>
 

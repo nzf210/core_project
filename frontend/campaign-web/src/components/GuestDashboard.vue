@@ -20,19 +20,21 @@
 
         <!-- Dropdown Filter Daerah -->
         <div class="region-filter-wrapper flex gap-2 items-center" style="margin-top: 1rem; margin-bottom: 2rem; justify-content: center;">
-          <label style="color: var(--text-secondary); font-weight: 500;">Tampilkan Data di:</label>
-          <select v-model="selectedRegionType" @change="fetchPublicStats" class="form-input" style="width: auto; display: inline-block; padding: 0.5rem 1rem;">
+          <label for="select-region-type" style="color: var(--text-secondary); font-weight: 500;">Tampilkan Data di:</label>
+          <select id="select-region-type" v-model="selectedRegionType" @change="fetchPublicStats" class="form-input" style="width: auto; display: inline-block; padding: 0.5rem 1rem;">
             <option value="nasional">Nasional (Seluruh Indonesia)</option>
             <option value="province">Tingkat Provinsi</option>
             <option value="regency">Tingkat Kabupaten/Kota</option>
           </select>
 
-          <select v-if="selectedRegionType === 'province'" v-model="selectedRegionId" @change="fetchPublicStats" class="form-input" style="width: auto; display: inline-block; padding: 0.5rem 1rem;">
+          <label for="select-province" v-if="selectedRegionType === 'province'" style="color: var(--text-secondary); font-weight: 500;">Provinsi:</label>
+          <select id="select-province" v-if="selectedRegionType === 'province'" v-model="selectedRegionId" @change="fetchPublicStats" class="form-input" style="width: auto; display: inline-block; padding: 0.5rem 1rem;">
             <option value="">-- Pilih Provinsi --</option>
             <option v-for="prov in provinces" :key="prov.id" :value="prov.id">{{ prov.name }}</option>
           </select>
 
-          <select v-if="selectedRegionType === 'regency'" v-model="selectedRegionId" @change="fetchPublicStats" class="form-input" style="width: auto; display: inline-block; padding: 0.5rem 1rem;">
+          <label for="select-regency" v-if="selectedRegionType === 'regency'" style="color: var(--text-secondary); font-weight: 500;">Kabupaten:</label>
+          <select id="select-regency" v-if="selectedRegionType === 'regency'" v-model="selectedRegionId" @change="fetchPublicStats" class="form-input" style="width: auto; display: inline-block; padding: 0.5rem 1rem;">
             <option value="">-- Pilih Kabupaten --</option>
             <!-- Mock data for regencies right now -->
             <option value="1">Kota Jakarta Selatan</option>
@@ -203,6 +205,7 @@ onMounted(() => {
   font-size: 2.5rem;
   margin-bottom: 1rem;
   background: var(--accent-gradient);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

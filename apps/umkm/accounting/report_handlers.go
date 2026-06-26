@@ -1,15 +1,23 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
 
+const (
+	headerTenantRep    = "X-Tenant-ID"
+	errMissingTenantRep = "Missing X-Tenant-ID"
+	errDBRep           = "DB error"
+	labelDateRep       = "02 Jan"
+)
+
 
 func handleIncomeStatement(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantRep)
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
 
@@ -34,13 +42,13 @@ func handleIncomeStatement(w http.ResponseWriter, r *http.Request) {
 	`
 	rows, err := DB.Query(r.Context(), query, tenantID, from, to)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: errDBRep})
 		return
 	}
 	defer rows.Close()
 
 	var totalRevenue, totalExpense int64
-	var details []map[string]interface{}
+	var details []map[string]any
 	for rows.Next() {
 		var typ, name string
 		var balance int64
@@ -52,14 +60,14 @@ func handleIncomeStatement(w http.ResponseWriter, r *http.Request) {
 			} else {
 				totalRevenue += balance
 			}
-			details = append(details, map[string]interface{}{"type": typ, "name": name, "balance": balance})
+			details = append(details, map[string]any{"type": typ, "name": name, "balance": balance})
 		}
 	}
 
 	netIncome := totalRevenue - totalExpense
 	writeJSON(w, http.StatusOK, APIResponse{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"net_income": netIncome,
 			"revenue":    totalRevenue,
 			"expense":    totalExpense,
@@ -69,75 +77,40 @@ func handleIncomeStatement(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSalesChart(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantRep)
 	period := r.URL.Query().Get("period")
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingTenantRep})
 		return
 	}
 	if period == "" {
 		period = "week"
 	}
-
-	ctx := r.Context()
-	var query string
-	labels := []string{}
-
-	switch period {
-	case "week":
-		query = `
-			SELECT
-				DATE(e.created_at) AS day,
-				COALESCE(SUM(CASE WHEN c.type = 'revenue' THEN l.credit - l.debit ELSE 0 END), 0) AS revenue,
-				COALESCE(SUM(CASE WHEN c.type = 'expense' THEN l.debit - l.credit ELSE 0 END), 0) AS expense
-			FROM journal_entries e
-			JOIN journal_lines l ON l.entry_id = e.id
-			JOIN chart_of_accounts c ON l.account_id = c.id
-			WHERE e.tenant_id = $1 AND e.created_at >= NOW() - INTERVAL '7 days'
-			GROUP BY DATE(e.created_at)
-			ORDER BY day`
-		for i := 6; i >= 0; i-- {
-			labels = append(labels, time.Now().AddDate(0, 0, -i).Format("02 Jan"))
-		}
-	case "month":
-		query = `
-			SELECT
-				DATE(e.created_at) AS day,
-				COALESCE(SUM(CASE WHEN c.type = 'revenue' THEN l.credit - l.debit ELSE 0 END), 0) AS revenue,
-				COALESCE(SUM(CASE WHEN c.type = 'expense' THEN l.debit - l.credit ELSE 0 END), 0) AS expense
-			FROM journal_entries e
-			JOIN journal_lines l ON l.entry_id = e.id
-			JOIN chart_of_accounts c ON l.account_id = c.id
-			WHERE e.tenant_id = $1 AND e.created_at >= NOW() - INTERVAL '30 days'
-			GROUP BY DATE(e.created_at)
-			ORDER BY day`
-		for i := 29; i >= 0; i-- {
-			labels = append(labels, time.Now().AddDate(0, 0, -i).Format("02 Jan"))
-		}
-	case "year":
-		query = `
-			SELECT
-				TO_CHAR(DATE_TRUNC('month', e.created_at), 'Mon YYYY') AS month_label,
-				COALESCE(SUM(CASE WHEN c.type = 'revenue' THEN l.credit - l.debit ELSE 0 END), 0) AS revenue,
-				COALESCE(SUM(CASE WHEN c.type = 'expense' THEN l.debit - l.credit ELSE 0 END), 0) AS expense
-			FROM journal_entries e
-			JOIN journal_lines l ON l.entry_id = e.id
-			JOIN chart_of_accounts c ON l.account_id = c.id
-			WHERE e.tenant_id = $1 AND e.created_at >= NOW() - INTERVAL '12 months'
-			GROUP BY DATE_TRUNC('month', e.created_at)
-			ORDER BY DATE_TRUNC('month', e.created_at)`
-		for i := 11; i >= 0; i-- {
-			labels = append(labels, time.Now().AddDate(0, -i, 0).Format("Jan YYYY"))
-		}
-	default:
+	if period != "week" && period != "month" && period != "year" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid period: use week, month, or year"})
 		return
 	}
+	labels, rowMap := querySalesChartData(r.Context(), tenantID, period)
+	revenue, expense, profit := buildChartSeries(labels, rowMap)
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]any{
+			"period":  period,
+			"labels":  labels,
+			"revenue": revenue,
+			"expense": expense,
+			"profit":  profit,
+		},
+	})
+}
+
+func querySalesChartData(ctx context.Context, tenantID, period string) ([]string, map[string][]int64) {
+	query := chartQuery(period)
+	labels := chartLabels(period)
 
 	rows, err := DB.Query(ctx, query, tenantID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
-		return
+		return labels, map[string][]int64{}
 	}
 	defer rows.Close()
 
@@ -155,42 +128,80 @@ func handleSalesChart(w http.ResponseWriter, r *http.Request) {
 			var day time.Time
 			var rev, exp int64
 			if rows.Scan(&day, &rev, &exp) == nil {
-				rowMap[day.Format("02 Jan")] = []int64{rev, exp}
+				rowMap[day.Format(labelDateRep)] = []int64{rev, exp}
 			}
 		}
 	}
+	return labels, rowMap
+}
 
-	revenue := []int64{}
-	expense := []int64{}
-	for _, lbl := range labels {
-		if v, ok := rowMap[lbl]; ok {
-			revenue = append(revenue, v[0])
-			expense = append(expense, v[1])
-		} else {
-			revenue = append(revenue, 0)
-			expense = append(expense, 0)
+func chartQuery(period string) string {
+	base := `
+		SELECT
+			DATE(e.created_at) AS day,
+			COALESCE(SUM(CASE WHEN c.type = 'revenue' THEN l.credit - l.debit ELSE 0 END), 0) AS revenue,
+			COALESCE(SUM(CASE WHEN c.type = 'expense' THEN l.debit - l.credit ELSE 0 END), 0) AS expense
+		FROM journal_entries e
+		JOIN journal_lines l ON l.entry_id = e.id
+		JOIN chart_of_accounts c ON l.account_id = c.id
+		WHERE e.tenant_id = $1 AND e.created_at >= `
+	switch period {
+	case "week":
+		return base + `NOW() - INTERVAL '7 days' GROUP BY DATE(e.created_at) ORDER BY day`
+	case "month":
+		return base + `NOW() - INTERVAL '30 days' GROUP BY DATE(e.created_at) ORDER BY day`
+	case "year":
+		return `
+			SELECT
+				TO_CHAR(DATE_TRUNC('month', e.created_at), 'Mon YYYY') AS month_label,
+				COALESCE(SUM(CASE WHEN c.type = 'revenue' THEN l.credit - l.debit ELSE 0 END), 0) AS revenue,
+				COALESCE(SUM(CASE WHEN c.type = 'expense' THEN l.debit - l.credit ELSE 0 END), 0) AS expense
+			FROM journal_entries e
+			JOIN journal_lines l ON l.entry_id = e.id
+			JOIN chart_of_accounts c ON l.account_id = c.id
+			WHERE e.tenant_id = $1 AND e.created_at >= NOW() - INTERVAL '12 months'
+			GROUP BY DATE_TRUNC('month', e.created_at)
+			ORDER BY DATE_TRUNC('month', e.created_at)`
+	default:
+		return ""
+	}
+}
+
+func chartLabels(period string) []string {
+	var labels []string
+	switch period {
+	case "week":
+		for i := 6; i >= 0; i-- {
+			labels = append(labels, time.Now().AddDate(0, 0, -i).Format(labelDateRep))
+		}
+	case "month":
+		for i := 29; i >= 0; i-- {
+			labels = append(labels, time.Now().AddDate(0, 0, -i).Format(labelDateRep))
+		}
+	case "year":
+		for i := 11; i >= 0; i-- {
+			labels = append(labels, time.Now().AddDate(0, -i, 0).Format("Jan YYYY"))
 		}
 	}
+	return labels
+}
 
-	profit := []int64{}
-	for i := range revenue {
-		p := revenue[i] - expense[i]
+func buildChartSeries(labels []string, rowMap map[string][]int64) ([]int64, []int64, []int64) {
+	var revenue, expense, profit []int64
+	for _, lbl := range labels {
+		rev, exp := int64(0), int64(0)
+		if v, ok := rowMap[lbl]; ok {
+			rev, exp = v[0], v[1]
+		}
+		revenue = append(revenue, rev)
+		expense = append(expense, exp)
+		p := rev - exp
 		if p < 0 {
 			p = 0
 		}
 		profit = append(profit, p)
 	}
-
-	writeJSON(w, http.StatusOK, APIResponse{
-		Success: true,
-		Data: map[string]interface{}{
-			"period":  period,
-			"labels":  labels,
-			"revenue": revenue,
-			"expense": expense,
-			"profit":  profit,
-		},
-	})
+	return revenue, expense, profit
 }
 
 func handleTopProducts(w http.ResponseWriter, r *http.Request) {
@@ -224,33 +235,33 @@ func handleTopProducts(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := DB.Query(ctx, query, tenantID, limit)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: errDBRep})
 		return
 	}
 	defer rows.Close()
 
-	var products []map[string]interface{}
+	var products []map[string]any
 	for rows.Next() {
 		var name string
 		var revenue, count int64
 		if rows.Scan(&name, &revenue, &count) == nil && revenue > 0 {
-			products = append(products, map[string]interface{}{
-				"name":                strings.TrimSpace(name),
-				"revenue_rupiah":      revenue,
-				"transaction_count":   count,
+			products = append(products, map[string]any{
+				"name":               strings.TrimSpace(name),
+				"revenue_rupiah":     revenue,
+				"transaction_count":  count,
 			})
 		}
 	}
 	if products == nil {
-		products = []map[string]interface{}{}
+		products = []map[string]any{}
 	}
 	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: products})
 }
 
 func handleRecentTransactions(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantRep)
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingTenantRep})
 		return
 	}
 	limit := 5
@@ -274,7 +285,7 @@ func handleRecentTransactions(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := DB.Query(ctx, query, tenantID, limit)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: errDBRep})
 		return
 	}
 	defer rows.Close()

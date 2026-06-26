@@ -137,13 +137,7 @@ func (m *MockRedis) Set(key string, value interface{}, ttl time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var payload interface{}
-	switch v := value.(type) {
-	case string:
-		payload = v
-	default:
-		payload = v
-	}
+	payload := value
 
 	expiryAt := time.Now().Add(ttl)
 	if ttl == 0 {

@@ -33,7 +33,7 @@ type CoordinatorStruct struct {
 func HandleAssignCoordinator(w http.ResponseWriter, r *http.Request) {
 	tenantID := ExtractTenantID(r)
 	if tenantID == "" {
-		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingTenantID})
 		return
 	}
 
@@ -214,42 +214,24 @@ func HandleCoordinatorHierarchy(w http.ResponseWriter, r *http.Request) {
 
 // validateAreaScope checks if region_id is valid for the given level
 func validateAreaScope(ctx context.Context, level, regionID string) error {
-	// Simplified validation - ensure region exists and matches level type
-	switch level {
-	case "korprov":
-		var exists bool
-		err := repository.DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM provinces WHERE id = $1)", regionID).Scan(&exists)
-		if err != nil || !exists {
-			return fmt.Errorf("invalid province region for level %s", level)
-		}
-	case "korKab":
-		var exists bool
-		err := repository.DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM regencies WHERE id = $1)", regionID).Scan(&exists)
-		if err != nil || !exists {
-			return fmt.Errorf("invalid regency region for level %s", level)
-		}
-	case "korKec":
-		var exists bool
-		err := repository.DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM districts WHERE id = $1)", regionID).Scan(&exists)
-		if err != nil || !exists {
-			return fmt.Errorf("invalid district region for level %s", level)
-		}
-	case "korKades":
-		var exists bool
-		err := repository.DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM villages WHERE id = $1)", regionID).Scan(&exists)
-		if err != nil || !exists {
-			return fmt.Errorf("invalid village region for level %s", level)
-		}
-	case "saksi_tps":
-		var exists bool
-		err := repository.DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM tps WHERE id = $1)", regionID).Scan(&exists)
-		if err != nil || !exists {
-			return fmt.Errorf("invalid tps region for level %s", level)
-		}
-	default:
+	queries := map[string]string{
+		"korprov":   "SELECT EXISTS(SELECT 1 FROM provinces WHERE id = $1)",
+		"korKab":    "SELECT EXISTS(SELECT 1 FROM regencies WHERE id = $1)",
+		"korKec":    "SELECT EXISTS(SELECT 1 FROM districts WHERE id = $1)",
+		"korKades":  "SELECT EXISTS(SELECT 1 FROM villages WHERE id = $1)",
+		"saksi_tps": "SELECT EXISTS(SELECT 1 FROM tps WHERE id = $1)",
+	}
+
+	query, ok := queries[level]
+	if !ok {
 		return fmt.Errorf("unknown coordinator level: %s", level)
 	}
 
+	var exists bool
+	err := repository.DB.QueryRow(ctx, query, regionID).Scan(&exists)
+	if err != nil || !exists {
+		return fmt.Errorf("invalid region for level %s", level)
+	}
 	return nil
 }
 

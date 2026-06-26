@@ -137,15 +137,8 @@ func TestValidateChatbotConfig_WAProviderPreferencePriority(t *testing.T) {
 // TestChatbotConfig_JSONTags verifies JSON serialization round-trip
 func TestChatbotConfig_JSONTags(t *testing.T) {
 	cfg := ChatbotConfig{
-		LLMProvider:          "openai",
 		Language:             "id",
 		WAProviderPreference: "cloud_api",
-		MaxTokens:            1000,
-		Temperature:          0.5,
-		ChannelsEnabled:      []string{"whatsapp", "telegram"},
-		BusinessDays:         []int{1, 2, 3, 4, 5}, // ISO weekdays
-		BusinessHoursStart:   "09:00",
-		BusinessHoursEnd:     "18:00",
 	}
 	// Just verify the field names exist with proper tags
 	if cfg.WAProviderPreference != "cloud_api" {

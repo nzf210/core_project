@@ -10,9 +10,16 @@ import (
 	"core_project/shared/sdk/response"
 )
 
+const (
+	errMethodNotAllowedBiz = "Method not allowed"
+	errInvalidRequestBiz   = "Invalid request"
+	headerTenantBiz       = "X-Tenant-ID"
+	errMissingTenantBiz   = "Missing tenant ID"
+)
+
 func handleGetBusinessTypes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, errMethodNotAllowedBiz, nil)
 		return
 	}
 
@@ -41,7 +48,7 @@ func handleGetBusinessTypes(w http.ResponseWriter, r *http.Request) {
 
 func handleOnboarding(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, errMethodNotAllowedBiz, nil)
 		return
 	}
 
@@ -52,13 +59,13 @@ func handleOnboarding(w http.ResponseWriter, r *http.Request) {
 		Plan           string `json:"plan"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		response.Error(w, http.StatusBadRequest, errInvalidRequestBiz, err)
 		return
 	}
 
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantBiz)
 	if tenantID == "" {
-		response.Error(w, http.StatusBadRequest, "Missing tenant ID", nil)
+		response.Error(w, http.StatusBadRequest, errMissingTenantBiz, nil)
 		return
 	}
 
@@ -77,13 +84,13 @@ func handleOnboarding(w http.ResponseWriter, r *http.Request) {
 
 func handleGetDashboard(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, errMethodNotAllowedBiz, nil)
 		return
 	}
 
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantBiz)
 	if tenantID == "" {
-		response.Error(w, http.StatusBadRequest, "Missing tenant ID", nil)
+		response.Error(w, http.StatusBadRequest, errMissingTenantBiz, nil)
 		return
 	}
 
@@ -96,7 +103,7 @@ func handleGetDashboard(w http.ResponseWriter, r *http.Request) {
 	widgets := getDashboardForType(businessType)
 	modules := getModuleListForType(businessType)
 
-	response.JSON(w, http.StatusOK, "Dashboard config retrieved", map[string]interface{}{
+	response.JSON(w, http.StatusOK, "Dashboard config retrieved", map[string]any{
 		"businessType": businessType,
 		"widgets":      widgets,
 		"modules":      modules,
@@ -105,13 +112,13 @@ func handleGetDashboard(w http.ResponseWriter, r *http.Request) {
 
 func handleGetPlan(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, errMethodNotAllowedBiz, nil)
 		return
 	}
 
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantBiz)
 	if tenantID == "" {
-		response.Error(w, http.StatusBadRequest, "Missing tenant ID", nil)
+		response.Error(w, http.StatusBadRequest, errMissingTenantBiz, nil)
 		return
 	}
 
@@ -120,7 +127,7 @@ func handleGetPlan(w http.ResponseWriter, r *http.Request) {
 	var isFrozen bool
 	DB.QueryRow(r.Context(), `SELECT plan, current_plan_expires_at, is_frozen FROM tenants WHERE id = $1`, tenantID).Scan(&plan, &expiresAt, &isFrozen)
 
-	response.JSON(w, http.StatusOK, "Plan retrieved", map[string]interface{}{
+	response.JSON(w, http.StatusOK, "Plan retrieved", map[string]any{
 		"plan":      plan,
 		"expiresAt": expiresAt,
 		"isFrozen":  isFrozen,
@@ -129,7 +136,7 @@ func handleGetPlan(w http.ResponseWriter, r *http.Request) {
 
 func handleUpgradePlan(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, errMethodNotAllowedBiz, nil)
 		return
 	}
 
@@ -137,7 +144,7 @@ func handleUpgradePlan(w http.ResponseWriter, r *http.Request) {
 		Plan string `json:"plan"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		response.Error(w, http.StatusBadRequest, errInvalidRequestBiz, err)
 		return
 	}
 
@@ -146,9 +153,9 @@ func handleUpgradePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantBiz)
 	if tenantID == "" {
-		response.Error(w, http.StatusBadRequest, "Missing tenant ID", nil)
+		response.Error(w, http.StatusBadRequest, errMissingTenantBiz, nil)
 		return
 	}
 
@@ -159,9 +166,9 @@ func handleUpgradePlan(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleStoresCollection(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantBiz)
 	if tenantID == "" {
-		response.Error(w, http.StatusBadRequest, "Missing tenant ID", nil)
+		response.Error(w, http.StatusBadRequest, errMissingTenantBiz, nil)
 		return
 	}
 
@@ -177,14 +184,14 @@ func handleStoresCollection(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		createStore(w, r, tenantID, userID)
 	default:
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, errMethodNotAllowedBiz, nil)
 	}
 }
 
 func handleStoresItem(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantBiz)
 	if tenantID == "" {
-		response.Error(w, http.StatusBadRequest, "Missing tenant ID", nil)
+		response.Error(w, http.StatusBadRequest, errMissingTenantBiz, nil)
 		return
 	}
 
@@ -199,11 +206,11 @@ func handleStoresItem(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		deleteStore(w, r, storeID, tenantID, userID)
 	default:
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, errMethodNotAllowedBiz, nil)
 	}
 }
 
-func listStores(w http.ResponseWriter, r *http.Request, tenantID, userID string) {
+func listStores(w http.ResponseWriter, r *http.Request, tenantID, _ string) {
 	rows, err := DB.Query(r.Context(), `SELECT id, name, address, phone FROM stores WHERE tenant_id = $1 ORDER BY name`, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Database error", err)
@@ -244,7 +251,7 @@ func createStore(w http.ResponseWriter, r *http.Request, tenantID, userID string
 		Phone   string `json:"phone"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		response.Error(w, http.StatusBadRequest, errInvalidRequestBiz, err)
 		return
 	}
 
@@ -259,7 +266,7 @@ func createStore(w http.ResponseWriter, r *http.Request, tenantID, userID string
 	response.JSON(w, http.StatusCreated, "Store created", map[string]string{"id": id})
 }
 
-func getStore(w http.ResponseWriter, r *http.Request, storeID, tenantID, userID string) {
+func getStore(w http.ResponseWriter, r *http.Request, storeID, tenantID, _ string) {
 	var store struct {
 		ID      string `json:"id"`
 		Name    string `json:"name"`
@@ -276,14 +283,14 @@ func getStore(w http.ResponseWriter, r *http.Request, storeID, tenantID, userID 
 	response.JSON(w, http.StatusOK, "Store retrieved", store)
 }
 
-func updateStore(w http.ResponseWriter, r *http.Request, storeID, tenantID, userID string) {
+func updateStore(w http.ResponseWriter, r *http.Request, storeID, tenantID, _ string) {
 	var req struct {
 		Name    string `json:"name"`
 		Address string `json:"address"`
 		Phone   string `json:"phone"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		response.Error(w, http.StatusBadRequest, errInvalidRequestBiz, err)
 		return
 	}
 
@@ -297,7 +304,7 @@ func updateStore(w http.ResponseWriter, r *http.Request, storeID, tenantID, user
 	response.JSON(w, http.StatusOK, "Store updated", nil)
 }
 
-func deleteStore(w http.ResponseWriter, r *http.Request, storeID, tenantID, userID string) {
+func deleteStore(w http.ResponseWriter, r *http.Request, storeID, tenantID, _ string) {
 	_, err := DB.Exec(r.Context(), `DELETE FROM stores WHERE id = $1 AND tenant_id = $2`, storeID, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to delete store", err)

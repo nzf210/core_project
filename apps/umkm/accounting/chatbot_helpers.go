@@ -138,7 +138,7 @@ func validateBusinessAndChannelConfig(c *ChatbotConfig) string {
 	return ""
 }
 
-func renderSystemPromptFromConfig(cfg *ChatbotConfig, tenantID, tenantName, role string) string {
+func renderSystemPromptFromConfig(cfg *ChatbotConfig, _, tenantName, _ string) string {
 	if !cfg.IsActive {
 		return cfg.OutsideHoursMessage
 	}

@@ -7,9 +7,16 @@ import (
 	"net/http"
 	"time"
 
+	"core_project/shared/sdk/response"
 	"github.com/google/uuid"
 	"log/slog"
-	"core_project/shared/sdk/response"
+)
+
+const (
+	errMissingTenantIDClinic  = "Missing tenant ID"
+	errDBErrorClinic          = "DB error"
+	errInvalidJSONClinic      = "Invalid JSON"
+	errMethodNotAllowedClinic = "Method not allowed"
 )
 
 func getTenantID(r *http.Request) string {
@@ -36,7 +43,7 @@ type CancelReq struct {
 func handleClinicSettings(w http.ResponseWriter, r *http.Request) {
 	tenantID := getTenantID(r)
 	if tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing tenant ID", nil)
+		response.Error(w, http.StatusUnauthorized, errMissingTenantIDClinic, nil)
 		return
 	}
 
@@ -56,7 +63,7 @@ func handleClinicSettings(w http.ResponseWriter, r *http.Request) {
 				VALUES ($1, $2, $3, $4)
 			`, tenantID, settings.QueueType, settings.SlotDurationMinutes, settings.IsActive)
 		} else if err != nil {
-			response.Error(w, http.StatusInternalServerError, "DB error", nil)
+			response.Error(w, http.StatusInternalServerError, errDBErrorClinic, nil)
 			return
 		}
 
@@ -67,7 +74,7 @@ func handleClinicSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPut {
 		var req ClinicSettings
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			response.Error(w, http.StatusBadRequest, "Invalid JSON", nil)
+			response.Error(w, http.StatusBadRequest, errInvalidJSONClinic, nil)
 			return
 		}
 
@@ -95,24 +102,24 @@ func handleClinicSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	response.Error(w, http.StatusMethodNotAllowed, errMethodNotAllowedClinic, nil)
 }
 
 func handleClinicBook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, errMethodNotAllowedClinic, nil)
 		return
 	}
 
 	tenantID := getTenantID(r)
 	if tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing tenant ID", nil)
+		response.Error(w, http.StatusUnauthorized, errMissingTenantIDClinic, nil)
 		return
 	}
 
 	var req BookReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid JSON", nil)
+		response.Error(w, http.StatusBadRequest, errInvalidJSONClinic, nil)
 		return
 	}
 
@@ -140,7 +147,7 @@ func handleClinicBook(w http.ResponseWriter, r *http.Request) {
 		queueType = "sequential"
 		slotDuration = 30
 	} else if err != nil {
-		response.Error(w, http.StatusInternalServerError, "DB error", nil)
+		response.Error(w, http.StatusInternalServerError, errDBErrorClinic, nil)
 		return
 	}
 
@@ -214,19 +221,19 @@ func handleClinicBook(w http.ResponseWriter, r *http.Request) {
 
 func handleClinicCancel(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, errMethodNotAllowedClinic, nil)
 		return
 	}
 
 	tenantID := getTenantID(r)
 	if tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing tenant ID", nil)
+		response.Error(w, http.StatusUnauthorized, errMissingTenantIDClinic, nil)
 		return
 	}
 
 	var req CancelReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid JSON", nil)
+		response.Error(w, http.StatusBadRequest, errInvalidJSONClinic, nil)
 		return
 	}
 
@@ -239,7 +246,7 @@ func handleClinicCancel(w http.ResponseWriter, r *http.Request) {
 	`, req.PerformedBy, req.AppointmentID, tenantID)
 
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "DB error", nil)
+		response.Error(w, http.StatusInternalServerError, errDBErrorClinic, nil)
 		return
 	}
 
@@ -259,13 +266,13 @@ func handleClinicCancel(w http.ResponseWriter, r *http.Request) {
 
 func handleClinicQueue(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, errMethodNotAllowedClinic, nil)
 		return
 	}
 
 	tenantID := getTenantID(r)
 	if tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing tenant ID", nil)
+		response.Error(w, http.StatusUnauthorized, errMissingTenantIDClinic, nil)
 		return
 	}
 
@@ -278,7 +285,7 @@ func handleClinicQueue(w http.ResponseWriter, r *http.Request) {
 	`, tenantID)
 
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "DB error", nil)
+		response.Error(w, http.StatusInternalServerError, errDBErrorClinic, nil)
 		return
 	}
 	defer rows.Close()
@@ -304,13 +311,13 @@ func handleClinicQueue(w http.ResponseWriter, r *http.Request) {
 
 func handleClinicCall(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, errMethodNotAllowedClinic, nil)
 		return
 	}
 
 	tenantID := getTenantID(r)
 	if tenantID == "" {
-		response.Error(w, http.StatusUnauthorized, "Missing tenant ID", nil)
+		response.Error(w, http.StatusUnauthorized, errMissingTenantIDClinic, nil)
 		return
 	}
 
@@ -319,7 +326,7 @@ func handleClinicCall(w http.ResponseWriter, r *http.Request) {
 	}
 	var req CallReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid JSON", nil)
+		response.Error(w, http.StatusBadRequest, errInvalidJSONClinic, nil)
 		return
 	}
 
@@ -342,7 +349,7 @@ func handleClinicCall(w http.ResponseWriter, r *http.Request) {
 	`, req.AppointmentID, tenantID)
 
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "DB error", nil)
+		response.Error(w, http.StatusInternalServerError, errDBErrorClinic, nil)
 		return
 	}
 

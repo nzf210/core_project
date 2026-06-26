@@ -13,8 +13,8 @@
         
         <div class="config-box">
           <h4>Telegram Bot API</h4>
-          <p class="text-muted" style="margin-bottom: 1rem; font-size: 0.9rem;">Masukkan token dari BotFather untuk mengaktifkan OTP Telegram.</p>
-          <input type="text" v-model="telegramKey" class="input-field" placeholder="123456789:ABCdefGHIjkl..." style="width:100%; margin-bottom: 1rem;" />
+          <label for="telegram-key-input" class="text-muted" style="margin-bottom: 0.25rem; font-size: 0.9rem; display: block;">Masukkan token dari BotFather untuk mengaktifkan OTP Telegram.</label>
+          <input id="telegram-key-input" type="text" v-model="telegramKey" class="input-field" placeholder="123456789:ABCdefGHIjkl..." style="width:100%; margin-bottom: 1rem;" />
           <button class="btn-primary" @click="saveTelegramKey">Simpan Token</button>
         </div>
 
@@ -22,7 +22,7 @@
           <h4>WhatsApp Gateway</h4>
           <p class="text-muted" style="margin-bottom: 1rem; font-size: 0.9rem;">Hubungkan perangkat WA untuk mengirim OTP secara otomatis.</p>
           
-          <div v-if="waStatus === 'connected'" class="alert-success" style="padding: 1rem; border-radius: 8px; background: rgba(16,185,129,0.1); color: #10b981;">
+          <div v-if="waStatus === 'connected'" class="alert-success" style="padding: 1rem; border-radius: 8px; background: rgba(16,185,129,0.1); color: var(--accent-success, #059669);">
             ✅ WhatsApp Terhubung ({{ waJID }})
           </div>
           
@@ -131,6 +131,7 @@ const generateWAQR = async () => {
       waStatus.value = 'connected'
     }
   } catch (err) {
+    console.error('WA QR error:', err)
     alert("Gagal menghubungi WA Gateway")
   }
 }

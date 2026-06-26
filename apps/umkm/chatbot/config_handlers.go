@@ -78,7 +78,6 @@ func loadChatbotConfig(ctx context.Context, tenantID string) *chatConfigCache {
 // fields are empty, treats as always-open (returns true, "").
 func isWithinBusinessHours(cfg *chatConfigCache) (bool, string) {
 	if cfg == nil || !cfg.IsActive {
-		// is_active=false means chatbot is off — return outside-hours message
 		msg := ""
 		if cfg != nil {
 			msg = cfg.OutsideHoursMessage
@@ -88,25 +87,25 @@ func isWithinBusinessHours(cfg *chatConfigCache) (bool, string) {
 	if cfg.BusinessHoursStart == "" || cfg.BusinessHoursEnd == "" {
 		return true, ""
 	}
-	now := time.Now()
-	// Business days: 0=Sunday, default allow Mon-Sat (1-6)
-	if len(cfg.BusinessDays) > 0 {
-		wd := int(now.Weekday())
-		allowed := false
-		for _, d := range cfg.BusinessDays {
-			if d == wd {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			return false, cfg.OutsideHoursMessage
-		}
+	if !isBusinessDay(cfg.BusinessDays) {
+		return false, cfg.OutsideHoursMessage
 	}
-	// Compare HH:MM
-	nowHM := now.Format("15:04")
+	nowHM := time.Now().Format("15:04")
 	if nowHM < cfg.BusinessHoursStart || nowHM > cfg.BusinessHoursEnd {
 		return false, cfg.OutsideHoursMessage
 	}
 	return true, ""
+}
+
+func isBusinessDay(allowedDays []int) bool {
+	if len(allowedDays) == 0 {
+		return true
+	}
+	wd := int(time.Now().Weekday())
+	for _, d := range allowedDays {
+		if d == wd {
+			return true
+		}
+	}
+	return false
 }

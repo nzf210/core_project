@@ -8,18 +8,18 @@
 
       <form @submit.prevent="submitVerification" class="flex flex-col gap-4">
         <div>
-          <label>Unggah Foto KTP</label>
-          <input type="file" accept="image/*" class="input-field" required style="padding: 0.5rem;" />
+          <label for="input-ktp">Unggah Foto KTP</label>
+          <input id="input-ktp" type="file" accept="image/*" class="input-field" required style="padding: 0.5rem;" />
         </div>
         
         <div>
-          <label>Partai Pengusung / Independen</label>
-          <input v-model="form.partai" type="text" class="input-field" placeholder="Misal: Partai ABC" required />
+          <label for="input-partai">Partai Pengusung / Independen</label>
+          <input id="input-partai" v-model="form.partai" type="text" class="input-field" placeholder="Misal: Partai ABC" required />
         </div>
 
         <div>
-          <label>Daerah Pemilihan (Dapil)</label>
-          <input v-model="form.dapil" type="text" class="input-field" placeholder="Misal: Jawa Barat I" required />
+          <label for="input-dapil">Daerah Pemilihan (Dapil)</label>
+          <input id="input-dapil" v-model="form.dapil" type="text" class="input-field" placeholder="Misal: Jawa Barat I" required />
         </div>
 
         <button type="submit" class="btn-primary mt-4" :disabled="isLoading">
@@ -56,6 +56,7 @@ const submitVerification = async () => {
       alert("Verifikasi gagal: " + data.message)
     }
   } catch (err) {
+    console.error('Verification error:', err)
     alert("Terjadi kesalahan sistem")
   } finally {
     isLoading.value = false

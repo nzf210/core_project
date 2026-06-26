@@ -70,7 +70,7 @@ type testHelper struct {
 
 // newTestHelper membuat instance testHelper baru.
 // Setiap test harus memanggil ini di awal.
-func newTestHelper(t *testing.T) *testHelper {
+func newTestHelper(_ *testing.T) *testHelper {
 	h := &testHelper{
 		mockDB:    mocks.NewMockDB(),
 		mockAI:    mocks.NewMockAIGateway(),
@@ -1715,43 +1715,6 @@ func BenchmarkVectorFromSlice(b *testing.B) {
 //  - Double-entry bookkeeping rules
 // ============================================================
 
-// TestSAKEMKMChartOfAccounts conformance test untuk COA.
-//
-// Verifikasi:
-//  - Minimal 7 account types ada (asset, liability, equity, revenue, expense, cost, contra)
-//  - Each account memiliki code yang benar
-//  - Normal balance sesuai dengan account type
-func TestSAKEMKMChartOfAccounts(t *testing.T) {
-	h := newTestHelper(t)
-
-	req := h.newRequest("GET", "/accounts", nil)
-	w := httptest.NewRecorder()
-
-	// handleAccounts(w, req)
-		_ = req; _ = w
-	// assertStatus(t, w.Code, http.StatusOK)
-
-	// var resp map[string]any
-	// json.Unmarshal(w.Body.Bytes(), &resp)
-	// accounts := resp["data"].([]map[string]any)
-	//
-	// Buat map untuk categorize
-	// typeGroups := make(map[string][]map[string]any)
-	// for _, acc := range accounts {
-	//     accType := acc["type"].(string)
-	//     typeGroups[accType] = append(typeGroups[accType], acc)
-	// }
-	//
-	// Verifikasi minimal ada account untuk setiap type
-	// requiredTypes := []string{"asset", "liability", "equity", "revenue", "expense"}
-	// for _, rt := range requiredTypes {
-	//     if len(typeGroups[rt]) == 0 {
-	//         t.Errorf("tidak ada account dengan type %q", rt)
-	//     }
-	// }
-
-	_ = h
-}
 
 // TestQRISFormat conformance test untuk QRIS generation.
 //
@@ -1855,40 +1818,6 @@ func TestEdgeCaseZeroStock(t *testing.T) {
 // Jika smoke test gagal, berarti ada masalah fundamental.
 // ============================================================
 
-// TestSmokeAccounts menguji endpoint accounts bisa diakses.
-func TestSmokeAccounts(t *testing.T) {
-	h := newTestHelper(t)
-
-	req := h.newRequest("GET", "/accounts", nil)
-	w := httptest.NewRecorder()
-
-	// handleAccounts(w, req)
-		_ = req; _ = w
-
-	// Smoke test: minimal harus dapat response (bisa 200 atau 401)
-	// if w.Code == 0 {
-	//     t.Error("handler tidak menulis response")
-	// }
-
-	_ = h
-}
-
-// TestSmokeProducts menguji endpoint products bisa diakses.
-func TestSmokeProducts(t *testing.T) {
-	h := newTestHelper(t)
-
-	req := h.newRequest("GET", "/products", nil)
-	w := httptest.NewRecorder()
-
-	// handleProducts(w, req)
-		_ = req; _ = w
-
-	// if w.Code == 0 {
-	//     t.Error("handler tidak menulis response")
-	// }
-
-	_ = h
-}
 
 // ============================================================
 // REGRESSION TESTS

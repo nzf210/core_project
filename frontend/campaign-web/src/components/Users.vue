@@ -43,22 +43,39 @@
           Pendaftaran manual akan melewati verifikasi OTP. Gunakan hanya untuk pendaftaran via kandidat/admin.
         </p>
         <form @submit.prevent="addUser" class="flex flex-col gap-4">
-          <input v-model="form.nik" placeholder="NIK (Nomor Induk Kependudukan)" required class="input-field"
-            maxlength="16" />
-          <input v-model="form.name" placeholder="Nama Lengkap" required class="input-field" />
-          <input v-model="form.phone_number" placeholder="Nomor Telepon / WA" required class="input-field" />
+          <div>
+            <label for="user-nik" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">NIK</label>
+            <input id="user-nik" v-model="form.nik" placeholder="NIK (Nomor Induk Kependudukan)" required class="input-field" maxlength="16" />
+          </div>
+          <div>
+            <label for="user-name" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Nama Lengkap</label>
+            <input id="user-name" v-model="form.name" placeholder="Nama Lengkap" required class="input-field" />
+          </div>
+          <div>
+            <label for="user-phone" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Nomor Telepon / WA</label>
+            <input id="user-phone" v-model="form.phone_number" placeholder="Nomor Telepon / WA" required class="input-field" />
+          </div>
 
-          <select v-model="form.role" class="input-field" required>
-            <option value="" disabled>-- Pilih Jenjang (Role) --</option>
-            <option value="admin">Admin</option>
-            <option value="koordinator">Koordinator</option>
-            <option value="relawan">Relawan</option>
-            <option value="user_biasa">Pemilih Biasa</option>
-          </select>
+          <div>
+            <label for="user-role" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Role</label>
+            <select id="user-role" v-model="form.role" class="input-field" required>
+              <option value="" disabled>-- Pilih Jenjang (Role) --</option>
+              <option value="admin">Admin</option>
+              <option value="koordinator">Koordinator</option>
+              <option value="relawan">Relawan</option>
+              <option value="user_biasa">Pemilih Biasa</option>
+            </select>
+          </div>
 
           <h4 style="margin-top: 0.5rem;">Informasi Lokasi</h4>
-          <input v-model="form.dusun" placeholder="Dusun / Lingkungan" required class="input-field" />
-          <input v-model="form.tps" placeholder="Nomor TPS (contoh: TPS 01)" required class="input-field" />
+          <div>
+            <label for="user-dusun" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Dusun / Lingkungan</label>
+            <input id="user-dusun" v-model="form.dusun" placeholder="Dusun / Lingkungan" required class="input-field" />
+          </div>
+          <div>
+            <label for="user-tps" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Nomor TPS</label>
+            <input id="user-tps" v-model="form.tps" placeholder="Nomor TPS (contoh: TPS 01)" required class="input-field" />
+          </div>
 
           <div class="flex justify-end gap-2" style="margin-top: 1rem;">
             <button type="button" class="btn-outline" @click="showModal = false">Batal</button>
@@ -88,9 +105,7 @@ const fetchUsers = async () => {
     if (data.success) {
       users.value = data.data
     }
-  } catch (err) {
-    console.error(err)
-  }
+  } catch { /* ignore fetch errors */ }
 }
 
 const addUser = async () => {
@@ -114,9 +129,7 @@ const addUser = async () => {
     } else {
       alert("Gagal menambahkan pengguna: " + data.message)
     }
-  } catch (err) {
-    console.error(err)
-  }
+  } catch { /* ignore fetch errors */ }
 }
 
 const getRoleBadge = (role: string) => {
@@ -189,7 +202,7 @@ onMounted(fetchUsers)
 }
 
 .badge-danger {
-  background: #ef4444;
+  background: #dc2626;
   color: white;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
@@ -197,7 +210,7 @@ onMounted(fetchUsers)
 }
 
 .badge-warning {
-  background: #f59e0b;
+  background: #92400e;
   color: white;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
@@ -205,7 +218,7 @@ onMounted(fetchUsers)
 }
 
 .badge-primary {
-  background: #3b82f6;
+  background: #2563eb;
   color: white;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;

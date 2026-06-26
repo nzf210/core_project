@@ -11,19 +11,19 @@
         <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
         
         <div>
-          <label v-if="initialRole">Nomor WA / Username</label>
-          <label v-else>Username / Nomor WA</label>
-          <input v-model="form.username" type="text" class="input-field" placeholder="Masukkan Nomor WA (misal: 0812...)" required />
+          <label v-if="initialRole" for="input-username">Nomor WA / Username</label>
+          <label v-else for="input-username">Username / Nomor WA</label>
+          <input id="input-username" v-model="form.username" type="text" class="input-field" placeholder="Masukkan Nomor WA (misal: 0812...)" required />
         </div>
-        
+
         <div>
-          <label>Password</label>
-          <input v-model="form.password" type="password" class="input-field" placeholder="Masukkan password" required />
+          <label for="input-password">Password</label>
+          <input id="input-password" v-model="form.password" type="password" class="input-field" placeholder="Masukkan password" required />
         </div>
 
         <div v-if="initialRole">
-          <label>Kode Referral (opsional)</label>
-          <input v-model="referralCode" type="text" class="input-field" placeholder="AGEN-XXXXXX" style="text-transform: uppercase;" />
+          <label for="input-referral">Kode Referral (opsional)</label>
+          <input id="input-referral" v-model="referralCode" type="text" class="input-field" placeholder="AGEN-XXXXXX" style="text-transform: uppercase;" />
         </div>
 
         <button type="submit" class="btn-primary mt-2" :disabled="isLoading">
@@ -42,8 +42,8 @@
         </p>
         
         <div>
-          <label>Kode OTP</label>
-          <input v-model="otpCode" type="text" class="input-field text-center" placeholder="6 Digit OTP" required maxlength="6" style="font-size: 1.5rem; letter-spacing: 0.5rem;" />
+          <label for="input-otp">Kode OTP</label>
+          <input id="input-otp" v-model="otpCode" type="text" class="input-field text-center" placeholder="6 Digit OTP" required maxlength="6" style="font-size: 1.5rem; letter-spacing: 0.5rem;" />
         </div>
 
         <button type="submit" class="btn-primary mt-2" :disabled="isLoading">
@@ -99,7 +99,7 @@ const handleLogin = async () => {
         errorMsg.value = data.message || 'Login gagal. Periksa kredensial Anda.'
       }
     }
-  } catch (err) {
+  } catch {
     errorMsg.value = 'Gagal terhubung ke server.'
   } finally {
     isLoading.value = false
@@ -113,7 +113,7 @@ const verifyOTP = async () => {
   try {
     let res = await authApi.verifyOTP(form.value.username, otpCode.value)
     let data = await res.json()
-    
+
     if (data.success) {
       let loginRes = await authApi.login(form.value.username, form.value.password)
       let loginData = await loginRes.json()
@@ -126,7 +126,7 @@ const verifyOTP = async () => {
     } else {
       errorMsg.value = data.message || 'OTP salah.'
     }
-  } catch (err) {
+  } catch {
     errorMsg.value = 'Gagal terhubung ke server.'
   } finally {
     isLoading.value = false
@@ -224,8 +224,8 @@ label {
 .btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
 .error-msg {
   padding: 0.75rem;
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  background: #fde8e8;
+  color: #7f1d1d;
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
   text-align: center;

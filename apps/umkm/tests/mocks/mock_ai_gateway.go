@@ -154,14 +154,17 @@ func (m *MockAIGateway) Handler() http.HandlerFunc {
 		}
 
 		// Route based on path
+	const headerContentTypeMock = "Content-Type"
+	const mimeJSONMock = "application/json"
+
 		switch r.URL.Path {
 		case "/v1/chat", "/v1/chat/completions":
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(headerContentTypeMock, mimeJSONMock)
 			w.WriteHeader(http.StatusOK)
 			io.WriteString(w, m.chatResponse)
 
 		case "/v1/embeddings":
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(headerContentTypeMock, mimeJSONMock)
 			w.WriteHeader(http.StatusOK)
 			io.WriteString(w, m.embedResponse)
 

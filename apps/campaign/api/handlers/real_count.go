@@ -48,8 +48,8 @@ type visionResponse struct {
 
 type c1OCRResult struct {
 	CandidateVotes int `json:"candidate_votes"`
-	OpponentVotes int `json:"opponent_votes"`
-	InvalidVotes  int `json:"invalid_votes"`
+	OpponentVotes  int `json:"opponent_votes"`
+	InvalidVotes   int `json:"invalid_votes"`
 }
 
 // HandleRealCount processes incoming C1 Plano reports from WA/N8N
@@ -60,59 +60,60 @@ func HandleRealCount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+		getRealCountDashboard(w, r, tenantID)
+	case http.MethodPost:
+		recordRealCount(w, r, tenantID)
+	default:
 		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+	}
+}
+
+func getRealCountDashboard(w http.ResponseWriter, r *http.Request, tenantID string) {
+	campaignID := r.URL.Query().Get("campaign_id")
+	if campaignID == "" {
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "campaign_id is required"})
 		return
 	}
 
-	// GET: Retrieve Real Count Dashboard Data
-	if r.Method == http.MethodGet {
-		campaignID := r.URL.Query().Get("campaign_id")
-		if campaignID == "" {
-			WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "campaign_id is required"})
-			return
-		}
-
-		query := `
-			SELECT 
-				SUM(reported_candidate_votes) as cand_votes,
-				SUM(reported_opponent_votes) as opp_votes,
-				SUM(reported_invalid_votes) as inv_votes,
-				COUNT(tps_id) as tps_reported
-			FROM real_count_records
-			WHERE tenant_id = $1 AND campaign_id = $2 AND status IN ('auto_verified', 'human_verified')
-		`
-		var cand, opp, inv, reported int
-		err := repository.DB.QueryRow(context.Background(), query, tenantID, campaignID).Scan(&cand, &opp, &inv, &reported)
-		if err != nil {
-			cand, opp, inv, reported = 0, 0, 0, 0 // No data yet
-		}
-
-		// Count total TPS to get percentage
-		var totalTPS int
-		_ = repository.DB.QueryRow(context.Background(), "SELECT COUNT(*) FROM tps").Scan(&totalTPS)
-
-		WriteJSON(w, http.StatusOK, APIResponse{
-			Success: true,
-			Data: map[string]interface{}{
-				"candidate_votes": cand,
-				"opponent_votes":  opp,
-				"invalid_votes":   inv,
-				"tps_reported":    reported,
-				"total_tps":       totalTPS,
-			},
-		})
-		return
+	query := `
+		SELECT
+			SUM(reported_candidate_votes) as cand_votes,
+			SUM(reported_opponent_votes) as opp_votes,
+			SUM(reported_invalid_votes) as inv_votes,
+			COUNT(tps_id) as tps_reported
+		FROM real_count_records
+		WHERE tenant_id = $1 AND campaign_id = $2 AND status IN ('auto_verified', 'human_verified')
+	`
+	var cand, opp, inv, reported int
+	err := repository.DB.QueryRow(context.Background(), query, tenantID, campaignID).Scan(&cand, &opp, &inv, &reported)
+	if err != nil {
+		cand, opp, inv, reported = 0, 0, 0, 0 // No data yet
 	}
 
-	// POST: Receive C1 from WA Bot / Saksi
+	var totalTPS int
+	_ = repository.DB.QueryRow(context.Background(), "SELECT COUNT(*) FROM tps").Scan(&totalTPS)
+
+	WriteJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]any{
+			"candidate_votes": cand,
+			"opponent_votes":  opp,
+			"invalid_votes":   inv,
+			"tps_reported":    reported,
+			"total_tps":       totalTPS,
+		},
+	})
+}
+
+func recordRealCount(w http.ResponseWriter, r *http.Request, tenantID string) {
 	var req RealCountPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request payload"})
 		return
 	}
 
-	// Basic validation
 	if req.CampaignID == "" || req.TpsID == "" || req.VolunteerID == "" || req.C1ImageURL == "" {
 		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing required fields (campaign_id, tps_id, volunteer_id, c1_image_url)"})
 		return
@@ -120,52 +121,19 @@ func HandleRealCount(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Ensure volunteer is authorized saksi for this TPS (check saksi_attendances)
 	var saksiPresent bool
 	_ = repository.DB.QueryRow(ctx, `
-		SELECT true FROM saksi_attendances 
+		SELECT true FROM saksi_attendances
 		WHERE tenant_id = $1 AND volunteer_id = $2 AND tps_id = $3
 	`, tenantID, req.VolunteerID, req.TpsID).Scan(&saksiPresent)
 
 	if !saksiPresent {
-		// Tolak jika belum absen / bukan saksi resmi TPS tersebut
 		WriteJSON(w, http.StatusForbidden, APIResponse{Message: "Volunteer is not registered or absent at this TPS"})
 		return
 	}
 
-	// CALL AI GATEWAY VISION (Internal HTTP Call)
-	// We call our own internal ai-gateway to analyze the C1 Image
-	aiCandVotes := -1
-	aiOppVotes := -1
-	aiInvVotes := -1
+	aiCandVotes, aiOppVotes, aiInvVotes := performOCR(ctx, tenantID, req.C1ImageURL)
 
-	// Call AI Gateway vision endpoint to OCR C1 form
-	visionReq := visionRequest{
-		TenantID: tenantID,
-		ImageURL: req.C1ImageURL,
-		Prompt:   "Extract C1 numbers",
-	}
-	visionReqBytes, _ := json.Marshal(visionReq)
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", visionGatewayURL, bytes.NewBuffer(visionReqBytes))
-	if err == nil {
-		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("X-Tenant-ID", tenantID)
-		httpResp, err := http.DefaultClient.Do(httpReq)
-		if err == nil {
-			defer httpResp.Body.Close()
-			var visionResp visionResponse
-			if err := json.NewDecoder(httpResp.Body).Decode(&visionResp); err == nil && visionResp.Success {
-				var ocrResult c1OCRResult
-				if err := json.Unmarshal([]byte(visionResp.Data.Text), &ocrResult); err == nil {
-					aiCandVotes = ocrResult.CandidateVotes
-					aiOppVotes = ocrResult.OpponentVotes
-					aiInvVotes = ocrResult.InvalidVotes
-				}
-			}
-		}
-	}
-
-	// Fallback: if AI fails, use reported values (needs human review anyway)
 	if aiCandVotes == -1 {
 		aiCandVotes = req.ReportedVotes1
 		aiOppVotes = req.ReportedVotes2
@@ -173,34 +141,30 @@ func HandleRealCount(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[real_count] AI Vision failed for TPS %s, using reported values\n", req.TpsID)
 	}
 
-	// Cross-check reported vs AI
-	status := "pending_review"
-	var notes string
-
+	status, notes := "pending_review", ""
 	if aiCandVotes == req.ReportedVotes1 && aiOppVotes == req.ReportedVotes2 && aiInvVotes == req.ReportedInvalid {
-		status = "auto_verified" // Angka ketik saksi match dengan foto C1
+		status = "auto_verified"
 	} else {
 		status = "needs_human_review"
 		notes = "AI Vision mismatch with Saksi input"
 	}
 
-	// Insert into DB
 	query := `
-		INSERT INTO real_count_records 
-		(tenant_id, campaign_id, tps_id, volunteer_id, 
-		 reported_candidate_votes, reported_opponent_votes, reported_invalid_votes, 
-		 ai_candidate_votes, ai_opponent_votes, ai_invalid_votes, 
+		INSERT INTO real_count_records
+		(tenant_id, campaign_id, tps_id, volunteer_id,
+		 reported_candidate_votes, reported_opponent_votes, reported_invalid_votes,
+		 ai_candidate_votes, ai_opponent_votes, ai_invalid_votes,
 		 c1_image_url, status, notes)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-		ON CONFLICT (campaign_id, tps_id) 
-		DO UPDATE SET 
+		ON CONFLICT (campaign_id, tps_id)
+		DO UPDATE SET
 			reported_candidate_votes = EXCLUDED.reported_candidate_votes,
 			c1_image_url = EXCLUDED.c1_image_url,
 			status = EXCLUDED.status,
 			updated_at = NOW()
 	`
 
-	_, err = repository.DB.Exec(ctx, query,
+	_, err := repository.DB.Exec(ctx, query,
 		tenantID, req.CampaignID, req.TpsID, req.VolunteerID,
 		req.ReportedVotes1, req.ReportedVotes2, req.ReportedInvalid,
 		aiCandVotes, aiOppVotes, aiInvVotes,
@@ -217,11 +181,42 @@ func HandleRealCount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, APIResponse{
-		Success: true, 
+		Success: true,
 		Message: "Real count recorded",
-		Data: map[string]interface{}{
-			"status": status,
+		Data: map[string]any{
+			"status":   status,
 			"ai_match": status == "auto_verified",
 		},
 	})
+}
+
+func performOCR(ctx context.Context, tenantID, imageURL string) (int, int, int) {
+	visionReq := visionRequest{
+		TenantID: tenantID,
+		ImageURL: imageURL,
+		Prompt:   "Extract C1 numbers",
+	}
+	visionReqBytes, _ := json.Marshal(visionReq)
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", visionGatewayURL, bytes.NewBuffer(visionReqBytes))
+	if err != nil {
+		return -1, -1, -1
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("X-Tenant-ID", tenantID)
+	httpResp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return -1, -1, -1
+	}
+	defer httpResp.Body.Close()
+
+	var visionResp visionResponse
+	if err := json.NewDecoder(httpResp.Body).Decode(&visionResp); err != nil || !visionResp.Success {
+		return -1, -1, -1
+	}
+
+	var ocrResult c1OCRResult
+	if err := json.Unmarshal([]byte(visionResp.Data.Text), &ocrResult); err != nil {
+		return -1, -1, -1
+	}
+	return ocrResult.CandidateVotes, ocrResult.OpponentVotes, ocrResult.InvalidVotes
 }

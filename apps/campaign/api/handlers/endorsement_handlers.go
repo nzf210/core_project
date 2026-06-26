@@ -8,7 +8,37 @@ import (
 	"regexp"
 
 	"core_project/apps/campaign/api/repository"
+
+	"github.com/jackc/pgx/v5"
 )
+
+var nikRegex = regexp.MustCompile(`^\d{16}$`)
+
+func validateNIK(nik string) string {
+	if nikRegex.MatchString(nik) {
+		return "valid"
+	}
+	return "invalid_nik"
+}
+
+func checkDuplicateEndorsement(ctx context.Context, tx pgx.Tx, tenantID, citizenID string) string {
+	rows, err := tx.Query(ctx, "SELECT tenant_id::text, campaign_id::text FROM endorsements WHERE citizen_id = $1", citizenID)
+	if err != nil {
+		return ""
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var tID, cID string
+		if err := rows.Scan(&tID, &cID); err == nil {
+			if tID == tenantID {
+				return "conflict_internal"
+			}
+			return "conflict_external"
+		}
+	}
+	return ""
+}
 
 // HandleEndorsements replaces the old POST /voters logic
 // Supports F031 Anti-Double Validation and Citizen-Centric Schema
@@ -43,16 +73,9 @@ func HandleEndorsements(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Validasi Format NIK (harus 16 digit angka)
-	nikRegex := regexp.MustCompile(`^\d{16}$`)
-	endorsementStatus := "valid"
-	if !nikRegex.MatchString(req.Nik) {
-		endorsementStatus = "invalid_nik"
-	}
-
+	endorsementStatus := validateNIK(req.Nik)
 	ctx := context.Background()
 
-	// Mulai Transaksi Database
 	tx, err := repository.DB.Begin(ctx)
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Transaction start failed"})
@@ -60,21 +83,17 @@ func HandleEndorsements(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 
-	// 2. Insert or Get Citizen (Master Data)
-	var citizenID string
+	// Check if NIK exists in DPT
 	var isDPTVerified bool
-	var existingTPS *string
-
-	// Cek apakah NIK ini ada di DPT
-	err = tx.QueryRow(ctx, "SELECT true, tps_name FROM dpt_records WHERE nik = $1", req.Nik).Scan(&isDPTVerified, &existingTPS)
+	err = tx.QueryRow(ctx, "SELECT true, tps_name FROM dpt_records WHERE nik = $1", req.Nik).Scan(&isDPTVerified, new(string))
 	if err != nil {
-		isDPTVerified = false // Not in DPT
+		isDPTVerified = false
 	}
 
-	// Insert into citizens (ON CONFLICT DO NOTHING)
+	// Insert citizen (ON CONFLICT DO NOTHING)
 	_, err = tx.Exec(ctx, `
-		INSERT INTO citizens (nik, name, address, is_dpt_verified) 
-		VALUES ($1, $2, $3, $4) 
+		INSERT INTO citizens (nik, name, address, is_dpt_verified)
+		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (nik) DO NOTHING
 	`, req.Nik, req.Name, req.Address, isDPTVerified)
 	if err != nil {
@@ -82,52 +101,23 @@ func HandleEndorsements(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ambil citizen_id (karena ON CONFLICT DO NOTHING tidak return ID di PostgreSQL)
+	var citizenID string
 	err = tx.QueryRow(ctx, "SELECT id FROM citizens WHERE nik = $1", req.Nik).Scan(&citizenID)
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to retrieve citizen ID"})
 		return
 	}
 
-	// 3. Deteksi Ganda (Internal vs External) jika NIK valid
-	if endorsementStatus != "invalid_nik" {
-		// Cek apakah citizen ini sudah didukung di sistem
-		var existingClaims []struct {
-			TenantID   string
-			CampaignID string
-		}
-		
-		rows, err := tx.Query(ctx, "SELECT tenant_id::text, campaign_id::text FROM endorsements WHERE citizen_id = $1", citizenID)
-		if err == nil {
-			for rows.Next() {
-				var tID, cID string
-				if err := rows.Scan(&tID, &cID); err == nil {
-					existingClaims = append(existingClaims, struct{TenantID, CampaignID string}{tID, cID})
-				}
-			}
-			rows.Close()
-		}
-
-		for _, claim := range existingClaims {
-			if claim.TenantID == tenantID {
-				// Sudah didukung di kubu/paslon yang sama -> Konflik Internal (Nyolong teman)
-				endorsementStatus = "conflict_internal"
-			} else {
-				// Didukung oleh paslon lawan -> Konflik Eksternal (Sengketa silang)
-				// Tetap validkan jika internal belum conflict, tapi utamakan external conflict
-				if endorsementStatus != "conflict_internal" {
-					endorsementStatus = "conflict_external"
-				}
-			}
+	// Check for duplicate endorsements if NIK is valid
+	if endorsementStatus == "valid" {
+		if dupStatus := checkDuplicateEndorsement(ctx, tx, tenantID, citizenID); dupStatus != "" {
+			endorsementStatus = dupStatus
 		}
 	}
 
-	// 4. Insert Relasi Endorsement
 	var recruiterArg interface{}
 	if req.RecruiterID != "" {
 		recruiterArg = req.RecruiterID
-	} else {
-		recruiterArg = nil
 	}
 
 	var endorsementID string
@@ -137,7 +127,6 @@ func HandleEndorsements(w http.ResponseWriter, r *http.Request) {
 		ON CONFLICT (citizen_id, campaign_id) DO NOTHING
 		RETURNING id
 	`, citizenID, tenantID, req.CampaignID, recruiterArg, endorsementStatus).Scan(&endorsementID)
-	
 	if err != nil {
 		slog.Error("Failed to record endorsement", "tenant_id", tenantID, "citizen_id", citizenID)
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to record endorsement"})
@@ -150,12 +139,12 @@ func HandleEndorsements(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, APIResponse{
-		Success: true, 
-		Message: "Endorsement recorded", 
-		Data: map[string]interface{}{
-			"endorsement_id": endorsementID,
-			"citizen_id": citizenID,
-			"status": endorsementStatus,
+		Success: true,
+		Message: "Endorsement recorded",
+		Data: map[string]any{
+			"endorsement_id":   endorsementID,
+			"citizen_id":      citizenID,
+			"status":          endorsementStatus,
 			"is_dpt_verified": isDPTVerified,
 		},
 	})

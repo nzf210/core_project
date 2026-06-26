@@ -2,8 +2,14 @@
   <div class="volunteers">
     <h3 style="margin-bottom: 1rem; color: var(--text-secondary)">Manajemen Relawan</h3>
     <form @submit.prevent="addVolunteer" class="volunteer-form">
-      <input v-model="form.name" placeholder="Nama Relawan" required class="input-field" />
-      <input v-model="form.phone" placeholder="Nomor Telepon" required class="input-field" />
+      <div>
+        <label for="vol-name" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Nama Relawan</label>
+        <input id="vol-name" v-model="form.name" placeholder="Nama Relawan" required class="input-field" />
+      </div>
+      <div>
+        <label for="vol-phone" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Nomor Telepon</label>
+        <input id="vol-phone" v-model="form.phone" placeholder="Nomor Telepon" required class="input-field" />
+      </div>
       <button type="submit" class="btn-primary">Tambah Relawan</button>
     </form>
     

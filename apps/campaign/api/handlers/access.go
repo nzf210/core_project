@@ -24,11 +24,12 @@ type AuditLog struct {
 func HandleRoles(w http.ResponseWriter, r *http.Request) {
 	tenantID := ExtractTenantID(r)
 	if tenantID == "" {
-		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingTenantID})
 		return
 	}
 
-	if r.Method == http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
 		rows, err := repository.DB.Query(context.Background(),
 			"SELECT id, name, COALESCE(description, '') FROM roles WHERE tenant_id = $1", tenantID)
 		if err != nil {
@@ -50,10 +51,8 @@ func HandleRoles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		WriteJSON(w, http.StatusOK, APIResponse{Success: true, Data: roles})
-		return
-	}
 
-	if r.Method == http.MethodPost {
+	case http.MethodPost:
 		var req struct {
 			Name        string `json:"name"`
 			Description string `json:"description"`
@@ -67,17 +66,16 @@ func HandleRoles(w http.ResponseWriter, r *http.Request) {
 		err := repository.DB.QueryRow(context.Background(),
 			"INSERT INTO roles (tenant_id, name, description) VALUES ($1, $2, $3) RETURNING id",
 			tenantID, req.Name, req.Description).Scan(&id)
-		
 		if err != nil {
 			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create role"})
 			return
 		}
 
 		WriteJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Role created", Data: map[string]string{"id": id}})
-		return
-	}
 
-	WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+	default:
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+	}
 }
 
 func HandleAuditLogs(w http.ResponseWriter, r *http.Request) {

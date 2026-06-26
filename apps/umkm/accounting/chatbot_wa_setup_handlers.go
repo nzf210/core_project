@@ -244,11 +244,14 @@ func validateCloudAPICredentialsAfterSave(ctx context.Context, w http.ResponseWr
 		_, _ = DB.Exec(ctx, `UPDATE wa_cloud_api_credentials SET verification_status = $1, last_checked_at = NOW(), check_error = $3 WHERE tenant_id = $2`, verificationStatus, tenantID, "Gagal terhubung ke Meta API untuk validasi")
 	}
 
-	respMsg := "Cloud API credential tersimpan"
-	if verificationStatus == "verified" {
-		respMsg += " & terverifikasi!"
-	} else if verificationStatus == "error" {
-		respMsg += ". Validasi gagal — periksa credential Anda."
+	var respMsg string
+	switch verificationStatus {
+	case "verified":
+		respMsg = "Cloud API credential tersimpan & terverifikasi!"
+	case "error":
+		respMsg = "Cloud API credential tersimpan. Validasi gagal — periksa credential Anda."
+	default:
+		respMsg = "Cloud API credential tersimpan"
 	}
 	writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: respMsg})
 }

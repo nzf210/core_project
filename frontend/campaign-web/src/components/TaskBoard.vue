@@ -2,18 +2,30 @@
   <div class="task-board">
     <h3 style="margin-bottom: 1rem; color: var(--text-secondary)">Task & Operations</h3>
     <form @submit.prevent="addTask" class="flex flex-col gap-4" style="max-width: 500px; margin-bottom: 2rem;">
-      <input v-model="form.title" placeholder="Task Title" required class="input-field" />
-      <textarea v-model="form.description" placeholder="Description" rows="3" class="input-field"></textarea>
-      
-      <select v-model="form.assigned_to" class="input-field">
-        <option value="">-- Assign to (Opsional) --</option>
-        <option v-for="u in users" :key="u.id" :value="u.id">{{ u.username }} ({{ u.role }})</option>
-      </select>
+      <div>
+        <label for="task-title" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Task Title</label>
+        <input id="task-title" v-model="form.title" placeholder="Task Title" required class="input-field" />
+      </div>
+      <div>
+        <label for="task-desc" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Description</label>
+        <textarea id="task-desc" v-model="form.description" placeholder="Description" rows="3" class="input-field"></textarea>
+      </div>
 
-      <select v-model="form.verification_type" class="input-field">
-        <option value="auto">Verifikasi Otomatis (GPS & AI)</option>
-        <option value="manual">Verifikasi Manual (Admin)</option>
-      </select>
+      <div>
+        <label for="task-assign" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Assign to</label>
+        <select id="task-assign" v-model="form.assigned_to" class="input-field">
+          <option value="">-- Assign to (Opsional) --</option>
+          <option v-for="u in users" :key="u.id" :value="u.id">{{ u.username }} ({{ u.role }})</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="task-verif" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Verification Type</label>
+        <select id="task-verif" v-model="form.verification_type" class="input-field">
+          <option value="auto">Verifikasi Otomatis (GPS & AI)</option>
+          <option value="manual">Verifikasi Manual (Admin)</option>
+        </select>
+      </div>
 
       <button type="submit" class="btn-primary" style="align-self: flex-start;">Create Task</button>
     </form>
@@ -53,7 +65,7 @@ const fetchTasks = async () => {
     const res = await apiClient('/tasks')
     const data = await res.json()
     if (data.success) { tasks.value = data.data }
-  } catch (err) { console.error(err) }
+  } catch { /* ignore fetch errors */ }
 }
 
 const fetchUsers = async () => {
@@ -61,7 +73,7 @@ const fetchUsers = async () => {
     const res = await apiClient('/users')
     const data = await res.json()
     if (data.success) { users.value = data.data }
-  } catch (err) { console.error(err) }
+  } catch { /* ignore fetch errors */ }
 }
 
 const fetchCampaigns = async () => {
@@ -71,7 +83,7 @@ const fetchCampaigns = async () => {
     if (data.success && data.data.length > 0) {
       form.value.campaign_id = data.data[0].id
     }
-  } catch (err) { console.error(err) }
+  } catch { /* ignore fetch errors */ }
 }
 
 const getUserName = (id: string) => {
@@ -95,7 +107,7 @@ const addTask = async () => {
     } else {
       console.error(data.message)
     }
-  } catch (err) { console.error(err) }
+  } catch { /* ignore fetch errors */ }
 }
 
 const updateTaskStatus = async (id: string, status: string) => {

@@ -5,6 +5,8 @@ import (
 	"net/http"
 )
 
+const errMissingTenantID = "Missing X-Tenant-ID"
+
 type APIResponse struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message"`

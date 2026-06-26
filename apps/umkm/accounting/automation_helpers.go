@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-
 func getAutomationLimit(plan string) int {
 	switch plan {
 	case "lite":
@@ -17,7 +16,7 @@ func getAutomationLimit(plan string) int {
 	case "enterprise", "ultimate", "superadmin":
 		return 999
 	default:
-		return 0 // unknown / inactive = no automation
+		return 0
 	}
 }
 
@@ -30,7 +29,7 @@ func cronMatchesNow(cronExpr string, now time.Time) bool {
 	hour := now.Hour()
 	dayOfMonth := now.Day()
 	month := int(now.Month())
-	dayOfWeek := int(now.Weekday()) // 0=Sunday
+	dayOfWeek := int(now.Weekday())
 
 	return fieldMatches(parts[0], minute) &&
 		fieldMatches(parts[1], hour) &&
@@ -43,25 +42,13 @@ func fieldMatches(field string, value int) bool {
 	if field == "*" {
 		return true
 	}
-	// Handle */N step values
 	if strings.HasPrefix(field, "*/") {
-		step, err := strconv.Atoi(field[2:])
-		if err != nil || step == 0 {
-			return false
-		}
-		return value%step == 0
+		return matchesStep(field, value)
 	}
-	// Handle comma-separated values
 	for _, part := range strings.Split(field, ",") {
-		// Handle range N-M
 		if strings.Contains(part, "-") {
-			rangeParts := strings.Split(part, "-")
-			if len(rangeParts) == 2 {
-				low, err1 := strconv.Atoi(rangeParts[0])
-				high, err2 := strconv.Atoi(rangeParts[1])
-				if err1 == nil && err2 == nil && value >= low && value <= high {
-					return true
-				}
+			if matchesRange(part, value) {
+				return true
 			}
 			continue
 		}
@@ -71,6 +58,24 @@ func fieldMatches(field string, value int) bool {
 		}
 	}
 	return false
+}
+
+func matchesStep(field string, value int) bool {
+	step, err := strconv.Atoi(field[2:])
+	if err != nil || step == 0 {
+		return false
+	}
+	return value%step == 0
+}
+
+func matchesRange(part string, value int) bool {
+	rangeParts := strings.Split(part, "-")
+	if len(rangeParts) != 2 {
+		return false
+	}
+	low, err1 := strconv.Atoi(rangeParts[0])
+	high, err2 := strconv.Atoi(rangeParts[1])
+	return err1 == nil && err2 == nil && value >= low && value <= high
 }
 
 func formatRupiah(amount int64) string {

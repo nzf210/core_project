@@ -71,6 +71,8 @@ type DashboardWidget struct {
 	Size     string      `json:"size"`
 }
 
+const titlePendapatanHariIni = "Pendapatan Hari Ini"
+
 var widgetTemplates = map[string][]DashboardWidget{
 	"umum": {
 		{ID: "income_summary", Type: "metric", Title: "Pendapatan Bulan Ini", Module: "reports", Config: map[string]string{"metric": "income_current_month"}, Position: 0, Size: "medium"},
@@ -83,13 +85,13 @@ var widgetTemplates = map[string][]DashboardWidget{
 		{ID: "daily_sales", Type: "chart", Title: "Penjualan Hari Ini", Module: "transactions", Config: map[string]string{"chart": "bar", "period": "today"}, Position: 0, Size: "large"},
 		{ID: "best_selling_items", Type: "list", Title: "Item Terlaris", Module: "inventory", Config: map[string]int{"limit": 5}, Position: 1, Size: "medium"},
 		{ID: "stock_alert", Type: "alert", Title: "Stok Menipis", Module: "inventory", Config: map[string]int{"threshold": 5}, Position: 2, Size: "medium"},
-		{ID: "income_summary", Type: "metric", Title: "Pendapatan Hari Ini", Module: "reports", Config: map[string]string{"metric": "income_today"}, Position: 3, Size: "medium"},
+		{ID: "income_summary", Type: "metric", Title: titlePendapatanHariIni, Module: "reports", Config: map[string]string{"metric": "income_today"}, Position: 3, Size: "medium"},
 		{ID: "profit_margin", Type: "metric", Title: "Margin Keuntungan", Module: "reports", Config: map[string]string{"metric": "profit_margin"}, Position: 4, Size: "medium"},
 		{ID: "expense_summary", Type: "metric", Title: "Pengeluaran", Module: "reports", Config: map[string]string{"metric": "expense_today"}, Position: 5, Size: "medium"},
 	},
 	"laundry": {
 		{ID: "active_orders", Type: "list", Title: "Pesanan Aktif", Module: "order_tracking", Config: map[string]string{"status": "active"}, Position: 0, Size: "large"},
-		{ID: "daily_revenue", Type: "metric", Title: "Pendapatan Hari Ini", Module: "reports", Config: map[string]string{"metric": "income_today"}, Position: 1, Size: "medium"},
+		{ID: "daily_revenue", Type: "metric", Title: titlePendapatanHariIni, Module: "reports", Config: map[string]string{"metric": "income_today"}, Position: 1, Size: "medium"},
 		{ID: "package_breakdown", Type: "chart", Title: "Pesanan Per Paket", Module: "order_tracking", Config: map[string]string{"chart": "pie", "groupBy": "package"}, Position: 2, Size: "medium"},
 		{ID: "customer_summary", Type: "metric", Title: "Total Pelanggan", Module: "customers", Config: map[string]string{"metric": "total_customers"}, Position: 3, Size: "medium"},
 		{ID: "order_status_timeline", Type: "timeline", Title: "Status Pesanan", Module: "order_tracking", Config: map[string]string{"view": "timeline"}, Position: 4, Size: "medium"},
@@ -109,7 +111,7 @@ var widgetTemplates = map[string][]DashboardWidget{
 		{ID: "pending_shipments", Type: "list", Title: "Pengiriman Pending", Module: "shipment_tracking", Config: map[string]string{"status": "pending"}, Position: 4, Size: "medium"},
 	},
 	"restoran": {
-		{ID: "daily_revenue", Type: "metric", Title: "Pendapatan Hari Ini", Module: "reports", Config: map[string]string{"metric": "income_today"}, Position: 0, Size: "medium"},
+		{ID: "daily_revenue", Type: "metric", Title: titlePendapatanHariIni, Module: "reports", Config: map[string]string{"metric": "income_today"}, Position: 0, Size: "medium"},
 		{ID: "popular_items", Type: "list", Title: "Menu Terpopuler", Module: "menu_management", Config: map[string]int{"limit": 5}, Position: 1, Size: "medium"},
 		{ID: "cost_ratio", Type: "metric", Title: "Rasio Biaya", Module: "reports", Config: map[string]string{"metric": "cost_ratio"}, Position: 2, Size: "medium"},
 		{ID: "peak_hours", Type: "chart", Title: "Jam Sibuk", Module: "transactions", Config: map[string]string{"chart": "bar", "groupBy": "hour"}, Position: 3, Size: "medium"},
@@ -117,14 +119,14 @@ var widgetTemplates = map[string][]DashboardWidget{
 	},
 	"jasa": {
 		{ID: "appointments_today", Type: "list", Title: "Janji Hari Ini", Module: "appointment_scheduling", Config: map[string]string{"date": "today"}, Position: 0, Size: "large"},
-		{ID: "service_revenue", Type: "metric", Title: "Pendapatan Layanan", Module: "reports", Config: map[string]string{"metric": "income_today"}, Position: 1, Size: "medium"},
+		{ID: "service_revenue", Type: "metric", Title: titlePendapatanHariIni, Module: "reports", Config: map[string]string{"metric": "income_today"}, Position: 1, Size: "medium"},
 		{ID: "top_services", Type: "list", Title: "Layanan Terpopuler", Module: "service_catalog", Config: map[string]int{"limit": 5}, Position: 2, Size: "medium"},
 		{ID: "customer_retention", Type: "metric", Title: "Retensi Pelanggan", Module: "customers", Config: map[string]string{"metric": "retention_rate"}, Position: 3, Size: "medium"},
 		{ID: "staff_utilization", Type: "chart", Title: "Utilisasi Staff", Module: "staff_performance", Config: map[string]string{"chart": "bar"}, Position: 4, Size: "medium"},
 	},
 	"hotel": {
 		{ID: "room_occupancy", Type: "metric", Title: "Tingkat Okupansi", Module: "room_management", Config: map[string]string{"metric": "occupancy_today"}, Position: 0, Size: "medium"},
-		{ID: "daily_revenue", Type: "metric", Title: "Pendapatan Hari Ini", Module: "reports", Config: map[string]string{"metric": "income_today"}, Position: 1, Size: "medium"},
+		{ID: "daily_revenue", Type: "metric", Title: titlePendapatanHariIni, Module: "reports", Config: map[string]string{"metric": "income_today"}, Position: 1, Size: "medium"},
 		{ID: "booking_status", Type: "list", Title: "Status Booking", Module: "booking", Config: map[string]int{"limit": 5}, Position: 2, Size: "large"},
 		{ID: "income_summary", Type: "chart", Title: "Tren Pendapatan", Module: "reports", Config: map[string]string{"chart": "line"}, Position: 3, Size: "medium"},
 		{ID: "guest_demographics", Type: "chart", Title: "Demografi Tamu", Module: "customers", Config: map[string]string{"chart": "pie"}, Position: 4, Size: "medium"},

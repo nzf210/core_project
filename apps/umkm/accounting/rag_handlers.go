@@ -12,11 +12,16 @@ import (
 	"time"
 )
 
+const (
+	errMissingTenantRAG = "Missing tenant_id"
+	errInvalidBodyRAG   = "Invalid body"
+)
+
 
 func handleInternalRAGSearch(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.PathValue("tenant_id")
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing tenant_id"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingTenantRAG})
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -31,7 +36,7 @@ func handleInternalRAGSearch(w http.ResponseWriter, r *http.Request) {
 		Threshold float64 `json:"threshold"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errInvalidBodyRAG})
 		return
 	}
 	if req.Query == "" {
