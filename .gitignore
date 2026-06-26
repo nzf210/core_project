@@ -65,6 +65,7 @@ frontend/*/.nuxt/
 # =============================================================================
 # Python (tools/scripts)
 # =============================================================================
+scripts/revenue_simulation/
 __pycache__/
 *.py[cod]
 *.pyc
@@ -96,10 +97,16 @@ temp/
 *~
 Thumbs.db
 chatbot
+# Negate umkm chatbot source directory (chatbot pattern above ignores legacy builds/outputs)
+!apps/umkm/chatbot/
 subscription-worker
 temp.md
 business
+# Negate umkm business source directory (business pattern above ignores legacy builds/outputs)
+!apps/umkm/business/
 api
+# Negate campaign API source directory (api pattern above is legacy leftover)
+!apps/campaign/api/
 auto-bin
 bin/auth-service.*
 bin/accounting.*
@@ -119,12 +126,10 @@ api
 automation
 # apps/umkm/automation/main_test.go - folder archived
 # frontend/*/src/env.d.ts - Vite/Vue type declarations, should be tracked
-
-# Auto-generated / unwanted files
-automation
-# apps/umkm/automation/main_test.go - folder archived
-# frontend/*/src/env.d.ts - Vite/Vue type declarations, should be tracked
 apps/umkm/accounting/accounting
+
+# Negate campaign API source directory (api pattern above is legacy leftover)
+!apps/campaign/api/
 
 # Temp AI scripts (dash and underscore variants)
 test-*
