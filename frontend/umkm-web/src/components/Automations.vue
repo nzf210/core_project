@@ -433,9 +433,9 @@ onMounted(() => {
 
 .limit-warning {
   text-align: center;
-  color: #f59e0b;
+  color: #92400e;
   padding: 1rem;
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(245, 158, 11, 0.15);
   border-radius: 8px;
   margin-bottom: 1.5rem;
 }
