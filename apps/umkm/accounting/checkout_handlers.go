@@ -1,13 +1,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
-	"core_project/shared/sdk/webhook"
 	xendit "github.com/xendit/xendit-go/v6"
 	invoice "github.com/xendit/xendit-go/v6/invoice"
 )
@@ -22,13 +21,11 @@ func handleCheckout(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		var req struct {
-			PaymentMethod string  `json:"payment_method"` // "cash" or "qris"
-			TotalAmount   float64 `json:"total_amount"`
+			PaymentMethod string `json:"payment_method"` // "cash" or "qris"
 			Items         []struct {
-				ID       string  `json:"id"`
-				Name     string  `json:"name"`
-				Quantity int     `json:"quantity"`
-				Price    float64 `json:"price"`
+				ProductID string `json:"product_id"`
+				Quantity  int    `json:"quantity"`
+				Price     int64  `json:"price"` // frontend sends integer price in IDR
 			} `json:"items"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -36,173 +33,173 @@ func handleCheckout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if len(req.Items) == 0 {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Items cannot be empty"})
+			return
+		}
+
 		ctx := r.Context()
+		handleCheckoutPostRequest(w, r, ctx, tenantID, req.PaymentMethod, req.Items)
+	} else {
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+	}
+}
+type CheckoutItem struct {
+	ProductID string `json:"product_id"`
+	Quantity  int    `json:"quantity"`
+	Price     int64  `json:"price"`
+}
 
-		var realTotalAmount float64
-		for _, item := range req.Items {
-			var dbPrice float64
-			err := DB.QueryRow(ctx, "SELECT price FROM products WHERE id = $1 AND tenant_id = $2", item.ID, tenantID).Scan(&dbPrice)
-			if err != nil {
-				writeJSON(w, http.StatusBadRequest, APIResponse{Message: fmt.Sprintf("Produk tidak valid: %s", item.Name)})
-				return
-			}
-			realTotalAmount += dbPrice * float64(item.Quantity)
-		}
-
-		// Security Check: Compare calculated total with requested total
-		if req.TotalAmount != realTotalAmount {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Harga tidak valid. Kemungkinan terdeteksi manipulasi."})
-			return
-		}
-
-		if realTotalAmount <= 0 {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid amount"})
-			return
-		}
-
-		// Determine accounts
-		var debitAccCode, creditAccCode string
-		creditAccCode = "400" // Pendapatan Usaha
-
-		var xenditApiKey *string
-		var qrisEnabled *bool
-
-		if req.PaymentMethod == "qris" {
-			// Validate QRIS settings
-			err := DB.QueryRow(ctx, "SELECT xendit_api_key, qris_enabled FROM tenants WHERE id = $1", tenantID).Scan(&xenditApiKey, &qrisEnabled)
-			if err != nil || qrisEnabled == nil || !*qrisEnabled {
-				writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Pembayaran QRIS belum diaktifkan oleh toko ini"})
-				return
-			}
-			if xenditApiKey == nil || *xenditApiKey == "" {
-				writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Toko belum mengatur Xendit API Key untuk menerima pembayaran QRIS."})
-				return
-			}
-			debitAccCode = "101" // Bank / QRIS
-		} else {
-			debitAccCode = "100" // Kas (Cash)
-		}
-
-		var debitAccID, creditAccID string
-		err := DB.QueryRow(ctx, "SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = $2", tenantID, debitAccCode).Scan(&debitAccID)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Debit account not found. Try relogin to re-seed accounts."})
-			return
-		}
-
-		err = DB.QueryRow(ctx, "SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = $2", tenantID, creditAccCode).Scan(&creditAccID)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Credit account not found"})
-			return
-		}
-
-		// Insert Transaction
-		dateStr := time.Now().Format("2006-01-02")
-		description := "Penjualan via " + req.PaymentMethod
-		reference := "INV-" + time.Now().Format("060102150405")
-
-		itemsJSON, _ := json.Marshal(map[string]interface{}{
-			"items": req.Items,
-		})
-
-		status := "paid"
-		if req.PaymentMethod == "qris" {
-			status = "pending"
-		}
-
-		_, err = DB.Exec(ctx, "INSERT INTO pos_transactions (tenant_id, reference, total_amount, payment_method, status, items_json) VALUES ($1, $2, $3, $4, $5, $6)",
-			tenantID, reference, realTotalAmount, req.PaymentMethod, status, itemsJSON)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal menyimpan transaksi POS"})
-			return
-		}
-
-		// Xendit QRIS/Invoice implementation
-		if req.PaymentMethod == "qris" {
-			xClient := xendit.NewClient(*xenditApiKey)
-
-			externalID := reference
-			createInvoiceReq := invoice.NewCreateInvoiceRequest(externalID, realTotalAmount)
-			desc := "Pembayaran Toko UMKM: " + reference
-			createInvoiceReq.Description = &desc
-
-			resp, _, err := xClient.InvoiceApi.CreateInvoice(ctx).CreateInvoiceRequest(*createInvoiceReq).Execute()
-			if err != nil {
-				slog.Error("Failed to create store invoice", "error", err)
-				writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal membuat invoice Xendit. Cek API Key Anda."})
-				return
-			}
-
-			writeJSON(w, http.StatusOK, map[string]interface{}{
-				"success":   true,
-				"message":   "Menunggu pembayaran via Xendit",
-				"status":    "pending",
-				"qris_url":  resp.InvoiceUrl,
-				"reference": reference,
-			})
-			return
-		}
-
-		// If CASH (Paid immediately), proceed to journal and stock deduction
-		tx, err := DB.Begin(ctx)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
-			return
-		}
-		defer tx.Rollback(ctx)
-
-		var entryID string
-		err = tx.QueryRow(ctx,
-			"INSERT INTO journal_entries (tenant_id, date, description, reference, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-			tenantID, dateStr, description, reference, itemsJSON).Scan(&entryID)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create entry"})
-			return
-		}
-
-		// Insert Debit Line
-		_, err = tx.Exec(ctx,
-			"INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0)",
-			entryID, debitAccID, realTotalAmount)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to insert debit line"})
-			return
-		}
-
-		// Insert Credit Line
-		_, err = tx.Exec(ctx,
-			"INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)",
-			entryID, creditAccID, realTotalAmount)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to insert credit line"})
-			return
-		}
-
-		err = tx.Commit(ctx)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to commit transaction"})
-			return
-		}
-
-		for _, item := range req.Items {
-			DB.Exec(ctx, "UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2 AND tenant_id = $3", item.Quantity, item.ID, tenantID)
-		}
-
-		webhook.DispatchEvent("pos_checkout_completed", tenantID, map[string]interface{}{
-			"reference":      reference,
-			"total_amount":   realTotalAmount,
-			"payment_method": req.PaymentMethod,
-		})
-
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"success":   true,
-			"message":   "Transaksi berhasil dicatat",
-			"status":    "paid",
-			"qris_url":  "",
-			"reference": reference,
-		})
+func handleCheckoutPostRequest(w http.ResponseWriter, r *http.Request, ctx context.Context, tenantID, paymentMethod string, items []struct{ProductID string "json:\"product_id\""; Quantity int "json:\"quantity\""; Price int64 "json:\"price\""}) {
+	var xenditApiKey *string
+	err := DB.QueryRow(ctx, "SELECT xendit_api_key FROM tenants WHERE id = $1", tenantID).Scan(&xenditApiKey)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to read tenant config"})
 		return
 	}
 
-	writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+	if paymentMethod == "qris" && (xenditApiKey == nil || *xenditApiKey == "") {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Tenant belum setup integrasi Xendit."})
+		return
+	}
+
+	var totalAmount int64
+	for _, item := range items {
+		totalAmount += item.Price * int64(item.Quantity)
+	}
+	realTotalAmount := totalAmount * 100 // convert IDR to cents
+
+	if !validateCheckoutStock(w, ctx, tenantID, items) {
+		return
+	}
+
+	dateStr := time.Now().Format("2006-01-02")
+	description := "Penjualan via " + paymentMethod
+	reference := "INV-" + time.Now().Format("060102150405")
+
+	itemsJSON, _ := json.Marshal(map[string]interface{}{
+		"items": items,
+	})
+
+	status := "paid"
+	if paymentMethod == "qris" {
+		status = "pending"
+	}
+
+	_, err = DB.Exec(ctx, "INSERT INTO pos_transactions (tenant_id, reference, total_amount, payment_method, status, items_json) VALUES ($1, $2, $3, $4, $5, $6)",
+		tenantID, reference, realTotalAmount, paymentMethod, status, itemsJSON)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal menyimpan transaksi POS"})
+		return
+	}
+
+	if paymentMethod == "qris" {
+		handleCheckoutXendit(w, ctx, *xenditApiKey, reference, realTotalAmount)
+		return
+	}
+
+	handleCheckoutCash(w, ctx, tenantID, dateStr, description, reference, itemsJSON, realTotalAmount, items)
+}
+
+func validateCheckoutStock(w http.ResponseWriter, ctx context.Context, tenantID string, items []struct{ProductID string "json:\"product_id\""; Quantity int "json:\"quantity\""; Price int64 "json:\"price\""}) bool {
+	for _, item := range items {
+		var stock, price int64
+		err := DB.QueryRow(ctx, "SELECT stock, price FROM products WHERE id = $1 AND tenant_id = $2", item.ProductID, tenantID).Scan(&stock, &price)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Produk tidak ditemukan"})
+			return false
+		}
+		if stock < int64(item.Quantity) {
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Stok tidak mencukupi untuk beberapa produk"})
+			return false
+		}
+		if price != item.Price*100 { // Convert IDR to Cents for comparison
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Harga produk tidak sesuai master data"})
+			return false
+		}
+	}
+	return true
+}
+
+func handleCheckoutXendit(w http.ResponseWriter, ctx context.Context, xenditApiKey, reference string, realTotalAmount int64) {
+	xClient := xendit.NewClient(xenditApiKey)
+
+	externalID := reference
+	createInvoiceReq := invoice.NewCreateInvoiceRequest(externalID, float64(realTotalAmount))
+	desc := "Pembayaran Toko UMKM: " + reference
+	createInvoiceReq.Description = &desc
+
+	resp, _, err := xClient.InvoiceApi.CreateInvoice(ctx).CreateInvoiceRequest(*createInvoiceReq).Execute()
+	if err != nil {
+		slog.Error("Failed to create store invoice", "error", err)
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal membuat invoice Xendit. Cek API Key Anda."})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":   true,
+		"message":   "Menunggu pembayaran via Xendit",
+		"status":    "pending",
+		"qris_url":  resp.InvoiceUrl,
+		"reference": reference,
+	})
+}
+
+func handleCheckoutCash(w http.ResponseWriter, ctx context.Context, tenantID, dateStr, description, reference string, itemsJSON []byte, realTotalAmount int64, items []struct{ProductID string "json:\"product_id\""; Quantity int "json:\"quantity\""; Price int64 "json:\"price\""}) {
+	tx, err := DB.Begin(ctx)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	var entryID string
+	err = tx.QueryRow(ctx,
+		"INSERT INTO journal_entries (tenant_id, date, description, reference, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+		tenantID, dateStr, description, reference, itemsJSON).Scan(&entryID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create entry"})
+		return
+	}
+
+	// Insert Debit Line
+	_, err = tx.Exec(ctx,
+		"INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0)",
+		entryID, "1000", realTotalAmount) // 1000 = Kas
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create line"})
+		return
+	}
+
+	// Insert Credit Line
+	_, err = tx.Exec(ctx,
+		"INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)",
+		entryID, "4000", realTotalAmount) // 4000 = Pendapatan
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create line"})
+		return
+	}
+
+	// Deduct stock
+	for _, item := range items {
+		_, err = tx.Exec(ctx, "UPDATE products SET stock = stock - $1 WHERE id = $2 AND tenant_id = $3", item.Quantity, item.ProductID, tenantID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to update stock"})
+			return
+		}
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Transaction commit failed"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Message: "Checkout berhasil dicatat",
+		Data: map[string]interface{}{
+			"reference": reference,
+		},
+	})
 }

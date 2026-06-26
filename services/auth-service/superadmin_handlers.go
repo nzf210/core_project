@@ -43,7 +43,7 @@ func handleSuperAdminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
+	if bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Invalid credentials"})
 		return
 	}

@@ -143,7 +143,7 @@ func checkVoucherUsageQuota(ctx context.Context, programID, tenantID string, max
 		return err
 	}
 	if usesByTenant >= maxUsesPerTenant {
-		return fmt.Errorf("Voucher quota per tenant exceeded")
+		return fmt.Errorf("voucher quota per tenant exceeded")
 	}
 	return nil
 }

@@ -1,11 +1,9 @@
 package main
 
 import (
-	"context"
 	"net/http"
 	"time"
 
-	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/response"
 )
 
@@ -136,32 +134,3 @@ func handleValidateVoucher(w http.ResponseWriter, r *http.Request) {
 // ─────────────────────────────────────────────
 // Protected: Subscribe
 // ─────────────────────────────────────────────
-
-func checkSufficientBalance(ctx context.Context, tenantID string, price int64, w http.ResponseWriter) bool {
-	var refAid *int
-	_ = DB.QueryRow(ctx, querySelectAffiliateID, tenantID).Scan(&refAid)
-	if refAid != nil {
-		var dpct float64
-		_ = DB.QueryRow(ctx, `SELECT COALESCE(discount_percent,0) FROM referral_config WHERE id=1`).Scan(&dpct)
-		if dpct > 0 {
-			discount := int64(float64(price) * (dpct / 100.0))
-			price -= discount
-		}
-	}
-
-	if price > 0 {
-		if !auth.CheckWalletBalance(ctx, tenantID, price) {
-
-			var balance int64
-			_ = DB.QueryRow(ctx, "SELECT balance_rupiah FROM wallet_credits WHERE tenant_id = $1", tenantID).Scan(&balance)
-
-			response.JSON(w, http.StatusPaymentRequired, "Saldo wallet tidak cukup", map[string]interface{}{
-				"required_cents": price,
-				"balance_cents":  balance,
-				"topup_url":      walletEndpoint,
-			})
-			return false
-		}
-	}
-	return true
-}

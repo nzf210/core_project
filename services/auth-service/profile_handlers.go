@@ -71,7 +71,7 @@ func handleUploadProfileLogo(w http.ResponseWriter, r *http.Request) {
 	}
 	defer dst.Close()
 
-	if _, err := io.Copy(dst, file); err != nil {
+	if _, err = io.Copy(dst, file); err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to save logo"})
 		return
 	}

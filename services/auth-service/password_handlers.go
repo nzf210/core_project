@@ -197,7 +197,7 @@ func handleForceChangePassword(w http.ResponseWriter, r *http.Request) {
 		OldPassword string `json:"oldPassword"`
 		NewPassword string `json:"newPassword"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
 		return
 	}
@@ -230,7 +230,7 @@ func handleForceChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verifikasi old password (password default)
-	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.OldPassword)); err != nil {
+	if bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.OldPassword)) != nil {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Password lama tidak sesuai"})
 		return
 	}

@@ -173,12 +173,12 @@ func TestQuotaMiddleware_MissingTenant(t *testing.T) {
 }
 
 func TestCheckQuota_UnknownResource(t *testing.T) {
-	ok, limit := CheckQuota("t1", "transactions")
+	ok, _ := CheckQuota("t1", "transactions")
 	if !ok {
 		t.Error("expected true when cache client is nil")
 	}
 	// unknown resource falls through to default case: returns true, -1
-	ok, limit = CheckQuota("t1", "some_unknown_resource")
+	ok, limit := CheckQuota("t1", "some_unknown_resource")
 	if !ok {
 		t.Fatal("expected true for unknown resource (default case)")
 	}

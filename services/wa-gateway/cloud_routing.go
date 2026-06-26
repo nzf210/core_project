@@ -82,7 +82,7 @@ func routeToCloudAPI(tenantID, target, message, msgType string) (string, error) 
 
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("Cloud API: failed to parse response: %w", err)
+		return "", fmt.Errorf("cloud API: failed to parse response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -90,7 +90,7 @@ func routeToCloudAPI(tenantID, target, message, msgType string) (string, error) 
 		if m, ok := result["message"].(string); ok {
 			errMsg = m
 		}
-		return "", fmt.Errorf("Cloud API: %s", errMsg)
+		return "", fmt.Errorf("cloud API: %s", errMsg)
 	}
 
 	waMsgID := ""

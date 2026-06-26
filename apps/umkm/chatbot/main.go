@@ -49,7 +49,6 @@ var (
 	chatbotMessagesProcessed int64
 	chatbotLLMCalls          int64
 	chatbotErrors            int64
-	chatbotQueueDepth        int64
 )
 
 func main() {

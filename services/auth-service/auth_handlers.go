@@ -171,7 +171,7 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 	telegramChatID := ""
 
 	// Try struct first (WA registration), fallback to map (Telegram registration)
-	if err := json.Unmarshal([]byte(reqJSON), &regReq); err != nil || regReq.Username == "" {
+	if err = json.Unmarshal([]byte(reqJSON), &regReq); err != nil || regReq.Username == "" {
 		// Telegram registration stores different JSON structure
 		json.Unmarshal([]byte(reqJSON), &regMap)
 		if regMap != nil {
@@ -282,7 +282,7 @@ func handleManualRegister(w http.ResponseWriter, r *http.Request) {
 		TPS         string `json:"tps"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request"})
 		return
 	}

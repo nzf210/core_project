@@ -36,7 +36,7 @@ func validateWAConnectionForChatbot(ctx context.Context, pool *pgxpool.Pool, ten
 	exists = whatsmeowExists || cloudAPIExists
 
 	if !exists {
-		return fmt.Errorf("Nomor WhatsApp (CS) belum terhubung. Silakan hubungkan WhatsApp terlebih dahulu sebelum mengaktifkan Chatbot.")
+		return fmt.Errorf("nomor WhatsApp (CS) belum terhubung, silakan hubungkan WhatsApp terlebih dahulu sebelum mengaktifkan Chatbot")
 	}
 
 	return nil

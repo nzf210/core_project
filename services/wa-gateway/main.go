@@ -32,10 +32,9 @@ const (
 
 // Metrics counters
 var (
-	waMessagesSent   int64
-	waMessagesRecv   int64
-	waSessionsActive int64
-	waErrorsTotal    int64
+	waMessagesSent int64
+	waMessagesRecv int64
+	waErrorsTotal  int64
 )
 
 var (
@@ -132,13 +131,6 @@ func shouldReconnect(tenantID string) bool {
 	return true
 }
 
-func resetReconnectBackoff(tenantID string) {
-	reconnectMu.Lock()
-	defer reconnectMu.Unlock()
-	delete(reconnectAttempts, tenantID)
-	delete(reconnectBackoff, tenantID)
-}
-
 func main() {
 	_ = godotenv.Load(".env")
 	_ = godotenv.Load("../../.env")
@@ -148,18 +140,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				Heartbeat(ctx)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	go heartbeatLoop(ctx)
 
 	dbLog := waLog.Stdout("Database", "WARN", true)
 	container, err := sqlstore.New(context.Background(), "postgres", dbURI, dbLog)
@@ -170,15 +151,11 @@ func main() {
 	defer container.Close()
 
 	db, err = sql.Open("postgres", dbURI)
-	if err == nil {
-		_, err = db.Exec(`CREATE TABLE IF NOT EXISTS wa_tenant_sessions (tenant_id TEXT PRIMARY KEY, jid VARCHAR NOT NULL)`)
-		if err != nil {
-			slog.Error("Failed to create wa_tenant_sessions", "error", err)
-		}
-		db.Exec(`ALTER TABLE wa_tenant_sessions ALTER COLUMN tenant_id TYPE TEXT`)
-	} else {
-		slog.Error("Failed to open DB for mapping", "error", err)
+	if err != nil {
+		slog.Error("Failed to open database", "error", err)
+		os.Exit(1)
 	}
+	setupDB()
 
 	setContainer(container)
 	restoreSessions(ctx, container)
@@ -187,30 +164,7 @@ func main() {
 	http.DefaultServeMux = originalMux
 	setupRoutes(ctx, container)
 
-	go func() {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-		<-sigChan
-		slog.Info("Shutting down WA Gateway", "instance_id", instanceID)
-		cancel()
-
-		clientMu.Lock()
-		for tenantID, client := range clientMap {
-			client.Disconnect()
-			slog.Info("Disconnected tenant", "tenant_id", tenantID)
-		}
-		clientMu.Unlock()
-
-		if redisClient != nil {
-			clientMu.RLock()
-			for tenantID := range clientMap {
-				ReleaseSessionLock(context.Background(), tenantID)
-			}
-			clientMu.RUnlock()
-		}
-
-		os.Exit(0)
-	}()
+	go shutdownHandler(cancel)
 
 	port := ":8202"
 	slog.Info("WA Gateway running", "port", port, "instance_id", instanceID)
@@ -223,6 +177,55 @@ func main() {
 	}()
 }
 
+func heartbeatLoop(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			Heartbeat(ctx)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func setupDB() {
+	if db != nil {
+		_, err := db.Exec(`CREATE TABLE IF NOT EXISTS wa_tenant_sessions (tenant_id TEXT PRIMARY KEY, jid VARCHAR NOT NULL)`)
+		if err != nil {
+			slog.Error("Failed to create wa_tenant_sessions", "error", err)
+		}
+		db.Exec(`ALTER TABLE wa_tenant_sessions ALTER COLUMN tenant_id TYPE TEXT`)
+	} else {
+		slog.Error("Failed to open DB for mapping")
+	}
+}
+
+func shutdownHandler(cancel context.CancelFunc) {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
+	slog.Info("Shutting down WA Gateway", "instance_id", instanceID)
+	cancel()
+
+	clientMu.Lock()
+	for tenantID, client := range clientMap {
+		client.Disconnect()
+		slog.Info("Disconnected tenant", "tenant_id", tenantID)
+	}
+	clientMu.Unlock()
+
+	if redisClient != nil {
+		clientMu.RLock()
+		for tenantID := range clientMap {
+			ReleaseSessionLock(context.Background(), tenantID)
+		}
+		clientMu.RUnlock()
+	}
+
+	os.Exit(0)
+}
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")

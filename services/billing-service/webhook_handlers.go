@@ -1,45 +1,12 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 )
-
-func verifyWebhookToken(ctx context.Context, tenantID, callbackToken string) bool {
-	if callbackToken == "" {
-		return true // No token provided, assume insecure env or checked elsewhere (though usually required)
-	}
-	dbToken, err := getTenantXenditWebhookToken(ctx, tenantID)
-	if err == nil && dbToken != "" {
-		if callbackToken != dbToken {
-			return false
-		}
-	} else if envToken := os.Getenv("XENDIT_WEBHOOK_TOKEN"); envToken != "" {
-		if callbackToken != envToken {
-			return false
-		}
-	}
-	return true
-}
-
-func extractTenantIDFromExternalID(externalID string) string {
-	if strings.Contains(externalID, keyWalletTopup) {
-		parts := strings.Split(externalID, keyWalletTopup)
-		if len(parts) == 2 {
-			return parts[1]
-		}
-	} else {
-		parts := strings.Split(externalID, "|")
-		if len(parts) >= 2 {
-			return parts[1]
-		}
-	}
-	return ""
-}
 
 func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

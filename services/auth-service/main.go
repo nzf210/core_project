@@ -226,24 +226,6 @@ func main() {
 	}
 }
 
-func ensureSchema() error {
-	ctx := context.Background()
-	migrations := []string{
-		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS wa_number VARCHAR(50)`,
-		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS wa_provider VARCHAR(20) NOT NULL DEFAULT 'internal'`,
-		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_type VARCHAR(50) DEFAULT 'umum'`,
-		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE`,
-		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_name VARCHAR(255)`,
-		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_address TEXT`,
-		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url VARCHAR(255)`,
-	}
-	for _, m := range migrations {
-		if _, err := DB.Exec(ctx, m); err != nil {
-			return fmt.Errorf("ensureSchema: %w", err)
-		}
-	}
-	return nil
-}
 
 func ensureSuperadmin() error {
 	ctx := context.Background()

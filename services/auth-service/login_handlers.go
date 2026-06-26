@@ -61,7 +61,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		role = *rolePtr
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
+	if bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
 		slog.Error("Login: wrong password", "username", req.Username)
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Invalid credentials"})
 		return
@@ -223,7 +223,7 @@ func handleAddStaff(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req AddStaffRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
 		return
 	}

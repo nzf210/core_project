@@ -6,15 +6,16 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/jackc/pgx/v5"
 	"core_project/apps/campaign/api/repository"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // CoordinatorLevel enum: korprov, korKab, korKec, korKades, saksi_tps
 type CoordinatorAssignmentRequest struct {
 	CitizenNIK       string `json:"citizen_nik"`
-	CoordinatorLevel  string `json:"coordinator_level"`
-	RegionID          string `json:"region_id"`    // UUID of province/regency/district/village/tps
+	CoordinatorLevel string `json:"coordinator_level"`
+	RegionID         string `json:"region_id"` // UUID of province/regency/district/village/tps
 	AssignToCampaign string `json:"campaign_id"`
 }
 
@@ -22,10 +23,10 @@ type CoordinatorAssignmentRequest struct {
 type CoordinatorStruct struct {
 	ID               string `json:"id"`
 	CitizenNIK       string `json:"nik"`
-	CoordinatorLevel  string `json:"level"`
-	RegionID          string `json:"region_id"`
-	AssignedBy        string `json:"assigned_by"`
-	IsActive          bool   `json:"is_active"`
+	CoordinatorLevel string `json:"level"`
+	RegionID         string `json:"region_id"`
+	AssignedBy       string `json:"assigned_by"`
+	IsActive         bool   `json:"is_active"`
 }
 
 // POST /coordinator/assign - Assign a coordinator at a specific level
@@ -52,7 +53,7 @@ func HandleAssignCoordinator(w http.ResponseWriter, r *http.Request) {
 
 	// Verify citizen exists (NIK must be registered first)
 	var citizenExists bool
-	err := repository.DB.QueryRow(ctx, 
+	err := repository.DB.QueryRow(ctx,
 		"SELECT EXISTS(SELECT 1 FROM citizens WHERE nik = $1)", req.CitizenNIK).Scan(&citizenExists)
 	if err != nil || !citizenExists {
 		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "NIK not registered in system"})
@@ -164,11 +165,11 @@ func HandleCoordinatorHierarchy(w http.ResponseWriter, r *http.Request) {
 
 	// Return full hierarchy with volunteer counts
 	type HierarchyNode struct {
-		RegionID   string `json:"region_id"`
-		RegionName string `json:"region_name"`
-		Level      string `json:"level"`
+		RegionID       string `json:"region_id"`
+		RegionName     string `json:"region_name"`
+		Level          string `json:"level"`
 		CoordinatorNIK string `json:"coordinator_nik,omitempty"`
-		VolunteerCount int  `json:"volunteer_count"`
+		VolunteerCount int    `json:"volunteer_count"`
 	}
 
 	var hierarchy []HierarchyNode
@@ -253,9 +254,9 @@ func validateAreaScope(ctx context.Context, level, regionID string) error {
 }
 
 // checkPlanFeature checks if tenant has a specific plan feature enabled
-func checkPlanFeature(ctx context.Context, tenantID string, feature string) bool {
+func checkPlanFeature(ctx context.Context, tenantID string, _ string) bool {
 	var exists bool
-	err := repository.DB.QueryRow(ctx, 
+	err := repository.DB.QueryRow(ctx,
 		`SELECT pf.premium_coordination_view FROM plan_features pf 
 		 JOIN tenant_subscriptions ts ON ts.plan_id = pf.plan_id 
 		 WHERE ts.tenant_id = $1`, tenantID).Scan(&exists)

@@ -90,7 +90,7 @@ func handleStaffUpdate(w http.ResponseWriter, r *http.Request) {
 		PhoneNumber string `json:"phone_number"`
 		Password    string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
 		return
 	}

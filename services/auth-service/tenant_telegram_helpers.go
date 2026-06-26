@@ -81,7 +81,7 @@ func handleUploadTenantLogo(w http.ResponseWriter, r *http.Request) {
 	}
 	defer dst.Close()
 
-	if _, err := io.Copy(dst, file); err != nil {
+	if _, err = io.Copy(dst, file); err != nil {
 		slog.Error("Failed to write logo file", "error", err)
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to save logo"})
 		return

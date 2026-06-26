@@ -12,8 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"core_project/apps/campaign/api/repository"
+
+	"github.com/google/uuid"
 	xendit "github.com/xendit/xendit-go/v6"
 	invoice "github.com/xendit/xendit-go/v6/invoice"
 )
@@ -60,8 +61,6 @@ func splitExternalID(externalID string) []string {
 	return strings.Split(externalID, "|")
 }
 
-func strPtr(s string) *string { return &s }
-
 func getFrontendURL() string {
 	env := os.Getenv("APP_ENV")
 	if env == "production" {
@@ -96,11 +95,12 @@ func HandleBillingCheckout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var priceRupiah int64
-	if req.OrderType == "wargame_token" {
+	switch req.OrderType {
+	case "wargame_token":
 		priceRupiah = 100_000 * int64(req.Quantity)
-	} else if req.OrderType == "intelligence_pack" {
+	case "intelligence_pack":
 		priceRupiah = 5_000_000 * int64(req.Quantity)
-	} else {
+	default:
 		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid order type"})
 		return
 	}
@@ -164,12 +164,12 @@ func HandleBillingCheckout(w http.ResponseWriter, r *http.Request) {
 		desc := fmt.Sprintf("Campaign %s - %s x%d", req.CampaignID, req.OrderType, req.Quantity)
 		currency := string(invoice.INVOICECURRENCY_IDR)
 		createReq := invoice.CreateInvoiceRequest{
-			ExternalId:          externalID,
-			Amount:              float64(finalPrice),
-			Description:         &desc,
-			Currency:            &currency,
-			SuccessRedirectUrl:  &successURL,
-			FailureRedirectUrl:  &failureURL,
+			ExternalId:         externalID,
+			Amount:             float64(finalPrice),
+			Description:        &desc,
+			Currency:           &currency,
+			SuccessRedirectUrl: &successURL,
+			FailureRedirectUrl: &failureURL,
 		}
 		resp, _, xenditErr := xClient.InvoiceApi.CreateInvoice(ctx).CreateInvoiceRequest(createReq).Execute()
 		if xenditErr != nil {
@@ -296,13 +296,15 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if payload.Status == "PAID" || payload.Status == "SETTLED" {
+	switch payload.Status {
+	case "PAID", "SETTLED":
 		tx.Exec(ctx, "UPDATE campaign_billing_orders SET status = 'PAID', paid_at = NOW() WHERE id = $1", orderID)
 
-		if orderType == "wargame_token" {
+		switch orderType {
+		case "wargame_token":
 			tokensToAdd := 10 * quantity
 			tx.Exec(ctx, "UPDATE campaigns SET wargame_tokens = wargame_tokens + $1 WHERE id = $2", tokensToAdd, campaignID)
-		} else if orderType == "intelligence_pack" {
+		case "intelligence_pack":
 			tx.Exec(ctx, `
 				UPDATE campaigns
 				SET active_addons = (
@@ -343,12 +345,12 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 		if err := tx.Commit(ctx); err != nil {
 			slog.Error("Failed to commit campaign billing tx", "error", err)
 		}
-	} else if payload.Status == "EXPIRED" {
+	case "EXPIRED":
 		tx.Exec(ctx, "UPDATE campaign_billing_orders SET status = 'EXPIRED' WHERE id = $1", orderID)
 		if err := tx.Commit(ctx); err != nil {
 			slog.Error("Failed to commit campaign billing tx", "error", err)
 		}
-	} else {
+	default:
 		if err := tx.Commit(ctx); err != nil {
 			slog.Error("Failed to commit campaign billing tx", "error", err)
 		}

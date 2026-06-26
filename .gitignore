@@ -117,13 +117,13 @@ bin/umkm-*
 api
 # Auto-generated / unwanted files
 automation
-apps/umkm/automation/main_test.go
-frontend/*/src/env.d.ts
+# apps/umkm/automation/main_test.go - folder archived
+# frontend/*/src/env.d.ts - Vite/Vue type declarations, should be tracked
 
 # Auto-generated / unwanted files
 automation
-apps/umkm/automation/main_test.go
-frontend/*/src/env.d.ts
+# apps/umkm/automation/main_test.go - folder archived
+# frontend/*/src/env.d.ts - Vite/Vue type declarations, should be tracked
 apps/umkm/accounting/accounting
 
 # Temp AI scripts (dash and underscore variants)
@@ -181,3 +181,15 @@ fix5.js
 fix.sh
 get_issues.js
 get_func.js
+.claude/worktrees/split-work
+.claude/worktrees/wf_31b8eabb-a21-2
+.claude/worktrees/wf_31b8eabb-a21-3
+.claude/worktrees/wf_31b8eabb-a21-4
+.claude/worktrees/wf_31b8eabb-a21-5
+.claude/worktrees/wf_31b8eabb-a21-6
+.claude/worktrees/wf_31b8eabb-a21-7
+.claude/worktrees/wf_31b8eabb-a21-8
+.claude/worktrees/wf_31b8eabb-a21-9
+.claude/worktrees/wf_31b8eabb-a21-10
+.claude/worktrees/wf_31b8eabb-a21-11
+fix.patch

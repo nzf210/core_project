@@ -45,7 +45,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -61,13 +60,12 @@ import (
 // testHelper adalah helper untuk setup test.
 // Menyediakan mock DB, mock services, dan HTTP request builder.
 type testHelper struct {
-	mockDB     *mocks.MockDB
-	mockAI     *mocks.MockAIGateway
-	mockWA     *mocks.MockWAGateway
-	mockRedis  *mocks.MockRedis
-	server     *httptest.Server
-	tenantID   string
-	authToken  string
+	mockDB    *mocks.MockDB
+	mockAI    *mocks.MockAIGateway
+	mockWA    *mocks.MockWAGateway
+	mockRedis *mocks.MockRedis
+	tenantID  string
+	authToken string
 }
 
 // newTestHelper membuat instance testHelper baru.
@@ -183,52 +181,6 @@ func (h *testHelper) newRequest(method, path string, body interface{}) *http.Req
 	return req
 }
 
-// newMultipartRequest membuat request dengan multipart form.
-func (h *testHelper) newMultipartRequest(path string, formData map[string]string) *http.Request {
-	// Simple multipart simulation
-	body := fmt.Sprintf("--boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"test.csv\"\r\n\r\n%s\r\n--boundary--", formData["file"])
-	req := httptest.NewRequest("POST", path, bytes.NewReader([]byte(body)))
-	req.Header.Set("Content-Type", "multipart/form-data; boundary=boundary")
-	req.Header.Set("X-Tenant-ID", h.tenantID)
-	return req
-}
-
-// assertStatus memverifikasi status code HTTP.
-func assertStatus(t *testing.T, got, want int) {
-	if got != want {
-		t.Errorf("status code = %d, want %d", got, want)
-	}
-}
-
-// assertJSONField memverifikasi field tertentu di JSON response.
-func assertJSONField(t *testing.T, body []byte, field string, expected interface{}) {
-	var resp map[string]any
-	if err := json.Unmarshal(body, &resp); err != nil {
-		t.Fatalf("gagal parse JSON response: %v", err)
-	}
-
-	val, ok := resp[field]
-	if !ok {
-		t.Errorf("field %q tidak ditemukan di response", field)
-		return
-	}
-
-	// Convert untuk perbandingan
-	switch exp := expected.(type) {
-	case string:
-		if valStr, ok := val.(string); !ok || valStr != exp {
-			t.Errorf("field %q = %v, want %v", field, val, exp)
-		}
-	case int:
-		if valInt, ok := val.(float64); !ok || int(valInt) != exp {
-			t.Errorf("field %q = %v, want %v", field, val, exp)
-		}
-	case bool:
-		if valBool, ok := val.(bool); !ok || valBool != exp {
-			t.Errorf("field %q = %v, want %v", field, val, exp)
-		}
-	}
-}
 
 // ============================================================
 // TEST GROUP 1: Pure Functions

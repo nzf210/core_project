@@ -28,8 +28,6 @@ type cachedTenant struct {
 	expiresAt time.Time
 }
 
-var tenantCache = make(map[string]cachedTenant)
-
 type xenditClientCacheEntry struct {
 	client    *xendit.APIClient
 	createdAt time.Time
@@ -68,15 +66,6 @@ func getTenantXenditClient(ctx context.Context, tenantID string) (*xendit.APICli
 	xenditClientMu.Unlock()
 
 	return client, nil
-}
-
-func getTenantXenditMerchantID(ctx context.Context, tenantID string) (string, error) {
-	var merchantID string
-	err := DB.QueryRow(ctx, "SELECT xendit_merchant_id FROM tenants WHERE id = $1", tenantID).Scan(&merchantID)
-	if err != nil {
-		return "", fmt.Errorf("failed to get xendit_merchant_id for tenant %s: %w", tenantID, err)
-	}
-	return merchantID, nil
 }
 
 func getTenantXenditWebhookToken(ctx context.Context, tenantID string) (string, error) {

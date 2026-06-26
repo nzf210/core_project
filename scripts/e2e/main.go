@@ -53,7 +53,7 @@ func main() {
 	req, _ := http.NewRequest("POST", UMKMAccounting+"/seed", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("X-Tenant-ID", tenantID) // Note: In production, API Gateway handles this
-	resp, err = client.Do(req)
+	_, err = client.Do(req)
 	if err == nil {
 		fmt.Println("Chart of accounts seeded.")
 	}

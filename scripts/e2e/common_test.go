@@ -139,17 +139,6 @@ func (l *TestLogger) Waiting(msg string) {
 // SERVICE AVAILABILITY CHECK
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-// checkServiceHealth checks if a service is reachable
-func checkServiceHealth(url string) bool {
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(url + "/health")
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
-}
-
 // checkServiceConnection tries to connect to a service endpoint
 func checkServiceConnection(url, path string) bool {
 	client := &http.Client{Timeout: 2 * time.Second}

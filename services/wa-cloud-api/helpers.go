@@ -67,9 +67,7 @@ func normalizeTo(phone string) string {
 	phone = strings.TrimSpace(phone)
 	phone = strings.ReplaceAll(phone, " ", "")
 	phone = strings.ReplaceAll(phone, "-", "")
-	if strings.HasPrefix(phone, "+") {
-		phone = phone[1:]
-	}
+	phone = strings.TrimPrefix(phone, "+")
 	if strings.HasPrefix(phone, "0") {
 		phone = "62" + phone[1:]
 	}

@@ -14,7 +14,6 @@ import (
 )
 
 var DB *pgxpool.Pool
-var isTest bool
 
 // validTierIDs is the allowlist of plan tier IDs accepted by the plan-upgrade
 // handler. Mirrors the tiers defined in shared/sdk/auth/quota.go's plan_features

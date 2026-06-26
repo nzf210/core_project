@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -9,14 +10,19 @@ import (
 )
 
 // handleWASetup returns the current WA provider status for the setup UI.
-func handleWASetup(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
-	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
-		return
-	}
 
-	ctx := r.Context()
+const (
+	headerTenantID = "X-Tenant-ID"
+	errMissingTenantID = "Missing X-Tenant-ID"
+)
+
+func handleWASetup(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get(headerTenantID)
+	if tenantID == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingTenantID})
+		return
+		}
+		ctx := r.Context()
 
 	var waProviderPref string
 	_ = DB.QueryRow(ctx, "SELECT wa_provider_preference FROM tenant_chatbot_configs WHERE tenant_id = $1", tenantID).Scan(&waProviderPref)
@@ -68,11 +74,10 @@ func handleWASetup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleWAConnect updates the tenant's WA provider preference.
 func handleWAConnect(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantID)
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingTenantID})
 		return
 	}
 
@@ -98,13 +103,10 @@ func handleWAConnect(w http.ResponseWriter, r *http.Request) {
 		var hasAddon bool
 		_ = DB.QueryRow(ctx, "SELECT is_enabled FROM plan_features WHERE plan_id = $1 AND feature_key = 'wa_cloud_api'", plan).Scan(&hasAddon)
 		if !hasAddon {
-			writeJSON(w, http.StatusForbidden, APIResponse{
-				Message: "Cloud API memerlukan add-on. Hubungi superadmin untuk mengaktifkan fitur ini.",
-			})
+			writeJSON(w, http.StatusForbidden, APIResponse{Message: "Paket Anda tidak mendukung WA Cloud API. Silakan upgrade paket untuk menggunakan fitur ini."})
 			return
 		}
 	}
-
 	_, err := DB.Exec(ctx, `
 		INSERT INTO tenant_chatbot_configs (tenant_id, wa_provider_preference)
 		VALUES ($1, $2)
@@ -127,123 +129,126 @@ func handleWAConnect(w http.ResponseWriter, r *http.Request) {
 
 // handleWACloudAPICredential handles GET/POST for Meta Cloud API credentials.
 func handleWACloudAPICredential(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(headerTenantID)
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingTenantID})
 		return
 	}
 	ctx := r.Context()
 
 	switch r.Method {
 	case http.MethodGet:
-		var cred struct {
-			ID                 string `json:"id"`
-			PhoneNumberID      string `json:"phone_number_id"`
-			WABAID             string `json:"waba_id"`
-			VerifyToken        string `json:"verify_token"`
-			IsActive           bool   `json:"is_active"`
-			VerificationStatus string `json:"verification_status"`
-			VerifiedAt         string `json:"verified_at"`
-			CreatedAt          string `json:"created_at"`
-			UpdatedAt          string `json:"updated_at"`
-		}
-		err := DB.QueryRow(ctx, `
-			SELECT id, phone_number_id, COALESCE(waba_id,''), COALESCE(verify_token,''),
-			       is_active, COALESCE(verification_status,'unverified'),
-			       COALESCE(verified_at::text,''), created_at::text, updated_at::text
-			FROM wa_cloud_api_credentials WHERE tenant_id = $1
-		`, tenantID).Scan(&cred.ID, &cred.PhoneNumberID, &cred.WABAID, &cred.VerifyToken,
-			&cred.IsActive, &cred.VerificationStatus, &cred.VerifiedAt, &cred.CreatedAt, &cred.UpdatedAt)
-		if err != nil {
-			writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: nil})
-			return
-		}
-		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: cred})
+		handleWACloudAPICredentialGet(ctx, w, tenantID)
 
 	case http.MethodPost:
-		var body struct {
-			PhoneNumberID string `json:"phone_number_id"`
-			WABAID        string `json:"waba_id"`
-			AccessToken   string `json:"access_token"`
-			VerifyToken   string `json:"verify_token"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
-			return
-		}
-		body.PhoneNumberID = strings.TrimSpace(body.PhoneNumberID)
-		body.AccessToken = strings.TrimSpace(body.AccessToken)
-		if body.PhoneNumberID == "" || body.AccessToken == "" {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "phone_number_id dan access_token wajib diisi"})
-			return
-		}
-		if body.VerifyToken == "" {
-			body.VerifyToken = tenantID
-		}
-
-		_, err := DB.Exec(ctx, `
-			INSERT INTO wa_cloud_api_credentials (tenant_id, phone_number_id, waba_id, access_token, verify_token)
-			VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (tenant_id) DO UPDATE SET
-				phone_number_id = EXCLUDED.phone_number_id,
-				waba_id = EXCLUDED.waba_id,
-				access_token = EXCLUDED.access_token,
-				verify_token = EXCLUDED.verify_token,
-				is_active = true,
-				verification_status = 'unverified',
-				updated_at = NOW()
-		`, tenantID, body.PhoneNumberID, body.WABAID, body.AccessToken, body.VerifyToken)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal menyimpan credential: " + err.Error()})
-			return
-		}
-
-		cloudAPIHost := "http://localhost:8210"
-		if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
-			cloudAPIHost = "http://wa-cloud-api:8210"
-		}
-		vaURL := cloudAPIHost + "/validate"
-		vaBody, _ := json.Marshal(map[string]interface{}{
-			"access_token":    body.AccessToken,
-			"phone_number_id": body.PhoneNumberID,
-			"waba_id":         body.WABAID,
-		})
-		vaReq, _ := http.NewRequest(http.MethodPost, vaURL, bytes.NewReader(vaBody))
-		vaReq.Header.Set("Content-Type", "application/json")
-		vaReq.Header.Set("X-Tenant-ID", tenantID)
-
-		vaResp, err := http.DefaultClient.Do(vaReq)
-		verificationStatus := "unverified"
-		if err == nil {
-			defer vaResp.Body.Close()
-			switch vaResp.StatusCode {
-			case http.StatusOK:
-				verificationStatus = "verified"
-			default:
-				verificationStatus = "error"
-			}
-		}
-
-		if verificationStatus == "verified" {
-			_, _ = DB.Exec(ctx, `
-				UPDATE wa_cloud_api_credentials
-				SET verification_status = $1, verified_at = NOW(), last_checked_at = NOW()
-				WHERE tenant_id = $2
-			`, verificationStatus, tenantID)
-		} else {
-			_, _ = DB.Exec(ctx, `
-				UPDATE wa_cloud_api_credentials
-				SET verification_status = $1, last_checked_at = NOW(), check_error = $3
-				WHERE tenant_id = $2
-			`, verificationStatus, tenantID, "Gagal terhubung ke Meta API untuk validasi")
-		}
-
-		respMsg := "Cloud API credential tersimpan"
-		if verificationStatus == "verified" {
-			respMsg += " & terverifikasi!"
-		} else if verificationStatus == "error" {
-			respMsg += ". Validasi gagal — periksa credential Anda."
-		}
-		writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: respMsg})
+		handleWACloudAPICredentialPost(ctx, w, r, tenantID)
 	}
+}
+
+func handleWACloudAPICredentialGet(ctx context.Context, w http.ResponseWriter, tenantID string) {
+	var cred struct {
+		ID                 string `json:"id"`
+		PhoneNumberID      string `json:"phone_number_id"`
+		WABAID             string `json:"waba_id"`
+		VerifyToken        string `json:"verify_token"`
+		IsActive           bool   `json:"is_active"`
+		VerificationStatus string `json:"verification_status"`
+		VerifiedAt         string `json:"verified_at"`
+		CreatedAt          string `json:"created_at"`
+		UpdatedAt          string `json:"updated_at"`
+	}
+	err := DB.QueryRow(ctx, `
+		SELECT id, phone_number_id, COALESCE(waba_id,''), COALESCE(verify_token,''),
+			   is_active, COALESCE(verification_status,'unverified'),
+			   COALESCE(verified_at::text,''), created_at::text, updated_at::text
+		FROM wa_cloud_api_credentials WHERE tenant_id = $1
+	`, tenantID).Scan(&cred.ID, &cred.PhoneNumberID, &cred.WABAID, &cred.VerifyToken,
+		&cred.IsActive, &cred.VerificationStatus, &cred.VerifiedAt, &cred.CreatedAt, &cred.UpdatedAt)
+	if err != nil {
+		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: nil})
+		return
+	}
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: cred})
+}
+
+func handleWACloudAPICredentialPost(ctx context.Context, w http.ResponseWriter, r *http.Request, tenantID string) {
+	var body struct {
+		PhoneNumberID string `json:"phone_number_id"`
+		WABAID        string `json:"waba_id"`
+		AccessToken   string `json:"access_token"`
+		VerifyToken   string `json:"verify_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+		return
+	}
+	body.PhoneNumberID = strings.TrimSpace(body.PhoneNumberID)
+	body.AccessToken = strings.TrimSpace(body.AccessToken)
+	if body.PhoneNumberID == "" || body.AccessToken == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "phone_number_id dan access_token wajib diisi"})
+		return
+	}
+	if body.VerifyToken == "" {
+		body.VerifyToken = tenantID
+	}
+
+	_, err := DB.Exec(ctx, `
+		INSERT INTO wa_cloud_api_credentials (tenant_id, phone_number_id, waba_id, access_token, verify_token)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (tenant_id) DO UPDATE SET
+			phone_number_id = EXCLUDED.phone_number_id,
+			waba_id = EXCLUDED.waba_id,
+			access_token = EXCLUDED.access_token,
+			verify_token = EXCLUDED.verify_token,
+			is_active = true,
+			verification_status = 'unverified',
+			updated_at = NOW()
+	`, tenantID, body.PhoneNumberID, body.WABAID, body.AccessToken, body.VerifyToken)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal menyimpan credential: " + err.Error()})
+		return
+	}
+
+	validateCloudAPICredentialsAfterSave(ctx, w, tenantID, body.PhoneNumberID, body.WABAID, body.AccessToken)
+}
+
+func validateCloudAPICredentialsAfterSave(ctx context.Context, w http.ResponseWriter, tenantID, phoneID, wabaID, token string) {
+	cloudAPIHost := "http://localhost:8210"
+	if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+		cloudAPIHost = "http://wa-cloud-api:8210"
+	}
+	vaURL := cloudAPIHost + "/validate"
+	vaBody, _ := json.Marshal(map[string]interface{}{
+		"access_token":    token,
+		"phone_number_id": phoneID,
+		"waba_id":         wabaID,
+	})
+	vaReq, _ := http.NewRequest(http.MethodPost, vaURL, bytes.NewReader(vaBody))
+	vaReq.Header.Set("Content-Type", "application/json")
+	vaReq.Header.Set(headerTenantID, tenantID)
+
+	vaResp, err := http.DefaultClient.Do(vaReq)
+	verificationStatus := "unverified"
+	if err == nil {
+		defer vaResp.Body.Close()
+		if vaResp.StatusCode == http.StatusOK {
+			verificationStatus = "verified"
+		} else {
+			verificationStatus = "error"
+		}
+	}
+
+	if verificationStatus == "verified" {
+		_, _ = DB.Exec(ctx, `UPDATE wa_cloud_api_credentials SET verification_status = $1, verified_at = NOW(), last_checked_at = NOW() WHERE tenant_id = $2`, verificationStatus, tenantID)
+	} else {
+		_, _ = DB.Exec(ctx, `UPDATE wa_cloud_api_credentials SET verification_status = $1, last_checked_at = NOW(), check_error = $3 WHERE tenant_id = $2`, verificationStatus, tenantID, "Gagal terhubung ke Meta API untuk validasi")
+	}
+
+	respMsg := "Cloud API credential tersimpan"
+	if verificationStatus == "verified" {
+		respMsg += " & terverifikasi!"
+	} else if verificationStatus == "error" {
+		respMsg += ". Validasi gagal — periksa credential Anda."
+	}
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: respMsg})
 }

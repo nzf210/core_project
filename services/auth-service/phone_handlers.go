@@ -46,7 +46,7 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 
 	// OTP 1-hour reuse: check if valid OTP already exists for this phone
 	otpKey := "phone-login-otp:" + req.PhoneNumber
-	if existingOTP, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingOTP != "" {
+	if existingOTP, otpErr := Redis.Get(ctx, otpKey).Result(); otpErr == nil && existingOTP != "" {
 		ttl, _ := Redis.TTL(ctx, otpKey).Result()
 		slog.Info("Login OTP still active, reusing existing", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
 		writeJSON(w, http.StatusOK, Response{

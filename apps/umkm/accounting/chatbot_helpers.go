@@ -68,21 +68,30 @@ func loadChatbotConfigByTenant(ctx context.Context, tenantID string) (*ChatbotCo
 }
 
 func validateChatbotConfig(c *ChatbotConfig) string {
-	if c.WAProviderPreference != "" {
-		switch c.WAProviderPreference {
-		case "auto", "whatsmeow", "cloud_api":
-		default:
-			return "wa_provider_preference harus 'auto', 'whatsmeow', atau 'cloud_api'"
-		}
+	if err := validateWAAndLanguageConfig(c); err != "" {
+		return err
 	}
-	switch c.Language {
-	case "id", "en":
-	default:
+	if err := validateToneAndLLMConfig(c); err != "" {
+		return err
+	}
+	if err := validateRAGAndEscalationConfig(c); err != "" {
+		return err
+	}
+	return validateBusinessAndChannelConfig(c)
+}
+
+func validateWAAndLanguageConfig(c *ChatbotConfig) string {
+	if c.WAProviderPreference != "" && c.WAProviderPreference != "auto" && c.WAProviderPreference != "whatsmeow" && c.WAProviderPreference != "cloud_api" {
+		return "wa_provider_preference harus 'auto', 'whatsmeow', atau 'cloud_api'"
+	}
+	if c.Language != "id" && c.Language != "en" {
 		return "language harus 'id' atau 'en'"
 	}
-	switch c.Tone {
-	case "friendly", "formal", "casual", "professional", "":
-	default:
+	return ""
+}
+
+func validateToneAndLLMConfig(c *ChatbotConfig) string {
+	if c.Tone != "friendly" && c.Tone != "formal" && c.Tone != "casual" && c.Tone != "professional" && c.Tone != "" {
 		return "tone tidak valid"
 	}
 	if c.Temperature < 0 || c.Temperature > 1 {
@@ -94,6 +103,10 @@ func validateChatbotConfig(c *ChatbotConfig) string {
 	if c.MaxContextMessages < 1 || c.MaxContextMessages > 50 {
 		return "max_context_messages harus di antara 1 dan 50"
 	}
+	return ""
+}
+
+func validateRAGAndEscalationConfig(c *ChatbotConfig) string {
 	if c.RAGTopK < 1 || c.RAGTopK > 20 {
 		return "rag_top_k harus di antara 1 dan 20"
 	}
@@ -103,6 +116,13 @@ func validateChatbotConfig(c *ChatbotConfig) string {
 	if c.EscalationConfidenceThreshold < 0 || c.EscalationConfidenceThreshold > 1 {
 		return "escalation_confidence_threshold harus di antara 0.0 dan 1.0"
 	}
+	if c.EscalationEnabled && len(c.EscalationKeywords) == 0 {
+		return "escalation_keywords tidak boleh kosong jika escalation_enabled = true"
+	}
+	return ""
+}
+
+func validateBusinessAndChannelConfig(c *ChatbotConfig) string {
 	if c.BusinessHoursStart != "" && c.BusinessHoursEnd != "" &&
 		c.BusinessHoursStart >= c.BusinessHoursEnd {
 		return "business_hours_start harus lebih awal dari business_hours_end"
@@ -111,9 +131,6 @@ func validateChatbotConfig(c *ChatbotConfig) string {
 		if d < 0 || d > 6 {
 			return "business_days harus berisi angka 0-6"
 		}
-	}
-	if c.EscalationEnabled && len(c.EscalationKeywords) == 0 {
-		return "escalation_keywords tidak boleh kosong jika escalation_enabled = true"
 	}
 	if len(c.ChannelsEnabled) == 0 {
 		return "channels_enabled minimal 1 channel"

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/xuri/excelize/v2"
 )
@@ -172,47 +171,6 @@ func handleExportContacts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeFileResponse(w, "contacts", format, headers, rows)
-}
-
-func handleExportJournal(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
-	from := r.URL.Query().Get("from")
-	to := r.URL.Query().Get("to")
-	if tenantID == "" || from == "" || to == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID, from, or to"})
-		return
-	}
-	format := r.URL.Query().Get("format")
-	if format == "" {
-		format = "xlsx"
-	}
-	headers := []string{"date", "description", "reference", "account_code", "account_name", "debit", "credit"}
-	var rows [][]string
-	if DB != nil {
-		dbRows, err := DB.Query(r.Context(), `
-			SELECT e.date, e.description, e.reference, c.code, c.name, l.debit, l.credit
-			FROM journal_lines l
-			JOIN journal_entries e ON l.entry_id = e.id
-			JOIN chart_of_accounts c ON l.account_id = c.id
-			WHERE e.tenant_id = $1 AND e.date >= $2 AND e.date <= $3
-			ORDER BY e.date ASC, e.created_at ASC
-		`, tenantID, from, to)
-		if err == nil {
-			defer dbRows.Close()
-			for dbRows.Next() {
-				var date time.Time
-				var desc, ref, code, name string
-				var debit, credit int64
-				if err := dbRows.Scan(&date, &desc, &ref, &code, &name, &debit, &credit); err == nil {
-					rows = append(rows, []string{
-						date.Format("2006-01-02"), desc, ref, code, name,
-						strconv.FormatInt(debit, 10), strconv.FormatInt(credit, 10),
-					})
-				}
-			}
-		}
-	}
-	writeFileResponse(w, fmt.Sprintf("journal_%s_%s", from, to), format, headers, rows)
 }
 
 func handleImportTemplate(w http.ResponseWriter, r *http.Request) {

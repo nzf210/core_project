@@ -15,28 +15,6 @@ import (
 	"core_project/shared/sdk/auth"
 )
 
-func updateTenantPlanDetails(ctx context.Context, tenantID, planID string, expiresAt time.Time, isLifetime bool) error {
-	var updateQuery string
-	if isLifetime {
-		updateQuery = `UPDATE tenants SET plan = $1, current_plan_expires_at = NULL, updated_at = NOW() WHERE id = $2`
-		_, err := DB.Exec(ctx, updateQuery, planID, tenantID)
-		return err
-	}
-
-	var currentExpiresAt *time.Time
-	_ = DB.QueryRow(ctx, `SELECT current_plan_expires_at FROM tenants WHERE id = $1`, tenantID).Scan(&currentExpiresAt)
-
-	newExpiresAt := expiresAt
-	if currentExpiresAt != nil && currentExpiresAt.After(time.Now()) {
-		duration := expiresAt.Sub(time.Now())
-		newExpiresAt = currentExpiresAt.Add(duration)
-	}
-
-	updateQuery = `UPDATE tenants SET plan = $1, current_plan_expires_at = $2, updated_at = NOW() WHERE id = $3`
-	_, err := DB.Exec(ctx, updateQuery, planID, newExpiresAt, tenantID)
-	return err
-}
-
 func activateSubscription(ctx context.Context, tenantID, planID, planName string, validityDays int, activatedBy string, voucherCodeID *string, systemVoucherCode string) string {
 	now := time.Now()
 	ticketNumber := generateTicketNumber()
