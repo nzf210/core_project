@@ -79,7 +79,7 @@ function initPriceDisplay() {
 }
 
 function onPriceInput(addon: AddonFeature, val: string) {
-  const n = parseFloat(val) || 0
+  const n = Number.parseFloat(val) || 0
   priceDisplay.value[addon.feature_key] = n
   addon.addon_price_rupiah = rupiahToRupiah(n)
 }

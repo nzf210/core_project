@@ -17,8 +17,8 @@
         </div>
         <form @submit.prevent="savePlan(plan.id)">
           <div class="form-group" v-for="key in featureKeys" :key="key">
-            <label>{{ formatKey(key) }}</label>
-            <input type="number" v-model.number="formStates[plan.id][key]" min="0" />
+            <label :for="`pf-${plan.id}-${key}`">{{ formatKey(key) }}</label>
+            <input type="number" v-model.number="formStates[plan.id][key]" min="0" :id="`pf-${plan.id}-${key}`" />
           </div>
           <button type="submit" class="btn-save" :disabled="saving[plan.id]">
             {{ saving[plan.id] ? '⏳ Menyimpan...' : '💾 Simpan' }}
@@ -49,7 +49,7 @@ const featureKeys = [
 ]
 
 function formatKey(key: string): string {
-  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  return key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 }
 
 async function loadData() {
@@ -72,7 +72,7 @@ async function loadData() {
         })
       }
     }))
-  } catch (err) {
+  } catch {
     alert('Gagal memuat data plans')
   } finally {
     loading.value = false
@@ -88,7 +88,7 @@ async function savePlan(planId: string) {
     saveMsg.value[planId] = '✅ Berhasil disimpan'
     saveMsgType.value[planId] = 'success'
     setTimeout(() => { saveMsg.value[planId] = '' }, 3000)
-  } catch (err) {
+  } catch {
     saveMsg.value[planId] = '❌ Gagal menyimpan'
     saveMsgType.value[planId] = 'error'
   } finally {
@@ -102,7 +102,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.view-container { }
 
 .view-header { margin-bottom: 24px; }
 h1 { font-size: 22px; margin-bottom: 6px; }

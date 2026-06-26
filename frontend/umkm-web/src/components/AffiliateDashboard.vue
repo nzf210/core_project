@@ -32,9 +32,9 @@
     <div v-else class="affiliate-content">
       <!-- Card Referral -->
       <div class="card referral-card">
-        <label>Kode Referral Kamu</label>
+        <span class="stat-label">Kode Referral Kamu</span>
         <div class="code-row">
-          <code>{{ referralCode }}</code>
+          <code id="referral-code">{{ referralCode }}</code>
           <button class="btn btn-sm" @click="copyCode" :title="copyTooltip">{{ copyIcon }}</button>
         </div>
         <p class="hint">Bagikan kode ini ke calon tenant. Mereka masukkan saat daftar.</p>
@@ -43,12 +43,12 @@
       <!-- Card Saldo -->
       <div class="stats-row">
         <div class="card stat-card">
-          <label>Saldo Tersedia</label>
+          <span class="stat-label">Saldo Tersedia</span>
           <div class="stat-value">Rp {{ formatRupiah(balance) }}</div>
           <p class="hint">Bisa ditarik kapan saja</p>
         </div>
         <div class="card stat-card">
-          <label>Total Pendapatan</label>
+          <span class="stat-label">Total Pendapatan</span>
           <div class="stat-value gold">Rp {{ formatRupiah(totalEarnings) }}</div>
           <p class="hint">Seumur hidup</p>
         </div>
@@ -59,12 +59,13 @@
         <h3>💸 Tarik Dana</h3>
         <div class="form-row">
           <div class="form-group">
-            <label>Jumlah (Rp)</label>
-            <input 
-              v-model="withdrawAmount" 
-              type="number" 
-              class="form-control" 
-              placeholder="Minimal 100.000" 
+            <label for="withdraw-amount">Jumlah (Rp)</label>
+            <input
+              id="withdraw-amount"
+              v-model="withdrawAmount"
+              type="number"
+              class="form-control"
+              placeholder="Minimal 100.000"
               min="100000"
               step="100000"
             />

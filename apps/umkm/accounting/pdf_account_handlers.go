@@ -14,11 +14,11 @@ import (
 
 const (
 	layoutDateISO        = "2006-01-02"
-	layoutDateDisplay   = "2 January 2006"
-	layoutDateTimeFull  = "2 January 2006 15:04 MST"
-	errPDFGenFailed     = "PDF generation failed"
-	errMissingParamsInc = "Missing X-Tenant-ID, from, or to"
-	errMissingParamsBal = "Missing X-Tenant-ID or date"
+	layoutDateDisplay    = "2 January 2006"
+	layoutDateTimeFull   = "2 January 2006 15:04 MST"
+	errPDFGenFailed      = "PDF generation failed"
+	errMissingParamsInc  = "Missing X-Tenant-ID, from, or to"
+	errMissingParamsBal  = "Missing X-Tenant-ID or date"
 	tidakAda             = "(tidak ada)"
 )
 
@@ -102,7 +102,7 @@ func handleIncomeStatementPDF(w http.ResponseWriter, r *http.Request) {
 	businessName := getTenantBusinessName(r.Context(), tenantID)
 	revRows, expRows, revenue, expense := queryIncomeData(r.Context(), tenantID, from, to)
 	netIncome := revenue - expense
-	renderIncomeStatementPDF(w, businessName, from, to, revRows, expRows, revenue, expense, netIncome)
+	renderIncomeStatementPDF(w, incomePDFData{businessName, from, to, revRows, expRows, revenue, expense, netIncome})
 }
 
 func getTenantBusinessName(ctx context.Context, tenantID string) string {
@@ -147,10 +147,18 @@ func queryIncomeData(ctx context.Context, tenantID, from, to string) ([]incomeRo
 	return revRows, expRows, revenue, expense
 }
 
-func renderIncomeStatementPDF(w http.ResponseWriter, businessName, from, to string, revRows, expRows []incomeRow, revenue, expense, netIncome int64) {
-	fromDate, _ := time.Parse(layoutDateISO, from)
-	toDate, _ := time.Parse(layoutDateISO, to)
-	pdf := pdfHeader(businessName, "Laporan Laba Rugi",
+type incomePDFData struct {
+	businessName string
+	from, to     string
+	revRows      []incomeRow
+	expRows      []incomeRow
+	revenue, expense, netIncome int64
+}
+
+func renderIncomeStatementPDF(w http.ResponseWriter, d incomePDFData) {
+	fromDate, _ := time.Parse(layoutDateISO, d.from)
+	toDate, _ := time.Parse(layoutDateISO, d.to)
+	pdf := pdfHeader(d.businessName, "Laporan Laba Rugi",
 		fmt.Sprintf("Periode: %s – %s", fromDate.Format(layoutDateDisplay), toDate.Format(layoutDateDisplay)))
 	pdfLineItem := func(label string, amount int64) {
 		pdf.Cell(110, 5, "  "+label)
@@ -171,27 +179,27 @@ func renderIncomeStatementPDF(w http.ResponseWriter, businessName, from, to stri
 		pdf.SetFont("Arial", "", 10)
 	}
 	pdfSection("PENDAPATAN")
-	for _, r := range revRows {
+	for _, r := range d.revRows {
 		pdfLineItem(r.Name, r.Balance)
 	}
-	if len(revRows) == 0 {
+	if len(d.revRows) == 0 {
 		pdfLineItem(tidakAda, 0)
 	}
-	pdfTotal("Total Pendapatan", revenue)
+	pdfTotal("Total Pendapatan", d.revenue)
 	pdf.Ln(3)
 	pdfSection("BEBAN")
-	for _, r := range expRows {
+	for _, r := range d.expRows {
 		pdfLineItem(r.Name, -r.Balance)
 	}
-	if len(expRows) == 0 {
+	if len(d.expRows) == 0 {
 		pdfLineItem(tidakAda, 0)
 	}
-	pdfTotal("Total Beban", -expense)
+	pdfTotal("Total Beban", -d.expense)
 	pdf.Ln(3)
 	pdf.SetFont("Arial", "B", 12)
 	pdf.Cell(110, 8, "LABA / (RUGI) BERSIH")
-	pdf.CellFormat(60, 8, formatIDR(netIncome), "", 0, "R", false, 0, "")
-	pdfRespond(w, pdf, fmt.Sprintf("laba-rugi_%s_%s", from, to))
+	pdf.CellFormat(60, 8, formatIDR(d.netIncome), "", 0, "R", false, 0, "")
+	pdfRespond(w, pdf, fmt.Sprintf("laba-rugi_%s_%s", d.from, d.to))
 }
 
 func handleBalanceSheetPDF(w http.ResponseWriter, r *http.Request) {
@@ -203,7 +211,7 @@ func handleBalanceSheetPDF(w http.ResponseWriter, r *http.Request) {
 	}
 	businessName := getTenantBusinessName(r.Context(), tenantID)
 	assetRows, liabRows, eqRows, assets, liab, equity := queryBalanceData(r.Context(), tenantID, date)
-	renderBalanceSheetPDF(w, businessName, date, assetRows, liabRows, eqRows, assets, liab, equity)
+	renderBalanceSheetPDF(w, balancePDFData{businessName, date, assetRows, liabRows, eqRows, assets, liab, equity})
 }
 
 type balanceRow struct{ Typ, Name string; Balance int64 }
@@ -242,9 +250,15 @@ func queryBalanceData(ctx context.Context, tenantID, date string) ([]balanceRow,
 	return assetRows, liabRows, eqRows, assets, liab, equity
 }
 
-func renderBalanceSheetPDF(w http.ResponseWriter, businessName, date string, assetRows, liabRows, eqRows []balanceRow, assets, liab, equity int64) {
-	dateParsed, _ := time.Parse(layoutDateISO, date)
-	pdf := pdfHeader(businessName, "Neraca (Balance Sheet)",
+type balancePDFData struct {
+	businessName, date string
+	assetRows, liabRows, eqRows []balanceRow
+	assets, liab, equity int64
+}
+
+func renderBalanceSheetPDF(w http.ResponseWriter, d balancePDFData) {
+	dateParsed, _ := time.Parse(layoutDateISO, d.date)
+	pdf := pdfHeader(d.businessName, "Neraca (Balance Sheet)",
 		fmt.Sprintf("Per tanggal: %s", dateParsed.Format(layoutDateDisplay)))
 	pdfLine := func(label string, amount int64) {
 		pdf.Cell(110, 5, "  "+label)
@@ -265,34 +279,34 @@ func renderBalanceSheetPDF(w http.ResponseWriter, businessName, date string, ass
 		pdf.SetFont("Arial", "", 10)
 	}
 	pdfSection("ASET")
-	for _, r := range assetRows {
+	for _, r := range d.assetRows {
 		pdfLine(r.Name, r.Balance)
 	}
-	if len(assetRows) == 0 {
+	if len(d.assetRows) == 0 {
 		pdfLine(tidakAda, 0)
 	}
-	pdfTotal("Total Aset", assets)
+	pdfTotal("Total Aset", d.assets)
 	pdf.Ln(3)
 	pdfSection("LIABILITAS")
-	for _, r := range liabRows {
+	for _, r := range d.liabRows {
 		pdfLine(r.Name, -r.Balance)
 	}
-	if len(liabRows) == 0 {
+	if len(d.liabRows) == 0 {
 		pdfLine(tidakAda, 0)
 	}
-	pdfTotal("Total Liabilitas", -liab)
+	pdfTotal("Total Liabilitas", -d.liab)
 	pdf.Ln(3)
 	pdfSection("EKUITAS")
-	for _, r := range eqRows {
+	for _, r := range d.eqRows {
 		pdfLine(r.Name, -r.Balance)
 	}
-	if len(eqRows) == 0 {
+	if len(d.eqRows) == 0 {
 		pdfLine(tidakAda, 0)
 	}
-	pdfTotal("Total Ekuitas", -equity)
+	pdfTotal("Total Ekuitas", -d.equity)
 	pdf.Ln(5)
-	pdfSummaryBalanceSheet(pdf, assets, liab, equity)
-	pdfRespond(w, pdf, fmt.Sprintf("neraca_%s", date))
+	pdfSummaryBalanceSheet(pdf, d.assets, d.liab, d.equity)
+	pdfRespond(w, pdf, fmt.Sprintf("neraca_%s", d.date))
 }
 
 func pdfSummaryBalanceSheet(pdf *gofpdf.Fpdf, assets, liab, equity int64) {

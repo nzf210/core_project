@@ -13,10 +13,13 @@ import (
 )
 
 const (
-	errMissingTenantRAG = "Missing tenant_id"
-	errInvalidBodyRAG   = "Invalid body"
+	errMissingTenantRAG  = "Missing tenant_id"
+	errInvalidBodyRAG    = "Invalid body"
+	errMethodNotAllowedRAG = "Method not allowed"
+	errMsgTenantRequired = "tenant_id required"
+	errMsgFailedCreateSession = "Failed to create session"
+	errMsgDBError        = "DB error"
 )
-
 
 func handleInternalRAGSearch(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.PathValue("tenant_id")
@@ -25,7 +28,7 @@ func handleInternalRAGSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: errMethodNotAllowedRAG})
 		return
 	}
 
@@ -43,6 +46,30 @@ func handleInternalRAGSearch(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "query cannot be empty"})
 		return
 	}
+	applyRAGDefaults(&req, tenantID)
+
+	queryEmb, err := generateEmbedding(r.Context(), req.Query)
+	if err != nil {
+		slog.Warn("Failed to generate query embedding, returning empty RAG results", "error", err)
+		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: []any{}})
+		return
+	}
+
+	results, err := searchRAGEmbeddings(r.Context(), req.TenantID, queryEmb, req.Threshold, req.TopK)
+	if err != nil {
+		slog.Error("RAG search error", "error", err)
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Search error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: results})
+}
+
+func applyRAGDefaults(req *struct {
+	Query     string  `json:"query"`
+	TenantID  string  `json:"tenant_id"`
+	TopK      int     `json:"top_k"`
+	Threshold float64 `json:"threshold"`
+}, tenantID string) {
 	if req.TenantID == "" {
 		req.TenantID = tenantID
 	}
@@ -52,16 +79,10 @@ func handleInternalRAGSearch(w http.ResponseWriter, r *http.Request) {
 	if req.Threshold == 0 {
 		req.Threshold = 0.7
 	}
+}
 
-	// Generate query embedding via AI gateway
-	queryEmb, err := generateEmbedding(r.Context(), req.Query)
-	if err != nil {
-		slog.Warn("Failed to generate query embedding, returning empty RAG results", "error", err)
-		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: []interface{}{}})
-		return
-	}
-
-	rows, err := DB.Query(r.Context(), `
+func searchRAGEmbeddings(ctx context.Context, tenantID string, queryEmb []float64, threshold float64, topK int) ([]map[string]any, error) {
+	rows, err := DB.Query(ctx, `
 		SELECT id, source_type, source_id, content, metadata,
 		       1 - (embedding <=> $1::vector) AS similarity
 		FROM vector_embeddings
@@ -69,15 +90,13 @@ func handleInternalRAGSearch(w http.ResponseWriter, r *http.Request) {
 		  AND (1 - (embedding <=> $1::vector)) >= $3
 		ORDER BY embedding <=> $1::vector
 		LIMIT $4
-	`, queryEmb, req.TenantID, req.Threshold, req.TopK)
+	`, queryEmb, tenantID, threshold, topK)
 	if err != nil {
-		slog.Error("RAG search error", "error", err)
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Search error"})
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
-	var results []map[string]interface{}
+	var results []map[string]any
 	for rows.Next() {
 		var id, sourceType string
 		var sourceID *string
@@ -85,27 +104,26 @@ func handleInternalRAGSearch(w http.ResponseWriter, r *http.Request) {
 		var metaJSON []byte
 		var similarity float64
 		if err := rows.Scan(&id, &sourceType, &sourceID, &content, &metaJSON, &similarity); err == nil {
-			var meta map[string]interface{}
+			var meta map[string]any
 			json.Unmarshal(metaJSON, &meta)
 			sID := ""
 			if sourceID != nil {
 				sID = *sourceID
 			}
-			results = append(results, map[string]interface{}{
+			results = append(results, map[string]any{
 				"id": id, "source_type": sourceType, "source_id": sID,
 				"content": content, "similarity": similarity, "metadata": meta,
 			})
 		}
 	}
 	if results == nil {
-		results = []map[string]interface{}{}
+		results = []map[string]any{}
 	}
-
-	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: results})
+	return results, nil
 }
 
 func generateEmbedding(ctx context.Context, text string) ([]float64, error) {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"input": text,
 		"model": "text-embedding-ada-002",
 	}
@@ -115,7 +133,6 @@ func generateEmbedding(ctx context.Context, text string) ([]float64, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Use OpenAI API key from environment
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey != "" {
 		reqHTTP.Header.Set("Authorization", "Bearer "+apiKey)
@@ -145,7 +162,7 @@ func generateEmbedding(ctx context.Context, text string) ([]float64, error) {
 
 func handleInternalConversationLog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: errMethodNotAllowedRAG})
 		return
 	}
 
@@ -160,11 +177,11 @@ func handleInternalConversationLog(w http.ResponseWriter, r *http.Request) {
 		TokensUsed   int                      `json:"tokens_used"`
 		SessionID    string                   `json:"session_id,omitempty"`
 		Confidence   float64                  `json:"confidence,omitempty"`
-		RAGSources   []map[string]interface{} `json:"rag_sources,omitempty"`
+		RAGSources   []map[string]any `json:"rag_sources,omitempty"`
 		LatencyMs    int                      `json:"latency_ms,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errInvalidBodyRAG})
 		return
 	}
 	if req.TenantID == "" || req.CustomerID == "" {
@@ -177,42 +194,35 @@ func handleInternalConversationLog(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Upsert conversation session
 	var sessionID string
 	if req.SessionID != "" {
 		sessionID = req.SessionID
 	} else {
-		// Find or create active session
 		err := DB.QueryRow(ctx,
 			`SELECT id FROM conversation_sessions
 			 WHERE tenant_id = $1 AND customer_id = $2 AND status = 'active'
 			 ORDER BY last_message_at DESC LIMIT 1`,
 			req.TenantID, req.CustomerID).Scan(&sessionID)
 		if err != nil {
-			// Create new session
 			err = DB.QueryRow(ctx,
 				`INSERT INTO conversation_sessions (tenant_id, customer_id, channel, status, last_message_at)
 				 VALUES ($1, $2, $3, 'active', NOW()) RETURNING id`,
 				req.TenantID, req.CustomerID, req.Channel).Scan(&sessionID)
 			if err != nil {
-				writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create session"})
+				writeJSON(w, http.StatusInternalServerError, APIResponse{Message: errMsgFailedCreateSession})
 				return
 			}
 		}
 	}
 
-	// Log user message
-	var userLogID string
 	ragSrcJSON, _ := json.Marshal(req.RAGSources)
 	DB.QueryRow(ctx,
 		`INSERT INTO conversation_logs (session_id, tenant_id, role, content, channel,
 		 llm_provider, llm_model, tokens_used, latency_ms, confidence, rag_sources)
 		 VALUES ($1, $2, 'user', $3, $4, NULL, NULL, 0, 0, NULL, '[]')
 		 RETURNING id`,
-		sessionID, req.TenantID, req.UserMessage, req.Channel).Scan(&userLogID)
+		sessionID, req.TenantID, req.UserMessage, req.Channel)
 
-	// Log assistant message
-	var assistantLogID string
 	DB.QueryRow(ctx,
 		`INSERT INTO conversation_logs (session_id, tenant_id, role, content, channel,
 		 llm_provider, llm_model, tokens_used, latency_ms, confidence, rag_sources)
@@ -220,9 +230,8 @@ func handleInternalConversationLog(w http.ResponseWriter, r *http.Request) {
 		 RETURNING id`,
 		sessionID, req.TenantID, req.AssistantMsg, req.Channel,
 		req.LLMProvider, req.LLMModel, req.TokensUsed, req.LatencyMs,
-		req.Confidence, string(ragSrcJSON)).Scan(&assistantLogID)
+		req.Confidence, string(ragSrcJSON))
 
-	// Update session
 	DB.Exec(ctx,
 		`UPDATE conversation_sessions
 		 SET message_count = message_count + 2, last_message_at = NOW()
@@ -237,7 +246,7 @@ func handleInternalConversationLog(w http.ResponseWriter, r *http.Request) {
 
 func handleInternalEscalationLog(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: errMethodNotAllowedRAG})
 		return
 	}
 
@@ -249,17 +258,16 @@ func handleInternalEscalationLog(w http.ResponseWriter, r *http.Request) {
 		ChatwootConversationID string `json:"chatwoot_conversation_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errInvalidBodyRAG})
 		return
 	}
 	if req.TenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "tenant_id required"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMsgTenantRequired})
 		return
 	}
 
 	ctx := r.Context()
 
-	// Mark session as escalated
 	if req.SessionID != "" {
 		DB.Exec(ctx,
 			`UPDATE conversation_sessions
@@ -290,11 +298,11 @@ func handleInternalEscalationLog(w http.ResponseWriter, r *http.Request) {
 func handleInternalFAQs(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.PathValue("tenant_id")
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing tenant_id"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingTenantRAG})
 		return
 	}
 	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: errMethodNotAllowedRAG})
 		return
 	}
 
@@ -302,22 +310,22 @@ func handleInternalFAQs(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, question, answer FROM tenant_faqs WHERE tenant_id = $1 ORDER BY created_at ASC`,
 		tenantID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: errMsgDBError})
 		return
 	}
 	defer rows.Close()
 
-	var faqs []map[string]interface{}
+	var faqs []map[string]any
 	for rows.Next() {
 		var id, question, answer string
 		if rows.Scan(&id, &question, &answer) == nil {
-			faqs = append(faqs, map[string]interface{}{
+			faqs = append(faqs, map[string]any{
 				"id": id, "question": question, "answer": answer,
 			})
 		}
 	}
 	if faqs == nil {
-		faqs = []map[string]interface{}{}
+		faqs = []map[string]any{}
 	}
 
 	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: faqs})
@@ -326,11 +334,11 @@ func handleInternalFAQs(w http.ResponseWriter, r *http.Request) {
 func handleInternalProducts(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.PathValue("tenant_id")
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing tenant_id"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingTenantRAG})
 		return
 	}
 	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: errMethodNotAllowedRAG})
 		return
 	}
 
@@ -339,25 +347,25 @@ func handleInternalProducts(w http.ResponseWriter, r *http.Request) {
 		 FROM products WHERE tenant_id = $1 ORDER BY created_at DESC`,
 		tenantID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: errMsgDBError})
 		return
 	}
 	defer rows.Close()
 
-	var products []map[string]interface{}
+	var products []map[string]any
 	for rows.Next() {
 		var id, name, desc, category string
 		var price float64
 		var stock int
 		if rows.Scan(&id, &name, &price, &desc, &category, &stock) == nil {
-			products = append(products, map[string]interface{}{
+			products = append(products, map[string]any{
 				"id": id, "name": name, "price": int64(price * 100),
 				"description": desc, "category": category, "stock": stock,
 			})
 		}
 	}
 	if products == nil {
-		products = []map[string]interface{}{}
+		products = []map[string]any{}
 	}
 
 	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: products})
@@ -366,11 +374,11 @@ func handleInternalProducts(w http.ResponseWriter, r *http.Request) {
 func handleInternalRAGSingle(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.PathValue("tenant_id")
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing tenant_id"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingTenantRAG})
 		return
 	}
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: errMethodNotAllowedRAG})
 		return
 	}
 
@@ -381,7 +389,7 @@ func handleInternalRAGSingle(w http.ResponseWriter, r *http.Request) {
 		Content    string `json:"content"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errInvalidBodyRAG})
 		return
 	}
 	if req.Content == "" || req.SourceType == "" || req.SourceID == "" {
@@ -392,14 +400,12 @@ func handleInternalRAGSingle(w http.ResponseWriter, r *http.Request) {
 		req.TenantID = tenantID
 	}
 
-	// Generate embedding
 	emb, err := generateEmbedding(r.Context(), req.Content)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to generate embedding"})
 		return
 	}
 
-	// Upsert into vector_embeddings
 	var id string
 	err = DB.QueryRow(r.Context(),
 		`INSERT INTO vector_embeddings (tenant_id, source_type, source_id, content, embedding)
@@ -427,7 +433,7 @@ func vectorFromSlice(v []float64) string {
 		if i > 0 {
 			b.WriteString(",")
 		}
-		b.WriteString(fmt.Sprintf("%.6f", f))
+		fmt.Fprintf(b, "%.6f", f)
 	}
 	b.WriteString("]")
 	return b.String()

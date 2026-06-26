@@ -145,11 +145,14 @@ onMounted(load)
       <div class="list-header">
         <h2>Daftar License Key</h2>
         <div class="filters">
-          <select v-model="filterUsed" @change="load">
-            <option value="all">Semua</option>
-            <option value="false">Belum Digunakan</option>
-            <option value="true">Sudah Digunakan</option>
-          </select>
+          <label class="filter-label" for="filter-used">
+            <span>Filter</span>
+            <select id="filter-used" v-model="filterUsed" @change="load">
+              <option value="all">Semua</option>
+              <option value="false">Belum Digunakan</option>
+              <option value="true">Sudah Digunakan</option>
+            </select>
+          </label>
           <button class="btn-refresh" @click="load">🔄</button>
         </div>
       </div>
@@ -256,7 +259,6 @@ h1 { font-size: 24px; margin-bottom: 4px; }
 }
 .btn-generate:hover:not(:disabled) { background: #2563eb; }
 
-.section { }
 .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .list-header h2 { font-size: 16px; }
 .filters { display: flex; gap: 8px; align-items: center; }

@@ -59,7 +59,8 @@ const usageChartData = () => ({
     <div class="header">
       <h1>Voucher Analytics</h1>
       <div class="filter">
-        <select v-model="selectedProgram" @change="filterByProgram">
+        <label for="va-program" class="sr-only">Filter by program</label>
+        <select id="va-program" v-model="selectedProgram" @change="filterByProgram">
           <option value="">All Programs</option>
           <option v-for="p in programs" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
@@ -124,6 +125,7 @@ const usageChartData = () => ({
 h1 { font-size: 24px; margin: 0; }
 .filter { display: flex; gap: 12px; }
 .filter select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
 .loading, .error { padding: 40px; text-align: center; }
 .error { color: var(--danger); }
 .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }

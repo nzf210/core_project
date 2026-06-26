@@ -190,8 +190,8 @@ button:hover { background: #2563eb; }
 .btn-edit, .btn-delete { font-size: 12px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
 .btn-edit { background: var(--accent); color: white; }
 .btn-edit:hover { background: #2563eb; }
-.btn-delete { background: #ef4444; color: white; }
-.btn-delete:hover { background: #dc2626; }
+.btn-delete { background: #dc2626; color: white; }
+.btn-delete:hover { background: #b91c1c; }
 .program-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; font-size: 13px; }
 .program-details div { color: var(--muted); }
 .form-actions { display: flex; gap: 12px; margin-top: 16px; }

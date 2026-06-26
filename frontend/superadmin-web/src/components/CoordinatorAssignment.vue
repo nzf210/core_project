@@ -9,21 +9,21 @@
         <h2>Assign Koordinator</h2>
 
         <div class="field">
-          <label>Campaign</label>
-          <select v-model="selectedCampaign" @change="fetchCoordinators">
+          <label for="campaign">Campaign</label>
+          <select id="campaign" v-model="selectedCampaign" @change="fetchCoordinators">
             <option value="">-- Pilih Campaign --</option>
             <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
           </select>
         </div>
 
         <div class="field">
-          <label>NIK (Citizen ID)</label>
-          <input v-model="nikInput" type="text" placeholder="327xxxxxxxxxxxxxx" maxlength="16" />
+          <label for="nik">NIK (Citizen ID)</label>
+          <input id="nik" v-model="nikInput" type="text" placeholder="327xxxxxxxxxxxxxx" maxlength="16" />
         </div>
 
         <div class="field">
-          <label>Level Koordinator</label>
-          <select v-model="selectedLevel" @change="fetchRegions">
+          <label for="level">Level Koordinator</label>
+          <select id="level" v-model="selectedLevel" @change="fetchRegions">
             <option value="">-- Pilih Level --</option>
             <option value="korprov">Koordinator Provinsi (Korprov)</option>
             <option value="korKab">Koordinator Kabupaten (KorKab)</option>
@@ -34,8 +34,8 @@
         </div>
 
         <div class="field" v-if="selectedLevel">
-          <label>Wilayah</label>
-          <select v-model="selectedRegion">
+          <label for="region">Wilayah</label>
+          <select id="region" v-model="selectedRegion">
             <option value="">-- Pilih Wilayah --</option>
             <option v-for="r in regions" :key="r.id" :value="r.id">{{ r.name }}</option>
           </select>
@@ -191,7 +191,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page { }
 h1 { font-size: 24px; margin-bottom: 4px; }
 .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
 

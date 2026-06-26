@@ -48,8 +48,8 @@
               </div>
             </div>
             <div>
-              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.5rem;">Tone / Gaya Bicara</span>
-              <select v-model="form.tone" class="form-control">
+              <label for="tone-select" style="display: block; font-size: 0.85rem; margin-bottom: 0.5rem;">Tone / Gaya Bicara</label>
+              <select id="tone-select" v-model="form.tone" class="form-control">
                 <option value="friendly">Ramah & Hangat</option>
                 <option value="formal">Formal</option>
                 <option value="casual">Santai & Akrab</option>
@@ -102,9 +102,9 @@
                   {{ kw }}
                   <button type="button" @click="form.escalation_keywords.splice(i, 1)">×</button>
                 </span>
-                <input type="text" v-model="newKeyword" @keydown.enter.prevent="addKeyword"
+                <input id="keyword-input" type="text" v-model="newKeyword" @keydown.enter.prevent="addKeyword"
                   @keydown.,.prevent="addKeyword" placeholder="Tekan Enter untuk tambah"
-                  class="form-control kw-input" />
+                  class="form-control kw-input" aria-label="Kata kunci baru" />
               </div>
             </div>
             <label>
@@ -177,9 +177,9 @@
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.5rem 0;" />
 
             <div>
-              <span style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">📡 WA
-                Provider</span>
-              <select v-model="form.wa_provider_preference" class="form-control">
+              <label for="wa-provider-select" style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">📡 WA
+                Provider</label>
+              <select id="wa-provider-select" v-model="form.wa_provider_preference" class="form-control">
                 <option value="auto">⚡ Auto (Rekomendasi)</option>
                 <option value="whatsmeow">📱 Whatsmeow Only</option>
                 <option value="cloud_api" :disabled="!hasWaPremium">☁️ Cloud API (Meta) — butuh add-on</option>
@@ -243,8 +243,8 @@
         <p style="font-size: 0.85rem; color: var(--text-secondary);">Coba kirim pesan ke bot untuk lihat bagaimana dia
           akan
           menjawab dengan konfigurasi saat ini.</p>
-        <input v-model="testInput" type="text" class="form-control" placeholder='Misal: "Halo, ada diskon?"'
-          @keydown.enter="runTest" style="margin-top: 0.5rem;" />
+        <input id="test-input" v-model="testInput" type="text" class="form-control" placeholder='Misal: "Halo, ada diskon?"'
+          @keydown.enter="runTest" aria-label="Pesan test" style="margin-top: 0.5rem;" />
         <div v-if="testReply" class="test-reply"
           style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 0.5rem;">
           <p style="margin: 0 0 0.5rem; font-size: 0.9rem;">{{ testReply }}</p>
@@ -356,30 +356,22 @@ async function loadConfig() {
   loading.value = true
   try {
     const res = await api.getChatbotConfig()
-    if (res.success && res.data) {
-      // Merge loaded values into form (only known keys)
-      const d = res.data
-      if (d.language) form.language = d.language
-      if (d.tone) form.tone = d.tone
-      if (d.system_prompt) form.system_prompt = d.system_prompt
-      if (d.welcome_message) form.welcome_message = d.welcome_message
-      if (d.fallback_message) form.fallback_message = d.fallback_message
-      if (d.outside_hours_message) form.outside_hours_message = d.outside_hours_message
-      if (d.business_hours_start) form.business_hours_start = d.business_hours_start
-      if (d.business_hours_end) form.business_hours_end = d.business_hours_end
-      if (d.business_days) form.business_days = d.business_days
-      form.escalation_enabled = !!d.escalation_enabled
-      if (d.escalation_keywords) form.escalation_keywords = d.escalation_keywords
-      if (d.auto_escalate_after_minutes) form.auto_escalate_after_minutes = d.auto_escalate_after_minutes
-      if (d.channels_enabled) form.channels_enabled = d.channels_enabled
-      if (d.wa_provider_preference) form.wa_provider_preference = d.wa_provider_preference
-      form.is_active = d.is_active !== false
-    }
-  } catch (e: any) {
-    errorMsg.value = 'Gagal memuat konfigurasi: ' + (e?.message || e)
+    if (res.success && res.data) applyConfig(res.data)
+  } catch {
+    errorMsg.value = 'Gagal memuat konfigurasi'
   } finally {
     loading.value = false
   }
+}
+
+function applyConfig(d: any) {
+  const fields = ['language','tone','system_prompt','welcome_message','fallback_message',
+    'outside_hours_message','business_hours_start','business_hours_end',
+    'business_days','escalation_keywords','auto_escalate_after_minutes',
+    'channels_enabled','wa_provider_preference','bot_name']
+  fields.forEach(k => { if (d[k]) (form as any)[k] = d[k] })
+  form.escalation_enabled = !!d.escalation_enabled
+  form.is_active = d.is_active !== false
 }
 
 function goToStep(i: number) {
@@ -407,14 +399,18 @@ function addKeyword() {
 function saveDraft() {
   try {
     sessionStorage.setItem('chatbot_config_draft', JSON.stringify(form))
-  } catch { }
+  } catch {
+    // sessionStorage not available — silently ignore
+  }
 }
 
 function loadDraft() {
   try {
     const raw = sessionStorage.getItem('chatbot_config_draft')
     if (raw) Object.assign(form, JSON.parse(raw))
-  } catch { }
+  } catch {
+    // sessionStorage not available — silently ignore
+  }
 }
 
 async function save() {
@@ -522,8 +518,8 @@ onMounted(() => {
 }
 
 .step-pill.done {
-  background: #10b981;
-  color: white;
+  background: #047857;
+  color: #f0fdf4;
 }
 
 .step-num {
@@ -533,9 +529,9 @@ onMounted(() => {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.4);
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .radio-pill,
@@ -617,7 +613,7 @@ onMounted(() => {
 }
 
 .kw-tag button {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.4);
   border: 0;
   color: white;
   width: 18px;

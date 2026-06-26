@@ -9,8 +9,9 @@
       <div class="form-grid">
         <!-- Discount % -->
         <div class="field">
-          <label>Diskon untuk Downline (%)</label>
+          <label for="ref-discount">Diskon untuk Downline (%)</label>
           <input
+            id="ref-discount"
             v-model.number="config.discount_percent"
             type="number"
             min="0" max="100" step="0.5"
@@ -22,8 +23,9 @@
 
         <!-- Commission % -->
         <div class="field">
-          <label>Komisi untuk Upline (%)</label>
+          <label for="ref-commission">Komisi untuk Upline (%)</label>
           <input
+            id="ref-commission"
             v-model.number="config.commission_percent"
             type="number"
             min="0" max="100" step="0.5"
@@ -35,8 +37,9 @@
 
         <!-- Min Purchase -->
         <div class="field">
-          <label>Min. Pembelian untuk Komisi (Rp)</label>
+          <label for="ref-min-purchase">Min. Pembelian untuk Komisi (Rp)</label>
           <input
+            id="ref-min-purchase"
             v-model.number="minPurchaseRp"
             type="number"
             min="0" step="1000"
@@ -49,8 +52,9 @@
 
         <!-- Max Commission -->
         <div class="field">
-          <label>Max. Komisi per Transaksi (Rp)</label>
+          <label for="ref-max-commission">Max. Komisi per Transaksi (Rp)</label>
           <input
+            id="ref-max-commission"
             v-model.number="maxCommissionRp"
             type="number"
             min="0" step="1000"

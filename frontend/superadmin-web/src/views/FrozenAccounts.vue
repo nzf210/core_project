@@ -18,8 +18,8 @@ onMounted(async () => {
 
 function sendReminderWA(name: string) {
   // Placeholder: trigger WA via notification-service
-  const msg = encodeURIComponent(`Halo ${name}, akun WCH Anda freeze. Redeem voucher untuk aktifkan kembali: ${window.location.origin}/redeem`)
-  window.open(`https://wa.me/?text=${msg}`, '_blank')
+  const msg = encodeURIComponent(`Halo ${name}, akun WCH Anda freeze. Redeem voucher untuk aktifkan kembali: ${globalThis.location.origin}/redeem`)
+  globalThis.open(`https://wa.me/?text=${msg}`, '_blank')
 }
 </script>
 

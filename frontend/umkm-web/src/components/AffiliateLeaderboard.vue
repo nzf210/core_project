@@ -92,7 +92,8 @@ async function loadLeaderboard() {
     } else {
       errorMsg.value = res?.message || 'Gagal memuat leaderboard'
     }
-  } catch (e: any) {
+  } catch (e) {
+    console.warn('Leaderboard load failed:', e)
     errorMsg.value = 'Kesalahan jaringan'
   } finally {
     loading.value = false

@@ -42,32 +42,40 @@ func processChatJob(job ChatJob) {
 	callAIAndSendReply(ctx, tenantID, sender, job.Message, userRole, tenantName, chatCfg)
 }
 
+func preprocessAudio(plan auth.PlanFeaturesRow, job ChatJob) string {
+	if plan.MaxAIAudioMinutes == 0 {
+		return "[Sistem] Maaf, layanan pesan suara (Voice Note) belum diaktifkan oleh Toko ini. Harap ketik pesan Anda."
+	}
+	if text, err := transcribeAudio(job.TenantID, job.MediaPath); err == nil {
+		return text
+	}
+	return "[Pesan Suara tidak dapat diproses]"
+}
+
+func preprocessImage(plan auth.PlanFeaturesRow, job ChatJob) string {
+	disabledMsg := "[Sistem] Maaf, layanan analisa gambar belum diaktifkan oleh Toko ini. Harap ketik pertanyaan Anda secara detail."
+	visionDisabledNoMsg := disabledMsg
+	if plan.MaxAIVision == 0 {
+		if job.Message != "" {
+			return job.Message + "\n" + disabledMsg
+		}
+		return visionDisabledNoMsg
+	}
+	if text, err := analyzeImage(job.TenantID, job.MediaPath, job.Message); err == nil {
+		if job.Message != "" {
+			return job.Message + "\n[Analisis Gambar: " + text + "]"
+		}
+		return "[Analisis Gambar: " + text + "]"
+	}
+	return job.Message + "\n[Gambar tidak dapat diproses]"
+}
+
 func preprocessMedia(plan auth.PlanFeaturesRow, job ChatJob) string {
 	switch {
 	case job.MsgType == "audio" && job.MediaPath != "":
-		if plan.MaxAIAudioMinutes == 0 {
-			return "[Sistem] Maaf, layanan pesan suara (Voice Note) belum diaktifkan oleh Toko ini. Harap ketik pesan Anda."
-		}
-		if text, err := transcribeAudio(job.TenantID, job.MediaPath); err == nil {
-			return text
-		}
-		return "[Pesan Suara tidak dapat diproses]"
-
+		return preprocessAudio(plan, job)
 	case job.MsgType == "image" && job.MediaPath != "":
-		if plan.MaxAIVision == 0 {
-			if job.Message != "" {
-				return job.Message + "\n[Sistem] Maaf, layanan analisa gambar belum diaktifkan oleh Toko ini. Harap ketik pertanyaan Anda secara detail."
-			}
-			return "[Sistem] Maaf, layanan analisa gambar belum diaktifkan oleh Toko ini. Harap ketik pertanyaan Anda secara detail."
-		}
-		if text, err := analyzeImage(job.TenantID, job.MediaPath, job.Message); err == nil {
-			if job.Message != "" {
-				return job.Message + "\n[Analisis Gambar: " + text + "]"
-			}
-			return "[Analisis Gambar: " + text + "]"
-		}
-		return job.Message + "\n[Gambar tidak dapat diproses]"
-
+		return preprocessImage(plan, job)
 	default:
 		return job.Message
 	}
@@ -119,7 +127,7 @@ func sendUnregisteredReply(ctx context.Context, sender string) {
 	data.Set("message", "Mohon maaf, nomor WhatsApp Anda belum terdaftar sebagai pengguna sistem UMKM WCH. Silakan mendaftar melalui aplikasi web kami terlebih dahulu.")
 	data.Set("tenant_id", "global")
 	req, _ := http.NewRequestWithContext(ctx, "POST", waSendURL(), strings.NewReader(data.Encode()))
-	req.Header.Set("Content-Type", headerContentTypeForm)
+	req.Header.Set(headerContentType, headerContentTypeForm)
 	if resp, err := http.DefaultClient.Do(req); err == nil {
 		resp.Body.Close()
 	}
@@ -145,7 +153,7 @@ func sendOutsideHoursReply(ctx context.Context, tenantID, sender string, chatCfg
 	data.Set("message", outsideMsg)
 	data.Set("tenant_id", tenantID)
 	req, _ := http.NewRequestWithContext(ctx, "POST", waSendURL(), strings.NewReader(data.Encode()))
-	req.Header.Set("Content-Type", headerContentTypeForm)
+	req.Header.Set(headerContentType, headerContentTypeForm)
 	if resp, err := http.DefaultClient.Do(req); err == nil {
 		resp.Body.Close()
 		if tenantID != "" {
@@ -165,7 +173,7 @@ func callAIAndSendReply(ctx context.Context, tenantID, sender, message, userRole
 	}
 	jsonBody, _ := json.Marshal(aiReqBody)
 	aiReq, _ := http.NewRequestWithContext(ctx, "POST", AIGatewayURL, bytes.NewBuffer(jsonBody))
-	aiReq.Header.Set("Content-Type", "application/json")
+	aiReq.Header.Set(headerContentType, "application/json")
 	aiReq.Header.Set("X-Tenant-ID", tenantID)
 
 	aiResp, err := http.DefaultClient.Do(aiReq)
@@ -197,7 +205,7 @@ func sendWAMessage(ctx context.Context, tenantID, target, message string) {
 	data.Set("message", message)
 	data.Set("tenant_id", tenantID)
 	req, _ := http.NewRequestWithContext(ctx, "POST", waSendURL(), strings.NewReader(data.Encode()))
-	req.Header.Set("Content-Type", headerContentTypeForm)
+	req.Header.Set(headerContentType, headerContentTypeForm)
 	if resp, err := http.DefaultClient.Do(req); err == nil {
 		resp.Body.Close()
 		if tenantID != "" {

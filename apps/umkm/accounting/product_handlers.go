@@ -225,6 +225,22 @@ func handleProductsImport(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func tryInsertProduct(ctx context.Context, tx pgx.Tx, tenantID string, row2 parsedCSVRow, hasID bool) error {
+	if hasID {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO products (tenant_id, name, price, description, category, stock_quantity)
+			 VALUES ($1, $2, $3, $4, $5, $6)
+			 ON CONFLICT (tenant_id, sku) DO NOTHING`,
+			tenantID, row2.name, row2.price, row2.desc, row2.category, row2.stock)
+		return err
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO products (tenant_id, name, price, description, category, stock_quantity)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		tenantID, row2.name, row2.price, row2.desc, row2.category, row2.stock)
+	return err
+}
+
 func importCSVProducts(ctx context.Context, tx pgx.Tx, tenantID string, records [][]string) (int, int, []string) {
 	hasIDCol := len(records) > 0 && strings.ToLower(records[0][0]) == "id"
 	successCount, skipCount := 0, 0
@@ -239,25 +255,12 @@ func importCSVProducts(ctx context.Context, tx pgx.Tx, tenantID string, records 
 			}
 			continue
 		}
-		if id != "" {
-			_, err := tx.Exec(ctx,
-				`INSERT INTO products (tenant_id, name, price, description, category, stock_quantity)
-				 VALUES ($1, $2, $3, $4, $5, $6)
-				 ON CONFLICT (tenant_id, sku) DO NOTHING`,
-				tenantID, row2.name, row2.price, row2.desc, row2.category, row2.stock)
-			if err == nil {
-				successCount++
-			} else {
-				skipCount++
-				skippedIDs = append(skippedIDs, id)
-			}
+		if err := tryInsertProduct(ctx, tx, tenantID, row2, id != ""); err == nil {
+			successCount++
 		} else {
-			_, err := tx.Exec(ctx,
-				`INSERT INTO products (tenant_id, name, price, description, category, stock_quantity)
-				 VALUES ($1, $2, $3, $4, $5, $6)`,
-				tenantID, row2.name, row2.price, row2.desc, row2.category, row2.stock)
-			if err == nil {
-				successCount++
+			skipCount++
+			if id != "" {
+				skippedIDs = append(skippedIDs, id)
 			}
 		}
 	}

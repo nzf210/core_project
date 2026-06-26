@@ -252,7 +252,8 @@ const loadMarketplace = async () => {
     } else {
       marketplace.value = []
     }
-  } catch (e: any) {
+  } catch (e) {
+    console.warn('Marketplace load failed:', e)
     loadError.value = 'Gagal memuat marketplace. Pastikan koneksi stabil.'
   } finally {
     loading.value = false
@@ -495,8 +496,9 @@ onMounted(() => {
   margin-top: 0.25rem;
   line-height: 1.5;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
 }
 

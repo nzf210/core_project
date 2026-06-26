@@ -29,8 +29,8 @@
       </div>
 
       <div class="chat-input-area">
-        <input v-model="inputMsg" @keyup.enter="sendMessage" type="text"
-          placeholder="Tanya soal keuangan atau strategi bisnis..." class="form-control" />
+        <input id="chat-input" v-model="inputMsg" @keyup.enter="sendMessage" type="text"
+          placeholder="Tanya soal keuangan atau strategi bisnis..." class="form-control" aria-label="Pesan chat" />
         <button @click="sendMessage" class="btn btn-primary" :disabled="isLoading || !inputMsg.trim()">Kirim</button>
       </div>
     </div>
@@ -86,7 +86,8 @@ const sendMessage = async () => {
     } else {
       throw new Error(data.message || 'API Error')
     }
-  } catch (e: any) {
+  } catch (e) {
+    console.warn('Chat send failed:', e)
     messages.value.push({
       role: 'assistant',
       content: 'Maaf, sistem AI Chatbot sedang bermasalah atau belum terhubung.'

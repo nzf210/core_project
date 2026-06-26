@@ -34,7 +34,7 @@ async function impersonateTenant(tenantId: string) {
 
     sessionStorage.setItem('superadmin_token', localStorage.getItem('access_token') || '')
 
-    const url = new URL(window.location.origin.replace('superadmin', 'app'))
+    const url = new URL(globalThis.location.origin.replace('superadmin', 'app'))
     url.searchParams.set('impersonate_token', data.data.access_token)
     window.open(url.toString(), '_blank')
 
@@ -160,7 +160,7 @@ h1 { font-size: 24px; margin-bottom: 4px; }
 .error { color: var(--danger); }
 .empty { text-align: center; color: var(--muted); padding: 20px; }
 .btn-impersonate {
-  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
   color: white;
   border: none;
   padding: 6px 12px;

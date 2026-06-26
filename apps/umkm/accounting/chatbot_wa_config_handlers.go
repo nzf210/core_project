@@ -73,52 +73,34 @@ func updateChatbotConfig(w http.ResponseWriter, r *http.Request, tenantID string
 	})
 }
 
+func mergeStr(merged, body *string) {
+	if *body != "" {
+		*merged = *body
+	}
+}
+
 func mergeChatbotConfig(current, body *ChatbotConfig) ChatbotConfig {
 	merged := *current
-	if body.LLMProvider != "" {
-		merged.LLMProvider = body.LLMProvider
-	}
-	if body.LLMModel != "" {
-		merged.LLMModel = body.LLMModel
-	}
+	mergeStr(&merged.LLMProvider, &body.LLMProvider)
+	mergeStr(&merged.LLMModel, &body.LLMModel)
+	mergeStr(&merged.SystemPrompt, &body.SystemPrompt)
+	mergeStr(&merged.Tone, &body.Tone)
+	mergeStr(&merged.Language, &body.Language)
+	mergeStr(&merged.WelcomeMessage, &body.WelcomeMessage)
+	mergeStr(&merged.FallbackMessage, &body.FallbackMessage)
+	mergeStr(&merged.OutsideHoursMessage, &body.OutsideHoursMessage)
+	mergeStr(&merged.BusinessHoursStart, &body.BusinessHoursStart)
+	mergeStr(&merged.BusinessHoursEnd, &body.BusinessHoursEnd)
+	mergeStr(&merged.WAProviderPreference, &body.WAProviderPreference)
+	mergeStr(&merged.VoiceModel, &body.VoiceModel)
 	if body.Temperature != 0 {
 		merged.Temperature = body.Temperature
 	}
 	if body.MaxTokens != 0 {
 		merged.MaxTokens = body.MaxTokens
 	}
-	if body.SystemPrompt != "" {
-		merged.SystemPrompt = body.SystemPrompt
-	}
-	if body.Tone != "" {
-		merged.Tone = body.Tone
-	}
-	if body.Language != "" {
-		merged.Language = body.Language
-	}
 	if body.MaxContextMessages != 0 {
 		merged.MaxContextMessages = body.MaxContextMessages
-	}
-	if body.WelcomeMessage != "" {
-		merged.WelcomeMessage = body.WelcomeMessage
-	}
-	if body.FallbackMessage != "" {
-		merged.FallbackMessage = body.FallbackMessage
-	}
-	if body.OutsideHoursMessage != "" {
-		merged.OutsideHoursMessage = body.OutsideHoursMessage
-	}
-	if body.BusinessHoursStart != "" {
-		merged.BusinessHoursStart = body.BusinessHoursStart
-	}
-	if body.BusinessHoursEnd != "" {
-		merged.BusinessHoursEnd = body.BusinessHoursEnd
-	}
-	if body.BusinessDays != nil {
-		merged.BusinessDays = body.BusinessDays
-	}
-	if body.EscalationKeywords != nil {
-		merged.EscalationKeywords = body.EscalationKeywords
 	}
 	if body.AutoEscalateAfterMinutes != 0 {
 		merged.AutoEscalateAfterMinutes = body.AutoEscalateAfterMinutes
@@ -129,14 +111,14 @@ func mergeChatbotConfig(current, body *ChatbotConfig) ChatbotConfig {
 	if body.RAGSimilarityThreshold != 0 {
 		merged.RAGSimilarityThreshold = body.RAGSimilarityThreshold
 	}
+	if body.BusinessDays != nil {
+		merged.BusinessDays = body.BusinessDays
+	}
+	if body.EscalationKeywords != nil {
+		merged.EscalationKeywords = body.EscalationKeywords
+	}
 	if body.ChannelsEnabled != nil {
 		merged.ChannelsEnabled = body.ChannelsEnabled
-	}
-	if body.WAProviderPreference != "" {
-		merged.WAProviderPreference = body.WAProviderPreference
-	}
-	if body.VoiceModel != "" {
-		merged.VoiceModel = body.VoiceModel
 	}
 	merged.EscalationEnabled = body.EscalationEnabled
 	merged.RAGEnabled = body.RAGEnabled

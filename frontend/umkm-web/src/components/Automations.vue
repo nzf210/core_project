@@ -53,8 +53,8 @@
         <h3 style="margin-bottom: 1.5rem;">{{ editingId ? 'Edit Automasi' : 'Buat Automasi Baru' }}</h3>
         <div style="display: flex; flex-direction: column; gap: 1rem;">
           <div>
-            <label class="form-label">Jenis Automasi</label>
-            <select v-model="form.type" class="form-control" @change="onTypeChange">
+            <label class="form-label" for="auto-type">Jenis Automasi</label>
+            <select id="auto-type" v-model="form.type" class="form-control" @change="onTypeChange">
               <option value="" disabled>Pilih jenis automasi</option>
               <option value="daily_report">📊 Laporan Harian</option>
               <option value="weekly_report">📈 Laporan Mingguan</option>
@@ -63,25 +63,25 @@
             </select>
           </div>
           <div>
-            <label class="form-label">Nama (custom)</label>
-            <input type="text" v-model="form.name" class="form-control" placeholder="Contoh: Laporan Pagi" />
+            <label class="form-label" for="auto-name">Nama (custom)</label>
+            <input id="auto-name" type="text" v-model="form.name" class="form-control" placeholder="Contoh: Laporan Pagi" />
           </div>
 
           <div class="schedule-picker">
-            <label class="form-label">Jadwal</label>
+            <label class="form-label" for="auto-schedule">Jadwal</label>
             <div class="flex gap-3 items-center flex-wrap">
-              <select v-model="scheduleFreq" class="form-control" style="flex: 1; min-width: 150px;">
+              <select id="auto-schedule" v-model="scheduleFreq" class="form-control" style="flex: 1; min-width: 150px;">
                 <option value="daily">Setiap Hari</option>
                 <option value="weekly">Setiap Minggu</option>
                 <option value="monthly">Setiap Bulan (Tgl 1)</option>
               </select>
               <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="color: var(--text-secondary);">Jam:</span>
-                <input type="time" v-model="scheduleTime" class="form-control" style="width: 130px;" />
+                <label for="auto-time" style="color: var(--text-secondary);">Jam:</label>
+                <input id="auto-time" type="time" v-model="scheduleTime" class="form-control" style="width: 130px;" />
               </div>
               <div v-if="scheduleFreq === 'weekly'" style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="color: var(--text-secondary);">Hari:</span>
-                <select v-model="scheduleDay" class="form-control" style="width: 130px;">
+                <label for="auto-day" style="color: var(--text-secondary);">Hari:</label>
+                <select id="auto-day" v-model="scheduleDay" class="form-control" style="width: 130px;">
                   <option value="1">Senin</option>
                   <option value="2">Selasa</option>
                   <option value="3">Rabu</option>
@@ -96,13 +96,13 @@
           </div>
 
           <div v-if="form.type === 'low_stock_alert'">
-            <label class="form-label">Threshold Stok (alert jika ≤)</label>
-            <input type="number" v-model.number="form.threshold" class="form-control" placeholder="5" min="1" />
+            <label class="form-label" for="auto-threshold">Threshold Stok (alert jika ≤)</label>
+            <input id="auto-threshold" type="number" v-model.number="form.threshold" class="form-control" placeholder="5" min="1" />
           </div>
 
           <div>
-            <label class="form-label">Nomor WA Tujuan (opsional, default: nomor toko)</label>
-            <input type="text" v-model="form.target_wa" class="form-control" placeholder="6281234567890" />
+            <label class="form-label" for="auto-wa">Nomor WA Tujuan (opsional, default: nomor toko)</label>
+            <input id="auto-wa" type="text" v-model="form.target_wa" class="form-control" placeholder="6281234567890" />
           </div>
 
           <div class="flex gap-2" style="margin-top: 0.5rem;">
@@ -382,7 +382,7 @@ onMounted(() => {
 }
 .plan-lite { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
 .plan-pro { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
-.plan-ultimate { background: rgba(139, 92, 246, 0.15); color: #a78bfa; }
+.plan-ultimate { background: rgba(139, 92, 246, 0.2); color: #5b21b6; }
 .plan-enterprise { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
 .plan-superadmin { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 

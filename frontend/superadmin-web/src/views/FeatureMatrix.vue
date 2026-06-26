@@ -160,6 +160,7 @@ onMounted(load)
                       @change="toggleFeature(plan.id, feat)"
                       :disabled="!!savingCell[`${plan.id}:${feat}`]"
                       class="checkbox"
+                      :aria-label="`${feat} — ${plan.name}`"
                     />
                     <span class="checkmark"></span>
                   </label>
@@ -183,8 +184,8 @@ onMounted(load)
               <code class="gating-key">{{ addon.feature_key }}</code>
             </div>
             <div class="gating-controls">
-              <label class="gating-label">Min Tier</label>
-              <select v-model="addon.min_tier" class="tier-select">
+              <label class="gating-label" :for="`min-tier-${addon.feature_key}`">Min Tier</label>
+              <select v-model="addon.min_tier" class="tier-select" :id="`min-tier-${addon.feature_key}`">
                 <option value="">Semua tier (tidak ada min)</option>
                 <option v-for="t in TIERS" :key="t" :value="t">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</option>
               </select>
