@@ -129,6 +129,7 @@ Format per feature:
 | F060 | Landing Page — Marketing & Onboarding | ✅ Approved | ✅ Done | 2026-06-21 |
 | F061 | Sales Dashboard Chart — Visual Penjualan | ✅ Approved | ✅ Done | 2026-06-21 |
 | F062 | Staff Management UI (Settings.vue) | ✅ Approved | ✅ Done | 2026-06-22 |
+| F063 | WA Keyword Registration (REG/OTP/VERIF) + WA Center | ✅ Approved | ✅ Done | 2026-06-27 |
 
 ## F058: Superadmin Impersonate + Grafana Monitoring
 
@@ -231,6 +232,87 @@ curl -X POST http://localhost:8010/api/auth/validate \
 2. Click "🔓 Login Sebagai" → confirm dialog → tab baru terbuka
 3. Check navbar → "📊 Monitoring (Grafana)" link muncul
 4. Click link → Grafana dashboard terbuka di tab baru
+
+---
+
+## F063: WA Keyword Registration (REG/OTP/VERIF)
+
+**Spec Status:** ✅ Approved  
+**Implementation:** ✅ Done  
+**Last Updated:** 2026-06-27
+
+### 🎯 Objectives
+
+Fix masalah OTP tidak terkirim saat tenant pakai WA Gateway whatsmeow. User bisa:
+1. Register penuh via WhatsApp (keyword "REG")
+2. Login via WhatsApp (keyword "OTP")
+3. Verify web registration OTP via WhatsApp reply ("VERIF {kode}")
+4. Superadmin kelola WA Center (platform-level WA) dari Superadmin Dashboard
+
+### 📝 Spec
+
+#### AC-1: Full WA Registration (REG / DAFTAR keyword)
+- [x] User kirim "REG" atau "DAFTAR" ke nomor WA Center (whatsmeow)
+- [x] WA-Gateway balas welcome + tanya step-by-step (nama bisnis, tipe, username, password, konfirmasi HP)
+- [x] Submit ke auth-service `/register-wa` → create account
+- [x] Balas success + credentials via WhatsApp
+
+#### AC-2: Login OTP via WhatsApp (OTP keyword)
+- [x] User kirim "OTP" → WA-Gateway → auth-service `/phone-login` → generate OTP
+- [x] Auth-service kirim OTP via wa-gateway (via cloud API fallback)
+- [x] WA-Gateway balas instruksi → user balas 6 digit → verify via `/verify-phone-login-wa`
+
+#### AC-3: Web Registration VERIF Flow (VERIF keyword)
+- [x] POST `/register?wa_verify=true` → generate OTP, SIMPAN `wa-otp:{code}`→phone, JANGAN kirim
+- [x] Response: "Kirim VERIF {kode} ke WA Center"
+- [x] User kirim "VERIF {kode}" → WA-Gateway → `/verify-otp-wa` → lookup `wa-otp:{code}` → verify + create account
+
+#### AC-4: Non-Registered Phone Detection
+- [x] "OTP" ke nomor belum terdaftar → "Nomor ini belum terdaftar. Ketik REG."
+- [x] "REG" ke nomor sudah terdaftar → "Nomor ini sudah terdaftar."
+
+#### AC-5: WA Center Management (Superadmin Dashboard)
+- [x] Card "📱 WA Center" di Superadmin Dashboard
+- [x] Status: connected (nomor WA + JID) atau disconnected
+- [x] Tombol "Connect WA Center" → GET `/api/superadmin/wa/qr` → show QR code
+- [x] Tombol "Disconnect" → POST `/api/superadmin/wa/logout` → putuskan koneksi
+- [x] Navbar link "📱 WA Center" → scroll ke section atau langsung ke Dashboard
+- [x] Usage guide: penjelasan keyword REG/OTP/VERIF
+
+### 🛠️ Implementation Details
+
+**Backend Files:**
+- `services/wa-gateway/event_handler.go` (MODIFIED) — keyword detection + WA reply via whatsmeow
+- `services/auth-service/auth_handlers.go` (MODIFIED) — `handleRegisterWA`, `handleVerifyOTPWA`, `handleVerifyPhoneLoginWA`
+- `services/auth-service/main.go` (MODIFIED) — register routes
+- `shared/migrations/000082_wa_jid_column.up.sql` (NEW) — `users.wa_jid` column
+- `services/api-gateway/main.go` (MODIFIED) — route `/api/superadmin/wa/` → wa-gateway
+
+**Frontend Files:**
+- `frontend/superadmin-web/src/components/WACenter.vue` (NEW) — WA Center card di Dashboard
+- `frontend/superadmin-web/src/views/Dashboard.vue` (MODIFIED) — import + inject WACenter
+- `frontend/superadmin-web/src/App.vue` (MODIFIED) — navbar link ke WA Center
+- `frontend/superadmin-web/src/api/client.ts` (MODIFIED) — `getWAStatus()`, `getWAQR()` methods
+
+**Env Vars:**
+- `AUTH_SERVICE_URL` (wa-gateway) — URL auth-service (default: http://localhost:8001)
+
+### ✅ Testing
+
+```bash
+# 1. Full WA registration
+# Kirim "REG" ke nomor WA Center → jawab step-by-step → akun terbuat
+
+# 2. OTP login
+# Kirim "OTP" → dapat OTP di WA → balas 6 digit → login berhasil
+
+# 3. VERIF flow
+# POST /register?wa_verify=true → dapat otp_code
+# Kirim "VERIF {otp_code}" → akun terbuat
+
+# 4. Compile
+go build ./services/wa-gateway/ && go build ./services/auth-service/
+```
 
 ---
 

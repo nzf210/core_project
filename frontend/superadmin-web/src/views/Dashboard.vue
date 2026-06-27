@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { api } from '../api/client'
 import HAMonitoring from '../components/HAMonitoring.vue'
+import WACenter from '../components/WACenter.vue'
 
 const data = ref<any>(null)
 const loading = ref(true)
@@ -53,6 +54,11 @@ async function impersonateTenant(tenantId: string) {
     <!-- HA Monitoring: WA Gateway + Chatbot -->
     <section class="block">
       <HAMonitoring />
+    </section>
+
+    <!-- F063: WA Center — platform-level WhatsApp for REG/OTP/VERIF -->
+    <section class="block">
+      <WACenter />
     </section>
 
     

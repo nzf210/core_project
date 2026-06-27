@@ -854,16 +854,58 @@ Payment Webhook Callback
 
 ## 🛡️ Standar SonarQube
 
-**Semua kode (BE dan FE) WAJIB mengikuti standar coding SonarQube:**
+**Semua kode (BE dan FE) WAJIB mengikuti standar coding SonarQube.**
 
-1. **Maintainability:**
-   - Cyclomatic Complexity rendah (hindari nested if/for berlebihan).
-   - Maksimal 450 baris per file untuk Go (BE).
-   - Maksimal 500 baris per file untuk Vue (FE).
-2. **Reliability:**
-   - Tangani semua  di Go. Jangan  kecuali terpaksa.
-   - Hindari memory leak (tutup koneksi DB, Response Body, dll).
-3. **Security:**
-   - Gunakan parameterized query untuk mencegah SQL Injection.
-   - Enkripsi data sensitif (password, NIK, dll).
+> **Skill:** `.claude/skills/sonarqube-check.md` — checklist otomatis full stack. AI WAJIB invoke skill `sonarqube-check` saat review kode atau sebelum commit.
+
+### Quality Gate (Auto Block Merge)
+PR WAJIB FAIL jika:
+- ❌ Bug > 0
+- ❌ Vulnerability > 0
+- ❌ Code Smell Critical
+- ❌ Coverage < 75%
+- ❌ Duplication > 3%
+- ❌ Security hotspot belum di-review
+
+### Backend (Go)
+1. **Clean Architecture:** Handler tidak berisi business logic → service layer → repository layer untuk DB query
+2. **Error Handling:** `if err != nil` selalu di-handle, tidak ada `panic()` di production flow
+3. **Performance:** Tidak ada N+1 query, connection pool digunakan, response time < 300–500ms
+4. **Struct:** Tidak terlalu besar (anti God Struct)
+5. **File Size:** Maksimal 450 baris per file — pecah jika mendekati batas ini
+
+### Frontend (Vue + Tailwind)
+1. **Komponen:** Reusable, tidak duplikasi UI
+2. **Logic:** Tidak ada logic berat di template, Composition API konsisten
+3. **Props:** Validation aktif
+4. **CSS:** Tailwind — tidak ada inline style manual, tidak ada class duplikasi
+5. **Responsive:** Mobile-first wajib
+6. **Cleanliness:** Tidak ada `console.log`, unused import/component
+7. **File Size:** Maksimal 500 baris per file
+
+### Database (PostgreSQL)
+- Parameterized query (anti SQL injection)
+- Index untuk kolom sering di-filter
+- Hindari `SELECT *`
+- Pagination untuk data besar
+- FK constraint aktif
+
+### Security (All Stack)
+- Tidak ada hardcoded secret / API key
+- Environment variable untuk semua konfigurasi
+- Input validation di backend & frontend
+- CORS dikontrol dengan benar
+- Rate limiting aktif untuk API
+
+### Testing
+- **Backend:** Unit test service layer, mock DB repository, coverage ≥ 75%
+- **Frontend:** Component test untuk UI critical, API call di-test (mocked)
+
+### Final Score
+| Score | Status |
+|:------|:-------|
+| 90–100 | Production Ready |
+| 80–89 | Good |
+| 70–79 | Needs Improvement |
+| <70 | Reject |
 

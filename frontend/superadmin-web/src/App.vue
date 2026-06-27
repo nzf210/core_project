@@ -44,6 +44,7 @@ function doLogout() {
         <RouterLink to="/addon-pricing">Addon Pricing</RouterLink>
         <RouterLink to="/referral-config">Referral</RouterLink>
         <RouterLink to="/campaign-licenses">Licenses</RouterLink>
+        <RouterLink to="/">📱 WA Center</RouterLink>
       </nav>
       <div class="user-info">
         <span class="role">{{ role }}</span>

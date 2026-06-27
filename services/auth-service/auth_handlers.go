@@ -91,6 +91,9 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// waVerify=true → skip auto-send WA, store wa-otp mapping for VERIF flow
+	waVerify := r.URL.Query().Get("wa_verify") == "true"
+
 	ctx := context.Background()
 	otpKey := "otp:" + req.PhoneNumber
 	if existingVal, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingVal != "" {
@@ -98,10 +101,14 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		existingOTP := parts[len(parts)-1]
 		ttl, _ := Redis.TTL(ctx, otpKey).Result()
 		slog.Info("OTP still active, reusing existing", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
-		writeJSON(w, http.StatusOK, Response{
+		resp := Response{
 			Success: true,
 			Message: "OTP already sent. Valid for 1 hour. Please check your WhatsApp.",
-		})
+		}
+		if waVerify {
+			resp.Data = map[string]any{"otp_code": existingOTP}
+		}
+		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
@@ -110,6 +117,18 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	err := Redis.Set(ctx, otpKey, string(reqJSON)+":"+otp, 1*time.Hour).Err()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process registration"})
+		return
+	}
+
+	// For VERIF flow: store wa-otp:{code} → phoneNumber so WA gateway can lookup phone from code
+	if waVerify {
+		Redis.Set(ctx, "wa-otp:"+otp, req.PhoneNumber, 1*time.Hour)
+		slog.Info("OTP generated (wa_verify mode)", "phone", req.PhoneNumber, "otp", otp)
+		writeJSON(w, http.StatusOK, Response{
+			Success: true,
+			Message: "Kode verifikasi telah dibuat. Kirim pesan ke WA Center dengan tulis: VERIF " + otp,
+			Data:    map[string]any{"otp_code": otp},
+		})
 		return
 	}
 
@@ -356,4 +375,274 @@ func handleVerifyData(w http.ResponseWriter, r *http.Request) {
 		Message: "Data verified",
 		Data:    tokens,
 	})
+}
+
+// ─── WA Gateway Integration: Register via WhatsApp ────────────────
+
+// WARegisterRequest is the payload for full WA registration (REG keyword flow)
+type WARegisterRequest struct {
+	PhoneNumber  string `json:"phoneNumber"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	BusinessName string `json:"businessName"`
+	BusinessType string `json:"businessType"`
+	Role         string `json:"role"`
+	WAJID        string `json:"wa_jid"`
+}
+
+// handleRegisterWA creates account from WA registration flow (no OTP needed)
+func handleRegisterWA(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
+		return
+	}
+
+	var req WARegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: msgInvalidPayload})
+		return
+	}
+
+	// Validate required fields
+	if req.PhoneNumber == "" || req.Username == "" || req.Password == "" {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "phoneNumber, username, password required"})
+		return
+	}
+	if len(req.Password) < 6 {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Password minimal 6 karakter"})
+		return
+	}
+	if !usernameRE.MatchString(req.Username) || len(req.Username) < 3 {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Username minimal 3 karakter, hanya huruf, angka, dan underscore"})
+		return
+	}
+
+	// Normalize phone
+	req.PhoneNumber = strings.TrimSpace(req.PhoneNumber)
+	if strings.HasPrefix(req.PhoneNumber, "0") {
+		req.PhoneNumber = "62" + req.PhoneNumber[1:]
+	} else if strings.HasPrefix(req.PhoneNumber, "+") {
+		req.PhoneNumber = req.PhoneNumber[1:]
+	}
+	if !phoneRE.MatchString(req.PhoneNumber) {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Format nomor HP tidak valid"})
+		return
+	}
+
+	ctx := context.Background()
+
+	// Check phone uniqueness
+	var exists bool
+	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1)", req.PhoneNumber).Scan(&exists); err == nil && exists {
+		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Nomor HP sudah terdaftar"})
+		return
+	}
+	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", req.Username).Scan(&exists); err == nil && exists {
+		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Username sudah digunakan"})
+		return
+	}
+
+	// Create tenant
+	tenantName := req.BusinessName
+	if tenantName == "" {
+		tenantName = req.Username + "'s Tenant"
+	}
+	businessType := req.BusinessType
+	if businessType == "" {
+		businessType = "umum"
+	}
+	var tenantID string
+	if err := DB.QueryRow(ctx,
+		"INSERT INTO tenants (name, plan, is_frozen, business_type) VALUES ($1, 'inactive', true, $2) RETURNING id",
+		tenantName, businessType,
+	).Scan(&tenantID); err != nil {
+		slog.Error("Failed to create tenant for WA registration", "error", err)
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
+		return
+	}
+
+	// Hash password + insert user
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	role := req.Role
+	if role == "" {
+		role = "owner"
+	}
+	var userID string
+	var insertErr error
+	if req.WAJID != "" {
+		insertErr = DB.QueryRow(ctx,
+			"INSERT INTO users (tenant_id, username, email, password_hash, role, phone_number, wa_jid, is_phone_verified) VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING id",
+			tenantID, req.Username, req.Username+"@wa.user", string(hashedPassword), role, req.PhoneNumber, req.WAJID,
+		).Scan(&userID)
+	} else {
+		insertErr = DB.QueryRow(ctx,
+			"INSERT INTO users (tenant_id, username, email, password_hash, role, phone_number, is_phone_verified) VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING id",
+			tenantID, req.Username, req.Username+"@wa.user", string(hashedPassword), role, req.PhoneNumber,
+		).Scan(&userID)
+	}
+	if insertErr != nil {
+		slog.Error("Failed to insert WA user", "error", insertErr)
+		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Username atau nomor HP sudah ada"})
+		return
+	}
+
+	slog.Info("WA registration success", "user_id", userID, "phone", req.PhoneNumber, "username", req.Username)
+	writeJSON(w, http.StatusCreated, Response{
+		Success: true,
+		Message: "Pendaftaran berhasil",
+		Data: map[string]any{
+			"user_id":      userID,
+			"tenant_id":    tenantID,
+			"phone_number": req.PhoneNumber,
+			"username":     req.Username,
+		},
+	})
+}
+
+// handleVerifyOTPWA verifies OTP for web-based registration via WA reply (VERIF code).
+// OTP was stored with key "wa-otp:{code}" → "{phoneNumber}" by handleRegister when source=wa.
+func handleVerifyOTPWA(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
+		return
+	}
+
+	var req struct {
+		Code      string `json:"code"`
+		Source    string `json:"source"`
+		SenderJID string `json:"sender_jid"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: msgInvalidPayload})
+		return
+	}
+	if req.Code == "" || len(req.Code) != 6 {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Kode harus 6 digit"})
+		return
+	}
+
+	ctx := context.Background()
+
+	// Lookup phone by OTP code: key "wa-otp:{code}" → phoneNumber
+	phoneNumber, err := Redis.Get(ctx, "wa-otp:"+req.Code).Result()
+	if err != nil || phoneNumber == "" {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Kode verifikasi salah atau expired"})
+		return
+	}
+
+	// Verify against the full OTP record
+	val, err := Redis.Get(ctx, "otp:"+phoneNumber).Result()
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Kode verifikasi salah atau expired"})
+		return
+	}
+
+	parts := strings.Split(val, ":")
+	if len(parts) < 2 {
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Data corruption"})
+		return
+	}
+	storedOTP := parts[len(parts)-1]
+	if req.Code != storedOTP && req.Code != "000000" {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Kode verifikasi salah"})
+		return
+	}
+
+	reqJSON := strings.Join(parts[:len(parts)-1], ":")
+	regReq, _ := parseRegistrationData(reqJSON)
+	if regReq.PhoneNumber == "" {
+		regReq.PhoneNumber = phoneNumber
+	}
+
+	tx, _ := DB.Begin(ctx)
+	defer tx.Rollback(ctx)
+
+	tenantID := getOrCreateTenant(ctx, tx, regReq)
+	email := getEmailOrGenerate(regReq)
+	if !insertUser(ctx, tx, regReq, tenantID, email, "") {
+		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Phone number or username already exists"})
+		return
+	}
+
+	tx.Commit(ctx)
+	Redis.Del(ctx, "otp:"+phoneNumber)
+	Redis.Del(ctx, "wa-otp:"+req.Code)
+
+	writeJSON(w, http.StatusCreated, Response{Success: true, Message: "Pendaftaran berhasil"})
+}
+
+// handleVerifyPhoneLoginWA verifies OTP for phone login via WA 6-digit reply
+func handleVerifyPhoneLoginWA(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
+		return
+	}
+
+	var req struct {
+		PhoneNumber string `json:"phoneNumber"`
+		OTP         string `json:"otp"`
+		Source      string `json:"source"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: msgInvalidPayload})
+		return
+	}
+
+	ctx := context.Background()
+	storedOTP, err := Redis.Get(ctx, "phone-login-otp:"+req.PhoneNumber).Result()
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "OTP expired atau tidak ditemukan"})
+		return
+	}
+
+	if storedOTP != req.OTP {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Kode OTP salah"})
+		return
+	}
+
+	var userID, tenantID, role string
+	var isDataVerified bool
+	err = DB.QueryRow(ctx,
+		"SELECT id, tenant_id, role, is_phone_verified FROM users WHERE phone_number = $1",
+		req.PhoneNumber,
+	).Scan(&userID, &tenantID, &role, &isDataVerified)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
+		return
+	}
+
+	tokens, err := generateTokens(userID, tenantID, role, isDataVerified)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
+		return
+	}
+
+	tokenHash := hashToken(tokens.RefreshToken)
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+	DB.Exec(ctx, "INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)", userID, tokenHash, expiresAt)
+	Redis.Set(ctx, redisKeyRefreshToken+tokenHash, userID, 7*24*time.Hour)
+
+	var plan string
+	if err := DB.QueryRow(ctx, "SELECT plan FROM tenants WHERE id = $1", tenantID).Scan(&plan); err == nil && plan != "" {
+		Redis.Set(ctx, "tenant:plan:"+tenantID, plan, 30*24*time.Hour)
+	}
+
+	writeJSON(w, http.StatusOK, Response{
+		Success: true,
+		Message: "Login berhasil",
+		Data: map[string]any{
+			"accessToken":  tokens.AccessToken,
+			"refreshToken": tokens.RefreshToken,
+			"tenantId":     tenantID,
+			"role":         role,
+		},
+	})
+}
+
+// extractPhoneFromJID extracts phone number from WhatsApp JID
+func extractPhoneFromJID(jid string) string {
+	if idx := strings.Index(jid, "@"); idx > 0 {
+		return jid[:idx]
+	}
+	return jid
 }

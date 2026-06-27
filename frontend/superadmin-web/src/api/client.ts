@@ -19,8 +19,19 @@ function getRole(): string {
   }
 }
 
+function isTokenExpired(): boolean {
+  const tok = getToken()
+  if (!tok) return true
+  try {
+    const payload = JSON.parse(atob(tok.split('.')[1]))
+    return payload.exp * 1000 < Date.now()
+  } catch {
+    return true
+  }
+}
+
 function isAuthed(): boolean {
-  return !!getToken() && getRole() === 'superadmin'
+  return !!getToken() && getRole() === 'superadmin' && !isTokenExpired()
 }
 
 function logout() {
@@ -28,16 +39,21 @@ function logout() {
 }
 
 async function request(path: string, options: RequestInit = {}) {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  }
+  const optHeaders = (options.headers || {}) as Record<string, string>
+  const headers: Record<string, string> = {}
+  // Merge custom headers first, then defaults (caller wins for Content-Type)
+  for (const k in optHeaders) headers[k] = optHeaders[k]
+  if (!headers['Content-Type']) headers['Content-Type'] = 'application/json'
   const tok = getToken()
   if (tok) headers['Authorization'] = `Bearer ${tok}`
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
+    if (res.status === 401) {
+      localStorage.removeItem('access_token')
+      window.location.href = '/login'
+    }
     throw new Error(data.message || `HTTP ${res.status}`)
   }
   return data
@@ -98,6 +114,14 @@ export const api = {
 
   // Monitoring / HA status
   getHealthStatus: () => request('/admin/health-status'),
+
+  // F063: WA Center — platform-level WhatsApp for REG/OTP/VERIF
+  getWAStatus: () => request('/admin/wa/status', {
+    headers: { 'X-Tenant-ID': 'system' }
+  }),
+  getWAQR: () => request('/admin/wa/qr', {
+    headers: { 'X-Tenant-ID': 'system' }
+  }),
 }
 
 export { isAuthed, getRole, logout, getToken, request }

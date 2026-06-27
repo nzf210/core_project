@@ -70,6 +70,8 @@ func main() {
 	mux.Handle(pathSA+"/billing/", auth.Middleware(http.StripPrefix(pathSA+"/billing", newTenantProxy(getTarget(svcBilling, "8003")+pathAdmin))))
 	// Login endpoint — NO auth middleware (otherwise login itself requires auth!)
 	mux.Handle(pathSA+"/login", http.StripPrefix(pathSA, newTenantProxy(getTarget(svcAuth, "8001")+"/superadmin")))
+	// F063: WA Center — superadmin manages platform-level WhatsApp for REG/OTP/VERIF
+	mux.Handle(pathSA+"/wa/", auth.Middleware(http.StripPrefix(pathSA, newProxy(getTarget("wa-gateway", "8202")))))
 	// Catch-all superadmin routes — must be LAST
 	mux.Handle(pathSA+"/", auth.Middleware(http.StripPrefix(pathSA, newTenantProxy(getTarget(svcAuth, "8001")+"/superadmin"))))
 	mux.Handle(pathSA+"/n8n/", auth.Middleware(http.StripPrefix(pathSA+"/n8n", n8nProxy(getTarget("n8n", "5678")))))
