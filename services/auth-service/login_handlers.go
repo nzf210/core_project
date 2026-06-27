@@ -199,6 +199,36 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, Response{Success: true, Message: "Logged out successfully"})
 }
 
+// validateStaffBody validates the staff registration payload and returns a 4xx message
+// or empty string if valid.
+func validateStaffBody(req *AddStaffRequest) string {
+	req.PhoneNumber = strings.TrimSpace(req.PhoneNumber)
+	if strings.HasPrefix(req.PhoneNumber, "0") {
+		req.PhoneNumber = "62" + req.PhoneNumber[1:]
+	} else if strings.HasPrefix(req.PhoneNumber, "+") {
+		req.PhoneNumber = req.PhoneNumber[1:]
+	}
+	if req.Username == "" || req.Password == "" || req.Role == "" || req.PhoneNumber == "" {
+		return "Missing required fields"
+	}
+	if len(req.Username) < 3 {
+		return "Username minimal 3 karakter"
+	}
+	if !usernameRE.MatchString(req.Username) {
+		return "Username hanya boleh huruf, angka, dan underscore"
+	}
+	if req.Email != "" && !emailRE.MatchString(req.Email) {
+		return "Format email tidak valid"
+	}
+	if len(req.Password) < 6 {
+		return "Password minimal 6 karakter"
+	}
+	if !phoneRE.MatchString(req.PhoneNumber) {
+		return "Nomor HP harus diawali 62, contoh: 62812..."
+	}
+	return ""
+}
+
 func handleAddStaff(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
@@ -216,7 +246,6 @@ func handleAddStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tenantID := claims.TenantID
-	// ONLY owner can add staff
 	if claims.Role != "owner" && claims.Role != "admin" {
 		writeJSON(w, http.StatusForbidden, Response{Success: false, Message: "Hanya owner yang dapat menambah staff"})
 		return
@@ -227,37 +256,8 @@ func handleAddStaff(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: msgInvalidPayload})
 		return
 	}
-
-	// Auto-format phone number
-	req.PhoneNumber = strings.TrimSpace(req.PhoneNumber)
-	if strings.HasPrefix(req.PhoneNumber, "0") {
-		req.PhoneNumber = "62" + req.PhoneNumber[1:]
-	} else if strings.HasPrefix(req.PhoneNumber, "+") {
-		req.PhoneNumber = req.PhoneNumber[1:]
-	}
-
-	if req.Username == "" || req.Password == "" || req.Role == "" || req.PhoneNumber == "" {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Missing required fields"})
-		return
-	}
-	if len(req.Username) < 3 {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Username minimal 3 karakter"})
-		return
-	}
-	if !usernameRE.MatchString(req.Username) {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Username hanya boleh huruf, angka, dan underscore"})
-		return
-	}
-	if req.Email != "" && !emailRE.MatchString(req.Email) {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Format email tidak valid"})
-		return
-	}
-	if len(req.Password) < 6 {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Password minimal 6 karakter"})
-		return
-	}
-	if !phoneRE.MatchString(req.PhoneNumber) {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Nomor HP harus diawali 62, contoh: 62812..."})
+	if msg := validateStaffBody(&req); msg != "" {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: msg})
 		return
 	}
 

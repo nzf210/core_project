@@ -1,7 +1,7 @@
 export const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? globalThis.location.origin : 'http://localhost:8000')
 
 export async function initDomain() {
-  const hostname = window.location.hostname
+  const hostname = globalThis.window.location.hostname
   try {
     const res = await fetch(`${API_BASE}/auth/public/tenant/resolve?domain=${hostname}`)
     if (res.ok) {
@@ -376,10 +376,14 @@ export const api = {
   async post(url: string, body?: any, isMultipart = false) {
     const h = headers()
     if (isMultipart) delete h['Content-Type']
+    let requestBody: any
+    if (isMultipart) requestBody = body
+    else if (body) requestBody = JSON.stringify(body)
+
     const res = await fetch(`${API_BASE}${url}`, {
       method: 'POST',
       headers: h,
-      body: isMultipart ? body : (body ? JSON.stringify(body) : undefined), // ponytail: ternary for body type
+      body: requestBody,
     })
     return res.json()
   },

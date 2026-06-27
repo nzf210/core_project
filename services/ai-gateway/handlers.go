@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,11 +13,57 @@ import (
 )
 
 const (
-	methodNotAllowed = "Method not allowed"
-	headerTenantID   = "X-Tenant-ID"
-	systemTenantID   = "00000000-0000-0000-0000-000000000000"
+	methodNotAllowed  = "Method not allowed"
+	headerTenantID    = "X-Tenant-ID"
+	systemTenantID    = "00000000-0000-0000-0000-000000000000"
 	headerContentType = "Content-Type"
 )
+
+// resolveTenantID extracts tenant ID from request body or header.
+func resolveTenantID(r *http.Request, reqTenantID string) string {
+	if reqTenantID != "" {
+		return reqTenantID
+	}
+	if id := r.Header.Get(headerTenantID); id != "" {
+		return id
+	}
+	return systemTenantID
+}
+
+// tryRespondCache tries to serve the response from semantic cache.
+// Returns true if response was sent and handler should return.
+func tryRespondCache(w http.ResponseWriter, r *http.Request, cacheKey string, req ChatRequest) bool {
+	if !cfg.AI.CacheEnabled {
+		return false
+	}
+	cached, hit := checkCache(r.Context(), cacheKey)
+	if !hit {
+		return false
+	}
+	slog.Info("cache hit", "key", cacheKey[:16])
+	aiCacheHits.Add(1)
+	aiRequestsTotal.Add(1)
+	writeJSON(w, http.StatusOK, ChatResponse{
+		Success:  true,
+		Provider: req.Provider,
+		Model:    req.Model,
+		Text:     cached,
+		CacheHit: true,
+	})
+	return true
+}
+
+// storeCacheEntry stores the LLM response in cache if enabled.
+func storeCacheEntry(ctx context.Context, cacheKey, text string, reqTTL int) {
+	if !cfg.AI.CacheEnabled {
+		return
+	}
+	ttl := cfg.AI.CacheTTL
+	if reqTTL > 0 {
+		ttl = reqTTL
+	}
+	storeCache(ctx, cacheKey, text, ttl)
+}
 
 func handleChat(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -37,29 +84,11 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.TenantID == "" {
-		req.TenantID = r.Header.Get(headerTenantID)
-		if req.TenantID == "" {
-			req.TenantID = systemTenantID
-		}
-	}
-
+	req.TenantID = resolveTenantID(r, req.TenantID)
 	cacheKey := buildCacheKey(req.Provider, req.Model, req.SystemMsg, req.Message)
 
-	if cfg.AI.CacheEnabled {
-		if cached, hit := checkCache(r.Context(), cacheKey); hit {
-			slog.Info("cache hit", "key", cacheKey[:16])
-			aiCacheHits.Add(1)
-			aiRequestsTotal.Add(1)
-			writeJSON(w, http.StatusOK, ChatResponse{
-				Success:  true,
-				Provider: req.Provider,
-				Model:    req.Model,
-				Text:     cached,
-				CacheHit: true,
-			})
-			return
-		}
+	if tryRespondCache(w, r, cacheKey, req) {
+		return
 	}
 
 	text, tokensIn, tokensOut, modelID, tier, err := callLLMWith3TierFallback(r.Context(), req)
@@ -73,14 +102,7 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	provider, model := parseModelID(modelID)
-
-	if cfg.AI.CacheEnabled {
-		ttl := cfg.AI.CacheTTL
-		if req.CacheTTL > 0 {
-			ttl = req.CacheTTL
-		}
-		storeCache(r.Context(), cacheKey, text, ttl)
-	}
+	storeCacheEntry(r.Context(), cacheKey, text, req.CacheTTL)
 
 	costUSD := estimateCost(modelID, tokensIn, tokensOut)
 
@@ -132,12 +154,7 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "message cannot be empty"})
 		return
 	}
-	if req.TenantID == "" {
-		req.TenantID = r.Header.Get(headerTenantID)
-		if req.TenantID == "" {
-			req.TenantID = systemTenantID
-		}
-	}
+	req.TenantID = resolveTenantID(r, req.TenantID)
 
 	w.Header().Set(headerContentType, "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -167,7 +184,6 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	defer stream.Close()
 
-	firstChunk := true
 	for {
 		chunk, err := stream.Recv()
 		if err == io.EOF {
@@ -183,9 +199,6 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 		content := chunk.Choices[0].Delta.Content
 		if content != "" {
-			if firstChunk {
-				firstChunk = false
-			}
 			data, _ := json.Marshal(map[string]string{"text": content})
 			fmt.Fprintf(w, "data: %s\n\n", data)
 			flusher.Flush()
@@ -198,9 +211,9 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Message: "AI Gateway is healthy",
 		Data: map[string]any{
-			"primary_model":     cfg.AI.MiniMaxModel,
-			"gemini_fallback":   "enabled",
-			"models_available":  len(cfg.AI.LLM.Models),
+			"primary_model":    cfg.AI.MiniMaxModel,
+			"gemini_fallback":  "enabled",
+			"models_available": len(cfg.AI.LLM.Models),
 		},
 	})
 }
@@ -219,7 +232,7 @@ func handleListModels(w http.ResponseWriter, r *http.Request) {
 			"model":           m.Model,
 			"base_url":        m.BaseURL,
 			"capability":      m.Capability,
-			"context_window":   m.ContextWindow,
+			"context_window":  m.ContextWindow,
 			"cost_per_1m_in":  m.CostPer1MIn,
 			"cost_per_1m_out": m.CostPer1MOut,
 			"priority":        m.Priority,
@@ -292,12 +305,7 @@ func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "input cannot be empty"})
 		return
 	}
-	if req.TenantID == "" {
-		req.TenantID = r.Header.Get(headerTenantID)
-		if req.TenantID == "" {
-			req.TenantID = systemTenantID
-		}
-	}
+	req.TenantID = resolveTenantID(r, req.TenantID)
 
 	var emb []float64
 	var err error

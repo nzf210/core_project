@@ -117,8 +117,8 @@ export function useSuperAdmin() {
           new_password: '',
         }
       }
-    } catch {
-      console.error('Failed to load my profile')
+    } catch (e) {
+      console.error('Failed to load my profile', e)
     }
   }
 
@@ -148,6 +148,7 @@ export function useSuperAdmin() {
         myProfileError.value = data.message || 'Gagal menyimpan'
       }
     } catch (e) {
+      console.error('saveMyProfile failed', e)
       myProfileError.value = 'Kesalahan jaringan'
     } finally {
       savingMyProfile.value = false
@@ -172,8 +173,8 @@ export function useSuperAdmin() {
       if (data.success && data.data) {
         tenants.value = data.data
       }
-    } catch {
-      console.error('Failed to fetch tenants')
+    } catch (e) {
+      console.error('Failed to fetch tenants', e)
     } finally {
       loadingTenants.value = false
     }
@@ -204,7 +205,8 @@ export function useSuperAdmin() {
       } else {
         deleteError.value = data.message || 'Gagal menghapus tenant'
       }
-    } catch {
+    } catch (e) {
+      console.error('deleteTenant failed', e)
       deleteError.value = 'Kesalahan jaringan saat menghapus tenant'
     } finally {
       deleting.value = false
@@ -223,7 +225,8 @@ export function useSuperAdmin() {
           showToast('WhatsApp Verifier berhasil terhubung!', 'success')
         }
       }
-    } catch {
+    } catch (e) {
+      console.error('checkVerifierStatus failed', e)
       showToast('Gagal memeriksa status verifier', 'error')
     } finally {
       checkingStatus.value = false
@@ -245,7 +248,8 @@ export function useSuperAdmin() {
       } else {
         showToast(data.message || 'Gagal mendapatkan QR code', 'error')
       }
-    } catch {
+    } catch (e) {
+      console.error('connectVerifier failed', e)
       showToast('Gagal menghubungkan verifier', 'error')
     } finally {
       loadingQR.value = false
@@ -264,7 +268,8 @@ export function useSuperAdmin() {
       } else {
         showToast(data.message || 'Gagal memutuskan verifier', 'error')
       }
-    } catch {
+    } catch (e) {
+      console.error('disconnectVerifier failed', e)
       showToast('Gagal memutuskan verifier', 'error')
     } finally {
       disconnecting.value = false
@@ -297,7 +302,8 @@ export function useSuperAdmin() {
       } else {
         profileError.value = 'Gagal memuat profil'
       }
-    } catch {
+    } catch (e) {
+      console.error('openEditProfile getProfile failed', e)
       profileError.value = 'Kesalahan jaringan'
     }
   }
@@ -321,7 +327,8 @@ export function useSuperAdmin() {
       } else {
         profileError.value = result.message || 'Gagal upload logo'
       }
-    } catch {
+    } catch (e) {
+      console.error('uploadLogo failed', e)
       profileError.value = 'Kesalahan jaringan saat upload'
     } finally {
       uploadingLogo.value = false
@@ -370,10 +377,9 @@ export function useSuperAdmin() {
       } else {
         profileError.value = result.message || 'Gagal menyimpan'
       }
-    } catch {
+    } catch (e) {
+      console.error('saveProfile failed', e)
       profileError.value = 'Kesalahan jaringan'
-    } finally {
-      savingProfile.value = false
     }
   }
 
@@ -420,8 +426,8 @@ export function useSuperAdmin() {
       if (plans && Array.isArray(plans)) {
         planOptions.value = plans
       }
-    } catch {
-      console.error('Failed to fetch plan options')
+    } catch (e) {
+      console.error('Failed to fetch plan options', e)
     }
   }
 
@@ -436,8 +442,8 @@ export function useSuperAdmin() {
       if (plans && Array.isArray(plans)) {
         planOptions.value = plans
       }
-    } catch {
-      console.error('Failed to fetch plan options')
+    } catch (e) {
+      console.error('Failed to fetch plan options', e)
     }
   }
 
@@ -473,7 +479,8 @@ export function useSuperAdmin() {
     try {
       await navigator.clipboard.writeText(text)
       showToast(msg || 'Berhasil disalin!', 'success')
-    } catch {
+    } catch (e) {
+      console.error('clipboard copy failed', e)
       showToast('Gagal menyalin', 'error')
     }
   }
@@ -571,8 +578,9 @@ export function useSuperAdmin() {
         price: Math.round((a.addon_price_rupiah || 0) ),
         min_tier: (gatingMap.get(a.feature_key) as any)?.min_tier || ''
       }))
-      if (!featuresRes.success) addonSaveMsg.value = (featuresRes as any).message || 'Gagal memuat features'
-    } catch {
+      if (!featuresRes.success) addonSaveMsg.value = featuresRes.message || 'Gagal memuat features'
+    } catch (e) {
+      console.error('loadAddonOptions failed', e)
       addonSaveMsg.value = 'Kesalahan jaringan memuat add-on'
     } finally {
       loadingAddons.value = false
@@ -606,7 +614,8 @@ export function useSuperAdmin() {
         category: 'growth',
       }
       await openAddonEditor()
-    } catch {
+    } catch (e) {
+      console.error('saveAddon failed', e)
       addonSaveMsg.value = 'Kesalahan jaringan saat menyimpan addon'
     }
   }
@@ -622,7 +631,8 @@ export function useSuperAdmin() {
       }
       addonSaveMsg.value = 'Addon berhasil dihapus'
       addonOptions.value = addonOptions.value.filter((a: any) => a.addon_key !== addon.addon_key)
-    } catch {
+    } catch (e) {
+      console.error('deleteAddon failed', e)
       addonSaveMsg.value = 'Kesalahan jaringan saat menghapus addon'
     } finally {
       deletingAddon.value = null
@@ -652,7 +662,8 @@ export function useSuperAdmin() {
       }
       addonSaveMsg.value = hasError ? 'Beberapa perubahan gagal disimpan' : 'Semua perubahan berhasil disimpan'
       if (!hasError) await openAddonEditor()
-    } catch {
+    } catch (e) {
+      console.error('saveAllAddons failed', e)
       addonSaveMsg.value = 'Kesalahan jaringan saat menyimpan'
     } finally {
       savingAddons.value = false
@@ -675,7 +686,8 @@ export function useSuperAdmin() {
       } else {
         planError.value = 'Gagal memuat daftar paket'
       }
-    } catch {
+    } catch (e) {
+      console.error('loadPlanEditor failed', e)
       planError.value = 'Kesalahan jaringan'
     } finally {
       loadingPlans.value = false
@@ -711,7 +723,8 @@ export function useSuperAdmin() {
         showToast('Harga paket berhasil diperbarui')
         showPlanEditor.value = false
       }
-    } catch {
+    } catch (e) {
+      console.error('updatePlans failed', e)
       planError.value = 'Kesalahan jaringan'
     } finally {
       savingPlans.value = false
@@ -765,6 +778,7 @@ export function useSuperAdmin() {
     try {
       await superadminApi.toggleFeature({ plan_id: planId, feature_key: featureKey, is_enabled: newVal })
     } catch (e) {
+      console.error('toggleFeature failed', e)
       // Revert on failure
       if (featureMatrixData.value[planId]) {
         featureMatrixData.value[planId][featureKey] = { ...featureMatrixData.value[planId][featureKey], is_enabled: !newVal }
@@ -786,6 +800,7 @@ export function useSuperAdmin() {
       addon.min_tier = minTier || null
       showToast('Addon gating disimpan')
     } catch (e) {
+      console.error('saveAddonMinTier failed', e)
       showToast('Gagal menyimpan addon gating', 'error')
     }
   }
@@ -808,7 +823,8 @@ export function useSuperAdmin() {
       } else {
         showToast("Gagal: " + data.message, "error")
       }
-    } catch {
+    } catch (e) {
+      console.error('generateVoucher failed', e)
       showToast("Terjadi kesalahan jaringan.", "error")
     }
   }

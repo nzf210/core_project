@@ -80,7 +80,7 @@
                 </select>
             </div>
             <div>
-              <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Default aktif di tier</label>
+              <span style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Default aktif di tier</span>
               <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <label v-for="t in ['lite', 'pro', 'ultimate']" :key="t" style="font-size: 0.75rem; display: flex; align-items: center; gap: 0.25rem;">
                   <input type="checkbox" :value="t" v-model="addon.default_enabled" />

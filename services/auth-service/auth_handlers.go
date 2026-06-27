@@ -280,7 +280,7 @@ func handleManualRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, err := validateToken(strings.TrimPrefix(authHeader, "Bearer "))
+	claims, err := validateToken(strings.TrimPrefix(authHeader, bearerPrefix))
 	if err != nil || (claims.Role != "admin" && claims.Role != "kandidat") {
 		writeJSON(w, http.StatusForbidden, Response{Success: false, Message: "Only Admin or Candidate can add users manually"})
 		return
@@ -326,7 +326,7 @@ func handleVerifyData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, err := validateToken(strings.TrimPrefix(authHeader, "Bearer "))
+	claims, err := validateToken(strings.TrimPrefix(authHeader, bearerPrefix))
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Invalid token"})
 		return
