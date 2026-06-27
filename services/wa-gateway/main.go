@@ -175,6 +175,9 @@ func main() {
 			os.Exit(1)
 		}
 	}()
+
+	<-ctx.Done()
+	slog.Info("WA Gateway main exiting", "instance_id", instanceID)
 }
 
 func heartbeatLoop(ctx context.Context) {

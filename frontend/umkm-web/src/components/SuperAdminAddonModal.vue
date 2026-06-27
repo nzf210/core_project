@@ -2,28 +2,34 @@
   <div class="modal-overlay" @click.self="$emit('update:showAddonEditor', false)">
     <div class="modal-card" style="max-width: 600px;">
       <h3 style="margin: 0 0 0.25rem 0;">Kelola Harga Add-on</h3>
-      <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
         <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0;">
           Ubah harga fitur add-on untuk marketplace wallet.
         </p>
-        <button class="btn btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" @click="$emit('create-addon')">
+        <button class="btn btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;"
+          @click="$emit('create-addon')">
           + Buat Addon Baru
         </button>
       </div>
 
-      <div v-if="showAddAddonForm" class="form-group" style="background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.3); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem;">
+      <div v-if="showAddAddonForm" class="form-group"
+        style="background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.3); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
           <strong>Buat Addon Baru</strong>
-          <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" @click="$emit('update:showAddAddonForm', false)">Batal</button>
+          <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;"
+            @click="$emit('update:showAddAddonForm', false)">Batal</button>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
           <div>
             <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Key Addon
-              <input v-model.trim="newAddon.feature_key" type="text" class="form-control" placeholder="extra_store" /></label>
+              <input v-model.trim="newAddon.feature_key" type="text" class="form-control"
+                placeholder="extra_store" /></label>
           </div>
           <div>
             <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Nama
-              <input v-model.trim="newAddon.feature_name" type="text" class="form-control" placeholder="Extra Store" /></label>
+              <input v-model.trim="newAddon.feature_name" type="text" class="form-control"
+                placeholder="Extra Store" /></label>
           </div>
         </div>
         <div style="margin-top: 0.75rem;">
@@ -32,7 +38,8 @@
         </div>
         <div style="margin-top: 0.75rem;">
           <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Deskripsi
-            <input v-model.trim="newAddon.description" type="text" class="form-control" placeholder="Tambah jumlah toko" /></label>
+            <input v-model.trim="newAddon.description" type="text" class="form-control"
+              placeholder="Tambah jumlah toko" /></label>
         </div>
         <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.75rem;">
           <button class="btn btn-secondary" @click="$emit('create-addon')">Simpan Addon</button>
@@ -46,7 +53,8 @@
         <div v-for="addon in addonOptions" :key="addon.addon_key" class="addon-card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
             <div style="font-weight: 600; text-transform: uppercase;">{{ addon.addon_key.replace(/_/g, ' ') }}</div>
-            <label style="display: flex; align-items: center; gap: 0.5rem; margin: 0; font-size: 0.85rem; font-weight: 400;">
+            <label
+              style="display: flex; align-items: center; gap: 0.5rem; margin: 0; font-size: 0.85rem; font-weight: 400;">
               <input type="checkbox" v-model="addon.is_active" /> Aktif
             </label>
           </div>
@@ -55,7 +63,8 @@
             <div>
               <label style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Harga (Rp)
                 <div style="position: relative;">
-                  <span style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 0.85rem;">Rp</span>
+                  <span
+                    style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 0.85rem;">Rp</span>
                   <input v-model.number="addon.price" type="number" class="form-control" style="padding-left: 2rem;" />
                 </div>
               </label>
@@ -78,11 +87,13 @@
                   <option value="pro">Pro</option>
                   <option value="ultimate">Ultimate</option>
                 </select>
+              </label>
             </div>
             <div>
               <span style="font-size: 0.75rem; margin-bottom: 0.25rem; display: block;">Default aktif di tier</span>
               <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <label v-for="t in ['lite', 'pro', 'ultimate']" :key="t" style="font-size: 0.75rem; display: flex; align-items: center; gap: 0.25rem;">
+                <label v-for="t in ['lite', 'pro', 'ultimate']" :key="t"
+                  style="font-size: 0.75rem; display: flex; align-items: center; gap: 0.25rem;">
                   <input type="checkbox" :value="t" v-model="addon.default_enabled" />
                   <span>{{ t.charAt(0).toUpperCase() + t.slice(1) }}</span>
                 </label>
@@ -90,13 +101,16 @@
             </div>
           </div>
           <div style="margin-top: 0.75rem; text-align: right;">
-            <button class="btn" style="background: #ef444420; color: #ef4444; border: 1px solid #ef444440; padding: 0.25rem 0.6rem; font-size: 0.75rem;" @click="$emit('delete-addon', addon)" :disabled="deletingAddon === addon.addon_key">
+            <button class="btn"
+              style="background: #ef444420; color: #ef4444; border: 1px solid #ef444440; padding: 0.25rem 0.6rem; font-size: 0.75rem;"
+              @click="$emit('delete-addon', addon)" :disabled="deletingAddon === addon.addon_key">
               {{ deletingAddon === addon.addon_key ? 'Menghapus...' : 'Hapus' }}
             </button>
           </div>
         </div>
 
-        <div v-if="addonSaveMsg" :style="{ color: addonSaveMsg.includes('gagal') ? '#ef4444' : '#10b981', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }">
+        <div v-if="addonSaveMsg"
+          :style="{ color: addonSaveMsg.includes('gagal') ? '#ef4444' : '#10b981', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }">
           {{ addonSaveMsg }}
         </div>
       </div>
@@ -125,6 +139,7 @@ defineProps<{
 
 defineEmits<{
   'update:showAddonEditor': [value: boolean]
+  'update:showAddAddonForm': [value: boolean]
   'save': []
   'create-addon': []
   'delete-addon': [addon: any]
