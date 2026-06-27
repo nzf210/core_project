@@ -74,7 +74,7 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"user_id":              userID,
 			"username":             username,
 			"email":                email,

@@ -49,13 +49,13 @@
         <form v-if="loginMode === 'wa'"
           @submit.prevent="phoneStep === 'input' ? handlePhoneLogin() : handleVerifyPhoneLogin()">
           <div v-if="phoneStep === 'input'" class="form-group">
-            <label>Nomor WhatsApp</label>
-            <input v-model="phoneNumber" type="text" class="form-control" placeholder="Contoh: 081234567890" required />
+            <label for="wa-phone">Nomor WhatsApp</label>
+            <input id="wa-phone" v-model="phoneNumber" type="text" class="form-control" placeholder="Contoh: 081234567890" required />
           </div>
 
           <div v-if="phoneStep === 'verify'" class="form-group">
-            <label>Kode OTP (dikirim ke {{ phoneNumber }})</label>
-            <input v-model="phoneOTP" type="text" class="form-control" placeholder="Masukkan 6 digit OTP" maxlength="6"
+            <label for="wa-otp">Kode OTP (dikirim ke {{ phoneNumber }})</label>
+            <input id="wa-otp" v-model="phoneOTP" type="text" class="form-control" placeholder="Masukkan 6 digit OTP" maxlength="6"
               required />
             <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">
               <a href="#" @click.prevent="phoneStep = 'input'" style="color: var(--accent-primary);">Ganti nomor</a>
@@ -71,8 +71,8 @@
         <form v-if="loginMode === 'telegram'"
           @submit.prevent="telegramStep === 'input' ? handleTelegramLogin() : handleTelegramVerifyLogin()">
           <div v-if="telegramStep === 'input'" class="form-group">
-            <label>Chat ID Telegram</label>
-            <input v-model="telegramChatId" type="text" class="form-control" placeholder="cth: 123456789" required />
+            <label for="tg-chatid">Chat ID Telegram</label>
+            <input id="tg-chatid" v-model="telegramChatId" type="text" class="form-control" placeholder="cth: 123456789" required />
             <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
               Chat bot kami di <a href="https://t.me/WCHBot" target="_blank"
                 style="color: var(--accent-primary);">@core_tesbot</a> — kirim /start untuk dapat Chat ID
@@ -80,13 +80,13 @@
           </div>
 
           <div v-if="telegramStep === 'input'" class="form-group">
-            <label>Nomor WhatsApp (terdaftar)</label>
-            <input v-model="telegramPhone" type="text" class="form-control" placeholder="cth: 081234567890" required />
+            <label for="tg-phone">Nomor WhatsApp (terdaftar)</label>
+            <input id="tg-phone" v-model="telegramPhone" type="text" class="form-control" placeholder="cth: 081234567890" required />
           </div>
 
           <div v-if="telegramStep === 'verify'" class="form-group">
-            <label>Kode OTP (dikirim ke Telegram Anda)</label>
-            <input v-model="telegramOTP" type="text" class="form-control" placeholder="Masukkan 6 digit OTP"
+            <label for="tg-otp">Kode OTP (dikirim ke Telegram Anda)</label>
+            <input id="tg-otp" v-model="telegramOTP" type="text" class="form-control" placeholder="Masukkan 6 digit OTP"
               maxlength="6" required />
             <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">
               <a href="#" @click.prevent="telegramStep = 'input'" style="color: var(--accent-primary);">Ganti Chat ID /
@@ -103,20 +103,20 @@
         <!-- Password Login Form -->
         <form v-if="loginMode === 'password'" @submit.prevent="handleLogin">
           <div class="form-group">
-            <label>Username / Email</label>
-            <input v-model="username" type="text" class="form-control" placeholder="Masukkan username atau email"
+            <label for="login-username">Username / Email</label>
+            <input id="login-username" v-model="username" type="text" class="form-control" placeholder="Masukkan username atau email"
               required />
           </div>
 
           <div class="form-group" style="margin-bottom: 2rem;">
             <div class="flex items-center justify-between"
               style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <label>Password</label>
+              <label for="login-password">Password</label>
               <router-link to="/forgot-password" style="font-size: 0.8rem; color: var(--accent-primary);">Lupa
                 Password?</router-link>
             </div>
             <div style="position: relative;">
-              <input v-model="password" :type="showPassword ? 'text' : 'password'" class="form-control"
+              <input id="login-password" v-model="password" :type="showPassword ? 'text' : 'password'" class="form-control"
                 placeholder="Masukkan password" required style="padding-right: 2.5rem;" />
               <button type="button" @click="showPassword = !showPassword"
                 style="position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0; display: flex;">
@@ -191,22 +191,37 @@ const loading = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 
+async function applyLoginSuccess(d: any) {
+  localStorage.setItem('access_token', d.accessToken)
+  localStorage.setItem('refresh_token', d.refreshToken)
+  localStorage.setItem('tenant_id', d.tenantId)
+  localStorage.setItem('role', d.role)
+  try {
+    const profileRes = await api.get('/api/profile')
+    if (profileRes.success && profileRes.data) {
+      localStorage.setItem('plan', profileRes.data.plan || 'lite')
+      if (profileRes.data.business_name || d.role !== 'owner') {
+        localStorage.setItem('onboarding_completed', 'true')
+      }
+      let subStatus = 'active'
+      if (typeof profileRes.data.is_frozen === 'boolean') {
+        subStatus = profileRes.data.is_frozen ? 'frozen' : 'active'
+      }
+      sessionStorage.setItem('subscription_status', subStatus)
+    }
+  } catch { console.error('Failed to check profile for onboarding status') }
+  await redeemPendingReferral()
+  router.push('/')
+}
+
 async function redeemPendingReferral() {
   const code = localStorage.getItem('pending_referral_code')
   if (!code) return
-
   try {
     const res = await api.redeemReferral(code)
-    if (res && res.status >= 200 && res.status < 300) {
-      successMsg.value = 'Kode referral berhasil diterapkan!'
-      localStorage.removeItem('pending_referral_code')
-    } else {
-      // Jangan blokir login — kode bisa saja sudah terpakai
-      localStorage.removeItem('pending_referral_code')
-    }
-  } catch (e) {
-    localStorage.removeItem('pending_referral_code')
-  }
+    if (res && res.status >= 200 && res.status < 300) successMsg.value = 'Kode referral berhasil diterapkan!'
+  } catch { /* kode sudah terpakai, abaikan */ }
+  localStorage.removeItem('pending_referral_code')
 }
 
 const handlePhoneLogin = async () => {
@@ -222,7 +237,7 @@ const handlePhoneLogin = async () => {
     } else {
       errorMsg.value = data.message || 'Nomor tidak terdaftar.'
     }
-  } catch (e) {
+  } catch {
     errorMsg.value = 'Terjadi kesalahan jaringan.'
   } finally {
     loading.value = false
@@ -237,34 +252,11 @@ const handleVerifyPhoneLogin = async () => {
   try {
     const data = await api.verifyPhoneLogin(phoneNumber.value, phoneOTP.value)
     if (data.success && data.data) {
-      localStorage.setItem('access_token', data.data.accessToken)
-      localStorage.setItem('refresh_token', data.data.refreshToken)
-      localStorage.setItem('tenant_id', data.data.tenantId)
-      localStorage.setItem('role', data.data.role)
-
-      try {
-        const profileRes = await api.get('/api/profile')
-        if (profileRes.success && profileRes.data) {
-          localStorage.setItem('plan', profileRes.data.plan || 'lite')
-          if (profileRes.data.business_name || data.data.role !== 'owner') {
-            localStorage.setItem('onboarding_completed', 'true')
-          }
-          if (typeof profileRes.data.is_frozen === 'boolean') {
-            sessionStorage.setItem('subscription_status', profileRes.data.is_frozen ? 'frozen' : 'active')
-          } else {
-            sessionStorage.setItem('subscription_status', 'active')
-          }
-        }
-      } catch (err) {
-        console.error('Failed to check profile for onboarding status')
-      }
-
-      await redeemPendingReferral()
-      router.push('/')
+      await applyLoginSuccess(data.data)
     } else {
       errorMsg.value = data.message || 'OTP tidak valid.'
     }
-  } catch (e) {
+  } catch {
     errorMsg.value = 'Terjadi kesalahan jaringan.'
   } finally {
     loading.value = false
@@ -284,7 +276,7 @@ const handleTelegramLogin = async () => {
     } else {
       errorMsg.value = data.message || 'Nomor tidak terdaftar atau Chat ID tidak valid.'
     }
-  } catch (e) {
+  } catch {
     errorMsg.value = 'Terjadi kesalahan jaringan.'
   } finally {
     loading.value = false
@@ -299,34 +291,11 @@ const handleTelegramVerifyLogin = async () => {
   try {
     const data = await api.verifyPhoneLogin(telegramPhone.value, telegramOTP.value)
     if (data.success && data.data) {
-      localStorage.setItem('access_token', data.data.accessToken)
-      localStorage.setItem('refresh_token', data.data.refreshToken)
-      localStorage.setItem('tenant_id', data.data.tenantId)
-      localStorage.setItem('role', data.data.role)
-
-      try {
-        const profileRes = await api.get('/api/profile')
-        if (profileRes.success && profileRes.data) {
-          localStorage.setItem('plan', profileRes.data.plan || 'lite')
-          if (profileRes.data.business_name || data.data.role !== 'owner') {
-            localStorage.setItem('onboarding_completed', 'true')
-          }
-          if (typeof profileRes.data.is_frozen === 'boolean') {
-            sessionStorage.setItem('subscription_status', profileRes.data.is_frozen ? 'frozen' : 'active')
-          } else {
-            sessionStorage.setItem('subscription_status', 'active')
-          }
-        }
-      } catch (err) {
-        console.error('Failed to check profile for onboarding status')
-      }
-
-      await redeemPendingReferral()
-      router.push('/')
+      await applyLoginSuccess(data.data)
     } else {
       errorMsg.value = data.message || 'OTP tidak valid.'
     }
-  } catch (e) {
+  } catch {
     errorMsg.value = 'Terjadi kesalahan jaringan.'
   } finally {
     loading.value = false
@@ -342,34 +311,11 @@ const handleLogin = async () => {
     const data = await api.login(username.value, password.value)
 
     if (data.success && data.data) {
-      localStorage.setItem('access_token', data.data.accessToken)
-      localStorage.setItem('refresh_token', data.data.refreshToken)
-      localStorage.setItem('tenant_id', data.data.tenantId)
-      localStorage.setItem('role', data.data.role)
-
-      try {
-        const profileRes = await api.get('/api/profile')
-        if (profileRes.success && profileRes.data) {
-          localStorage.setItem('plan', profileRes.data.plan || 'lite')
-          if (profileRes.data.business_name || data.data.role !== 'owner') {
-            localStorage.setItem('onboarding_completed', 'true')
-          }
-          if (typeof profileRes.data.is_frozen === 'boolean') {
-            sessionStorage.setItem('subscription_status', profileRes.data.is_frozen ? 'frozen' : 'active')
-          } else {
-            sessionStorage.setItem('subscription_status', 'active')
-          }
-        }
-      } catch (err) {
-        console.error('Failed to check profile for onboarding status')
-      }
-
-      await redeemPendingReferral()
-      router.push('/')
+      await applyLoginSuccess(data.data)
     } else {
       errorMsg.value = data.message || 'Login gagal, periksa kredensial Anda.'
     }
-  } catch (e) {
+  } catch {
     errorMsg.value = 'Terjadi kesalahan jaringan ke server Auth.'
   } finally {
     loading.value = false

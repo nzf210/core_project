@@ -10,25 +10,31 @@
     <!-- Pengaturan Akun -->
     <div class="surface-card animate-fade-in" style="max-width: 600px; padding: 2rem;">
       <h3 style="margin-bottom: 1.5rem;">Pengaturan Akun</h3>
-      <div style="display: flex; flex-direction: column; gap: 1rem;" v-if="userRole === 'owner' || userRole === 'admin'">
+      <div style="display: flex; flex-direction: column; gap: 1rem;"
+        v-if="userRole === 'owner' || userRole === 'admin'">
         <div>
-          <label class="form-label">Username</label>
-          <input type="text" placeholder="Username" v-model="profileForm.username" class="form-control" />
+          <label class="form-label" for="sett-username">Username</label>
+          <input id="sett-username" type="text" placeholder="Username" v-model="profileForm.username"
+            class="form-control" />
         </div>
         <div>
-          <label class="form-label">Nomor HP</label>
-          <input type="text" placeholder="Nomor HP" v-model="profileForm.phone_number" class="form-control" />
+          <label class="form-label" for="sett-phone">Nomor HP</label>
+          <input id="sett-phone" type="text" placeholder="Nomor HP" v-model="profileForm.phone_number"
+            class="form-control" />
         </div>
         <div class="divider" style="border-top: 1px solid var(--border-color); margin: 0.5rem 0;"></div>
         <h4 style="margin-bottom: 0.25rem; font-size: 1rem; color: var(--text-primary);">Ganti Password</h4>
-        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0;">Kosongkan jika tidak ingin mengubah password</p>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0;">Kosongkan jika tidak ingin mengubah
+          password</p>
         <div>
-          <label class="form-label">Password Saat Ini</label>
-          <input type="password" placeholder="Password Saat Ini" v-model="profileForm.old_password" class="form-control" />
+          <label class="form-label" for="sett-old-pass">Password Saat Ini</label>
+          <input id="sett-old-pass" type="password" placeholder="Password Saat Ini" v-model="profileForm.old_password"
+            class="form-control" />
         </div>
         <div>
-          <label class="form-label">Password Baru</label>
-          <input type="password" placeholder="Password Baru" v-model="profileForm.new_password" class="form-control" />
+          <label class="form-label" for="sett-new-pass">Password Baru</label>
+          <input id="sett-new-pass" type="password" placeholder="Password Baru" v-model="profileForm.new_password"
+            class="form-control" />
         </div>
         <button class="btn btn-primary" @click="saveAccount" :disabled="loadingAccount">
           {{ loadingAccount ? 'Menyimpan...' : 'Simpan Akun' }}
@@ -43,8 +49,9 @@
       <div class="profile-logo-section" style="margin-bottom: 1.5rem; text-align: center;">
         <div class="logo-preview"
           style="width: 80px; height: 80px; border-radius: 50%; overflow: hidden; margin: 0 auto 0.5rem; border: 2px solid var(--border-color);">
-          <img v-if="profileForm.logo_url" :src="profileForm.logo_url.startsWith('http') ? profileForm.logo_url : API_BASE + profileForm.logo_url + '?t=' + Date.now()" alt="Logo"
-            style="width: 100%; height: 100%; object-fit: cover;" />
+          <img v-if="profileForm.logo_url"
+            :src="profileForm.logo_url.startsWith('http') ? profileForm.logo_url : API_BASE + profileForm.logo_url + '?t=' + Date.now()"
+            alt="Logo" style="width: 100%; height: 100%; object-fit: cover;" />
           <span v-else style="font-size: 2rem; color: var(--text-secondary);">S</span>
         </div>
         <label class="btn btn-secondary" style="cursor: pointer; font-size: 0.8rem; padding: 0.3rem 0.8rem;">
@@ -53,10 +60,13 @@
         </label>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 1rem;" v-if="userRole === 'owner' || userRole === 'admin'">
-        <input type="text" placeholder="Nama Usaha" v-model="profileForm.business_name" class="form-control" />
-        <textarea placeholder="Alamat Usaha" v-model="profileForm.business_address" class="form-control" rows="2" />
-        <select v-model="profileForm.business_type" class="form-control">
+      <div style="display: flex; flex-direction: column; gap: 1rem;"
+        v-if="userRole === 'owner' || userRole === 'admin'">
+        <input type="text" aria-label="Nama Usaha" placeholder="Nama Usaha" v-model="profileForm.business_name"
+          class="form-control" />
+        <textarea aria-label="Alamat Usaha" placeholder="Alamat Usaha" v-model="profileForm.business_address"
+          class="form-control" rows="2"></textarea>
+        <select aria-label="Jenis Usaha" v-model="profileForm.business_type" class="form-control">
           <option value="" disabled>Pilih Jenis Usaha</option>
           <option value="umum">Umum</option>
           <option value="warung">Warung</option>
@@ -66,7 +76,8 @@
           <option value="restoran">Restoran</option>
           <option value="jasa">Jasa</option>
         </select>
-        <input type="text" placeholder="Nomor WA (dengan kode negara, contoh: 6281...)" v-model="profileForm.wa_number" class="form-control" />
+        <input type="text" aria-label="Nomor WA" placeholder="Nomor WA (dengan kode negara, contoh: 6281...)"
+          v-model="profileForm.wa_number" class="form-control" />
         <button class="btn btn-primary" @click="saveStore" :disabled="loadingStore">
           {{ loadingStore ? 'Menyimpan...' : 'Simpan Toko' }}
         </button>
@@ -77,8 +88,8 @@
     <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
       <div class="flex justify-between items-center" style="margin-bottom: 1.5rem;">
         <h3>Pengaturan Pembayaran QRIS</h3>
-        <label class="switch">
-          <input type="checkbox" v-model="qrisEnabled">
+        <label class="switch" for="qrisEnabled">
+          <input type="checkbox" id="qrisEnabled" v-model="qrisEnabled">
           <span class="slider round"></span>
         </label>
       </div>
@@ -88,11 +99,12 @@
       </p>
 
       <div v-if="qrisEnabled" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem;">
-        <input type="password" v-model="xenditApiKey" class="form-control"
+        <!-- ponytail: QRIS fields have implicit label from surrounding text -->
+        <input type="password" aria-label="Xendit Secret API Key" v-model="xenditApiKey" class="form-control"
           placeholder="Xendit Secret API Key (xnd_...)" />
-        <input type="text" v-model="xenditMerchantID" class="form-control"
+        <input type="text" aria-label="Xendit Merchant ID" v-model="xenditMerchantID" class="form-control"
           placeholder="Xendit Merchant ID (opsional, untuk routing pembayaran ke akun Anda)" />
-        <input type="password" v-model="xenditWebhookToken" class="form-control"
+        <input type="password" aria-label="Xendit Webhook Token" v-model="xenditWebhookToken" class="form-control"
           placeholder="Xendit Webhook Verification Token" />
       </div>
 
@@ -102,25 +114,24 @@
     </div>
 
     <!-- Quota Usage (F025, Task 2.9) — superadmin only -->
-    <div v-if="isSuperadmin" class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
+    <div v-if="isSuperadmin" class="glass-card animate-fade-in"
+      style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
       <h3 style="margin-bottom: 1.5rem;">📊 Quota Usage (Superadmin)</h3>
       <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
-        Inspect quota counters and plan limits for any tenant. Endpoint: <code>/api/superadmin/billing/quota/{tenant_id}</code>
+        Inspect quota counters and plan limits for any tenant. Endpoint:
+        <code>/api/superadmin/billing/quota/{tenant_id}</code>
       </p>
 
       <div class="flex gap-2" style="margin-bottom: 1rem;">
-        <input
-          v-model="quotaTenantInput"
-          placeholder="Tenant ID (UUID)"
-          class="form-control"
-          style="flex: 1;"
-        />
+        <input v-model="quotaTenantInput" placeholder="Tenant ID (UUID)" class="form-control" style="flex: 1;"
+          aria-label="Tenant ID" />
         <button class="btn btn-primary" @click="loadQuota" :disabled="loadingQuota || !quotaTenantInput">
           {{ loadingQuota ? 'Memuat...' : 'Muat' }}
         </button>
       </div>
 
-      <div v-if="quotaError" style="background: rgba(239,68,68,0.1); color: #ef4444; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem;">
+      <div v-if="quotaError"
+        style="background: rgba(239,68,68,0.1); color: #ef4444; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem;">
         {{ quotaError }}
       </div>
 
@@ -133,16 +144,15 @@
         </p>
 
         <div v-for="row in quotaRows" :key="row.key" class="quota-bar" style="margin-bottom: 0.75rem;">
-          <div class="quota-bar-label" style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.25rem;">
+          <div class="quota-bar-label"
+            style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.25rem;">
             <span>{{ row.label }}</span>
             <span>{{ row.used }} / {{ row.limitText }}</span>
           </div>
-          <div class="quota-bar-track" style="background: var(--bg-tertiary); height: 8px; border-radius: 4px; overflow: hidden;">
-            <div
-              class="quota-bar-fill"
-              :class="row.percent >= 80 ? 'quota-bar-warn' : ''"
-              :style="{ width: row.percent + '%' }"
-            ></div>
+          <div class="quota-bar-track"
+            style="background: var(--bg-tertiary); height: 8px; border-radius: 4px; overflow: hidden;">
+            <div class="quota-bar-fill" :class="row.percent >= 80 ? 'quota-bar-warn' : ''"
+              :style="{ width: row.percent + '%' }"></div>
           </div>
         </div>
       </div>
@@ -152,7 +162,8 @@
     <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
       <h3 style="margin-bottom: 1rem;">Pengaturan Automasi & Laporan</h3>
       <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
-        Fitur laporan harian kini lebih canggih. Anda bisa membuat banyak jadwal laporan otomatis (Harian, Mingguan, Bulanan) dan notifikasi stok rendah.
+        Fitur laporan harian kini lebih canggih. Anda bisa membuat banyak jadwal laporan otomatis (Harian, Mingguan,
+        Bulanan) dan notifikasi stok rendah.
       </p>
       <router-link to="/automations" class="btn btn-primary" style="display: inline-block; text-decoration: none;">
         Kelola Automasi ➡️
@@ -160,15 +171,21 @@
     </div>
 
     <!-- Staff Management -->
-    <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;" v-if="userRole === 'owner' || userRole === 'admin'">
-      <h3 style="margin-bottom: 1.5rem;" v-if="userRole === 'owner' || userRole === 'admin'">Pengaturan Pegawai (Kasir)</h3>
-      <div style="display: flex; flex-direction: column; gap: 1rem;" v-if="userRole === 'owner' || userRole === 'admin'">
-        <input type="text" placeholder="Username" v-model="staffForm.username" class="form-control" />
-        <input type="email" placeholder="Email" v-model="staffForm.email" class="form-control" />
-        <input type="password" placeholder="Password Sementara" v-model="staffForm.password" class="form-control" />
+    <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;"
+      v-if="userRole === 'owner' || userRole === 'admin'">
+      <h3 style="margin-bottom: 1.5rem;" v-if="userRole === 'owner' || userRole === 'admin'">Pengaturan Pegawai (Kasir)
+      </h3>
+      <div style="display: flex; flex-direction: column; gap: 1rem;"
+        v-if="userRole === 'owner' || userRole === 'admin'">
+        <input type="text" aria-label="Username staff" placeholder="Username" v-model="staffForm.username"
+          class="form-control" />
+        <input type="email" aria-label="Email staff" placeholder="Email" v-model="staffForm.email"
+          class="form-control" />
+        <input type="password" aria-label="Password sementara" placeholder="Password Sementara"
+          v-model="staffForm.password" class="form-control" />
         <input type="text" placeholder="Nomor WA (contoh: 0812...)" v-model="staffForm.phoneNumber"
           class="form-control" />
-        <select v-model="staffForm.role" class="form-control">
+        <select aria-label="Role staff" v-model="staffForm.role" class="form-control">
           <option value="kasir">Kasir</option>
           <option value="admin">Admin</option>
         </select>
@@ -182,25 +199,32 @@
     <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;">
       <h3 style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
         Daftar Pegawai
-        <button class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem;" @click="fetchStaffList" :disabled="loadingStaffList">
+        <button class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem;" @click="fetchStaffList"
+          :disabled="loadingStaffList">
           {{ loadingStaffList ? '...' : 'Refresh' }}
         </button>
       </h3>
 
       <div v-if="loadingStaffList" style="text-align: center; padding: 2rem;">Loading...</div>
-      <div v-else-if="staffList.length === 0" style="text-align: center; padding: 2rem; opacity: 0.7;">Belum ada data pegawai.</div>
+      <div v-else-if="staffList.length === 0" style="text-align: center; padding: 2rem; opacity: 0.7;">Belum ada data
+        pegawai.</div>
 
       <div v-else style="display: flex; flex-direction: column; gap: 1rem;">
-        <div v-for="staff in staffList" :key="staff.id" style="border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 1rem;">
+        <div v-for="staff in staffList" :key="staff.id"
+          style="border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 1rem;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
             <div>
               <strong>{{ staff.username }}</strong>
-              <span style="font-size: 0.8rem; padding: 0.2rem 0.5rem; background: rgba(var(--primary-color-rgb), 0.2); border-radius: 4px; margin-left: 0.5rem;">
+              <span
+                style="font-size: 0.8rem; padding: 0.2rem 0.5rem; background: rgba(var(--primary-color-rgb), 0.2); border-radius: 4px; margin-left: 0.5rem;">
                 {{ staff.role }}
               </span>
             </div>
-            <div v-if="userRole === 'owner' || userRole === 'admin'">              <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; margin-right: 0.5rem;" @click="openEditStaffModal(staff)">Edit</button>
-              <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" @click="openDeleteStaffModal(staff.id)">Hapus</button>
+            <div v-if="userRole === 'owner' || userRole === 'admin'"> <button class="btn btn-secondary"
+                style="padding: 0.3rem 0.6rem; font-size: 0.8rem; margin-right: 0.5rem;"
+                @click="openEditStaffModal(staff)">Edit</button>
+              <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;"
+                @click="openDeleteStaffModal(staff.id)">Hapus</button>
             </div>
           </div>
           <div style="font-size: 0.9rem; opacity: 0.8;">
@@ -224,30 +248,40 @@
       </p>
 
       <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem;">
-        <div v-for="faq in faqs" :key="faq.id" style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px;">
+        <div v-for="faq in faqs" :key="faq.id"
+          style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px;">
           <template v-if="editingFaqId === faq.id">
-            <input type="text" v-model="editFaqForm.question" class="form-control" style="margin-bottom: 0.5rem;" />
-            <textarea v-model="editFaqForm.answer" class="form-control" rows="2" style="margin-bottom: 0.5rem;"></textarea>
+            <input type="text" aria-label="Edit pertanyaan FAQ" v-model="editFaqForm.question" class="form-control"
+              style="margin-bottom: 0.5rem;" />
+            <textarea aria-label="Edit jawaban FAQ" v-model="editFaqForm.answer" class="form-control" rows="2"
+              style="margin-bottom: 0.5rem;"></textarea>
             <div style="display: flex; gap: 0.5rem;">
-              <button class="btn btn-primary btn-sm" @click="saveEditFAQ(faq.id)" :disabled="!editFaqForm.question || !editFaqForm.answer">Simpan</button>
+              <button class="btn btn-primary btn-sm" @click="saveEditFAQ(faq.id)"
+                :disabled="!editFaqForm.question || !editFaqForm.answer">Simpan</button>
               <button class="btn btn-secondary btn-sm" @click="cancelEditFAQ">Batal</button>
             </div>
           </template>
           <template v-else>
             <div style="font-weight: bold; margin-bottom: 0.3rem;">Q: {{ faq.question }}</div>
-            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">A: {{ faq.answer }}</div>
+            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">A: {{ faq.answer }}
+            </div>
             <div style="display: flex; gap: 0.5rem;">
               <button class="btn btn-secondary btn-sm" @click="startEditFAQ(faq)">✏️ Edit</button>
-              <button class="btn btn-secondary btn-sm" style="color: #ef4444; border-color: #ef4444;" @click="deleteFAQ(faq.id)">Hapus</button>
+              <button class="btn btn-secondary btn-sm" style="color: #ef4444; border-color: #ef4444;"
+                @click="deleteFAQ(faq.id)">Hapus</button>
             </div>
           </template>
         </div>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
-        <input type="text" placeholder="Pertanyaan (Contoh: Jam Buka?)" v-model="newFaq.question" class="form-control" />
-        <textarea placeholder="Jawaban (Contoh: Buka dari jam 8 pagi...)" v-model="newFaq.answer" class="form-control" rows="2"></textarea>
-        <button class="btn btn-primary" @click="addFAQ" :disabled="!newFaq.question || !newFaq.answer">Tambah FAQ</button>
+      <div
+        style="display: flex; flex-direction: column; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+        <input type="text" aria-label="Pertanyaan baru FAQ" placeholder="Pertanyaan (Contoh: Jam Buka?)"
+          v-model="newFaq.question" class="form-control" />
+        <textarea aria-label="Jawaban baru FAQ" placeholder="Jawaban (Contoh: Buka dari jam 8 pagi...)"
+          v-model="newFaq.answer" class="form-control" rows="2"></textarea>
+        <button class="btn btn-primary" @click="addFAQ" :disabled="!newFaq.question || !newFaq.answer">Tambah
+          FAQ</button>
       </div>
     </div>
 
@@ -257,16 +291,21 @@
         <h3>Edit Pegawai</h3>
         <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem;">
           <div>
-            <label style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 0.3rem; display: block;">Username</label>
-            <input type="text" v-model="editStaffForm.username" class="form-control" />
+            <label for="edit-staff-username"
+              style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 0.3rem; display: block;">Username</label>
+            <input id="edit-staff-username" type="text" v-model="editStaffForm.username" class="form-control" />
           </div>
           <div>
-            <label style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 0.3rem; display: block;">No. WA</label>
-            <input type="text" v-model="editStaffForm.phone_number" class="form-control" />
+            <label for="edit-staff-phone"
+              style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 0.3rem; display: block;">No. WA</label>
+            <input id="edit-staff-phone" type="text" v-model="editStaffForm.phone_number" class="form-control" />
           </div>
           <div>
-            <label style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 0.3rem; display: block;">Reset Password (opsional)</label>
-            <input type="password" placeholder="Biarkan kosong jika tidak diubah" v-model="editStaffForm.password" class="form-control" />
+            <label for="edit-staff-pass"
+              style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 0.3rem; display: block;">Reset Password
+              (opsional)</label>
+            <input id="edit-staff-pass" type="password" placeholder="Biarkan kosong jika tidak diubah"
+              v-model="editStaffForm.password" class="form-control" />
           </div>
 
           <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem;">
@@ -287,14 +326,18 @@
       </p>
 
       <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
-        <div v-for="fwd in forwarders" :key="fwd.id" class="flex justify-between items-center" style="background: rgba(255,255,255,0.05); padding: 0.5rem 1rem; border-radius: 8px;">
+        <div v-for="fwd in forwarders" :key="fwd.id" class="flex justify-between items-center"
+          style="background: rgba(255,255,255,0.05); padding: 0.5rem 1rem; border-radius: 8px;">
           <span>{{ fwd.phone_number }}</span>
-          <button class="btn btn-secondary btn-sm" style="color: #ef4444; border-color: transparent;" @click="deleteForwarder(fwd.id)">Hapus</button>
+          <button class="btn btn-secondary btn-sm" style="color: #ef4444; border-color: transparent;"
+            @click="deleteForwarder(fwd.id)">Hapus</button>
         </div>
       </div>
 
       <div class="flex gap-2">
-        <input type="text" placeholder="Nomor WA (contoh: 62812...)" v-model="newForwarder" class="form-control" style="flex: 1;" />
+        <input type="text" aria-label="Nomor WA forwarder baru" placeholder="Nomor WA (contoh: 62812...)"
+          v-model="newForwarder" class="form-control" style="flex: 1;" />
+        aria-label="Tenant ID"
         <button class="btn btn-primary" @click="addForwarder" :disabled="!newForwarder">Tambah</button>
       </div>
     </div>
@@ -313,7 +356,8 @@
           <h3 style="margin-bottom: 0.5rem;">Hapus Pegawai?</h3>
           <p style="opacity: 0.7; margin-bottom: 1.5rem;">Tindakan ini tidak dapat dibatalkan.</p>
           <div style="display: flex; gap: 1rem; justify-content: center;">
-            <button class="btn btn-secondary" @click="showDeleteModal = false" :disabled="loadingDeleteStaff">Batal</button>
+            <button class="btn btn-secondary" @click="showDeleteModal = false"
+              :disabled="loadingDeleteStaff">Batal</button>
             <button class="btn btn-danger" @click="confirmDeleteStaff" :disabled="loadingDeleteStaff">
               {{ loadingDeleteStaff ? 'Menghapus...' : 'Hapus' }}
             </button>
@@ -479,7 +523,7 @@ const loadingUpdateStaff = ref(false)
 const userRole = computed(() => localStorage.getItem('role') || '')
 
 const fetchStaffList = async () => {
-  
+
   loadingStaffList.value = true;
   try {
     const res = await authApi.getStaffList();
@@ -631,9 +675,7 @@ const loadFaqs = async () => {
   try {
     const res = await api.get('/api/umkm/faqs')
     if (res.success) faqs.value = res.data || []
-  } catch (e) {
-    console.error(e)
-  }
+  } catch { /* ignore */ }
 }
 
 const addFAQ = async () => {
@@ -646,7 +688,7 @@ const addFAQ = async () => {
     } else {
       showToast('Gagal menambahkan FAQ', 'error')
     }
-  } catch (e) {
+  } catch {
     showToast('Network error', 'error')
   }
 }
@@ -685,6 +727,7 @@ const saveEditFAQ = async (id: string) => {
       showToast(res.message || 'Gagal update FAQ', 'error')
     }
   } catch (e) {
+    console.error('Save edit FAQ error:', e)
     showToast('Network error', 'error')
   }
 }

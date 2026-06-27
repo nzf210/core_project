@@ -6,8 +6,8 @@
         <p class="text-muted">Kelola daftar produk, harga, dan deskripsi produk Anda.</p>
       </div>
       <div class="header-actions">
-        <select v-model="selectedCategory" class="form-control"
-          style="width: 200px; display: inline-block; margin-right: 1rem;">
+        <select id="pc-category" v-model="selectedCategory" class="form-control"
+          aria-label="Filter kategori" style="width: 200px; display: inline-block; margin-right: 1rem;">
           <option value="">Semua Kategori</option>
           <option v-for="cat in uniqueCategories" :key="cat" :value="cat">{{ cat }}</option>
         </select>
@@ -19,7 +19,8 @@
           Export XLSX
         </button>
 
-        <input type="file" ref="fileInput" accept=".csv,.xlsx" style="display: none" @change="handleFileUpload" />
+        <label for="pc-file-input" class="sr-only">Upload file produk</label>
+        <input type="file" id="pc-file-input" ref="fileInput" accept=".csv,.xlsx" style="display: none" @change="handleFileUpload" />
         <button class="btn btn-outline" @click="($refs.fileInput as HTMLInputElement).click()"
           style="margin-right: 0.5rem;" :disabled="uploading">
           {{ uploading ? 'Mengimpor...' : 'Import (CSV/XLSX)' }}
@@ -91,14 +92,14 @@
               <button class="gallery-nav left" @click.stop="scrollGallery('left')">&lt;</button>
               <div ref="galleryRef" class="gallery-container"
                 style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; max-width: 100%; -webkit-overflow-scrolling: touch;">
-                <img v-if="selectedProduct.photo_url" :src="selectedProduct.photo_url" class="gallery-img" />
+                <img v-if="selectedProduct.photo_url" :src="selectedProduct.photo_url" alt="Foto utama produk" class="gallery-img" />
                 <div
                   v-if="!selectedProduct.photo_url && (!selectedProduct.additional_photos || selectedProduct.additional_photos.length === 0)"
                   class="gallery-img-placeholder">
                   Tanpa Foto
                 </div>
                 <img v-for="(photo, index) in selectedProduct.additional_photos" :key="index" :src="photo"
-                  class="gallery-img" />
+                  alt="Foto tambahan produk" class="gallery-img" />
               </div>
               <button class="gallery-nav right" @click.stop="scrollGallery('right')">&gt;</button>
             </div>
@@ -140,16 +141,17 @@
 
           <form @submit.prevent="saveProduct">
             <div class="form-group">
-              <label>URL Foto Utama (Opsional)</label>
-              <input type="url" v-model="formData.photo_url" class="form-control"
+              <label for="pc-photo-url">URL Foto Utama (Opsional)</label>
+              <input id="pc-photo-url" type="url" v-model="formData.photo_url" class="form-control"
                 placeholder="https://contoh.com/gambar.jpg" />
             </div>
 
             <div class="form-group">
-              <label>Foto Tambahan (Opsional)</label>
+              <p class="form-label">Foto Tambahan (Opsional)</p>
               <div v-for="(_, index) in formData.additional_photos" :key="index"
                 style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-                <input type="url" v-model="formData.additional_photos[index]"
+                <input :id="'pc-add-photo-' + index" type="url" v-model="formData.additional_photos[index]"
+                  :aria-label="'URL foto tambahan ' + (index + 1)"
                   placeholder="https://contoh.com/foto-tambahan.jpg" class="form-control" />
                 <button class="btn btn-outline" style="color: #ef4444; border-color: #ef4444; padding: 0 0.75rem;"
                   @click.prevent="formData.additional_photos.splice(index, 1)">X</button>
@@ -159,30 +161,30 @@
             </div>
 
             <div class="form-group">
-              <label>Nama Produk</label>
-              <input type="text" v-model="formData.name" class="form-control" required
+              <label for="pc-name">Nama Produk</label>
+              <input id="pc-name" type="text" v-model="formData.name" class="form-control" required
                 placeholder="Contoh: Kopi Susu Aren" />
             </div>
 
             <div class="form-group">
-              <label>Harga (Rp)</label>
-              <input type="number" v-model="formData.price" class="form-control" required min="0" />
+              <label for="pc-price">Harga (Rp)</label>
+              <input id="pc-price" type="number" v-model="formData.price" class="form-control" required min="0" />
             </div>
 
             <div class="form-group">
-              <label>Kategori</label>
-              <input type="text" v-model="formData.category" class="form-control"
+              <label for="pc-category-input">Kategori</label>
+              <input id="pc-category-input" type="text" v-model="formData.category" class="form-control"
                 placeholder="Contoh: Makanan, Minuman, Pakaian" />
             </div>
 
             <div class="form-group">
-              <label>Stok Barang</label>
-              <input type="number" v-model="formData.stock_quantity" class="form-control" required />
+              <label for="pc-stock">Stok Barang</label>
+              <input id="pc-stock" type="number" v-model="formData.stock_quantity" class="form-control" required />
             </div>
 
             <div class="form-group">
-              <label>Deskripsi (Opsional)</label>
-              <textarea v-model="formData.description" class="form-control" placeholder="Deskripsi singkat produk"
+              <label for="pc-desc">Deskripsi (Opsional)</label>
+              <textarea id="pc-desc" v-model="formData.description" class="form-control" placeholder="Deskripsi singkat produk"
                 rows="3"></textarea>
             </div>
 
@@ -382,11 +384,12 @@ const handleFileUpload = async (event: any) => {
     const res = await api.importFile('/api/umkm/import/products', file);
     if (res.success && res.data) {
       const d = res.data;
-      let msg = `Import selesai: ✅ ${d.imported} berhasil`;
-      if (d.skipped > 0) msg += `, ⚠️ ${d.skipped} dilewati`;
+      let msg = 'Import selesai: ✅ ' + d.imported + ' berhasil';
+      if (d.skipped > 0) msg += ', ⚠️ ' + d.skipped + ' dilewati';
       if (d.errors && d.errors.length > 0) {
-        msg += `\n\nError (max 10):\n${d.errors.slice(0, 10).map((e: any) => `• Baris ${e.row}: ${e.error}`).join('\n')}`;
-        if (d.errors.length > 10) msg += `\n... +${d.errors.length - 10} lainnya`;
+        const errorLines = d.errors.slice(0, 10).map((e: any) => '• Baris ' + e.row + ': ' + e.error).join('\n');
+        msg += '\n\nError (max 10):\n' + errorLines;
+        if (d.errors.length > 10) msg += '\n... +' + (d.errors.length - 10) + ' lainnya';
       }
       alert(msg);
       await fetchProducts();
@@ -409,7 +412,7 @@ const exportCSV = async () => {
     const blobUrl = await api.exportFile('/api/umkm/export/products', 'csv');
     const a = document.createElement('a');
     a.href = blobUrl;
-    a.download = `products_export_${new Date().getTime()}.csv`;
+    a.download = 'products_export_' + Date.now() + '.csv';
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -428,7 +431,7 @@ const exportXLSX = async () => {
     const blobUrl = await api.exportFile('/api/umkm/export/products', 'xlsx');
     const a = document.createElement('a');
     a.href = blobUrl;
-    a.download = `products_export_${new Date().getTime()}.xlsx`;
+    a.download = 'products_export_' + Date.now() + '.xlsx';
     document.body.appendChild(a);
     a.click();
     a.remove();

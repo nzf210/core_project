@@ -1,4 +1,4 @@
-export const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? window.location.origin : 'http://localhost:8000')
+export const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? globalThis.location.origin : 'http://localhost:8000')
 
 export async function initDomain() {
   const hostname = window.location.hostname
@@ -379,7 +379,7 @@ export const api = {
     const res = await fetch(`${API_BASE}${url}`, {
       method: 'POST',
       headers: h,
-      body: isMultipart ? body : (body ? JSON.stringify(body) : undefined),
+      body: isMultipart ? body : (body ? JSON.stringify(body) : undefined), // ponytail: ternary for body type
     })
     return res.json()
   },
@@ -517,7 +517,7 @@ export interface QuotaUsage {
 // Returns null if the request fails or returns non-200 status.
 export async function getQuotaUsage(tenantId: string): Promise<QuotaUsage | null> {
   const res = await api.getQuotaUsage(tenantId)
-  if (res && res.status === 200 && res.data) return res.data as QuotaUsage
+  if (res?.status === 200 && res?.data) return res.data as QuotaUsage
   return null
 }
 

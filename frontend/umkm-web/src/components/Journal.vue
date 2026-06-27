@@ -120,18 +120,18 @@
 
         <div class="form-row-2">
           <div class="input-group">
-            <label class="input-label">Tanggal</label>
-            <input type="date" class="form-control" v-model="form.date" />
+            <label class="input-label" for="jrnl-date">Tanggal</label>
+            <input id="jrnl-date" type="date" class="form-control" v-model="form.date" />
           </div>
           <div class="input-group">
-            <label class="input-label">Referensi</label>
-            <input type="text" class="form-control" v-model="form.reference" placeholder="cth: INV-001" />
+            <label class="input-label" for="jrnl-ref">Referensi</label>
+            <input id="jrnl-ref" type="text" class="form-control" v-model="form.reference" placeholder="cth: INV-001" />
           </div>
         </div>
 
         <div class="input-group" style="margin-bottom: 1rem;">
-          <label class="input-label">Keterangan</label>
-          <input type="text" class="form-control" v-model="form.description" placeholder="cth: Penjualan Produk A" />
+          <label class="input-label" for="jrnl-desc">Keterangan</label>
+          <input id="jrnl-desc" type="text" class="form-control" v-model="form.description" placeholder="cth: Penjualan Produk A" />
         </div>
 
         <div style="margin-bottom: 0.75rem; font-weight: 600; font-size: 0.9rem; color: var(--text-secondary);">
@@ -140,14 +140,14 @@
 
         <div class="journal-lines">
           <div v-for="(line, idx) in form.lines" :key="idx" class="journal-line-row">
-            <select class="form-control" v-model="line.account_id" style="flex: 2;">
+            <select class="form-control" v-model="line.account_id" style="flex: 2;" :id="'jrnl-acc-' + idx">
               <option value="">Pilih Akun</option>
               <option v-for="acc in accounts" :key="acc.id" :value="acc.id">
                 {{ acc.code }} — {{ acc.name }}
               </option>
             </select>
-            <input type="number" class="form-control" v-model.number="line.debit" placeholder="Debit (Rp)" min="0" style="flex: 1;" @input="line.credit = 0" />
-            <input type="number" class="form-control" v-model.number="line.credit" placeholder="Kredit (Rp)" min="0" style="flex: 1;" @input="line.debit = 0" />
+            <input type="number" class="form-control" v-model.number="line.debit" placeholder="Debit (Rp)" min="0" style="flex: 1;" @input="line.credit = 0" aria-label="Debit" />
+            <input type="number" class="form-control" v-model.number="line.credit" placeholder="Kredit (Rp)" min="0" style="flex: 1;" @input="line.debit = 0" aria-label="Kredit" />
             <button class="btn btn-secondary btn-sm" @click="removeLine(idx)" style="padding: 0.3rem 0.5rem; color: #ef4444;">✕</button>
           </div>
         </div>
@@ -306,7 +306,7 @@ const saveTransaction = async () => {
     } else {
       lineError.value = data.message || 'Gagal menyimpan jurnal.'
     }
-  } catch (e) {
+  } catch {
     lineError.value = 'Kesalahan jaringan.'
   } finally {
     saving.value = false
@@ -352,7 +352,7 @@ const getTrxTotal = (trx: any) => {
 const printReceipt = async (trx: any) => {
   selectedTrx.value = trx
   await nextTick()
-  setTimeout(() => { window.print() }, 500)
+  setTimeout(() => { globalThis.print() }, 500)
 }
 </script>
 

@@ -141,7 +141,7 @@ const syncData = async () => {
     const today = new Date().toISOString().split('T')[0]
     const lastMonth = new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0]
     const twoMonthsAgo = new Date(new Date().setDate(new Date().getDate() - 60)).toISOString().split('T')[0]
-    
+
     // Previous period
     const isPrevData = await api.get(`/api/umkm/reports/income-statement?from=${twoMonthsAgo}&to=${lastMonth}`)
     if (isPrevData.success && isPrevData.data) {
@@ -160,7 +160,7 @@ const syncData = async () => {
         expense: isData.data.expense || 0,
         net_income: isData.data.net_income || 0
       }
-      
+
       revPercent.value = calculatePercent(incomeStatement.value.revenue, incomeStatementPrev.value.revenue)
       expPercent.value = calculatePercent(incomeStatement.value.expense, incomeStatementPrev.value.expense)
       netPercent.value = calculatePercent(incomeStatement.value.net_income, incomeStatementPrev.value.net_income)
@@ -170,8 +170,8 @@ const syncData = async () => {
       chartData.value = {
         labels: ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'],
         datasets: [
-          { label: 'Pemasukan', backgroundColor: '#3b82f6', data: Array(7).fill(dailyRev) },
-          { label: 'Pengeluaran', backgroundColor: '#ef4444', data: Array(7).fill(dailyExp) }
+          { label: 'Pemasukan', backgroundColor: '#3b82f6', data: new Array(7).fill(dailyRev) },
+          { label: 'Pengeluaran', backgroundColor: '#ef4444', data: new Array(7).fill(dailyExp) }
         ]
       }
     }
@@ -257,7 +257,7 @@ onMounted(() => {
     align-items: flex-start;
     gap: 1rem;
   }
-  
+
   .metrics-grid {
     grid-template-columns: 1fr;
   }

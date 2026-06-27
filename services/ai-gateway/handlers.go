@@ -11,13 +11,16 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
-// =====================================================
-// HTTP Handlers
-// =====================================================
+const (
+	methodNotAllowed = "Method not allowed"
+	headerTenantID   = "X-Tenant-ID"
+	systemTenantID   = "00000000-0000-0000-0000-000000000000"
+	headerContentType = "Content-Type"
+)
 
 func handleChat(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: methodNotAllowed})
 		return
 	}
 
@@ -35,9 +38,9 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.TenantID == "" {
-		req.TenantID = r.Header.Get("X-Tenant-ID")
+		req.TenantID = r.Header.Get(headerTenantID)
 		if req.TenantID == "" {
-			req.TenantID = "00000000-0000-0000-0000-000000000000"
+			req.TenantID = systemTenantID
 		}
 	}
 
@@ -116,7 +119,7 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 
 func handleChatStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: methodNotAllowed})
 		return
 	}
 
@@ -130,13 +133,13 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.TenantID == "" {
-		req.TenantID = r.Header.Get("X-Tenant-ID")
+		req.TenantID = r.Header.Get(headerTenantID)
 		if req.TenantID == "" {
-			req.TenantID = "00000000-0000-0000-0000-000000000000"
+			req.TenantID = systemTenantID
 		}
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set(headerContentType, "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	flusher, ok := w.(http.Flusher)
@@ -204,7 +207,7 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func handleListModels(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: methodNotAllowed})
 		return
 	}
 
@@ -235,7 +238,7 @@ func handleListModels(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleMetrics(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	w.Header().Set(headerContentType, "text/plain; version=0.0.4")
 
 	aiCostMu.Lock()
 	costTotal := aiCostUSDTotal
@@ -244,26 +247,26 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 	var b strings.Builder
 	b.WriteString("# HELP ai_gateway_requests_total Total number of chat requests\n")
 	b.WriteString("# TYPE ai_gateway_requests_total counter\n")
-	b.WriteString(fmt.Sprintf("ai_gateway_requests_total %d\n", aiRequestsTotal.Load()))
+	fmt.Fprintf(&b, "ai_gateway_requests_total %d\n", aiRequestsTotal.Load())
 
 	b.WriteString("# HELP ai_gateway_cache_hits_total Total semantic cache hits\n")
 	b.WriteString("# TYPE ai_gateway_cache_hits_total counter\n")
-	b.WriteString(fmt.Sprintf("ai_gateway_cache_hits_total %d\n", aiCacheHits.Load()))
+	fmt.Fprintf(&b, "ai_gateway_cache_hits_total %d\n", aiCacheHits.Load())
 
 	b.WriteString("# HELP ai_gateway_tokens_total Total tokens processed\n")
 	b.WriteString("# TYPE ai_gateway_tokens_total counter\n")
-	b.WriteString(fmt.Sprintf("ai_gateway_tokens_in_total %d\n", aiTokensInTotal.Load()))
-	b.WriteString(fmt.Sprintf("ai_gateway_tokens_out_total %d\n", aiTokensOutTotal.Load()))
+	fmt.Fprintf(&b, "ai_gateway_tokens_in_total %d\n", aiTokensInTotal.Load())
+	fmt.Fprintf(&b, "ai_gateway_tokens_out_total %d\n", aiTokensOutTotal.Load())
 
 	b.WriteString("# HELP ai_gateway_cost_usd_total Total estimated cost in USD\n")
 	b.WriteString("# TYPE ai_gateway_cost_usd_total counter\n")
-	b.WriteString(fmt.Sprintf("ai_gateway_cost_usd_total %.6f\n", costTotal))
+	fmt.Fprintf(&b, "ai_gateway_cost_usd_total %.6f\n", costTotal)
 
 	b.WriteString("# HELP ai_gateway_model_requests_total Requests per model\n")
 	b.WriteString("# TYPE ai_gateway_model_requests_total counter\n")
 	modelRequestsMu.RLock()
 	for model, count := range modelRequests {
-		b.WriteString(fmt.Sprintf("ai_gateway_model_requests_total{model=\"%s\"} %d\n", model, count))
+		fmt.Fprintf(&b, "ai_gateway_model_requests_total{model=\"%s\"} %d\n", model, count)
 	}
 	modelRequestsMu.RUnlock()
 
@@ -272,7 +275,7 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 
 func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: methodNotAllowed})
 		return
 	}
 
@@ -290,9 +293,9 @@ func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.TenantID == "" {
-		req.TenantID = r.Header.Get("X-Tenant-ID")
+		req.TenantID = r.Header.Get(headerTenantID)
 		if req.TenantID == "" {
-			req.TenantID = "00000000-0000-0000-0000-000000000000"
+			req.TenantID = systemTenantID
 		}
 	}
 
@@ -315,9 +318,9 @@ func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"object": "list",
-		"data": []map[string]interface{}{
+		"data": []map[string]any{
 			{"object": "embedding", "embedding": emb, "index": 0},
 		},
 		"model":     req.Model,
@@ -325,8 +328,8 @@ func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func writeJSON(w http.ResponseWriter, status int, body interface{}) {
-	w.Header().Set("Content-Type", "application/json")
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set(headerContentType, "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
 }

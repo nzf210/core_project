@@ -88,7 +88,33 @@ const restoreSuperadmin = () => {
     localStorage.removeItem('tenant_id')
     sessionStorage.removeItem('impersonated_by')
     sessionStorage.removeItem('superadmin_token')
-    window.location.href = window.location.origin.replace('app', 'superadmin')
+    globalThis.location.href = globalThis.location.origin.replace('app', 'superadmin')
+  }
+}
+
+const syncProfile = async () => {
+  try {
+    const data = await api.get('/api/profile')
+    if (data.success && data.data) {
+      if (data.data.business_name) {
+        businessName.value = data.data.business_name
+        localStorage.setItem('business_name', data.data.business_name)
+      }
+      if (data.data.plan) {
+        plan.value = data.data.plan
+        localStorage.setItem('plan', data.data.plan)
+      }
+      if (data.data.business_type) {
+        businessType.value = data.data.business_type
+        localStorage.setItem('business_type', data.data.business_type)
+      }
+    }
+    if (data.data && typeof data.data.is_frozen === 'boolean') {
+      isFrozen.value = data.data.is_frozen
+      sessionStorage.setItem('subscription_status', isFrozen.value ? 'frozen' : 'active')
+    }
+  } catch (e) {
+    console.error('Failed to sync profile', e)
   }
 }
 
@@ -109,29 +135,7 @@ const checkAuth = async () => {
     isFrozen.value = cachedStatus === 'frozen'
 
     if (hasTenantId) {
-      try {
-        const data = await api.get('/api/profile')
-        if (data.success && data.data) {
-          if (data.data.business_name) {
-            businessName.value = data.data.business_name
-            localStorage.setItem('business_name', data.data.business_name)
-          }
-          if (data.data.plan) {
-            plan.value = data.data.plan
-            localStorage.setItem('plan', data.data.plan)
-          }
-          if (data.data.business_type) {
-            businessType.value = data.data.business_type
-            localStorage.setItem('business_type', data.data.business_type)
-          }
-        }
-        if (data.data && typeof data.data.is_frozen === 'boolean') {
-          isFrozen.value = data.data.is_frozen
-          sessionStorage.setItem('subscription_status', isFrozen.value ? 'frozen' : 'active')
-        }
-      } catch (e) {
-        console.error('Failed to sync profile', e)
-      }
+      syncProfile()
     }
   } else {
     isLoggedIn.value = false

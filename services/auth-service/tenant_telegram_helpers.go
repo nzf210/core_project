@@ -96,7 +96,7 @@ func handleUploadTenantLogo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, Response{Success: true, Message: "Logo berhasil diupload", Data: map[string]interface{}{"logo_url": logoURL}})
+	writeJSON(w, http.StatusOK, Response{Success: true, Message: "Logo berhasil diupload", Data: map[string]any{"logo_url": logoURL}})
 }
 
 func derefStr(s *string) string {
@@ -117,7 +117,7 @@ func sendTelegramMessage(chatID, message string) error {
 	}
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", telegramBotToken)
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"chat_id":    chatID,
 		"text":       message,
 		"parse_mode": "Markdown",
@@ -144,7 +144,7 @@ func sendTelegramOTP(chatID, message string) error {
 	}
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", telegramBotToken)
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"chat_id":    chatID,
 		"text":       message,
 		"parse_mode": "Markdown",

@@ -382,7 +382,7 @@ onMounted(() => {
 }
 .plan-lite { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
 .plan-pro { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
-.plan-ultimate { background: rgba(139, 92, 246, 0.2); color: #5b21b6; }
+.plan-ultimate { background: rgba(139, 92, 246, 0.2); color: #3b0764; }
 .plan-enterprise { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
 .plan-superadmin { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 

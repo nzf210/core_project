@@ -99,9 +99,9 @@ type AddStaffRequest struct {
 }
 
 type Response struct {
-	Success bool        `json:"success"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
 type TenantProfileUpdateRequest struct {
@@ -225,7 +225,6 @@ func main() {
 		os.Exit(1)
 	}
 }
-
 
 func ensureSuperadmin() error {
 	ctx := context.Background()

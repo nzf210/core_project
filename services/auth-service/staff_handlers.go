@@ -14,16 +14,16 @@ import (
 
 func handleStaffList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
 	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Authorization required"})
+	if authHeader == "" || !strings.HasPrefix(authHeader, bearerPrefix) {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: msgAuthorizationRequired})
 		return
 	}
-	claims, err := validateToken(strings.TrimPrefix(authHeader, "Bearer "))
+	claims, err := validateToken(strings.TrimPrefix(authHeader, bearerPrefix))
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Invalid or expired token"})
 		return
@@ -38,7 +38,7 @@ func handleStaffList(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var staffs []map[string]interface{}
+	var staffs []map[string]any
 	for rows.Next() {
 		var id, username, email, role string
 		var phone sql.NullString
@@ -47,7 +47,7 @@ func handleStaffList(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		staff := map[string]interface{}{
+		staff := map[string]any{
 			"id":           id,
 			"username":     username,
 			"email":        email,
@@ -61,7 +61,7 @@ func handleStaffList(w http.ResponseWriter, r *http.Request) {
 		staffs = append(staffs, staff)
 	}
 	if staffs == nil {
-		staffs = make([]map[string]interface{}, 0)
+		staffs = make([]map[string]any, 0)
 	}
 
 	writeJSON(w, http.StatusOK, Response{Success: true, Data: staffs})
@@ -69,16 +69,16 @@ func handleStaffList(w http.ResponseWriter, r *http.Request) {
 
 func handleStaffUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
 	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Authorization required"})
+	if authHeader == "" || !strings.HasPrefix(authHeader, bearerPrefix) {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: msgAuthorizationRequired})
 		return
 	}
-	claims, err := validateToken(strings.TrimPrefix(authHeader, "Bearer "))
+	claims, err := validateToken(strings.TrimPrefix(authHeader, bearerPrefix))
 	if err != nil || claims.Role != "owner" {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Hanya owner yang dapat mengubah pegawai"})
 		return
@@ -117,16 +117,16 @@ func handleStaffUpdate(w http.ResponseWriter, r *http.Request) {
 
 func handleStaffDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
 	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Authorization required"})
+	if authHeader == "" || !strings.HasPrefix(authHeader, bearerPrefix) {
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: msgAuthorizationRequired})
 		return
 	}
-	claims, err := validateToken(strings.TrimPrefix(authHeader, "Bearer "))
+	claims, err := validateToken(strings.TrimPrefix(authHeader, bearerPrefix))
 	if err != nil || claims.Role != "owner" {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Hanya owner yang dapat menghapus pegawai"})
 		return

@@ -42,14 +42,14 @@
           <!-- Step 1: Form Input -->
           <template v-if="step === 'form'">
             <div class="form-group">
-              <label>Nama Usaha (Toko/Perusahaan)</label>
-              <input v-model="formData.name" type="text" class="form-control" placeholder="cth: Kedai Kopi Senja"
+              <label for="reg-name">Nama Usaha (Toko/Perusahaan)</label>
+              <input id="reg-name" v-model="formData.name" type="text" class="form-control" placeholder="cth: Kedai Kopi Senja"
                 required />
             </div>
 
             <div class="form-group">
-              <label>Jenis Usaha</label>
-              <select v-model="formData.businessType" class="form-control" required>
+              <label for="reg-biztype">Jenis Usaha</label>
+              <select id="reg-biztype" v-model="formData.businessType" class="form-control" required>
                 <option value="" disabled>Pilih jenis usaha...</option>
                 <option value="umum">🏪 Umum (Toko / Jasa)</option>
                 <option value="warung">🛒 Warung / Toko Kelontong</option>
@@ -66,15 +66,15 @@
             </div>
 
             <div class="form-group">
-              <label>Username Pemilik</label>
-              <input v-model="formData.username"
+              <label for="reg-username">Username Pemilik</label>
+              <input id="reg-username" v-model="formData.username"
                 @input="formData.username = formData.username.replace(/ /g, '_').toLowerCase()" type="text"
                 class="form-control" placeholder="cth: owner_kopi" required />
             </div>
 
             <div class="form-group">
-              <label>Nomor WhatsApp <span style="color: var(--accent-primary);">*</span></label>
-              <input v-model="formData.phone_number" type="text" class="form-control" placeholder="cth: 081234567890"
+              <label for="reg-phone">Nomor WhatsApp <span style="color: var(--accent-primary);">*</span></label>
+              <input id="reg-phone" v-model="formData.phone_number" type="text" class="form-control" placeholder="cth: 081234567890"
                 required />
               <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
                 {{ registerChannel === 'telegram' ? 'Kode OTP akan dikirim ke Telegram Anda' : `Kode OTP akan dikirim ke
@@ -83,8 +83,8 @@
             </div>
 
             <div v-if="registerChannel === 'telegram'" class="form-group">
-              <label>Chat ID Telegram <span style="color: var(--accent-primary);">*</span></label>
-              <input v-model="formData.telegramChatId" type="text" class="form-control" placeholder="cth: 123456789"
+              <label for="reg-tg-chatid">Chat ID Telegram <span style="color: var(--accent-primary);">*</span></label>
+              <input id="reg-tg-chatid" v-model="formData.telegramChatId" type="text" class="form-control" placeholder="cth: 123456789"
                 required />
               <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
                 Chat bot kami di <a href="https://t.me/WCHBot" target="_blank"
@@ -93,22 +93,22 @@
             </div>
 
             <div class="form-group">
-              <label>Email <span style="color: var(--text-secondary); font-size: 0.8rem;">(opsional)</span></label>
-              <input v-model="formData.email" type="email" class="form-control"
+              <label for="reg-email">Email <span style="color: var(--text-secondary); font-size: 0.8rem;">(opsional)</span></label>
+              <input id="reg-email" v-model="formData.email" type="email" class="form-control"
                 placeholder="cth: owner@kopisenja.com" />
             </div>
 
             <div class="form-group">
-              <label>Kode Referral <span style="color: var(--text-secondary); font-size: 0.8rem;">(opsional, dari
+              <label for="reg-referral">Kode Referral <span style="color: var(--text-secondary); font-size: 0.8rem;">(opsional, dari
                   agen)</span></label>
-              <input v-model="referralCode" type="text" class="form-control" placeholder="cth: AGEN-ABC123"
+              <input id="reg-referral" v-model="referralCode" type="text" class="form-control" placeholder="cth: AGEN-ABC123"
                 style="text-transform: uppercase;" />
             </div>
 
             <div class="form-group" style="margin-bottom: 2rem;">
-              <label>Password</label>
+              <label for="reg-password">Password</label>
               <div style="position: relative;">
-                <input v-model="formData.password" :type="showPassword ? 'text' : 'password'" class="form-control"
+                <input id="reg-password" v-model="formData.password" :type="showPassword ? 'text' : 'password'" class="form-control"
                   placeholder="Minimal 8 karakter" required style="padding-right: 2.5rem;" />
                 <button type="button" @click="showPassword = !showPassword"
                   style="position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0; display: flex;">
@@ -149,8 +149,8 @@
             </div>
 
             <div class="form-group">
-              <label>Masukkan Kode OTP</label>
-              <input v-model="otpCode" type="text" class="form-control otp-input" placeholder="000000" maxlength="6"
+              <label for="reg-otp">Masukkan Kode OTP</label>
+              <input id="reg-otp" v-model="otpCode" type="text" class="form-control otp-input" placeholder="000000" maxlength="6"
                 required />
             </div>
 

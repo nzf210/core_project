@@ -40,17 +40,17 @@
       <!-- Step 2: Detail Usaha (tanpa gate, tanpa plan selector) -->
       <div v-if="currentStep === 2" class="step-content">
         <div class="form-group">
-          <label>Nama Usaha</label>
-          <input v-model="businessName" type="text" placeholder="Nama usaha Anda" class="input-field" />
+          <label for="onboard-name">Nama Usaha</label>
+          <input id="onboard-name" v-model="businessName" type="text" placeholder="Nama usaha Anda" class="input-field" />
         </div>
         <div class="form-group">
-          <label>Alamat Usaha (opsional)</label>
-          <textarea v-model="businessAddress" placeholder="Alamat lengkap usaha" class="input-field"
+          <label for="onboard-address">Alamat Usaha (opsional)</label>
+          <textarea id="onboard-address" v-model="businessAddress" placeholder="Alamat lengkap usaha" class="input-field"
             rows="2"></textarea>
         </div>
         <div class="form-group">
-          <label>Nomor WhatsApp (untuk notifikasi)</label>
-          <input v-model="waNumber" type="text" placeholder="08xxxxxxxxxx" class="input-field" />
+          <label for="onboard-wa">Nomor WhatsApp (untuk notifikasi)</label>
+          <input id="onboard-wa" v-model="waNumber" type="text" placeholder="08xxxxxxxxxx" class="input-field" />
         </div>
         <div class="step-actions">
           <button class="btn btn-secondary" @click="currentStep = 1">Kembali</button>
@@ -145,7 +145,8 @@
           <!-- Masukkan Voucher -->
           <div v-if="activationTab === 'voucher'" class="activation-panel">
             <div class="voucher-input-group">
-              <input v-model="voucherCode" type="text" placeholder="Kode voucher / referral agen (AGEN-XXX)"
+              <label for="onboard-voucher" class="sr-only">Kode Voucher</label>
+              <input id="onboard-voucher" v-model="voucherCode" type="text" placeholder="Kode voucher / referral agen (AGEN-XXX)"
                 class="input-field" @keyup.enter="redeemVoucher" />
               <button class="btn btn-primary" :disabled="!voucherCode || isActivating" @click="redeemVoucher">
                 <span v-if="isActivating">...</span>

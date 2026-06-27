@@ -12,18 +12,77 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
+const (
+	msgMethodNotAllowed      = "Method not allowed"
+	msgInvalidPayload        = "Invalid request payload"
+	waGatewayDefault         = "http://wa-gateway:8202"
+	msgAuthorizationRequired = "Authorization required"
+	msgInvalidOrExpiredToken = "Invalid or expired token"
+	msgInternalServerError   = "Internal server error"
+	redisKeyRefreshToken     = "refresh_token:"
+	bearerPrefix             = "Bearer "
+)
+
+func sendWAGatewayOTP(senderTenant, authWAProvider, target, otp string) {
+	formData := url.Values{}
+	formData.Set("tenant_id", senderTenant)
+	formData.Set("target", target)
+	formData.Set("message", "Kode OTP registrasi WCH Anda: "+otp)
+
+	waURL := os.Getenv("WA_GATEWAY_URL")
+	if waURL == "" {
+		waURL = waGatewayDefault
+	}
+
+	var resp *http.Response
+	var err error
+	for i := 0; i < 3; i++ {
+		payload := strings.NewReader(formData.Encode())
+		req, _ := http.NewRequest("POST", waURL+"/api/wa/send", payload)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Message-Type", "otp")
+		req.Header.Set("X-Source", "auth-service")
+		req.Header.Set("X-WA-Provider-Override", authWAProvider)
+		resp, err = http.DefaultClient.Do(req)
+		if err != nil {
+			slog.Error("Failed to send OTP via WA Gateway", "error", err)
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		if resp.StatusCode == 409 {
+			resp.Body.Close()
+			slog.Warn("WA Gateway returned 409 (delegated), retrying...", "attempt", i+1)
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		break
+	}
+
+	if err != nil {
+		slog.Error("Failed to send OTP after retries", "error", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		slog.Error("WA Gateway rejected OTP", "status", resp.StatusCode, "body", string(body))
+	}
+}
+
 func handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: msgInvalidPayload})
 		return
 	}
 
@@ -32,11 +91,9 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// OTP 1-hour reuse: check if valid OTP already exists for this phone
 	ctx := context.Background()
 	otpKey := "otp:" + req.PhoneNumber
 	if existingVal, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingVal != "" {
-		// OTP still active — reuse it, don't send a new one
 		parts := strings.Split(existingVal, ":")
 		existingOTP := parts[len(parts)-1]
 		ttl, _ := Redis.TTL(ctx, otpKey).Result()
@@ -48,10 +105,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate new OTP
 	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
-
-	// Store in Redis (Valid for 1 hour — OTP reuse window)
 	reqJSON, _ := json.Marshal(req)
 	err := Redis.Set(ctx, otpKey, string(reqJSON)+":"+otp, 1*time.Hour).Err()
 	if err != nil {
@@ -59,7 +113,6 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Determine Tenant for sending WA (if joining existing)
 	senderTenant := req.TenantID
 	if senderTenant == "" {
 		senderTenant = os.Getenv("WA_SYSTEM_TENANT_ID")
@@ -68,63 +121,14 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Read auth_wa_provider_preference for system tenant (if exists)
 	var authWAProvider string
 	if err := DB.QueryRow(ctx, "SELECT COALESCE(auth_wa_provider_preference::text, 'auto') FROM tenants WHERE id = $1", senderTenant).Scan(&authWAProvider); err != nil {
-		authWAProvider = "auto" // default fallback
+		authWAProvider = "auto"
 	}
 
-	// Send via WA Gateway
-	go func() {
-		target := formatPhoneToWAJID(req.PhoneNumber)
+	go sendWAGatewayOTP(senderTenant, authWAProvider, formatPhoneToWAJID(req.PhoneNumber), otp)
 
-		formData := url.Values{}
-		formData.Set("tenant_id", senderTenant)
-		formData.Set("target", target)
-		formData.Set("message", "Kode OTP registrasi WCH Anda: "+otp)
-
-		waURL := os.Getenv("WA_GATEWAY_URL")
-		if waURL == "" {
-			waURL = "http://wa-gateway:8202"
-		}
-
-		var resp *http.Response
-		var err error
-		for i := 0; i < 3; i++ {
-			payload := strings.NewReader(formData.Encode())
-			req, _ := http.NewRequest("POST", waURL+"/api/wa/send", payload)
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			req.Header.Set("X-Message-Type", "otp")
-			req.Header.Set("X-Source", "auth-service")
-			req.Header.Set("X-WA-Provider-Override", authWAProvider)
-			resp, err = http.DefaultClient.Do(req)
-			if err != nil {
-				slog.Error("Failed to send OTP via WA Gateway", "error", err)
-				time.Sleep(500 * time.Millisecond)
-				continue
-			}
-			if resp.StatusCode == 409 {
-				resp.Body.Close()
-				slog.Warn("WA Gateway returned 409 (delegated), retrying...", "attempt", i+1)
-				time.Sleep(500 * time.Millisecond)
-				continue
-			}
-			break
-		}
-
-		if err != nil {
-			slog.Error("Failed to send OTP after retries", "error", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			slog.Error("WA Gateway rejected OTP", "status", resp.StatusCode, "body", string(body))
-		}
-	}()
-
-	slog.Info("OTP generated and sent", "phone", req.PhoneNumber, "otp", otp) // Log OTP for dev
+	slog.Info("OTP generated and sent", "phone", req.PhoneNumber, "otp", otp)
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
 		Message: "OTP has been sent to your WhatsApp/Telegram. Please verify.",
@@ -133,13 +137,13 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 
 func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
 	var req VerifyOTPRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: msgInvalidPayload})
 		return
 	}
 
@@ -159,20 +163,36 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 	storedOTP := parts[len(parts)-1]
 	reqJSON := strings.Join(parts[:len(parts)-1], ":")
 
-	// Allow "000000" as test OTP in development
 	if req.OTP != storedOTP && req.OTP != "000000" {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Incorrect OTP"})
 		return
 	}
 
-	// Parse registration data — works for both WA (RegisterRequest) and Telegram (map with telegramChatId)
+	regReq, telegramChatID := parseRegistrationData(reqJSON)
+
+	tx, _ := DB.Begin(ctx)
+	defer tx.Rollback(ctx)
+
+	tenantID := getOrCreateTenant(ctx, tx, regReq)
+	email := getEmailOrGenerate(regReq)
+
+	if !insertUser(ctx, tx, regReq, tenantID, email, telegramChatID) {
+		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Phone number or username already exists"})
+		return
+	}
+
+	linkReferralCode(ctx, tx, regReq.ReferralCode, tenantID)
+
+	tx.Commit(ctx)
+	writeJSON(w, http.StatusCreated, Response{Success: true, Message: "Account verified and created"})
+}
+
+func parseRegistrationData(reqJSON string) (RegisterRequest, string) {
 	var regReq RegisterRequest
-	var regMap map[string]interface{}
+	var regMap map[string]any
 	telegramChatID := ""
 
-	// Try struct first (WA registration), fallback to map (Telegram registration)
-	if err = json.Unmarshal([]byte(reqJSON), &regReq); err != nil || regReq.Username == "" {
-		// Telegram registration stores different JSON structure
+	if err := json.Unmarshal([]byte(reqJSON), &regReq); err != nil || regReq.Username == "" {
 		json.Unmarshal([]byte(reqJSON), &regMap)
 		if regMap != nil {
 			regReq.Username, _ = regMap["username"].(string)
@@ -186,14 +206,12 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 			telegramChatID, _ = regMap["telegramChatId"].(string)
 		}
 	}
+	return regReq, telegramChatID
+}
 
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(regReq.Password), 12)
-	tx, _ := DB.Begin(ctx)
-	defer tx.Rollback(ctx)
-
+func getOrCreateTenant(ctx context.Context, tx pgx.Tx, regReq RegisterRequest) string {
 	tenantID := regReq.TenantID
 	if tenantID == "" {
-		// New registrations start as inactive - must redeem voucher or make payment to activate
 		tenantName := regReq.BusinessName
 		if tenantName == "" {
 			tenantName = regReq.Username + "'s Tenant"
@@ -204,20 +222,26 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 		}
 		tx.QueryRow(ctx, "INSERT INTO tenants (name, plan, is_frozen, business_type) VALUES ($1, 'inactive', true, $2) RETURNING id", tenantName, businessType).Scan(&tenantID)
 	}
+	return tenantID
+}
 
+func getEmailOrGenerate(regReq RegisterRequest) string {
+	email := regReq.Email
+	if email == "" {
+		email = regReq.PhoneNumber + "@wa.user"
+	}
+	return email
+}
+
+func insertUser(ctx context.Context, tx pgx.Tx, regReq RegisterRequest, tenantID, email, telegramChatID string) bool {
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(regReq.Password), 12)
 	role := regReq.Role
 	if role == "" {
 		role = "user_biasa"
 	}
 
-	// Generate a unique email if empty (for phone-only registration)
-	email := regReq.Email
-	if email == "" {
-		email = regReq.PhoneNumber + "@wa.user"
-	}
-
+	var err error
 	var userID string
-	// Include telegram_chat_id if registration came from Telegram
 	if telegramChatID != "" {
 		err = tx.QueryRow(ctx,
 			"INSERT INTO users (tenant_id, username, email, password_hash, role, phone_number, telegram_chat_id, is_phone_verified) VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING id",
@@ -229,38 +253,27 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 			tenantID, regReq.Username, email, string(hashedPassword), role, regReq.PhoneNumber,
 		).Scan(&userID)
 	}
+	return err == nil
+}
 
-	if err != nil {
-		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Phone number or username already exists"})
-		return
-	}
-
-	// F054: Link referral code to tenant if provided
-	if regReq.ReferralCode != "" && tenantID != "" {
+func linkReferralCode(ctx context.Context, tx pgx.Tx, referralCode, tenantID string) {
+	if referralCode != "" && tenantID != "" {
 		var affID int
-		errRef := tx.QueryRow(ctx, "SELECT id FROM affiliates WHERE referral_code = $1", regReq.ReferralCode).Scan(&affID)
+		errRef := tx.QueryRow(ctx, "SELECT id FROM affiliates WHERE referral_code = $1", referralCode).Scan(&affID)
 		if errRef == nil {
 			_, _ = tx.Exec(ctx, "UPDATE tenants SET referred_by_affiliate_id = $1 WHERE id = $2 AND referred_by_affiliate_id IS NULL", affID, tenantID)
 			_, _ = tx.Exec(ctx, "INSERT INTO affiliate_referrals (affiliate_id, tenant_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", affID, tenantID)
-			slog.Info("Referral linked", "affiliate_id", affID, "tenant_id", tenantID, "referral_code", regReq.ReferralCode)
+			slog.Info("Referral linked", "affiliate_id", affID, "tenant_id", tenantID, "referral_code", referralCode)
 		}
 	}
-
-	tx.Commit(ctx)
-	// OTP persists for full 1-hour window (reusable during active period)
-	// Redis TTL handles auto-expiry
-
-	writeJSON(w, http.StatusCreated, Response{Success: true, Message: "Account verified and created"})
 }
 
 func handleManualRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
-	// This should be protected by an auth middleware checking for candidate/admin role
-	// For this task, we will verify the caller's JWT here
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Missing authorization"})
@@ -287,7 +300,7 @@ func handleManualRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(req.NIK), 12) // default pass is NIK
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(req.NIK), 12)
 
 	_, err = DB.Exec(context.Background(),
 		"INSERT INTO users (tenant_id, username, password_hash, phone_number, nik, dusun, tps, role, is_phone_verified) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)",
@@ -303,7 +316,7 @@ func handleManualRegister(w http.ResponseWriter, r *http.Request) {
 
 func handleVerifyData(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
@@ -319,13 +332,12 @@ func handleVerifyData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Just parsing multipart or json. We will mock simple JSON here.
 	var req struct {
 		KTP    string `json:"ktp"`
 		Partai string `json:"partai"`
 		Dapil  string `json:"dapil"`
 	}
-	json.NewDecoder(r.Body).Decode(&req) // Ignore errors, it's mocked anyway
+	json.NewDecoder(r.Body).Decode(&req)
 
 	_, err = DB.Exec(context.Background(), "UPDATE users SET is_phone_verified = true WHERE id = $1", claims.UserID)
 	if err != nil {
@@ -333,7 +345,6 @@ func handleVerifyData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate new token with IsDataVerified = true
 	tokens, err := generateTokens(claims.UserID, claims.TenantID, claims.Role, true)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to regenerate tokens"})

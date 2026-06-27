@@ -84,5 +84,5 @@ func handleUploadProfileLogo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, Response{Success: true, Message: "Logo uploaded successfully", Data: map[string]interface{}{"logo_url": logoURL}})
+	writeJSON(w, http.StatusOK, Response{Success: true, Message: "Logo uploaded successfully", Data: map[string]any{"logo_url": logoURL}})
 }

@@ -1,4 +1,4 @@
-import { ref, watch, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 
 type Theme = 'dark' | 'light' | 'system'
 
@@ -7,7 +7,7 @@ export function useTheme() {
 
   const applyTheme = (t: Theme) => {
     if (t === 'system') {
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      const isDark = globalThis.matchMedia('(prefers-color-scheme: dark)').matches
       document.documentElement.className = isDark ? 'theme-dark' : 'theme-light'
     } else {
       document.documentElement.className = `theme-${t}`
@@ -19,7 +19,7 @@ export function useTheme() {
     if (saved) theme.value = saved
     applyTheme(theme.value)
 
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    globalThis.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
       if (theme.value === 'system') applyTheme('system')
     })
   })

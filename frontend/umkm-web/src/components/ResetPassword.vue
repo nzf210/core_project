@@ -16,13 +16,13 @@
 
         <form v-if="!success" @submit.prevent="handleReset">
           <div class="form-group">
-            <label>Token Reset</label>
-            <input v-model="token" type="text" class="form-control" placeholder="Masukkan token reset dari email" required />
+            <label for="reset-token">Token Reset</label>
+            <input id="reset-token" v-model="token" type="text" class="form-control" placeholder="Masukkan token reset dari email" required />
           </div>
 
           <div class="form-group" style="margin-bottom: 2rem;">
-            <label>Kata Sandi Baru</label>
-            <input v-model="newPassword" type="password" class="form-control" placeholder="Minimal 8 karakter"
+            <label for="reset-new-password">Kata Sandi Baru</label>
+            <input id="reset-new-password" v-model="newPassword" type="password" class="form-control" placeholder="Minimal 8 karakter"
               required />
           </div>
 

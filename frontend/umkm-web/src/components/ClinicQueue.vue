@@ -29,7 +29,7 @@ const fetchQueue = async () => {
         
         // Simpan history yang sebelumnya
         if (inProgress.length > 1) {
-          lastCalled.value = inProgress.slice(0, inProgress.length - 1).reverse().slice(0, 3)
+          lastCalled.value = inProgress.slice(0, -1).reverse().slice(0, 3)
         }
       } else {
         currentCalling.value = null

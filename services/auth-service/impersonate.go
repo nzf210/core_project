@@ -71,7 +71,7 @@ func handleImpersonate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
 		Message: "Impersonate token generated",
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"access_token": accessToken,
 			"tenant": map[string]string{
 				"id":            tenantID,

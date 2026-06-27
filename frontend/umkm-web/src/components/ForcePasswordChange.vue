@@ -37,8 +37,8 @@ async function submit() {
     } else {
       error.value = res.message || 'Gagal mengubah password'
     }
-  } catch (e) {
-    error.value = 'Gagal terhubung ke server'
+  } catch (e: any) {
+    error.value = e?.message || 'Gagal terhubung ke server'
   } finally {
     loading.value = false
   }
@@ -58,8 +58,9 @@ async function submit() {
 
       <form @submit.prevent="submit">
         <div class="form-group">
-          <label>Password Lama (Default)</label>
+          <label for="oldPassword">Password Lama (Default)</label>
           <input
+            id="oldPassword"
             v-model="form.oldPassword"
             type="password"
             placeholder="Masukkan password lama"
@@ -68,8 +69,9 @@ async function submit() {
         </div>
 
         <div class="form-group">
-          <label>Password Baru</label>
+          <label for="newPassword">Password Baru</label>
           <input
+            id="newPassword"
             v-model="form.newPassword"
             type="password"
             placeholder="Min. 8 karakter"
@@ -79,8 +81,9 @@ async function submit() {
         </div>
 
         <div class="form-group">
-          <label>Konfirmasi Password Baru</label>
+          <label for="confirmPassword">Konfirmasi Password Baru</label>
           <input
+            id="confirmPassword"
             v-model="form.confirmPassword"
             type="password"
             placeholder="Ulangi password baru"

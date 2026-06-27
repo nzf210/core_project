@@ -13,6 +13,8 @@ import (
 	"core_project/shared/sdk/config"
 )
 
+const healthEndpoint = "/health"
+
 func handleReferralLinkRedirect(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/r/")
 	segments := strings.SplitN(path, "/", 2)
@@ -89,11 +91,11 @@ func handleAggregatedMetrics(getTarget func(string, string) string, cfg *config.
 	svcPorts := []serviceMetrics{
 		{"wa-gateway", "8202", "/metrics"},
 		{"umkm-chatbot", "8203", "/metrics"},
-		{"auth-service", "8001", "/health"},
-		{"ai-gateway", "8002", "/health"},
-		{"billing-service", "8003", "/health"},
-		{"umkm-accounting", "8201", "/health"},
-		{"campaign-api", "9002", "/health"},
+		{"auth-service", "8001", healthEndpoint},
+		{"ai-gateway", "8002", healthEndpoint},
+		{"billing-service", "8003", healthEndpoint},
+		{"umkm-accounting", "8201", healthEndpoint},
+		{"campaign-api", "9002", healthEndpoint},
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {

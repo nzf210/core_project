@@ -20,8 +20,9 @@
       </p>
 
       <div class="form-group">
-        <label>Jumlah Top-up (Rp)</label>
+        <label for="topup-amount">Jumlah Top-up (Rp)</label>
         <input
+          id="topup-amount"
           v-model.number="topupAmount"
           type="number"
           class="form-control"

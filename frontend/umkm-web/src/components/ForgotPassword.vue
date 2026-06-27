@@ -16,8 +16,9 @@
 
         <form v-if="!success" @submit.prevent="handleForgot">
           <div class="form-group">
-            <label>Username</label>
+            <label for="fp-username">Username</label>
             <input
+              id="fp-username"
               v-model="username"
               type="text"
               class="form-control"
@@ -27,8 +28,9 @@
           </div>
 
           <div class="form-group" style="margin-bottom: 2rem;">
-            <label>Nomor HP Terdaftar</label>
+            <label for="fp-phone">Nomor HP Terdaftar</label>
             <input
+              id="fp-phone"
               v-model="phoneNumber"
               type="tel"
               class="form-control"

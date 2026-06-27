@@ -305,7 +305,7 @@ const cashFlowSections = computed(() => {
 })
 
 function formatRupiah(rupiah: number): string {
-  if (rupiah == null || isNaN(rupiah)) return 'Rp 0'
+  if (rupiah == null || Number.isNaN(rupiah)) return 'Rp 0'
   // Convert from sen to rupiah if value looks like sen (>1000); otherwise treat as raw rupiah
   // Heuristic: values >= 100000 are likely sen; but to stay safe, just show as raw IDR
   const amount = Math.round(rupiah)

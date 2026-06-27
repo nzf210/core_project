@@ -14,9 +14,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Constants shared via auth_handlers.go: msgMethodNotAllowed, msgInvalidPayload, msgInternalServerError
+
 func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
@@ -37,7 +39,7 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if err != nil {
 		slog.Error("DB error in forgot password", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal error"})
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
@@ -48,7 +50,7 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 	_, err = DB.Exec(ctx, "INSERT INTO password_resets (email, token, expires_at) VALUES ($1, $2, $3)", req.Email, tokenStr, expiresAt)
 	if err != nil {
 		slog.Error("Failed to insert reset token", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal error"})
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
@@ -60,7 +62,7 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
@@ -85,7 +87,7 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Invalid or expired token"})
 		return
 	} else if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal error"})
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
@@ -110,7 +112,7 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 // handleResetPasswordDefault - reset password ke default berdasarkan username + phone
 func handleResetPasswordDefault(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
@@ -136,7 +138,7 @@ func handleResetPasswordDefault(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if err != nil {
 		slog.Error("DB error looking up user for password reset", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
@@ -153,7 +155,7 @@ func handleResetPasswordDefault(w http.ResponseWriter, r *http.Request) {
 	hashed, err := bcrypt.GenerateFromPassword([]byte(defaultPw), 12)
 	if err != nil {
 		slog.Error("Failed to hash default password", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
@@ -161,7 +163,7 @@ func handleResetPasswordDefault(w http.ResponseWriter, r *http.Request) {
 	_, err = DB.Exec(ctx, "UPDATE users SET password_hash = $1, must_change_password = true, updated_at = NOW() WHERE id = $2", string(hashed), userID)
 	if err != nil {
 		slog.Error("Failed to update password", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
@@ -176,7 +178,7 @@ func handleResetPasswordDefault(w http.ResponseWriter, r *http.Request) {
 // User harus mengirim old_password (password default) + new_password
 func handleForceChangePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
@@ -220,7 +222,7 @@ func handleForceChangePassword(w http.ResponseWriter, r *http.Request) {
 	err = DB.QueryRow(ctx, "SELECT password_hash, must_change_password FROM users WHERE id = $1", claims.UserID).Scan(&currentHash, &mustChange)
 	if err != nil {
 		slog.Error("DB error checking force change password", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
@@ -239,14 +241,14 @@ func handleForceChangePassword(w http.ResponseWriter, r *http.Request) {
 	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 12)
 	if err != nil {
 		slog.Error("Failed to hash new password", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
 	_, err = DB.Exec(ctx, "UPDATE users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE id = $2", string(newHash), claims.UserID)
 	if err != nil {
 		slog.Error("Failed to update password", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Internal server error"})
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 

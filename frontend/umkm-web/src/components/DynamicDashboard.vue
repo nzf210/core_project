@@ -300,6 +300,22 @@ const formatCurrency = (val: number) => {
   return 'Rp ' + Math.abs(val).toLocaleString('id-ID')
 }
 
+const checkWAWarning = async () => {
+  try {
+    const waRes = await api.getWASetup()
+    if (!waRes.success || !waRes.data) return false
+    const { wa_provider_preference: pref, whatsmeow, cloud_api } = waRes.data
+    if (pref === 'whatsmeow') return !whatsmeow?.connected
+    if (pref === 'cloud_api') return !cloud_api?.active
+    return !whatsmeow?.connected && !cloud_api?.active
+  } catch {
+    return false
+  }
+}
+
+const calcChange = (c: number, p: number) =>
+  p > 0 ? ((c - p) / p) * 100 : (c > 0 ? 100 : 0)
+
 const syncData = async () => {
   loading.value = true
   try {
@@ -313,22 +329,20 @@ const syncData = async () => {
       api.get(`/api/umkm/reports/balance-sheet?date=${today}`)
     ])
 
-    if (isData.success && isData.data) {
-      const curr = isData.data
-      const prev = isPrevData.success ? isPrevData.data : { revenue: 0, expense: 0 }
+    if (!isData.success || !isData.data) return
 
-      const calcChange = (c: number, p: number) => p > 0 ? ((c - p) / p) * 100 : (c > 0 ? 100 : 0)
+    const curr = isData.data
+    const prev = isPrevData.success ? isPrevData.data : { revenue: 0, expense: 0 }
 
-      widgetData.value = {
-        income_summary: { value: curr.revenue || 0, change: calcChange(curr.revenue || 0, prev.revenue || 0) },
-        income_today: { value: Math.round((curr.revenue || 0) / 30), change: calcChange(curr.revenue || 0, prev.revenue || 0) },
-        expense_summary: { value: curr.expense || 0, change: calcChange(curr.expense || 0, prev.expense || 0) },
-        profit_summary: { value: (curr.revenue || 0) - (curr.expense || 0), change: calcChange((curr.revenue || 0) - (curr.expense || 0), (prev.revenue || 0) - (prev.expense || 0)) },
-        profit_margin: { value: curr.revenue > 0 ? Math.round(((curr.revenue - curr.expense) / curr.revenue) * 100) : 0, change: 0 },
-        cost_ratio: { value: curr.revenue > 0 ? Math.round((curr.expense / curr.revenue) * 100) : 0, change: 0 },
-        total_customers: { value: 0, change: 0 },
-        quick_actions: {}
-      }
+    widgetData.value = {
+      income_summary: { value: curr.revenue || 0, change: calcChange(curr.revenue || 0, prev.revenue || 0) },
+      income_today: { value: Math.round((curr.revenue || 0) / 30), change: calcChange(curr.revenue || 0, prev.revenue || 0) },
+      expense_summary: { value: curr.expense || 0, change: calcChange(curr.expense || 0, prev.expense || 0) },
+      profit_summary: { value: (curr.revenue || 0) - (curr.expense || 0), change: calcChange((curr.revenue || 0) - (curr.expense || 0), (prev.revenue || 0) - (prev.expense || 0)) },
+      profit_margin: { value: curr.revenue > 0 ? Math.round(((curr.revenue - curr.expense) / curr.revenue) * 100) : 0, change: 0 },
+      cost_ratio: { value: curr.revenue > 0 ? Math.round((curr.expense / curr.revenue) * 100) : 0, change: 0 },
+      total_customers: { value: 0, change: 0 },
+      quick_actions: {}
     }
   } catch (e) {
     console.error('Sync data gagal:', e)
@@ -336,32 +350,10 @@ const syncData = async () => {
     loading.value = false
   }
 
-  // F060: Fetch sales chart + top products + recent transactions
   fetchSalesChart()
   fetchTopProducts()
   fetchRecentTransactions()
-
-  // Check WA Setup Status
-  try {
-    const waRes = await api.getWASetup()
-    if (waRes.success && waRes.data) {
-      const waProvider = waRes.data.wa_provider_preference
-      const wmConnected = waRes.data.whatsmeow?.connected
-      const cloudActive = waRes.data.cloud_api?.active
-
-      if (waProvider === 'whatsmeow' && !wmConnected) {
-        waWarning.value = true
-      } else if (waProvider === 'cloud_api' && !cloudActive) {
-        waWarning.value = true
-      } else if (waProvider === 'auto' && !wmConnected && !cloudActive) {
-        waWarning.value = true
-      } else {
-        waWarning.value = false
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to check WA status', e)
-  }
+  waWarning.value = await checkWAWarning()
 }
 
 const upgradePlan = (targetPlan: string) => {
@@ -445,7 +437,8 @@ onMounted(() => {
   businessType.value = localStorage.getItem('business_type') || 'umum'
   businessName.value = localStorage.getItem('business_name') || ''
   plan.value = localStorage.getItem('plan') || 'lite'
-  quotaLimit.value = plan.value === 'lite' ? 100 : plan.value === 'pro' ? 1000 : 10000
+  const planQuotas: Record<string, number> = { lite: 100, pro: 1000, ultimate: 10000 }
+  quotaLimit.value = planQuotas[plan.value] || 100
   syncData()
 })
 </script>

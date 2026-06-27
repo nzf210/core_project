@@ -16,7 +16,7 @@ import (
 
 func handleTelegramRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
@@ -36,7 +36,6 @@ func handleTelegramRegister(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	otpKey := "otp:" + req.PhoneNumber
 
-	// OTP 1-hour reuse: check if valid OTP already exists
 	if existingVal, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingVal != "" {
 		parts := strings.Split(existingVal, ":")
 		existingOTP := parts[len(parts)-1]
@@ -49,12 +48,9 @@ func handleTelegramRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate new OTP
 	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
 
-	// Store registration data + OTP in Redis (1-hour TTL)
-	// Also store telegram_chat_id so verify-otp can link the user
-	regData := map[string]interface{}{
+	regData := map[string]any{
 		"username":       req.Username,
 		"password":       req.Password,
 		"email":          req.Email,
@@ -71,7 +67,6 @@ func handleTelegramRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send OTP via Telegram
 	go func() {
 		msg := fmt.Sprintf("🔐 *Kode OTP Registrasi WCH*\n\nKode OTP Anda: *%s*\n\n📌 Masukkan kode ini di aplikasi WCH untuk menyelesaikan pendaftaran.\n\n⚠️ Jangan bagikan kode ini kepada siapapun.\n\nBerlaku selama 1 jam.", otp)
 		if err := sendTelegramOTP(req.TelegramChatID, msg); err != nil {
@@ -88,11 +83,9 @@ func handleTelegramRegister(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleTelegramLogin starts login via Telegram Bot.
-// Reuses the same Redis OTP key ("phone-login-otp:{phone}") so /verify-phone-login works for both WA and Telegram.
 func handleTelegramLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
@@ -109,7 +102,6 @@ func handleTelegramLogin(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Verify user exists
 	var userID string
 	err := DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", req.PhoneNumber).Scan(&userID)
 	if err == pgx.ErrNoRows {
@@ -121,7 +113,6 @@ func handleTelegramLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Always generate new OTP for Telegram (no reuse — Telegram is not rate-limited like WA)
 	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
 	otpKey := "phone-login-otp:" + req.PhoneNumber
 	err = Redis.Set(ctx, otpKey, otp, 1*time.Hour).Err()
@@ -130,13 +121,11 @@ func handleTelegramLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update telegram_chat_id for this user (link Telegram account)
 	_, err = DB.Exec(ctx, "UPDATE users SET telegram_chat_id = $1 WHERE phone_number = $2", req.TelegramChatID, req.PhoneNumber)
 	if err != nil {
 		slog.Warn("Failed to update telegram_chat_id", "phone", req.PhoneNumber, "error", err)
 	}
 
-	// Send OTP via Telegram
 	go func() {
 		msg := fmt.Sprintf("🔐 *Kode OTP Login WCH*\n\nKode OTP Anda: *%s*\n\n📌 Masukkan kode ini di aplikasi WCH untuk masuk ke akun Anda.\n\n⚠️ Jangan bagikan kode ini kepada siapapun.\n\nBerlaku selama 1 jam.", otp)
 		if err := sendTelegramOTP(req.TelegramChatID, msg); err != nil {
@@ -153,8 +142,71 @@ func handleTelegramLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// startTelegramPolling polls Telegram for updates when no webhook is set.
-// Falls back to getUpdates polling so /start works in dev without a public URL.
+func isTelegramWebhookSet(client *http.Client, baseURL string) bool {
+	resp, err := client.Get(baseURL + "/getWebhookInfo")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			URL string `json:"url"`
+		} `json:"result"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&result) == nil && result.Result.URL != "" {
+		return true
+	}
+	return false
+}
+
+func processTelegramUpdates(updates []map[string]any, nextUpdateID *int64) {
+	for _, update := range updates {
+		updateIDFloat, ok := update["update_id"].(float64)
+		if ok {
+			*nextUpdateID = int64(updateIDFloat) + 1
+		}
+
+		message, ok := update["message"].(map[string]any)
+		if !ok {
+			continue
+		}
+		chat, ok := message["chat"].(map[string]any)
+		if !ok {
+			continue
+		}
+		chatIDFloat, ok := chat["id"].(float64)
+		if !ok {
+			continue
+		}
+		chatID := fmt.Sprintf("%.0f", chatIDFloat)
+		text, _ := message["text"].(string)
+
+		handleTelegramCommand(chatID, text)
+	}
+}
+
+func handleTelegramCommand(chatID, text string) {
+	if text == "/start" {
+		welcomeMsg := fmt.Sprintf(
+			"👋 *Selamat datang di WCH Platform!*\n\n"+
+				"✅ Bot berhasil terhubung!\n"+
+				"Chat ID Anda: `%s`\n\n"+
+				"Buka aplikasi WCH dan pilih *Masuk dengan Telegram* untuk mendaftar atau login.\n\n"+
+				"Bot ini akan mengirimkan notifikasi penting seperti:\n"+
+				"• Update langganan & tagihan\n"+
+				"• Kode OTP untuk verifikasi\n"+
+				"• Pengingat automate\n\n"+
+				"Hubungi admin jika butuh bantuan.",
+			chatID,
+		)
+		sendTelegramMessage(chatID, welcomeMsg)
+	} else {
+		sendTelegramMessage(chatID, fmt.Sprintf("✅ Bot aktif!\n\nChat ID Anda: `%s`\n\nKirim `/start` untuk melihat panduan.", chatID))
+	}
+}
+
 func startTelegramPolling(cfg *config.Config) {
 	botToken := cfg.Telegram.BotToken
 	if botToken == "" {
@@ -172,112 +224,59 @@ func startTelegramPolling(cfg *config.Config) {
 	slog.Info("Telegram polling started", "bot", "Core_tesbot")
 
 	for range ticker.C {
-		// Check if webhook is configured — if yes, stop polling
-		resp, err := client.Get(baseURL + "/getWebhookInfo")
-		if err == nil {
-			var result struct {
-				OK     bool `json:"ok"`
-				Result struct {
-					URL string `json:"url"`
-				} `json:"result"`
-			}
-			if json.NewDecoder(resp.Body).Decode(&result) == nil && result.Result.URL != "" {
-				resp.Body.Close()
-				slog.Info("Telegram webhook is set, stopping polling")
-				return
-			}
-			resp.Body.Close()
+		if isTelegramWebhookSet(client, baseURL) {
+			slog.Info("Telegram webhook is set, stopping polling")
+			return
 		}
-
-		// Fetch updates since last ID (no timeout — ticker handles polling cadence)
-		url := fmt.Sprintf("%s/getUpdates?offset=%d", baseURL, nextUpdateID)
-		resp, err = client.Get(url)
-		if err != nil {
-			continue
-		}
-		var updates struct {
-			OK      bool                     `json:"ok"`
-			Result  []map[string]interface{} `json:"result"`
-			ErrCode int                      `json:"error_code"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&updates); err != nil {
-			resp.Body.Close()
-			continue
-		}
-		resp.Body.Close()
-
-		if len(updates.Result) > 0 {
-			slog.Info("Telegram updates received", "count", len(updates.Result), "next_offset", nextUpdateID)
-		} else {
-			slog.Info("Telegram poll cycle", "offset", nextUpdateID, "updates", 0)
-		}
-
-		for _, update := range updates.Result {
-			updateIDFloat, ok := update["update_id"].(float64)
-			if ok {
-				nextUpdateID = int64(updateIDFloat) + 1
-			}
-
-			message, ok := update["message"].(map[string]interface{})
-			if !ok {
-				continue
-			}
-			chat, ok := message["chat"].(map[string]interface{})
-			if !ok {
-				continue
-			}
-			chatIDFloat, ok := chat["id"].(float64)
-			if !ok {
-				continue
-			}
-			chatID := fmt.Sprintf("%.0f", chatIDFloat)
-			text, _ := message["text"].(string)
-
-			if text == "/start" {
-				welcomeMsg := fmt.Sprintf(
-					"👋 *Selamat datang di WCH Platform!*\n\n"+
-						"✅ Bot berhasil terhubung!\n"+
-						"Chat ID Anda: `%s`\n\n"+
-						"Buka aplikasi WCH dan pilih *Masuk dengan Telegram* untuk mendaftar atau login.\n\n"+
-						"Bot ini akan mengirimkan notifikasi penting seperti:\n"+
-						"• Update langganan & tagihan\n"+
-						"• Kode OTP untuk verifikasi\n"+
-						"• Pengingat automate\n\n"+
-						"Hubungi admin jika butuh bantuan.",
-					chatID,
-				)
-				sendTelegramMessage(chatID, welcomeMsg)
-			} else {
-				sendTelegramMessage(chatID, fmt.Sprintf("✅ Bot aktif!\n\nChat ID Anda: `%s`\n\nKirim `/start` untuk melihat panduan.", chatID))
-			}
-		}
+		pollTelegramOnce(client, baseURL, &nextUpdateID)
 	}
 }
 
-// handleTelegramWebhook handles incoming Telegram Bot webhooks.
-// When a user sends /start to the bot, we reply with instructions.
-// POST /telegram/webhook
-func handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+func pollTelegramOnce(client *http.Client, baseURL string, nextUpdateID *int64) {
+	url := fmt.Sprintf("%s/getUpdates?offset=%d", baseURL, *nextUpdateID)
+	resp, err := client.Get(url)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	var updates struct {
+		OK      bool             `json:"ok"`
+		Result  []map[string]any `json:"result"`
+		ErrCode int              `json:"error_code"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&updates); err != nil {
 		return
 	}
 
-	var update map[string]interface{}
+	if len(updates.Result) > 0 {
+		slog.Info("Telegram updates received", "count", len(updates.Result), "next_offset", *nextUpdateID)
+	} else {
+		slog.Info("Telegram poll cycle", "offset", *nextUpdateID, "updates", 0)
+	}
+
+	processTelegramUpdates(updates.Result, nextUpdateID)
+}
+
+func handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
+		return
+	}
+
+	var update map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid update payload"})
 		return
 	}
 
-	// Extract chat_id from the update
-	message, ok := update["message"].(map[string]interface{})
+	message, ok := update["message"].(map[string]any)
 	if !ok {
-		// Could be callback_query or other update types — silently ack
 		writeJSON(w, http.StatusOK, Response{Success: true, Message: "OK"})
 		return
 	}
 
-	chat, ok := message["chat"].(map[string]interface{})
+	chat, ok := message["chat"].(map[string]any)
 	if !ok {
 		writeJSON(w, http.StatusOK, Response{Success: true, Message: "OK"})
 		return
@@ -290,8 +289,13 @@ func handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	chatID := fmt.Sprintf("%.0f", chatIDFloat)
 
-	// Check for /start command
 	text, _ := message["text"].(string)
+	handleTelegramWebhookCommand(chatID, text)
+
+	writeJSON(w, http.StatusOK, Response{Success: true, Message: "OK"})
+}
+
+func handleTelegramWebhookCommand(chatID, text string) {
 	if text == "/start" {
 		welcomeMsg := fmt.Sprintf(
 			"👋 *Selamat datang di WCH Platform!*\n\n"+
@@ -309,8 +313,6 @@ func handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 	} else {
 		sendTelegramOTP(chatID, fmt.Sprintf("✅ Bot aktif!\n\nChat ID Anda: `%s`\n\nKirim `/start` untuk melihat panduan.", chatID))
 	}
-
-	writeJSON(w, http.StatusOK, Response{Success: true, Message: "OK"})
 }
 
 func formatPhoneToWAJID(phone string) string {

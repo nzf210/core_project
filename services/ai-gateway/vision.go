@@ -50,11 +50,12 @@ func HandleVision(w http.ResponseWriter, r *http.Request) {
 	// MOCK Implementation for C1 Real Count Form Processing.
 	// In production: Claude Sonnet Vision or OpenAI GPT-4o Vision API.
 	var respText string
-	if req.Prompt == "Extract C1 numbers" {
+	switch req.Prompt {
+	case "Extract C1 numbers":
 		respText = `{"candidate_votes": 125, "opponent_votes": 85, "invalid_votes": 2}`
-	} else if req.Prompt == "Extract KTP data" {
+	case "Extract KTP data":
 		respText = `{"nik": "3171234567890123", "name": "BUDI SANTOSO", "address": "JL. MERDEKA NO 45", "gender": "LAKI-LAKI", "age": 35}`
-	} else {
+	default:
 		respText = "[MOCK VISION] Gambar diterima: " + req.ImageURL + " | Prompt: " + req.Prompt
 	}
 

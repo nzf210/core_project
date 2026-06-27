@@ -6,17 +6,12 @@
     </div>
 
     <!-- TABS -->
-    <div class="tabs" style="display: flex; gap: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1.5rem; padding-bottom: 0.5rem;">
-      <button 
-        class="tab-btn" 
-        :class="{ active: activeTab === 'connection' }" 
-        @click="activeTab = 'connection'">
+    <div class="tabs"
+      style="display: flex; gap: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1.5rem; padding-bottom: 0.5rem;">
+      <button class="tab-btn" :class="{ active: activeTab === 'connection' }" @click="activeTab = 'connection'">
         Koneksi & Provider
       </button>
-      <button 
-        class="tab-btn" 
-        :class="{ active: activeTab === 'ai_config' }" 
-        @click="activeTab = 'ai_config'">
+      <button class="tab-btn" :class="{ active: activeTab === 'ai_config' }" @click="activeTab = 'ai_config'">
         Pengaturan AI CS
       </button>
     </div>
@@ -24,13 +19,15 @@
     <div v-if="loading" class="surface-card" style="padding: 2rem; text-align: center;">
       <p>Memuat status...</p>
     </div>
-    
+
     <!-- TAB 1: KONEKSI & PROVIDER -->
-    <div v-else-if="activeTab === 'connection'" class="setup-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
+    <div v-else-if="activeTab === 'connection'" class="setup-layout"
+      style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
       <div class="surface-card" style="padding: 1.5rem;">
         <h3 style="margin-bottom: 1rem;">Provider Utama</h3>
         <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-          Pilih provider yang ingin Anda gunakan. Mode Auto akan memprioritaskan Cloud API untuk notifikasi penting (jika aktif) dan Whatsmeow untuk chatbot.
+          Pilih provider yang ingin Anda gunakan. Mode Auto akan memprioritaskan Cloud API untuk notifikasi penting
+          (jika aktif) dan Whatsmeow untuk chatbot.
         </p>
 
         <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 2rem;">
@@ -41,17 +38,20 @@
               <span class="desc">Notifikasi tagihan/OTP via Cloud API, Chatbot via Whatsmeow.</span>
             </div>
           </label>
-          
+
           <label class="provider-card" :class="{ active: provider === 'whatsmeow' }">
             <input type="radio" value="whatsmeow" v-model="provider" @change="saveProvider" />
             <div class="provider-info">
               <strong>📱 Whatsmeow Only</strong>
-              <span class="desc">Gratis, tanpa kuota. <strong>Dilarang/diblokir untuk fitur Broadcast Massal</strong>.</span>
+              <span class="desc">Gratis, tanpa kuota. <strong>Dilarang/diblokir untuk fitur Broadcast
+                  Massal</strong>.</span>
             </div>
           </label>
-          
-          <label class="provider-card" :class="{ active: provider === 'cloud_api', locked: !waSetupState.can_use_cloud_api }">
-            <input type="radio" value="cloud_api" v-model="provider" :disabled="!waSetupState.can_use_cloud_api" @change="saveProvider" />
+
+          <label class="provider-card"
+            :class="{ active: provider === 'cloud_api', locked: !waSetupState.can_use_cloud_api }">
+            <input type="radio" value="cloud_api" v-model="provider" :disabled="!waSetupState.can_use_cloud_api"
+              @change="saveProvider" />
             <div class="provider-info">
               <strong>☁️ Cloud API (Meta Official)</strong>
               <span class="desc">Resmi, bebas blokir. Wajib untuk Broadcast Massal. Butuh saldo wallet.</span>
@@ -64,7 +64,8 @@
         <div class="status-box" :class="waSetupState.whatsmeow.status">
           <div class="status-header">
             <span class="status-dot"></span>
-            <strong>{{ waSetupState.whatsmeow.connected ? 'Terhubung' : (waSetupState.whatsmeow.status === 'qr_pending' ? 'Menunggu Scan QR' : 'Terputus') }}</strong>
+            <strong>{{ waSetupState.whatsmeow.connected ? 'Terhubung' : (waSetupState.whatsmeow.status === 'qr_pending'
+              ? 'Menunggu Scan QR' : 'Terputus') }}</strong>
           </div>
           <p class="status-desc">
             Koneksi pihak ketiga ke WhatsApp Web. Harus terhubung agar chatbot bisa membalas.
@@ -76,18 +77,21 @@
 
         <h3 style="margin-bottom: 1rem; margin-top: 2rem;">Status Cloud API</h3>
         <div class="status-box" :class="waSetupState.cloud_api.active ? 'connected' : 'disconnected'">
-           <div class="status-header">
+          <div class="status-header">
             <span class="status-dot"></span>
             <strong>{{ waSetupState.cloud_api.active ? 'Aktif' : 'Belum Dikonfigurasi' }}</strong>
           </div>
-          <div v-if="waSetupState.cloud_api.active" style="margin-top: 1rem; background: var(--bg-primary); padding: 1rem; border-radius: 0.5rem;">
+          <div v-if="waSetupState.cloud_api.active"
+            style="margin-top: 1rem; background: var(--bg-primary); padding: 1rem; border-radius: 0.5rem;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
               <span>Kredit Tersedia:</span>
-              <strong style="color: var(--success);">Rp {{ formatPrice(waSetupState.cloud_api.credit_balance_rupiah) }}</strong>
+              <strong style="color: var(--success);">Rp {{ formatPrice(waSetupState.cloud_api.credit_balance_rupiah)
+                }}</strong>
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span>Pemakaian Bulan Ini:</span>
-              <strong style="color: var(--warning);">Rp {{ formatPrice(waSetupState.cloud_api.credit_used_rupiah) }}</strong>
+              <strong style="color: var(--warning);">Rp {{ formatPrice(waSetupState.cloud_api.credit_used_rupiah)
+                }}</strong>
             </div>
             <button class="btn btn-secondary" style="margin-top: 1rem; width: 100%;">Top Up Kredit</button>
           </div>
@@ -102,10 +106,13 @@
       <div class="surface-card preview-card" style="padding: 1.25rem;">
         <h4 style="margin-bottom: 1rem; color: #f59e0b;">⚠️ Peringatan Broadcast</h4>
         <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1rem;">
-          Whatsmeow adalah koneksi tidak resmi (unofficial). Sesuai kebijakan keamanan, <strong>pengiriman broadcast promosi massal diblokir pada jalur Whatsmeow</strong> untuk mencegah nomor WhatsApp Anda dibanned secara permanen.
+          Whatsmeow adalah koneksi tidak resmi (unofficial). Sesuai kebijakan keamanan, <strong>pengiriman broadcast
+            promosi massal diblokir pada jalur Whatsmeow</strong> untuk mencegah nomor WhatsApp Anda dibanned secara
+          permanen.
         </p>
         <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
-          Untuk melakukan Blast / Broadcast massal, Anda diwajibkan melakukan upgrade dan menghubungkan nomor melalui jalur Meta Cloud API yang resmi.
+          Untuk melakukan Blast / Broadcast massal, Anda diwajibkan melakukan upgrade dan menghubungkan nomor melalui
+          jalur Meta Cloud API yang resmi.
         </p>
 
         <h4 style="margin-bottom: 0.75rem; margin-top: 2rem; color: #3b82f6;">💳 Tarif Cloud API</h4>
@@ -118,11 +125,13 @@
     </div>
 
     <!-- TAB 2: AI CONFIG -->
-    <div v-else-if="activeTab === 'ai_config'" class="config-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
+    <div v-else-if="activeTab === 'ai_config'" class="config-layout"
+      style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
       <div class="surface-card" style="padding: 1.5rem;">
         <!-- Stepper Inside AI Config -->
         <div class="stepper" style="display: flex; gap: 0.5rem; margin-bottom: 2rem;">
-          <div v-for="(label, i) in steps" :key="i" class="step-pill" :class="{ active: currentStep === i, done: currentStep > i }" @click="goToStep(i)">
+          <div v-for="(label, i) in steps" :key="i" class="step-pill"
+            :class="{ active: currentStep === i, done: currentStep > i }" @click="goToStep(i)">
             <span class="step-num">{{ currentStep > i ? '✓' : i + 1 }}</span>
             <span class="step-label">{{ label }}</span>
           </div>
@@ -148,8 +157,9 @@
               </div>
             </div>
             <div>
-              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.5rem;">Tone / Gaya Bicara</span>
-              <select v-model="form.tone" class="form-control">
+              <label for="form-tone" style="display: block; font-size: 0.85rem; margin-bottom: 0.5rem;">Tone / Gaya
+                Bicara</label>
+              <select id="form-tone" v-model="form.tone" class="form-control">
                 <option value="friendly">Ramah & Hangat</option>
                 <option value="formal">Formal</option>
                 <option value="casual">Santai & Akrab</option>
@@ -157,8 +167,10 @@
               </select>
             </div>
             <label>
-              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">System Prompt Custom (opsional, advanced)</span>
-              <textarea v-model="form.system_prompt" class="form-control" rows="3" placeholder="Biarkan kosong untuk pakai default. Isi jika ingin instruksi spesifik, misal 'Kamu selalu jawab pakai emoji ✨'."></textarea>
+              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">System Prompt Custom (opsional,
+                advanced)</span>
+              <textarea v-model="form.system_prompt" class="form-control" rows="3"
+                placeholder="Biarkan kosong untuk pakai default. Isi jika ingin instruksi spesifik, misal 'Kamu selalu jawab pakai emoji ✨'."></textarea>
             </label>
           </div>
         </div>
@@ -180,7 +192,8 @@
             <div>
               <span style="display: block; font-size: 0.85rem; margin-bottom: 0.5rem;">Hari Operasional</span>
               <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <label v-for="d in dayList" :key="d.value" class="day-pill" :class="{ active: form.business_days.includes(d.value) }">
+                <label v-for="d in dayList" :key="d.value" class="day-pill"
+                  :class="{ active: form.business_days.includes(d.value) }">
                   <input type="checkbox" :value="d.value" v-model="form.business_days" hidden />
                   {{ d.short }}
                 </label>
@@ -192,25 +205,23 @@
               <span>Aktifkan auto-eskalasi ke admin</span>
             </label>
             <div v-if="form.escalation_enabled">
-              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Kata Kunci Eskalasi (pisahkan dengan Enter)</span>
+              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Kata Kunci Eskalasi (pisahkan
+                dengan Enter)</span>
               <div class="keyword-input">
                 <span v-for="(kw, i) in form.escalation_keywords" :key="i" class="kw-tag">
                   {{ kw }}
                   <button type="button" @click="form.escalation_keywords.splice(i, 1)">×</button>
                 </span>
-                <input
-                  type="text"
-                  v-model="newKeyword"
-                  @keydown.enter.prevent="addKeyword"
-                  @keydown.,.prevent="addKeyword"
-                  placeholder="Tekan Enter untuk tambah"
-                  class="form-control kw-input"
-                />
+                <input id="new-keyword" type="text" v-model="newKeyword" @keydown.enter.prevent="addKeyword"
+                  @keydown.,.prevent="addKeyword" placeholder="Tekan Enter untuk tambah" class="form-control kw-input"
+                  aria-label="Tambah kata kunci eskalasi" />
               </div>
             </div>
             <label>
-              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Auto-eskalasi setelah berapa menit tanpa jawaban?</span>
-              <input v-model.number="form.auto_escalate_after_minutes" type="number" min="0" max="60" class="form-control" style="max-width: 120px;" />
+              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Auto-eskalasi setelah berapa
+                menit tanpa jawaban?</span>
+              <input v-model.number="form.auto_escalate_after_minutes" type="number" min="0" max="60"
+                class="form-control" style="max-width: 120px;" />
             </label>
           </div>
         </div>
@@ -224,16 +235,19 @@
               <textarea v-model="form.welcome_message" class="form-control" rows="2" />
             </label>
             <label>
-              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Pesan Fallback (kalau bot bingung)</span>
+              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Pesan Fallback (kalau bot
+                bingung)</span>
               <textarea v-model="form.fallback_message" class="form-control" rows="2" />
             </label>
             <label>
-              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Pesan di Luar Jam Operasional</span>
+              <span style="display: block; font-size: 0.85rem; margin-bottom: 0.25rem;">Pesan di Luar Jam
+                Operasional</span>
               <textarea v-model="form.outside_hours_message" class="form-control" rows="2" />
             </label>
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.5rem 0;" />
             <div>
-              <span style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">AI Modality</span>
+              <span style="display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">AI
+                Modality</span>
               <label class="toggle-row" style="margin-bottom: 0.25rem;">
                 <input type="checkbox" v-model="form.enable_vision" />
                 <span><strong>Enable Vision</strong> (Process image messages)</span>
@@ -255,7 +269,8 @@
             <div>
               <span style="display: block; font-size: 0.85rem; margin-bottom: 0.5rem;">Channel Aktif</span>
               <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                <label class="channel-pill" :class="{ active: form.channels_enabled.includes('whatsapp'), locked: true }">
+                <label class="channel-pill"
+                  :class="{ active: form.channels_enabled.includes('whatsapp'), locked: true }">
                   <input type="checkbox" value="whatsapp" v-model="form.channels_enabled" disabled /> 📱 WhatsApp
                 </label>
                 <label class="channel-pill" :class="{ active: form.channels_enabled.includes('telegram') }">
@@ -298,11 +313,13 @@
       <div class="surface-card preview-card" style="padding: 1.25rem;">
         <h4 style="margin-bottom: 0.75rem;">Preview</h4>
         <div class="preview-row"><span>Bot</span><b>{{ form.bot_name || 'CS Toko Anda' }}</b></div>
-        <div class="preview-row"><span>Bahasa</span><b>{{ form.language === 'en' ? '🇬🇧 English' : '🇮🇩 Indonesia' }}</b></div>
+        <div class="preview-row"><span>Bahasa</span><b>{{ form.language === 'en' ? '🇬🇧 English' : '🇮🇩 Indonesia'
+            }}</b></div>
         <div class="preview-row"><span>Tone</span><b>{{ toneLabel }}</b></div>
         <div class="preview-row"><span>Aktif</span><b>{{ form.is_active ? '✅ Ya' : '❌ Tidak' }}</b></div>
         <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 0.75rem 0;" />
-        <div class="preview-row"><span>Jam</span><b>{{ form.business_hours_start }}–{{ form.business_hours_end }}</b></div>
+        <div class="preview-row"><span>Jam</span><b>{{ form.business_hours_start }}–{{ form.business_hours_end }}</b>
+        </div>
         <div class="preview-row"><span>Hari</span><b>{{ dayShortList || 'Setiap hari' }}</b></div>
         <div class="preview-row"><span>Escalation</span><b>{{ form.escalation_enabled ? '✅ On' : '❌ Off' }}</b></div>
         <div class="preview-row"><span>Channel</span><b>{{ form.channels_enabled.join(', ') || '-' }}</b></div>
@@ -320,8 +337,10 @@
           Memuat QR Code...
         </div>
         <div v-else-if="qrStatus === 'qr' && qrImage">
-          <img :src="qrImage" alt="QR Code" style="width: 220px; height: 220px; border: 1px solid var(--border-color); border-radius: 8px;" />
-          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">QR code berlaku 60 detik. Refresh otomatis.</p>
+          <img :src="qrImage" alt="QR Code"
+            style="width: 220px; height: 220px; border: 1px solid var(--border-color); border-radius: 8px;" />
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">QR code berlaku 60 detik.
+            Refresh otomatis.</p>
         </div>
         <div v-else-if="qrStatus === 'connected'" style="padding: 2rem; color: #10b981;">
           ✅ WhatsApp terhubung!
@@ -341,42 +360,57 @@
       <div class="modal-content surface-card" style="max-width: 520px; padding: 1.5rem;">
         <h3 style="margin-bottom: 0.5rem;">☁️ Hubungkan Meta Cloud API</h3>
         <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem; line-height: 1.5;">
-          <strong>Step 1:</strong> Masukkan credential → klik <em>Validate</em> untuk uji coba koneksi ke Meta.<br/>
+          <strong>Step 1:</strong> Masukkan credential → klik <em>Validate</em> untuk uji coba koneksi ke Meta.<br />
           <strong>Step 2:</strong> Jika valid, klik <em>Simpan</em> untuk menyimpan.
         </p>
         <div style="display: flex; flex-direction: column; gap: 0.85rem;">
           <label>
-            <span style="display: block; font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--text-secondary);">Phone Number ID <span style="color: #dc2626;">*</span></span>
-            <input v-model="cloudApiForm.phone_number_id" type="text" class="form-control" placeholder="例: 123456789012345" />
+            <span style="display: block; font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--text-secondary);">Phone
+              Number ID <span style="color: #dc2626;">*</span></span>
+            <input v-model="cloudApiForm.phone_number_id" type="text" class="form-control"
+              placeholder="例: 123456789012345" />
           </label>
           <label>
-            <span style="display: block; font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--text-secondary);">WABA ID (WhatsApp Business Account)</span>
+            <span style="display: block; font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--text-secondary);">WABA
+              ID (WhatsApp Business Account)</span>
             <input v-model="cloudApiForm.waba_id" type="text" class="form-control" placeholder="例: 987654321098765" />
           </label>
           <label>
-            <span style="display: block; font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--text-secondary);">Permanent Access Token <span style="color: #dc2626;">*</span></span>
-            <input v-model="cloudApiForm.access_token" type="password" class="form-control" placeholder="Token dari Meta Developers" />
+            <span
+              style="display: block; font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--text-secondary);">Permanent
+              Access Token <span style="color: #dc2626;">*</span></span>
+            <input v-model="cloudApiForm.access_token" type="password" class="form-control"
+              placeholder="Token dari Meta Developers" />
           </label>
           <label>
-            <span style="display: block; font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--text-secondary);">Webhook Verify Token (opsional)</span>
-            <input v-model="cloudApiForm.verify_token" type="text" class="form-control" placeholder="Kosongkan untuk auto-generate" />
+            <span
+              style="display: block; font-size: 0.82rem; margin-bottom: 0.2rem; color: var(--text-secondary);">Webhook
+              Verify Token (opsional)</span>
+            <input v-model="cloudApiForm.verify_token" type="text" class="form-control"
+              placeholder="Kosongkan untuk auto-generate" />
           </label>
         </div>
         <!-- Validation status badge -->
-        <div v-if="cloudApiValidationResult === 'valid'" class="success-text" style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(16,185,129,0.1); border-radius: 0.5rem;">
+        <div v-if="cloudApiValidationResult === 'valid'" class="success-text"
+          style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(16,185,129,0.1); border-radius: 0.5rem;">
           ✅ Credential tervalidasi! Silakan klik Simpan.
         </div>
-        <div v-if="cloudApiValidationResult === 'invalid'" class="error-text" style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(220,38,38,0.1); border-radius: 0.5rem;">
+        <div v-if="cloudApiValidationResult === 'invalid'" class="error-text"
+          style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(220,38,38,0.1); border-radius: 0.5rem;">
           ❌ {{ cloudApiError || 'Credential tidak valid. Periksa kembali.' }}
         </div>
-        <p v-if="cloudApiError && cloudApiValidationResult !== 'invalid'" class="error-text" style="margin-top: 0.75rem;">{{ cloudApiError }}</p>
+        <p v-if="cloudApiError && cloudApiValidationResult !== 'invalid'" class="error-text"
+          style="margin-top: 0.75rem;">{{ cloudApiError }}</p>
         <p v-if="cloudApiSuccess" class="success-text" style="margin-top: 0.75rem;">{{ cloudApiSuccess }}</p>
         <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem;">
           <button class="btn btn-secondary" @click="closeCloudApiModal()">Batal</button>
-          <button v-if="!cloudApiValidated" class="btn btn-primary" :disabled="cloudApiLoading || !cloudApiForm.access_token.trim() || !cloudApiForm.phone_number_id.trim()" @click="validateAndSaveCredential">
+          <button v-if="!cloudApiValidated" class="btn btn-primary"
+            :disabled="cloudApiLoading || !cloudApiForm.access_token.trim() || !cloudApiForm.phone_number_id.trim()"
+            @click="validateAndSaveCredential">
             {{ cloudApiValidating ? '⏳ Validasi...' : '🔍 Validate' }}
           </button>
-          <button v-if="cloudApiValidated" class="btn btn-primary" :disabled="cloudApiLoading" @click="saveCloudApiCredential">
+          <button v-if="cloudApiValidated" class="btn btn-primary" :disabled="cloudApiLoading"
+            @click="saveCloudApiCredential">
             {{ cloudApiLoading ? 'Menyimpan...' : '💾 Simpan' }}
           </button>
         </div>
@@ -387,16 +421,24 @@
     <div v-if="testOpen" class="modal-backdrop" @click.self="testOpen = false">
       <div class="modal-content surface-card" style="max-width: 480px; padding: 1.5rem;">
         <h3 style="margin-bottom: 0.75rem;">🧪 Test Bot</h3>
-        <p style="font-size: 0.85rem; color: var(--text-secondary);">Coba kirim pesan ke bot untuk lihat bagaimana dia akan menjawab dengan konfigurasi saat ini.</p>
-        <input v-model="testInput" type="text" class="form-control" placeholder='Misal: "Halo, ada diskon?"' @keydown.enter="runTest" style="margin-top: 0.5rem;" />
-        <div v-if="testReply" class="test-reply" style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 0.5rem;">
+        <span id="test-desc"
+          style="font-size: 0.85rem; color: var(--text-secondary); display: block; margin-bottom: 0.5rem;">Coba kirim
+          pesan ke bot untuk lihat bagaimana dia akan menjawab dengan konfigurasi saat ini.</span>
+        <label for="test-input" style="display: block; margin-top: 0.5rem;">
+          <input id="test-input" v-model="testInput" type="text" class="form-control"
+            placeholder='Misal: "Halo, ada diskon?"' @keydown.enter="runTest" />
+        </label>
+        <div v-if="testReply" class="test-reply"
+          style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 0.5rem;">
           <p style="margin: 0 0 0.5rem; font-size: 0.9rem;">{{ testReply }}</p>
-          <p v-if="testWouldEscalate" style="margin: 0; font-size: 0.75rem; color: #f59e0b;">⚠️ Pesan ini akan di-eskalasi ke admin (kata kunci cocok).</p>
+          <p v-if="testWouldEscalate" style="margin: 0; font-size: 0.75rem; color: #f59e0b;">⚠️ Pesan ini akan
+            di-eskalasi ke admin (kata kunci cocok).</p>
         </div>
         <p v-if="testError" style="color: #dc2626; font-size: 0.85rem; margin-top: 0.5rem;">{{ testError }}</p>
         <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;">
           <button class="btn btn-secondary" @click="testOpen = false">Tutup</button>
-          <button class="btn btn-primary" @click="runTest" :disabled="testing || !testInput.trim()">{{ testing ? 'Mengirim...' : 'Kirim' }}</button>
+          <button class="btn btn-primary" @click="runTest" :disabled="testing || !testInput.trim()">{{ testing ?
+            'Mengirim...' : 'Kirim' }}</button>
         </div>
       </div>
     </div>
@@ -410,7 +452,7 @@ import { useModalState } from '../utils/modalState'
 
 const { openModal, closeModal } = useModalState()
 
-const activeTab = ref<'connection'|'ai_config'>('connection')
+const activeTab = ref<'connection' | 'ai_config'>('connection')
 
 // --- CONNECTION STATE ---
 const loading = ref(true)
@@ -423,7 +465,7 @@ const waSetupState = ref({
 })
 
 const formatPrice = (sen: number) => {
-  return (sen ).toLocaleString('id-ID')
+  return (sen).toLocaleString('id-ID')
 }
 
 // --- AI CONFIG STATE ---
@@ -504,20 +546,11 @@ const loadData = async () => {
     const resAI = await api.getChatbotConfig()
     if (resAI.success && resAI.data) {
       const d = resAI.data
-      if (d.language) form.language = d.language
-      if (d.tone) form.tone = d.tone
-      if (d.system_prompt) form.system_prompt = d.system_prompt
-      if (d.welcome_message) form.welcome_message = d.welcome_message
-      if (d.fallback_message) form.fallback_message = d.fallback_message
-      if (d.outside_hours_message) form.outside_hours_message = d.outside_hours_message
-      if (d.business_hours_start) form.business_hours_start = d.business_hours_start
-      if (d.business_hours_end) form.business_hours_end = d.business_hours_end
-      if (d.business_days) form.business_days = d.business_days
+        ;['language', 'tone', 'system_prompt', 'welcome_message', 'fallback_message',
+          'outside_hours_message', 'business_hours_start', 'business_hours_end',
+          'business_days', 'escalation_keywords', 'auto_escalate_after_minutes',
+          'channels_enabled', 'wa_provider_preference'].forEach(k => { if (d[k] !== undefined) form[k] = d[k] })
       form.escalation_enabled = !!d.escalation_enabled
-      if (d.escalation_keywords) form.escalation_keywords = d.escalation_keywords
-      if (d.auto_escalate_after_minutes) form.auto_escalate_after_minutes = d.auto_escalate_after_minutes
-      if (d.channels_enabled) form.channels_enabled = d.channels_enabled
-      if (d.wa_provider_preference) form.wa_provider_preference = d.wa_provider_preference
       form.is_active = d.is_active !== false
     }
   } catch (e) {
@@ -575,7 +608,7 @@ async function openCloudApiModal() {
       cloudApiForm.verify_token = res.data.verify_token || ''
       // access_token tidak pernah di-return (security)
     }
-  } catch {}
+  } catch { }
 }
 
 async function saveCloudApiCredential() {
@@ -656,7 +689,7 @@ const qrModal = ref(false)
 const qrImage = ref('')
 
 watch(qrModal, (v) => { if (v) openModal(); else closeModal(); });
-const qrStatus = ref<'loading'|'qr'|'connected'|'error'>('loading')
+const qrStatus = ref<'loading' | 'qr' | 'connected' | 'error'>('loading')
 const qrError = ref('')
 let qrPollInterval: ReturnType<typeof setInterval> | null = null
 
@@ -751,14 +784,14 @@ function addKeyword() {
 function saveDraft() {
   try {
     sessionStorage.setItem('chatbot_config_draft', JSON.stringify(form))
-  } catch {}
+  } catch { }
 }
 
 function loadDraft() {
   try {
     const raw = sessionStorage.getItem('chatbot_config_draft')
     if (raw) Object.assign(form, JSON.parse(raw))
-  } catch {}
+  } catch { }
 }
 
 async function save() {
@@ -851,6 +884,7 @@ onUnmounted(() => {
 .tabs {
   margin-bottom: 2rem;
 }
+
 .tab-btn {
   background: none;
   border: none;
@@ -861,11 +895,13 @@ onUnmounted(() => {
   border-bottom: 2px solid transparent;
   transition: all 0.2s;
 }
+
 .tab-btn.active {
   color: #4f46e5;
   border-bottom: 2px solid #4f46e5;
   font-weight: 600;
 }
+
 .provider-card {
   display: flex;
   align-items: flex-start;
@@ -877,26 +913,32 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.2s;
 }
+
 .provider-card:hover:not(.locked) {
   border-color: #4f46e5;
 }
+
 .provider-card.active {
   border-color: #4f46e5;
   background: rgba(79, 70, 229, 0.1);
 }
+
 .provider-card.locked {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
 .provider-info {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
+
 .provider-info .desc {
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
+
 .locked-badge {
   background: #dc2626;
   color: white;
@@ -906,27 +948,40 @@ onUnmounted(() => {
   width: fit-content;
   margin-top: 0.25rem;
 }
+
 .status-box {
   padding: 1rem;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   background: var(--bg-tertiary);
 }
+
 .status-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
 }
+
 .status-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: #6b7280;
 }
-.status-box.connected .status-dot { background: #10b981; }
-.status-box.qr_pending .status-dot { background: #f59e0b; }
-.status-box.disconnected .status-dot { background: #dc2626; }
+
+.status-box.connected .status-dot {
+  background: #10b981;
+}
+
+.status-box.qr_pending .status-dot {
+  background: #f59e0b;
+}
+
+.status-box.disconnected .status-dot {
+  background: #dc2626;
+}
+
 .status-desc {
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -946,14 +1001,17 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.2s;
 }
+
 .step-pill.active {
   background: #4f46e5;
   color: white;
 }
+
 .step-pill.done {
   background: #10b981;
   color: white;
 }
+
 .step-num {
   display: inline-flex;
   align-items: center;
@@ -965,6 +1023,7 @@ onUnmounted(() => {
   font-size: 0.75rem;
   font-weight: 600;
 }
+
 .radio-pill,
 .day-pill,
 .channel-pill {
@@ -980,24 +1039,31 @@ onUnmounted(() => {
   user-select: none;
   transition: all 0.15s;
 }
+
 .radio-pill input,
-.channel-pill input { margin: 0; }
+.channel-pill input {
+  margin: 0;
+}
+
 .day-pill.active,
 .channel-pill.active {
   background: #4f46e5;
   color: white;
   border-color: #4f46e5;
 }
+
 .channel-pill.locked {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
 .toggle-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.9rem;
 }
+
 .preview-row {
   display: flex;
   justify-content: space-between;
@@ -1005,8 +1071,15 @@ onUnmounted(() => {
   font-size: 0.85rem;
   border-bottom: 1px dashed var(--border-color);
 }
-.preview-row:last-child { border-bottom: 0; }
-.preview-row span { color: var(--text-secondary); }
+
+.preview-row:last-child {
+  border-bottom: 0;
+}
+
+.preview-row span {
+  color: var(--text-secondary);
+}
+
 .keyword-input {
   display: flex;
   flex-wrap: wrap;
@@ -1017,6 +1090,7 @@ onUnmounted(() => {
   border-radius: 0.5rem;
   background: var(--bg-primary);
 }
+
 .kw-tag {
   display: inline-flex;
   align-items: center;
@@ -1027,6 +1101,7 @@ onUnmounted(() => {
   border-radius: 999px;
   font-size: 0.8rem;
 }
+
 .kw-tag button {
   background: rgba(255, 255, 255, 0.3);
   border: 0;
@@ -1038,6 +1113,7 @@ onUnmounted(() => {
   font-size: 0.9rem;
   line-height: 1;
 }
+
 .kw-input {
   flex: 1;
   min-width: 120px;
@@ -1045,6 +1121,7 @@ onUnmounted(() => {
   background: transparent !important;
   padding: 0.3rem !important;
 }
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1054,10 +1131,14 @@ onUnmounted(() => {
   justify-content: center;
   z-index: 1000;
 }
+
 @media (max-width: 768px) {
-  .config-layout, .setup-layout {
+
+  .config-layout,
+  .setup-layout {
     grid-template-columns: 1fr !important;
   }
+
   .stepper {
     flex-direction: column;
   }

@@ -40,7 +40,7 @@ const saveSettings = async () => {
   try {
     const res = await api.updateClinicSettings(settings.value)
     if (res && res.success) alert('Pengaturan tersimpan!')
-  } catch (err) {
+  } catch {
     alert('Gagal menyimpan pengaturan')
   }
 }
@@ -104,7 +104,7 @@ const saveMedicalRecord = async () => {
     } else {
       alert(res?.message || 'Gagal menyimpan rekam medis')
     }
-  } catch (err) {
+  } catch {
     alert('Kesalahan jaringan saat menyimpan')
   }
 }
@@ -168,7 +168,7 @@ const saveDoctor = async () => {
     } else {
       alert(res?.message || 'Gagal menyimpan jadwal dokter')
     }
-  } catch (err) {
+  } catch {
     alert('Kesalahan jaringan saat menyimpan')
   }
 }
@@ -221,15 +221,15 @@ onMounted(() => {
         <h2 class="text-xl font-bold mb-4">⚙️ Pengaturan Antrean</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
-            <label class="block text-sm font-semibold mb-2">Jenis Antrean</label>
-            <select v-model="settings.queue_type" class="form-control">
+            <label for="queue-type" class="block text-sm font-semibold mb-2">Jenis Antrean</label>
+            <select id="queue-type" v-model="settings.queue_type" class="form-control">
               <option value="sequential">🔢 Nomor Urut (A-001, A-002, ...)</option>
               <option value="timeslot">🕐 Slot Waktu (09:00, 10:30, ...)</option>
             </select>
           </div>
           <div>
-            <label class="block text-sm font-semibold mb-2">Durasi Slot (menit)</label>
-            <input v-model="settings.slot_duration_minutes" type="number" min="15" max="120" class="form-control" />
+            <label for="slot-duration" class="block text-sm font-semibold mb-2">Durasi Slot (menit)</label>
+            <input id="slot-duration" v-model="settings.slot_duration_minutes" type="number" min="15" max="120" class="form-control" />
           </div>
           <div class="flex items-end">
             <label class="flex items-center gap-3 cursor-pointer">
@@ -299,28 +299,28 @@ onMounted(() => {
         <h3 class="text-lg font-bold mb-4">📝 Rekam Medis Baru</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-semibold mb-2">Nama Pasien *</label>
-            <input v-model="recordForm.patient_name" type="text" class="form-control" placeholder="cth: Budi Santoso" />
+            <label for="record-name" class="block text-sm font-semibold mb-2">Nama Pasien *</label>
+            <input id="record-name" v-model="recordForm.patient_name" type="text" class="form-control" placeholder="cth: Budi Santoso" />
           </div>
           <div>
-            <label class="block text-sm font-semibold mb-2">No. HP / WA</label>
-            <input v-model="recordForm.patient_phone" type="text" class="form-control" placeholder="cth: 081234567890" />
+            <label for="record-phone" class="block text-sm font-semibold mb-2">No. HP / WA</label>
+            <input id="record-phone" v-model="recordForm.patient_phone" type="text" class="form-control" placeholder="cth: 081234567890" />
           </div>
           <div class="md:col-span-2">
-            <label class="block text-sm font-semibold mb-2">Keluhan</label>
-            <textarea v-model="recordForm.complaint" class="form-control" rows="2" placeholder="cth: Demam 3 hari, sakit kepala"></textarea>
+            <label for="record-complaint" class="block text-sm font-semibold mb-2">Keluhan</label>
+            <textarea id="record-complaint" v-model="recordForm.complaint" class="form-control" rows="2" placeholder="cth: Demam 3 hari, sakit kepala"></textarea>
           </div>
           <div class="md:col-span-2">
-            <label class="block text-sm font-semibold mb-2">Diagnosis</label>
-            <textarea v-model="recordForm.diagnosis" class="form-control" rows="2" placeholder="cth: ISPA ringan"></textarea>
+            <label for="record-diagnosis" class="block text-sm font-semibold mb-2">Diagnosis</label>
+            <textarea id="record-diagnosis" v-model="recordForm.diagnosis" class="form-control" rows="2" placeholder="cth: ISPA ringan"></textarea>
           </div>
           <div class="md:col-span-2">
-            <label class="block text-sm font-semibold mb-2">Resep / Tindakan</label>
-            <textarea v-model="recordForm.prescription" class="form-control" rows="2" placeholder="cth: Paracetamol 3x1, istirahat"></textarea>
+            <label for="record-prescription" class="block text-sm font-semibold mb-2">Resep / Tindakan</label>
+            <textarea id="record-prescription" v-model="recordForm.prescription" class="form-control" rows="2" placeholder="cth: Paracetamol 3x1, istirahat"></textarea>
           </div>
           <div class="md:col-span-2">
-            <label class="block text-sm font-semibold mb-2">Catatan</label>
-            <textarea v-model="recordForm.notes" class="form-control" rows="2" placeholder="Follow-up, alergi, dll"></textarea>
+            <label for="record-notes" class="block text-sm font-semibold mb-2">Catatan</label>
+            <textarea id="record-notes" v-model="recordForm.notes" class="form-control" rows="2" placeholder="Follow-up, alergi, dll"></textarea>
           </div>
         </div>
         <div class="flex justify-end gap-2 mt-4">
@@ -365,30 +365,30 @@ onMounted(() => {
         <h3 class="text-lg font-bold mb-4">👨‍⚕️ Jadwal Dokter Baru</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-semibold mb-2">Nama Dokter *</label>
-            <input v-model="doctorForm.doctor_name" type="text" class="form-control" placeholder="cth: dr. Anisa Putri" />
+            <label for="doctor-name" class="block text-sm font-semibold mb-2">Nama Dokter *</label>
+            <input id="doctor-name" v-model="doctorForm.doctor_name" type="text" class="form-control" placeholder="cth: dr. Anisa Putri" />
           </div>
           <div>
-            <label class="block text-sm font-semibold mb-2">Spesialisasi</label>
-            <input v-model="doctorForm.specialization" type="text" class="form-control" placeholder="cth: Umum, Gigi, Anak" />
+            <label for="doctor-specialization" class="block text-sm font-semibold mb-2">Spesialisasi</label>
+            <input id="doctor-specialization" v-model="doctorForm.specialization" type="text" class="form-control" placeholder="cth: Umum, Gigi, Anak" />
           </div>
           <div>
-            <label class="block text-sm font-semibold mb-2">Hari</label>
-            <select v-model="doctorForm.day_of_week" class="form-control">
+            <label for="doctor-day" class="block text-sm font-semibold mb-2">Hari</label>
+            <select id="doctor-day" v-model="doctorForm.day_of_week" class="form-control">
               <option v-for="d in days" :key="d.value" :value="d.value">{{ d.label }}</option>
             </select>
           </div>
           <div>
-            <label class="block text-sm font-semibold mb-2">Max Pasien / Hari</label>
-            <input v-model="doctorForm.max_patients" type="number" min="1" max="200" class="form-control" />
+            <label for="doctor-max-patients" class="block text-sm font-semibold mb-2">Max Pasien / Hari</label>
+            <input id="doctor-max-patients" v-model="doctorForm.max_patients" type="number" min="1" max="200" class="form-control" />
           </div>
           <div>
-            <label class="block text-sm font-semibold mb-2">Jam Mulai</label>
-            <input v-model="doctorForm.time_start" type="time" class="form-control" />
+            <label for="doctor-time-start" class="block text-sm font-semibold mb-2">Jam Mulai</label>
+            <input id="doctor-time-start" v-model="doctorForm.time_start" type="time" class="form-control" />
           </div>
           <div>
-            <label class="block text-sm font-semibold mb-2">Jam Selesai</label>
-            <input v-model="doctorForm.time_end" type="time" class="form-control" />
+            <label for="doctor-time-end" class="block text-sm font-semibold mb-2">Jam Selesai</label>
+            <input id="doctor-time-end" v-model="doctorForm.time_end" type="time" class="form-control" />
           </div>
         </div>
         <div class="flex justify-end gap-2 mt-4">
@@ -437,12 +437,12 @@ onMounted(() => {
 }
 .badge-waiting {
   background: rgba(251, 191, 36, 0.15);
-  color: #fbbf24;
+  color: #713f12;
   border: 1px solid rgba(251, 191, 36, 0.3);
 }
 .badge-called {
   background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+  color: #14532d;
   border: 1px solid rgba(34, 197, 94, 0.3);
 }
 

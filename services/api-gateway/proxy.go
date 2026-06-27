@@ -11,14 +11,21 @@ import (
 	"core_project/shared/sdk/response"
 )
 
+const (
+	corsOrigin      = "Access-Control-Allow-Origin"
+	corsMethods     = "Access-Control-Allow-Methods"
+	corsHeaders     = "Access-Control-Allow-Headers"
+	corsCredentials = "Access-Control-Allow-Credentials"
+)
+
 func newProxy(targetHost string) *httputil.ReverseProxy {
 	url, _ := url.Parse(targetHost)
 	proxy := httputil.NewSingleHostReverseProxy(url)
 	proxy.ModifyResponse = func(r *http.Response) error {
-		r.Header.Del("Access-Control-Allow-Origin")
-		r.Header.Del("Access-Control-Allow-Methods")
-		r.Header.Del("Access-Control-Allow-Headers")
-		r.Header.Del("Access-Control-Allow-Credentials")
+		r.Header.Del(corsOrigin)
+		r.Header.Del(corsMethods)
+		r.Header.Del(corsHeaders)
+		r.Header.Del(corsCredentials)
 		return nil
 	}
 	return proxy
@@ -35,10 +42,10 @@ func n8nProxy(targetHost string) *httputil.ReverseProxy {
 	}
 
 	proxy.ModifyResponse = func(r *http.Response) error {
-		r.Header.Del("Access-Control-Allow-Origin")
-		r.Header.Del("Access-Control-Allow-Methods")
-		r.Header.Del("Access-Control-Allow-Headers")
-		r.Header.Del("Access-Control-Allow-Credentials")
+		r.Header.Del(corsOrigin)
+		r.Header.Del(corsMethods)
+		r.Header.Del(corsHeaders)
+		r.Header.Del(corsCredentials)
 		r.Header.Del("X-Frame-Options")
 		r.Header.Del("Content-Security-Policy")
 		return nil
@@ -70,10 +77,10 @@ func newTenantProxy(targetHost string) *httputil.ReverseProxy {
 	}
 
 	proxy.ModifyResponse = func(r *http.Response) error {
-		r.Header.Del("Access-Control-Allow-Origin")
-		r.Header.Del("Access-Control-Allow-Methods")
-		r.Header.Del("Access-Control-Allow-Headers")
-		r.Header.Del("Access-Control-Allow-Credentials")
+		r.Header.Del(corsOrigin)
+		r.Header.Del(corsMethods)
+		r.Header.Del(corsHeaders)
+		r.Header.Del(corsCredentials)
 		return nil
 	}
 
