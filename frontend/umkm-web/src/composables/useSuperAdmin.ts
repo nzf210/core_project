@@ -777,8 +777,7 @@ export function useSuperAdmin() {
     featureMatrixData.value[planId][featureKey] = { ...featureMatrixData.value[planId][featureKey], is_enabled: newVal }
     try {
       await superadminApi.toggleFeature({ plan_id: planId, feature_key: featureKey, is_enabled: newVal })
-    } catch (e) {
-      console.error('toggleFeature failed', e)
+    } catch {
       // Revert on failure
       if (featureMatrixData.value[planId]) {
         featureMatrixData.value[planId][featureKey] = { ...featureMatrixData.value[planId][featureKey], is_enabled: !newVal }
@@ -799,8 +798,7 @@ export function useSuperAdmin() {
       })
       addon.min_tier = minTier || null
       showToast('Addon gating disimpan')
-    } catch (e) {
-      console.error('saveAddonMinTier failed', e)
+    } catch {
       showToast('Gagal menyimpan addon gating', 'error')
     }
   }
