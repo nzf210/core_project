@@ -571,12 +571,12 @@ export function useSuperAdmin() {
         superadminApi.getAddonGating()
       ])
       const features = featuresRes.success ? (featuresRes.data || []) : []
-      const gating = gatingRes.success ? (gatingRes.data || []) : []
+      const gating: any[] = gatingRes.success ? (gatingRes.data || []) : []
       const gatingMap = new Map(gating.map((g: any) => [g.feature_key, g]))
       addonOptions.value = features.map((a: any) => ({
         ...a,
         price: Math.round((a.addon_price_rupiah || 0) ),
-        min_tier: (gatingMap.get(a.feature_key) as any)?.min_tier || ''
+        min_tier: gatingMap.get(a.feature_key)?.min_tier || ''
       }))
       if (!featuresRes.success) addonSaveMsg.value = featuresRes.message || 'Gagal memuat features'
     } catch (e) {

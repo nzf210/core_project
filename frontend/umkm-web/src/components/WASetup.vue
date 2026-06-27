@@ -426,7 +426,7 @@
           pesan ke bot untuk lihat bagaimana dia akan menjawab dengan konfigurasi saat ini.</span>
         <div style="display: block; margin-top: 0.5rem;">
           <input id="test-input" v-model="testInput" type="text" class="form-control"
-            placeholder='Misal: "Halo, ada diskon?"' @keydown.enter="runTest" />
+            aria-labelledby="test-desc" placeholder='Misal: "Halo, ada diskon?"' @keydown.enter="runTest" />
         </div>
         <div v-if="testReply" class="test-reply"
           style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 0.5rem;">

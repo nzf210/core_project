@@ -28,67 +28,59 @@ func eventHandler(tenantID string, evt interface{}) {
 }
 
 func handleMessageEvent(tenantID string, v *events.Message) {
-	// Ignore group messages
-	if v.Info.IsGroup {
-		return
-	}
-	// Ignore messages from ourselves
-	if v.Info.IsFromMe {
+	if v.Info.IsGroup || v.Info.IsFromMe || time.Since(v.Info.Timestamp) > 5*time.Minute {
 		return
 	}
 
-	// Skip initial sync history (timestamp too old)
-	if time.Since(v.Info.Timestamp) > 5*time.Minute {
-		return
-	}
-
-	var text string
-	if v.Message.GetConversation() != "" {
-		text = v.Message.GetConversation()
-	} else if v.Message.GetExtendedTextMessage() != nil {
-		text = v.Message.GetExtendedTextMessage().GetText()
-	}
+	text := extractMessageText(v)
 	if text == "" {
-		return // Ignore non-text messages for now
+		return
 	}
 
-	senderJID := v.Info.Sender.ToNonAD().String()
-	senderName := v.Info.PushName
-
-	// Build standard webhook payload for UMKM Chatbot
-	payload := map[string]interface{}{
+	jsonBody, _ := json.Marshal(map[string]interface{}{
 		"tenant_id":   tenantID,
-		"sender_jid":  senderJID,
-		"sender_name": senderName,
+		"sender_jid":  v.Info.Sender.ToNonAD().String(),
+		"sender_name": v.Info.PushName,
 		"message":     text,
 		"timestamp":   v.Info.Timestamp.Unix(),
 		"source":      "whatsmeow",
+	})
+
+	if tryForwardToN8N(tenantID, jsonBody) {
+		return
 	}
+	forwardToChatbot(tenantID, jsonBody)
+}
 
-	jsonBody, _ := json.Marshal(payload)
-
-	// Check if it's the N8N Chatbot or Go Chatbot
-	var n8nWebhookURL string
-	if db != nil {
-		err := db.QueryRow(`
-			SELECT n8n_webhook_url 
-			FROM tenant_chatbot_configs 
-			WHERE tenant_id = $1 AND is_active = true
-		`, tenantID).Scan(&n8nWebhookURL)
-		
-		if err == nil && n8nWebhookURL != "" {
-			// Forward to N8N
-			resp, err := http.Post(n8nWebhookURL, "application/json", bytes.NewBuffer(jsonBody))
-			if err != nil {
-				slog.Error("Failed to forward message to N8N", "error", err)
-			} else {
-				resp.Body.Close()
-			}
-			return
-		}
+func extractMessageText(v *events.Message) string {
+	if v.Message.GetConversation() != "" {
+		return v.Message.GetConversation()
 	}
+	if v.Message.GetExtendedTextMessage() != nil {
+		return v.Message.GetExtendedTextMessage().GetText()
+	}
+	return ""
+}
 
-	// Default Go Chatbot route
+func tryForwardToN8N(tenantID string, jsonBody []byte) bool {
+	if db == nil {
+		return false
+	}
+	var n8nURL string
+	err := db.QueryRow(`SELECT n8n_webhook_url FROM tenant_chatbot_configs WHERE tenant_id = $1 AND is_active = true`, tenantID).Scan(&n8nURL)
+	if err != nil || n8nURL == "" {
+		return false
+	}
+	resp, err := http.Post(n8nURL, "application/json", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		slog.Error("Failed to forward message to N8N", "error", err)
+		return true // still handled, don't fall through
+	}
+	resp.Body.Close()
+	return true
+}
+
+func forwardToChatbot(tenantID string, jsonBody []byte) {
 	chatbotURL := os.Getenv("UMKM_CHATBOT_URL")
 	if chatbotURL == "" {
 		if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
@@ -97,8 +89,7 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 			chatbotURL = "http://localhost:8203"
 		}
 	}
-	webhookURL := chatbotURL + "/webhook/wa?tenant_id=" + tenantID
-	resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonBody))
+	resp, err := http.Post(chatbotURL+"/webhook/wa?tenant_id="+tenantID, "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		slog.Error("Failed to forward message to chatbot", "error", err)
 	} else {

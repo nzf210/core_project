@@ -25,55 +25,34 @@ func callLLMWith3TierFallback(ctx context.Context, req ChatRequest) (string, int
 
 	primaryModel := selectModelByCapability(useCase, req.Provider, req.Model)
 
+	// Build fallback chain: primary + resolved fallbacks
+	chain := []*config.LLMModel{&primaryModel}
+	for _, fbID := range []string{primaryModel.FallbackTier1, primaryModel.FallbackTier2, primaryModel.FallbackTier3} {
+		if fbID == "" {
+			continue
+		}
+		if m := resolveModel(fbID); m != nil {
+			chain = append(chain, m)
+		}
+	}
+
 	baseURL := primaryModel.BaseURL
 	if req.BaseURL != "" {
 		baseURL = req.BaseURL
 	}
 
-	// Tier 1: Try primary model
-	slog.Info("LLM call tier 1", "model", primaryModel.ID, "use_case", useCase)
-	text, tin, tout, err := callLLM(ctx, primaryModel.Provider, primaryModel.Model, baseURL, primaryModel.APIKey, systemPrompt, req.Message)
-	if err == nil {
-		return text, tin, tout, primaryModel.ID, 1, nil
-	}
-	slog.Warn("Tier 1 failed, trying fallback 1", "model", primaryModel.ID, "error", err)
-
-	// Tier 2: Try first fallback
-	if primaryModel.FallbackTier1 != "" {
-		fb1 := resolveModel(primaryModel.FallbackTier1)
-		if fb1 != nil {
-			slog.Info("LLM call tier 2", "model", fb1.ID)
-			text, tin, tout, err := callLLM(ctx, fb1.Provider, fb1.Model, fb1.BaseURL, fb1.APIKey, systemPrompt, req.Message)
-			if err == nil {
-				return text, tin, tout, fb1.ID, 2, nil
-			}
-			slog.Warn("Tier 2 failed, trying fallback 2", "model", fb1.ID, "error", err)
+	for i, m := range chain {
+		tier := i + 1
+		// ponytail: only primary model uses request-level baseURL override; fallbacks use their own
+		if i > 0 {
+			baseURL = m.BaseURL
 		}
-	}
-
-	// Tier 3: Try second fallback
-	if primaryModel.FallbackTier2 != "" {
-		fb2 := resolveModel(primaryModel.FallbackTier2)
-		if fb2 != nil {
-			slog.Info("LLM call tier 3", "model", fb2.ID)
-			text, tin, tout, err := callLLM(ctx, fb2.Provider, fb2.Model, fb2.BaseURL, fb2.APIKey, systemPrompt, req.Message)
-			if err == nil {
-				return text, tin, tout, fb2.ID, 3, nil
-			}
-			slog.Warn("Tier 3 failed, trying fallback 3", "model", fb2.ID, "error", err)
+		slog.Info("LLM call", "tier", tier, "model", m.ID, "use_case", useCase)
+		text, tin, tout, err := callLLM(ctx, m.Provider, m.Model, baseURL, m.APIKey, systemPrompt, req.Message)
+		if err == nil {
+			return text, tin, tout, m.ID, tier, nil
 		}
-	}
-
-	// Tier 4: Last resort
-	if primaryModel.FallbackTier3 != "" {
-		fb3 := resolveModel(primaryModel.FallbackTier3)
-		if fb3 != nil {
-			slog.Info("LLM call tier 4 (last resort)", "model", fb3.ID)
-			text, tin, tout, err := callLLM(ctx, fb3.Provider, fb3.Model, fb3.BaseURL, fb3.APIKey, systemPrompt, req.Message)
-			if err == nil {
-				return text, tin, tout, fb3.ID, 4, nil
-			}
-		}
+		slog.Warn("LLM tier failed", "tier", tier, "model", m.ID, "error", err)
 	}
 
 	return "", 0, 0, "", 0, fmt.Errorf("all LLM providers failed")
@@ -124,36 +103,54 @@ func callLLM(ctx context.Context, provider, model, baseURL, apiKey, systemPrompt
 }
 
 func selectModelByCapability(useCase, providerOverride, modelOverride string) config.LLMModel {
-	if modelOverride != "" {
-		prov := providerOverride
-		if prov == "" {
-			prov = "Anthropic"
-		}
-		targetID := prov + ":" + modelOverride
-		for _, m := range cfg.AI.LLM.Models {
-			if m.ID == targetID {
-				return m
-			}
-		}
+	if m, ok := tryExactModelMatch(providerOverride, modelOverride); ok {
+		return m
 	}
+	if m, ok := findEnabledByCapability(useCase); ok {
+		return m
+	}
+	if m, ok := findFirstEnabled(); ok {
+		return m
+	}
+	return defaultModel()
+}
 
+func tryExactModelMatch(providerOverride, modelOverride string) (config.LLMModel, bool) {
+	if modelOverride == "" {
+		return config.LLMModel{}, false
+	}
+	prov := providerOverride
+	if prov == "" {
+		prov = "Anthropic"
+	}
+	targetID := prov + ":" + modelOverride
 	for _, m := range cfg.AI.LLM.Models {
-		if !m.IsEnabled {
-			continue
-		}
-		if containsCapability(m.Capability, useCase) {
-			return m
+		if m.ID == targetID {
+			return m, true
 		}
 	}
+	return config.LLMModel{}, false
+}
 
-	if len(cfg.AI.LLM.Models) > 0 {
-		for _, m := range cfg.AI.LLM.Models {
-			if m.IsEnabled {
-				return m
-			}
+func findEnabledByCapability(useCase string) (config.LLMModel, bool) {
+	for _, m := range cfg.AI.LLM.Models {
+		if m.IsEnabled && containsCapability(m.Capability, useCase) {
+			return m, true
 		}
 	}
+	return config.LLMModel{}, false
+}
 
+func findFirstEnabled() (config.LLMModel, bool) {
+	for _, m := range cfg.AI.LLM.Models {
+		if m.IsEnabled {
+			return m, true
+		}
+	}
+	return config.LLMModel{}, false
+}
+
+func defaultModel() config.LLMModel {
 	return config.LLMModel{
 		ID:       "Anthropic:" + cfg.AI.MiniMaxModel,
 		Provider: "Anthropic",
