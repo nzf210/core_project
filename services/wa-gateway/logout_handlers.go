@@ -11,7 +11,10 @@ func handleLogoutRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID := getTenantID(r)
+	tenantID := r.Header.Get("X-Tenant-ID")
+	if tenantID == "" {
+		tenantID = r.URL.Query().Get("tenant_id")
+	}
 	if tenantID == "" {
 		http.Error(w, `{"error":"tenant_id required"}`, http.StatusBadRequest)
 		return

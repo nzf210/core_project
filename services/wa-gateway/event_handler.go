@@ -203,10 +203,10 @@ func startWARegistration(tenantID, senderJID, senderPhone string) {
 	}
 
 	// Also check Redis for pending web registration with this phone
-	if redisClient != nil {
+	if redisShared != nil {
 		ctx := context.Background()
 		otpKey := "otp:" + senderPhone
-		if val, _ := redisClient.Get(ctx, otpKey).Result(); val != "" {
+		if val, _ := redisShared.Get(ctx, otpKey).Result(); val != "" {
 			sendWAMessage(tenantID, senderJID, "Nomor ini sedang dalam proses pendaftaran di website. Selesaikan verifikasi di website terlebih dahulu, atau tunggu 1 jam.")
 			return
 		}
@@ -328,7 +328,7 @@ func handleWAOTPRequest(tenantID, senderJID, senderPhone string) {
 	// For whatsmeow: Check for pending login request from web
 	ctx := context.Background()
 	pendingKey := "auth:pending:" + senderPhone
-	pendingVal, err := redisClient.Get(ctx, pendingKey).Result()
+	pendingVal, err := redisShared.Get(ctx, pendingKey).Result()
 	if err != nil || pendingVal == "" {
 		sendWAMessage(tenantID, senderJID, "❌ Tidak ada permintaan login. Silakan coba login di website terlebih dahulu.")
 		return
@@ -337,7 +337,7 @@ func handleWAOTPRequest(tenantID, senderJID, senderPhone string) {
 	// Generate actual OTP now (pending exists)
 	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
 	otpKey := "phone-login-otp:" + senderPhone
-	redisClient.Set(ctx, otpKey, otp, 1*time.Hour)
+	redisShared.Set(ctx, otpKey, otp, 1*time.Hour)
 
 	// Send OTP via whatsmeow - exact format per goal
 	sendWAMessage(tenantID, senderJID, "📩 Kode OTP telah dikirim ke WhatsApp ini.\n\nBalas pesan ini dengan 6 digit kode OTP Anda.\n\nContoh: 123456")
@@ -497,12 +497,12 @@ func forwardToChatbot(tenantID string, jsonBody []byte) {
 // invalidatePlatformWAProviderCache removes the Redis override so auto-detect picks up the new state.
 // AC-8: called on connect/disconnect so auth-service sees the correct provider immediately.
 func invalidatePlatformWAProviderCache() {
-	if redisClient == nil {
+	if redisShared == nil {
 		return
 	}
 	ctx := context.Background()
 	// Deleting forces getPlatformWAProvider to re-detect fresh (no cache to read)
-	redisClient.Del(ctx, "platform:wa:provider")
+	redisShared.Del(ctx, "platform:wa:provider")
 	slog.Info("platform:wa:provider cache invalidated")
 }
 

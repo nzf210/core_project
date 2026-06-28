@@ -40,7 +40,8 @@ var (
 var (
 	clientMap    = make(map[string]*whatsmeow.Client)
 	clientMu     sync.RWMutex
-	redisClient  *redis.Client
+	redisClient  *redis.Client   // DB 9 — WA Gateway coordination (locks, owner, heartbeat)
+	redisShared  *redis.Client   // DB 0 — shared cross-service keys (auth:pending, phone-login-otp, otp)
 	instanceID   string
 	db           *sql.DB
 	dbURI        string
@@ -137,6 +138,7 @@ func main() {
 
 	dbURI = getDBURI()
 	redisClient = initRedis()
+	redisShared = initRedisWithDB(0) // shared keys: auth:pending:, phone-login-otp:
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
