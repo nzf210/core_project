@@ -120,17 +120,8 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For VERIF flow: store wa-otp:{code} → phoneNumber so WA gateway can lookup phone from code
-	if waVerify {
-		Redis.Set(ctx, "wa-otp:"+otp, req.PhoneNumber, 1*time.Hour)
-		slog.Info("OTP generated (wa_verify mode)", "phone", req.PhoneNumber, "otp", otp)
-		writeJSON(w, http.StatusOK, Response{
-			Success: true,
-			Message: "Kode verifikasi telah dibuat. Kirim pesan ke WA Center dengan tulis: VERIF " + otp,
-			Data:    map[string]any{"otp_code": otp},
-		})
-		return
-	}
+	// Always store wa-otp:{code} → phoneNumber so VERIF works in any mode
+	Redis.Set(ctx, "wa-otp:"+otp, req.PhoneNumber, 1*time.Hour)
 
 	// Skip proactive OTP if platform uses whatsmeow (user must chat WA Center)
 	waProvider, _ := getPlatformWAProvider(ctx)
@@ -140,6 +131,17 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 			Success: true,
 			Message: "Untuk daftar, silakan kirim REG ke nomor WA Center.\nAtau kirim VERIF " + otp + " jika daftar dari web.",
 			Data:    map[string]any{"otp_code": otp, "wa_center_required": true},
+		})
+		return
+	}
+
+	// waVerify: tell user VERIF code for web flow (already stored above)
+	if waVerify {
+		slog.Info("OTP generated (wa_verify mode)", "phone", req.PhoneNumber, "otp", otp)
+		writeJSON(w, http.StatusOK, Response{
+			Success: true,
+			Message: "Kode verifikasi telah dibuat. Kirim pesan ke WA Center dengan tulis: VERIF " + otp,
+			Data:    map[string]any{"otp_code": otp},
 		})
 		return
 	}
