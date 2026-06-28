@@ -70,14 +70,8 @@ func initRedis() *redis.Client {
 // initRedisWithDB creates a Redis client connected to the specified database index.
 // Used by redisShared (DB 0) to access shared cross-service keys.
 func initRedisWithDB(db int) *redis.Client {
-	redisHost := os.Getenv("REDIS_HOST")
-	if redisHost == "" {
-		redisHost = "localhost"
-	}
-	redisPort := os.Getenv("REDIS_PORT")
-	if redisPort == "" {
-		redisPort = "6379"
-	}
+	redisHost := envOr("REDIS_HOST", "localhost")
+	redisPort := envOr("REDIS_PORT", "6381")
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 
 	client := redis.NewClient(&redis.Options{
@@ -122,6 +116,13 @@ func AcquireSessionLock(ctx context.Context, tenantID string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 func ReleaseSessionLock(ctx context.Context, tenantID string) {
