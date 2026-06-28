@@ -100,13 +100,24 @@ type waRegistrationSession struct {
 
 func handleMessageEvent(tenantID string, v *events.Message) {
 	if v.Info.IsGroup || v.Info.IsFromMe || time.Since(v.Info.Timestamp) > 5*time.Minute {
+		slog.Debug("handleMessageEvent: filtered message",
+			"is_group", v.Info.IsGroup,
+			"is_from_me", v.Info.IsFromMe,
+			"timestamp_age_sec", time.Since(v.Info.Timestamp).Seconds(),
+			"sender", v.Info.Sender.ToNonAD().String())
 		return
 	}
 
 	rawText := extractMessageText(v)
 	if rawText == "" {
+		slog.Debug("handleMessageEvent: empty message text", "sender", v.Info.Sender.ToNonAD().String())
 		return
 	}
+
+	slog.Info("handleMessageEvent: incoming message",
+		"sender", v.Info.Sender.ToNonAD().String(),
+		"text", rawText,
+		"tenant_id", tenantID)
 	upperText := strings.TrimSpace(strings.ToUpper(rawText))
 
 	senderJID := v.Info.Sender.ToNonAD().String()
