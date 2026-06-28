@@ -139,8 +139,9 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Normalize to 08xx format for consistency with wa-gateway extractPhoneFromJID
-	// Strip all non-digit chars first (web may send spaces, dashes, parens)
+	// Normalize phone for auth:pending key.
+	// extractPhoneFromJID in wa-gateway returns 0xxx format (62xx→0xx),
+	// so auth:pending key must use 0xxx to match when user sends "OTP" via WA.
 	redisPhone := strings.Map(func(r rune) rune {
 		if r >= '0' && r <= '9' {
 			return r
