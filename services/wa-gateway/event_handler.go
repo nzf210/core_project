@@ -173,9 +173,13 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 }
 
 func extractPhoneFromJID(jid string) string {
-	// JID format: 62812xxxx@s.whatsapp.net → extract 62 prefix
 	if idx := strings.Index(jid, "@"); idx > 0 {
-		return jid[:idx]
+		phone := jid[:idx]
+		// Normalize Indonesian 62 → 0 prefix so DB lookup matches (DB stores 0813xxx)
+		if strings.HasPrefix(phone, "62") && len(phone) > 3 {
+			phone = "0" + phone[2:]
+		}
+		return phone
 	}
 	return jid
 }
