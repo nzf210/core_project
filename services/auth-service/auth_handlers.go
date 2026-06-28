@@ -132,6 +132,18 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Skip proactive OTP if platform uses whatsmeow (user must chat WA Center)
+	waProvider, _ := getPlatformWAProvider(ctx)
+	if waProvider == "whatsmeow" {
+		slog.Info("OTP generated (whatsmeow mode, skip send)", "phone", req.PhoneNumber, "otp", otp)
+		writeJSON(w, http.StatusOK, Response{
+			Success: true,
+			Message: "Untuk daftar, silakan kirim REG ke nomor WA Center.\nAtau kirim VERIF " + otp + " jika daftar dari web.",
+			Data:    map[string]any{"otp_code": otp, "wa_center_required": true},
+		})
+		return
+	}
+
 	senderTenant := req.TenantID
 	if senderTenant == "" {
 		senderTenant = os.Getenv("WA_SYSTEM_TENANT_ID")
@@ -147,7 +159,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	go sendWAGatewayOTP(senderTenant, authWAProvider, formatPhoneToWAJID(req.PhoneNumber), otp)
 
-	slog.Info("OTP generated and sent", "phone", req.PhoneNumber, "otp", otp)
+	slog.Info("OTP generated and sent via Cloud API", "phone", req.PhoneNumber, "otp", otp)
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
 		Message: "OTP has been sent to your WhatsApp/Telegram. Please verify.",

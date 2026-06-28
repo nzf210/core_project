@@ -427,8 +427,21 @@ func forwardToChatbot(tenantID string, jsonBody []byte) {
 	}
 }
 
+// invalidatePlatformWAProviderCache removes the Redis override so auto-detect picks up the new state.
+// AC-8: called on connect/disconnect so auth-service sees the correct provider immediately.
+func invalidatePlatformWAProviderCache() {
+	if redisClient == nil {
+		return
+	}
+	ctx := context.Background()
+	// Deleting forces getPlatformWAProvider to re-detect fresh (no cache to read)
+	redisClient.Del(ctx, "platform:wa:provider")
+	slog.Info("platform:wa:provider cache invalidated")
+}
+
 func handleConnectedEvent(tenantID string) {
 	slog.Info("Connected to WhatsApp", "tenant_id", tenantID)
+	invalidatePlatformWAProviderCache()
 	clientMu.RLock()
 	c := clientMap[tenantID]
 	clientMu.RUnlock()

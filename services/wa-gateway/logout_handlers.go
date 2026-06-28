@@ -29,6 +29,7 @@ func handleLogoutRequest(w http.ResponseWriter, r *http.Request) {
 		db.Exec(`DELETE FROM wa_tenant_sessions WHERE tenant_id = $1`, tenantID)
 	}
 
+	invalidatePlatformWAProviderCache()
 	ReleaseSessionLock(r.Context(), tenantID)
 
 	w.Header().Set("Content-Type", "application/json")

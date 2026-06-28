@@ -9,6 +9,11 @@ const loadingQR = ref(false)
 const error = ref('')
 const pollInterval = ref<ReturnType<typeof setInterval>>()
 
+// F064: platform WA provider
+const platformProvider = ref<any>(null)
+const loadingProvider = ref(false)
+const savingProvider = ref(false)
+
 async function fetchStatus() {
   try {
     const res = await api.getWAStatus()
@@ -71,8 +76,30 @@ function stopPoll() {
   }
 }
 
+async function fetchPlatformProvider() {
+  try {
+    platformProvider.value = await api.getPlatformProvider()
+  } catch (e: any) {
+    // non-critical — silently fail
+  }
+}
+
+async function savePlatformProvider(wa_provider: string) {
+  savingProvider.value = true
+  try {
+    await api.setPlatformProvider(wa_provider)
+    await fetchPlatformProvider()
+    await fetchStatus()
+  } catch (e: any) {
+    error.value = e.message
+  } finally {
+    savingProvider.value = false
+  }
+}
+
 onMounted(() => {
   fetchStatus()
+  fetchPlatformProvider()
   startPoll()
 })
 
@@ -95,6 +122,46 @@ function extractPhone(jid: string) {
         </span>
       </div>
       <p class="desc">WhatsApp platform untuk REG/OTP/VERIF semua tenant SaaS UMKM</p>
+    </div>
+
+    <!-- F064: Platform WA Provider Selector -->
+    <div class="provider-selector">
+      <div class="provider-header">
+        <span class="provider-label">📡 WA Provider</span>
+        <select
+          class="provider-select"
+          :value="platformProvider?.data?.wa_provider || 'auto'"
+          :disabled="savingProvider"
+          @change="savePlatformProvider(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="auto">🔄 Auto Detect</option>
+          <option value="whatsmeow">📱 Paksa Whatsmeow</option>
+          <option value="cloud_api">⚡ Paksa Cloud API (Meta)</option>
+        </select>
+      </div>
+      <div class="provider-info" v-if="platformProvider?.data">
+        <div class="provider-status-row">
+          <span class="provider-mode">
+            Mode: <strong>{{ platformProvider.data.effective_provider === 'cloud_api' ? '⚡ Cloud API (Meta Official)' : '📱 Whatsmeow (WA Center)' }}</strong>
+          </span>
+          <span class="provider-reason">{{ platformProvider.data.reason }}</span>
+        </div>
+        <div class="connection-badges">
+          <span :class="['conn-badge', platformProvider.data.connections?.whatsmeow?.connected ? 'ok' : 'no']">
+            📱 Whatsmeow {{ platformProvider.data.connections?.whatsmeow?.connected ? '✅' : '❌' }}
+          </span>
+          <span :class="['conn-badge', platformProvider.data.connections?.cloud_api?.active ? 'ok' : 'no']">
+            ⚡ Cloud API {{ platformProvider.data.connections?.cloud_api?.active ? '✅' : '❌' }}
+          </span>
+        </div>
+        <div class="provider-hint" v-if="platformProvider.data.effective_provider === 'whatsmeow'">
+          <em>User harus chat REG/OTP/VERIF ke WA Center — sistem tidak kirim OTP otomatis.</em>
+        </div>
+        <div class="provider-hint" v-else>
+          <em>Sistem kirim OTP otomatis via Cloud API — user tidak perlu chat duluan.</em>
+        </div>
+      </div>
+      <div v-else-if="!loadingProvider" class="provider-loading">Memuat provider...</div>
     </div>
 
     <div v-if="loading" class="loading">Memuat status WA...</div>
@@ -283,4 +350,48 @@ h2 { font-size: 18px; font-weight: 600; margin: 0; }
   text-align: center;
   color: var(--accent);
 }
+
+/* F064: Platform WA Provider Selector */
+.provider-selector {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.provider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.provider-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.provider-select {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+.provider-select:disabled { opacity: 0.5; cursor: not-allowed; }
+.provider-info { display: flex; flex-direction: column; gap: 6px; }
+.provider-status-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; }
+.provider-mode { font-weight: 500; }
+.provider-reason { color: var(--muted); font-size: 12px; font-family: monospace; }
+.connection-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+.conn-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+.conn-badge.ok { color: var(--success); border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.05); }
+.conn-badge.no { color: var(--muted); }
+.provider-hint { font-size: 12px; color: var(--muted); }
+.provider-loading { font-size: 13px; color: var(--muted); text-align: center; }
 </style>

@@ -188,6 +188,7 @@ func main() {
 	mux.HandleFunc("/superadmin/tenants/profile", handleSuperadminTenantProfile)
 	mux.HandleFunc("/superadmin/tenants/profile/logo", handleUploadTenantLogo)
 	mux.HandleFunc("/superadmin/tenants/", handleImpersonate) // F058: impersonate tenant owner
+	mux.HandleFunc("/superadmin/wa/platform-provider", handleGetSetPlatformProvider) // F064: platform WA provider
 	mux.HandleFunc("/refresh", handleRefresh)
 	mux.HandleFunc("/logout", handleLogout)
 	mux.HandleFunc("/validate", handleValidate)

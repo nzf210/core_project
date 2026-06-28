@@ -94,6 +94,7 @@ func scheduleQRExpiry(client *whatsmeow.Client, tenantID string) {
 		clientMu.Lock()
 		delete(clientMap, tenantID)
 		clientMu.Unlock()
+		invalidatePlatformWAProviderCache()
 	}
 }
 

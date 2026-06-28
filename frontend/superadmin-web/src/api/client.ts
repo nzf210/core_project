@@ -122,6 +122,13 @@ export const api = {
   getWAQR: () => request('/admin/wa/qr', {
     headers: { 'X-Tenant-ID': 'system' }
   }),
+  // F064: Platform WA provider selector
+  getPlatformProvider: () => request('/admin/wa/platform-provider'),
+  setPlatformProvider: (wa_provider: string) => request('/admin/wa/platform-provider', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ wa_provider }),
+  }),
 }
 
 export { isAuthed, getRole, logout, getToken, request }

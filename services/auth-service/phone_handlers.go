@@ -118,6 +118,17 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 		DB.QueryRow(ctx, "SELECT COALESCE(auth_wa_provider_preference::text, 'auto') FROM tenants WHERE id = $1", tenantIDForPref).Scan(&authWAProvider)
 	}
 
+	// Skip proactive OTP if platform uses whatsmeow (user must chat WA Center)
+	waProvider, _ := getPlatformWAProvider(ctx)
+	if waProvider == "whatsmeow" {
+		slog.Info("Login OTP generated (whatsmeow mode, skip send)", "phone", req.PhoneNumber, "otp", otp)
+		writeJSON(w, http.StatusOK, Response{
+			Success: true,
+			Message: "Untuk login, silakan kirim OTP ke nomor WA Center dan balas kode OTP yang diterima.",
+		})
+		return
+	}
+
 	go sendLoginOTP(req.PhoneNumber, authWAProvider, otp)
 
 	slog.Info("Phone login OTP sent", "phone", req.PhoneNumber, "otp", otp)
