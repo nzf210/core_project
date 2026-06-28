@@ -10,15 +10,61 @@ import (
 	"strings"
 	"time"
 
+	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
+	waLog "go.mau.fi/whatsmeow/util/log"
 	"google.golang.org/protobuf/proto"
 )
 
+var globalContainer *sqlstore.Container
+
 func setContainer(c *sqlstore.Container) {
-	_ = c
+	globalContainer = c
+}
+
+// restoreSingleSession restores a specific tenant's WA session in-memory.
+// Used as fallback when sendWAMessage finds clientMap empty.
+func restoreSingleSession(tenantID string) {
+	if globalContainer == nil || db == nil {
+		slog.Warn("restoreSingleSession: cannot restore, container or db nil")
+		return
+	}
+
+	var jidStr string
+	err := db.QueryRow(`SELECT jid FROM wa_tenant_sessions WHERE tenant_id = $1`, tenantID).Scan(&jidStr)
+	if err != nil || jidStr == "" {
+		slog.Warn("restoreSingleSession: no session in DB", "tenant_id", tenantID)
+		return
+	}
+
+	ctx := context.Background()
+	if owned, _ := AcquireSessionLock(ctx, tenantID); !owned {
+		slog.Info("restoreSingleSession: session owned by another instance, skipping", "tenant_id", tenantID)
+		return
+	}
+
+	jid, _ := types.ParseJID(jidStr)
+	device, _ := globalContainer.GetDevice(ctx, jid)
+	if device == nil {
+		slog.Warn("restoreSingleSession: no device in whatsmeow store", "tenant_id", tenantID)
+		ReleaseSessionLock(ctx, tenantID)
+		return
+	}
+
+	client := whatsmeow.NewClient(device, waLog.Stdout("Client-"+tenantID, "INFO", true))
+	client.AddEventHandler(func(evt interface{}) { eventHandler(tenantID, evt) })
+	if err := client.Connect(); err == nil {
+		clientMu.Lock()
+		clientMap[tenantID] = client
+		clientMu.Unlock()
+		slog.Info("restoreSingleSession: session restored", "tenant_id", tenantID)
+	} else {
+		slog.Error("restoreSingleSession: failed to connect", "tenant_id", tenantID, "error", err)
+		ReleaseSessionLock(ctx, tenantID)
+	}
 }
 
 // eventHandler handles WhatsApp events for a tenant
@@ -353,7 +399,8 @@ func sendWAMessage(tenantID, targetJID, message string) {
 	clientMu.RUnlock()
 
 	if client == nil || !client.IsConnected() {
-		slog.Warn("Cannot send WA message: client not connected", "tenant_id", tenantID)
+		slog.Warn("sendWAMessage: client not connected, attempting restore", "tenant_id", tenantID)
+		go restoreSingleSession(tenantID)
 		return
 	}
 
