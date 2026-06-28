@@ -124,6 +124,9 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 	senderJID := v.Info.Sender.ToNonAD().String()
 	senderPhone := extractPhoneFromJID(senderJID)
 
+	// Map sender JID → registered phone so future OTP requests can find this user
+	mapUserJIDIfNeeded(senderJID, senderPhone)
+
 	// ─── Keyword-based routing ───────────────────────────────────────
 	// REG or DAFTAR → start WA-only registration flow
 	if upperText == "REG" || upperText == "DAFTAR" {
@@ -131,10 +134,25 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 		return
 	}
 
-	// OTP → trigger login OTP via auth-service
+	// OTP [phone] → trigger login OTP via auth-service
+	// If phone included: use it directly (handles LID masking / different WA phone)
+	// If just "OTP": try value-scan fallback
 	if upperText == "OTP" {
 		handleWAOTPRequest(tenantID, senderJID, senderPhone)
 		return
+	}
+	if strings.HasPrefix(upperText, "OTP ") {
+		phoneInMsg := strings.TrimSpace(strings.TrimPrefix(upperText, "OTP "))
+		phoneInMsg = strings.Map(func(r rune) rune {
+			if r >= '0' && r <= '9' {
+				return r
+			}
+			return -1
+		}, phoneInMsg)
+		if len(phoneInMsg) >= 8 {
+			handleWAOTPRequest(tenantID, senderJID, phoneInMsg)
+			return
+		}
 	}
 
 	// VERIF {code} → verify OTP for web-based registration
@@ -325,47 +343,72 @@ func submitWARegistration(tenantID string, session *waRegistrationSession) {
 // ─── OTP → Trigger Login OTP ───────────────────────────────────────
 
 func handleWAOTPRequest(tenantID, senderJID, senderPhone string) {
-	// For whatsmeow: Check for pending login request from web
 	ctx := context.Background()
-	pendingKey := "auth:pending:" + senderPhone
-	pendingVal, redisErr := redisShared.Get(ctx, pendingKey).Result()
-	if redisErr != nil || pendingVal == "" {
-		// ponytail: connection error vs key-not-found — redis.Nil indicates key miss
-		if redisErr != nil {
-			slog.Warn("redis auth:pending lookup", "error", redisErr, "key", pendingKey)
+
+	toLocal := func(p string) string {
+		if strings.HasPrefix(p, "62") {
+			return "0" + p[2:]
 		}
-		// ponytail: try alternate prefix (62xx vs 0xx mismatch between form input and JID)
-		pendingKey2 := ""
-		if strings.HasPrefix(senderPhone, "62") {
-			pendingKey2 = "auth:pending:0" + senderPhone[2:]
-		} else if strings.HasPrefix(senderPhone, "0") {
-			pendingKey2 = "auth:pending:62" + senderPhone[1:]
+		return p
+	}
+
+	localPhone := toLocal(senderPhone)
+
+	// Try direct key lookup first
+	for _, key := range []string{
+		"auth:pending:" + senderPhone,
+		"auth:pending:" + localPhone,
+	} {
+		v, e := redisShared.Get(ctx, key).Result()
+		if e == nil && v != "" {
+			generateAndSendOTP(ctx, tenantID, senderJID, senderPhone)
+			return
 		}
-		if pendingKey2 != "" {
-			if v, e := redisShared.Get(ctx, pendingKey2).Result(); e == nil && v != "" {
-				pendingKey = pendingKey2
-				pendingVal = v
-				redisErr = nil
+	}
+
+	// Scan all auth:pending keys and match by VALUE (stored phone number).
+	// This handles when user's login phone differs from their WhatsApp sender phone.
+	keys, _ := redisShared.Keys(ctx, "auth:pending:*").Result()
+	for _, key := range keys {
+		v, e := redisShared.Get(ctx, key).Result()
+		if e == nil && (v == senderPhone || v == localPhone) {
+			slog.Info("handleWAOTPRequest: found via value scan",
+				"senderPhone", senderPhone, "matchedKey", key)
+			generateAndSendOTP(ctx, tenantID, senderJID, senderPhone)
+			return
+		}
+	}
+
+	// Fallback: look up registered phone by sender's WhatsApp JID
+	if db != nil {
+		var registeredPhone string
+		err := db.QueryRow("SELECT phone_number FROM users WHERE wa_jid = $1", senderJID).Scan(&registeredPhone)
+		if err != nil {
+			shortJID := strings.Split(senderJID, ":")[0] + "@s.whatsapp.net"
+			err = db.QueryRow("SELECT phone_number FROM users WHERE wa_jid = $1", shortJID).Scan(&registeredPhone)
+		}
+		if registeredPhone != "" {
+			key := "auth:pending:" + toLocal(registeredPhone)
+			if v, e := redisShared.Get(ctx, key).Result(); e == nil && v != "" {
+				slog.Info("handleWAOTPRequest: found via wa_jid lookup",
+					"senderJID", senderJID, "registeredPhone", registeredPhone)
+				generateAndSendOTP(ctx, tenantID, senderJID, senderPhone)
+				return
 			}
 		}
 	}
-	if redisErr != nil || pendingVal == "" {
-		slog.Warn("OTP request without pending login",
-			"phone", senderPhone,
-			"key_tried", pendingKey,
-		)
-		sendWAMessage(tenantID, senderJID, "❌ Tidak ada permintaan login. Silakan coba login di website terlebih dahulu.")
-		return
-	}
 
-	// Generate actual OTP now (pending exists)
+	slog.Warn("OTP request without pending login", "phone", senderPhone)
+	sendWAMessage(tenantID, senderJID, "❌ Tidak ada permintaan login. Silakan coba login di website terlebih dahulu.")
+}
+
+func generateAndSendOTP(ctx context.Context, tenantID, senderJID, senderPhone string) {
 	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	// Value stores registered phone so verify step can use it (senderPhone may be LID-masked)
 	otpKey := "phone-login-otp:" + senderPhone
-	redisShared.Set(ctx, otpKey, otp, 1*time.Hour)
-
-	// Send OTP via whatsmeow - exact format per goal
-	sendWAMessage(tenantID, senderJID, "📩 Kode OTP telah dikirim ke WhatsApp ini.\n\nBalas pesan ini dengan 6 digit kode OTP Anda.\n\nContoh: 123456")
-	slog.Info("OTP generated & sent via WA Center for pending login", "phone", senderPhone, "otp", otp)
+	redisShared.Set(ctx, otpKey, otp+"|"+senderPhone, 1*time.Hour)
+	sendWAMessage(tenantID, senderJID, "📩 Kode OTP Anda: *"+otp+"*\n\nBalas pesan ini dengan 6 digit kode OTP tersebut.\n\nContoh: 123456")
+	slog.Info("OTP generated & sent via WA Center", "phone", senderPhone, "otp", otp)
 }
 
 // ─── VERIF {code} → Verify Web Registration OTP ───────────────────
@@ -528,6 +571,21 @@ func invalidatePlatformWAProviderCache() {
 	// Deleting forces getPlatformWAProvider to re-detect fresh (no cache to read)
 	redisShared.Del(ctx, "platform:wa:provider")
 	slog.Info("platform:wa:provider cache invalidated")
+}
+
+// mapUserJIDIfNeeded stores senderJID → phone_number in users.wa_jid
+// so OTP requests from this WA device can find the registered user.
+func mapUserJIDIfNeeded(senderJID, senderPhone string) {
+	if db == nil || senderJID == "" || senderPhone == "" {
+		return
+	}
+	// Normalize to DB format (0xxx)
+	phone := senderPhone
+	if strings.HasPrefix(phone, "62") {
+		phone = "0" + phone[2:]
+	}
+	db.Exec(`UPDATE users SET wa_jid = $1 WHERE phone_number = $2 AND (wa_jid IS NULL OR wa_jid = '')`,
+		senderJID, phone)
 }
 
 func handleConnectedEvent(tenantID string) {

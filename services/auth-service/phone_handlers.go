@@ -158,7 +158,8 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 		"normalized_phone", redisPhone,
 		"redis_key", "auth:pending:"+redisPhone)
 	// ponytail: 15 min TTL — user needs time to read message and switch to WA
-	err = Redis.Set(ctx, "auth:pending:"+redisPhone, "1", 15*time.Minute).Err()
+	// Value stores the login phone so wa-gateway can match via sender phone even when they differ
+	err = Redis.Set(ctx, "auth:pending:"+redisPhone, redisPhone, 15*time.Minute).Err()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process login"})
 		return
@@ -200,7 +201,13 @@ func handleVerifyPhoneLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if storedOTP != req.OTP {
+	// wa-gateway stores "otp|phone" format; extract just the OTP
+	storedCode := storedOTP
+	if idx := strings.Index(storedOTP, "|"); idx >= 0 {
+		storedCode = storedOTP[:idx]
+	}
+
+	if storedCode != req.OTP {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Incorrect OTP"})
 		return
 	}
