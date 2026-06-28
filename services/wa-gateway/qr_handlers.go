@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/skip2/go-qrcode"
@@ -43,6 +44,12 @@ func handleQRRequest(w http.ResponseWriter, r *http.Request, container *sqlstore
 		return
 	}
 
+	// If phone param provided, use pairing code instead of QR
+	if phone := r.URL.Query().Get("phone"); phone != "" {
+		handlePairingCode(w, client, tenantID, phone)
+		return
+	}
+
 	qrChan, _ := client.GetQRChannel(context.Background())
 	if err := client.Connect(); err != nil {
 		slog.Error("Failed to connect for QR", "error", err)
@@ -51,6 +58,36 @@ func handleQRRequest(w http.ResponseWriter, r *http.Request, container *sqlstore
 	}
 
 	handleQRChannel(w, client, tenantID, qrChan)
+}
+
+func handlePairingCode(w http.ResponseWriter, client *whatsmeow.Client, tenantID, phone string) {
+	if err := client.Connect(); err != nil {
+		slog.Error("Failed to connect for pairing", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to connect")
+		return
+	}
+
+	// Normalize: ensure 62 prefix for pairing code
+	if strings.HasPrefix(phone, "0") {
+		phone = "62" + phone[1:]
+	} else if !strings.HasPrefix(phone, "62") {
+		phone = "62" + phone
+	}
+
+	pairCode, err := client.PairPhone(context.Background(), phone, true, whatsmeow.PairClientChrome, "WCH Platform")
+	if err != nil {
+		slog.Error("Failed to get pairing code", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to get pairing code: "+err.Error())
+		return
+	}
+
+	slog.Info("Pairing code generated", "tenant_id", tenantID, "phone", phone)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":       "pairing",
+		"pairing_code": pairCode,
+		"phone":        phone,
+		"message":      "Buka WhatsApp → Linked Devices → Link a device → pilih Pair with phone number → masukkan kode: " + pairCode,
+	})
 }
 
 func extractTenantID(r *http.Request) string {
