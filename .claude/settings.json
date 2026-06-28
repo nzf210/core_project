@@ -67,7 +67,8 @@
     "frontend-design@claude-plugins-official": true,
     "superpowers@superpowers-marketplace": true,
     "ponytail@ponytail": true,
-    "sonarqube@claude-plugins-official": true
+    "sonarqube@claude-plugins-official": true,
+    "context-mode@context-mode": true
   },
   "max-contextualization-length": 1000
 }

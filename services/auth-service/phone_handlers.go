@@ -32,7 +32,7 @@ func sendLoginOTP(phoneNumber, authWAProvider, otp string) {
 
 	var resp *http.Response
 	var err error
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		payload := strings.NewReader(formData.Encode())
 		req, _ := http.NewRequest("POST", waURL+"/api/wa/send", payload)
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -47,7 +47,7 @@ func sendLoginOTP(phoneNumber, authWAProvider, otp string) {
 		}
 		if resp.StatusCode == 409 {
 			resp.Body.Close()
-			slog.Warn("WA Gateway returned 409 (delegated), retrying...", "attempt", i+1)
+			slog.Warn("WA Gateway returned 409 (delegated), retrying...")
 			time.Sleep(500 * time.Millisecond)
 			continue
 		}
@@ -140,11 +140,15 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Normalize to 08xx format for consistency with wa-gateway extractPhoneFromJID
-	// Handles +, 62, and 0 prefixes
-	redisPhone := req.PhoneNumber
-	redisPhone = strings.TrimPrefix(redisPhone, "+")  // strip +
+	// Strip all non-digit chars first (web may send spaces, dashes, parens)
+	redisPhone := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, req.PhoneNumber)
 	if strings.HasPrefix(redisPhone, "62") {
-		redisPhone = "0" + redisPhone[2:]  // 62xxx → 0xxx
+		redisPhone = "0" + redisPhone[2:] // 62xxx → 0xxx
 	}
 
 	// Set pending login state - OTP will be generated when user sends "OTP" to WA Center
@@ -174,7 +178,17 @@ func handleVerifyPhoneLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	storedOTP, err := Redis.Get(ctx, "phone-login-otp:"+req.PhoneNumber).Result()
+	otpPhone := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, req.PhoneNumber)
+	if strings.HasPrefix(otpPhone, "62") {
+		otpPhone = "0" + otpPhone[2:]
+	}
+
+	storedOTP, err := Redis.Get(ctx, "phone-login-otp:"+otpPhone).Result()
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "OTP expired or invalid"})
 		return
