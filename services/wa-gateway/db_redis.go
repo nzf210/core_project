@@ -45,7 +45,7 @@ func initRedis() *redis.Client {
 	}
 	redisPort := os.Getenv("REDIS_PORT")
 	if redisPort == "" {
-		redisPort = "6379"
+		redisPort = "6381" // Docker Redis exposed on 6381
 	}
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 
