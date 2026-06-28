@@ -95,21 +95,27 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	waVerify := r.URL.Query().Get("wa_verify") == "true"
 
 	ctx := context.Background()
+	waProvider, _ := getPlatformWAProvider(ctx)
 	otpKey := "otp:" + req.PhoneNumber
-	if existingVal, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingVal != "" {
-		parts := strings.Split(existingVal, ":")
-		existingOTP := parts[len(parts)-1]
-		ttl, _ := Redis.TTL(ctx, otpKey).Result()
-		slog.Info("OTP still active, reusing existing", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
-		resp := Response{
-			Success: true,
-			Message: "OTP already sent. Valid for 1 hour. Please check your WhatsApp.",
+
+	// Skip "already sent" reuse check when whatsmeow — OTP was never sent,
+	// always generate fresh code so user gets a new VERIF code.
+	if waProvider != "whatsmeow" {
+		if existingVal, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingVal != "" {
+			parts := strings.Split(existingVal, ":")
+			existingOTP := parts[len(parts)-1]
+			ttl, _ := Redis.TTL(ctx, otpKey).Result()
+			slog.Info("OTP still active, reusing existing", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
+			resp := Response{
+				Success: true,
+				Message: "OTP already sent. Valid for 1 hour. Please check your WhatsApp.",
+			}
+			if waVerify {
+				resp.Data = map[string]any{"otp_code": existingOTP}
+			}
+			writeJSON(w, http.StatusOK, resp)
+			return
 		}
-		if waVerify {
-			resp.Data = map[string]any{"otp_code": existingOTP}
-		}
-		writeJSON(w, http.StatusOK, resp)
-		return
 	}
 
 	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
@@ -124,12 +130,12 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	Redis.Set(ctx, "wa-otp:"+otp, req.PhoneNumber, 1*time.Hour)
 
 	// Skip proactive OTP if platform uses whatsmeow (user must chat WA Center)
-	waProvider, _ := getPlatformWAProvider(ctx)
+	waProvider, _ = getPlatformWAProvider(ctx)
 	if waProvider == "whatsmeow" {
 		slog.Info("OTP generated (whatsmeow mode, skip send)", "phone", req.PhoneNumber, "otp", otp)
 		writeJSON(w, http.StatusOK, Response{
 			Success: true,
-			Message: "Untuk daftar, silakan kirim REG ke nomor WA Center.\nAtau kirim VERIF " + otp + " jika daftar dari web.",
+			Message: "WhatsApp tidak tersedia untuk kirim OTP otomatis.\n\nLangkah:\n1. Kirim pesan ke WA Center dengan ketik: REG\n2. Ikuti instruksi di WhatsApp untuk lengkapi pendaftaran.\n\nCatatan: Jika dalam 5 menit belum dapat kode, kirim ke WA Center: VERIF " + otp,
 			Data:    map[string]any{"otp_code": otp, "wa_center_required": true},
 		})
 		return
@@ -140,7 +146,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		slog.Info("OTP generated (wa_verify mode)", "phone", req.PhoneNumber, "otp", otp)
 		writeJSON(w, http.StatusOK, Response{
 			Success: true,
-			Message: "Kode verifikasi telah dibuat. Kirim pesan ke WA Center dengan tulis: VERIF " + otp,
+			Message: "Kode verifikasi telah dibuat.\n\nJika dalam 5 menit belum dapat kode di WhatsApp, kirim ke WA Center: VERIF " + otp,
 			Data:    map[string]any{"otp_code": otp},
 		})
 		return
@@ -551,18 +557,19 @@ func handleVerifyOTPWA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parts := strings.Split(val, ":")
-	if len(parts) < 2 {
+	// Split from the LAST colon — OTP is always the last field (6 digits).
+	// Email in reqJSON contains "@wa.user" which would corrupt split-from-first.
+	lastColon := strings.LastIndex(val, ":")
+	if lastColon < 0 {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Data corruption"})
 		return
 	}
-	storedOTP := parts[len(parts)-1]
+	reqJSON := val[:lastColon]
+	storedOTP := val[lastColon+1:]
 	if req.Code != storedOTP && req.Code != "000000" {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Kode verifikasi salah"})
 		return
 	}
-
-	reqJSON := strings.Join(parts[:len(parts)-1], ":")
 	regReq, _ := parseRegistrationData(reqJSON)
 	if regReq.PhoneNumber == "" {
 		regReq.PhoneNumber = phoneNumber

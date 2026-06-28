@@ -94,24 +94,6 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	otpKey := "phone-login-otp:" + req.PhoneNumber
-	if existingOTP, otpErr := Redis.Get(ctx, otpKey).Result(); otpErr == nil && existingOTP != "" {
-		ttl, _ := Redis.TTL(ctx, otpKey).Result()
-		slog.Info("Login OTP still active, reusing existing", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
-		writeJSON(w, http.StatusOK, Response{
-			Success: true,
-			Message: "OTP sudah dikirim sebelumnya. Masih berlaku selama 1 jam. Silakan cek WhatsApp Anda.",
-		})
-		return
-	}
-
-	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
-	err = Redis.Set(ctx, otpKey, otp, 1*time.Hour).Err()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process login"})
-		return
-	}
-
 	var authWAProvider = "auto"
 	var tenantIDForPref string
 	if err := DB.QueryRow(ctx, "SELECT tenant_id FROM users WHERE phone_number = $1", req.PhoneNumber).Scan(&tenantIDForPref); err == nil {
@@ -120,11 +102,33 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Skip proactive OTP if platform uses whatsmeow (user must chat WA Center)
 	waProvider, _ := getPlatformWAProvider(ctx)
+
+	otpKey := "phone-login-otp:" + req.PhoneNumber
+	// Skip reuse check when whatsmeow — OTP was never sent, always generate fresh code.
+	if waProvider != "whatsmeow" {
+		if existingOTP, otpErr := Redis.Get(ctx, otpKey).Result(); otpErr == nil && existingOTP != "" {
+			ttl, _ := Redis.TTL(ctx, otpKey).Result()
+			slog.Info("Login OTP still active, reusing existing", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
+			writeJSON(w, http.StatusOK, Response{
+				Success: true,
+				Message: "OTP sudah dikirim sebelumnya. Masih berlaku selama 1 jam. Silakan cek WhatsApp Anda.",
+			})
+			return
+		}
+	}
+
+	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	err = Redis.Set(ctx, otpKey, otp, 1*time.Hour).Err()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process login"})
+		return
+	}
 	if waProvider == "whatsmeow" {
 		slog.Info("Login OTP generated (whatsmeow mode, skip send)", "phone", req.PhoneNumber, "otp", otp)
 		writeJSON(w, http.StatusOK, Response{
 			Success: true,
-			Message: "Untuk login, silakan kirim OTP ke nomor WA Center dan balas kode OTP yang diterima.",
+			Message: "WhatsApp tidak tersedia untuk kirim OTP otomatis.\n\nLangkah:\n1. Kirim pesan ke WA Center dengan ketik: OTP\n2. Ikuti instruksi di WhatsApp untuk login.\n\nCatatan: Jika dalam 5 menit belum dapat kode, kirim lagi: OTP",
+			Data:    map[string]any{"wa_center_required": true},
 		})
 		return
 	}
