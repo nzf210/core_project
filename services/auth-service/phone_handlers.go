@@ -153,7 +153,12 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set pending login state - OTP will be generated when user sends "OTP" to WA Center
-	err = Redis.Set(ctx, "auth:pending:"+redisPhone, "1", 5*time.Minute).Err()
+	slog.Info("Setting auth:pending for OTP trigger",
+		"original_phone", req.PhoneNumber,
+		"normalized_phone", redisPhone,
+		"redis_key", "auth:pending:"+redisPhone)
+	// ponytail: 15 min TTL — user needs time to read message and switch to WA
+	err = Redis.Set(ctx, "auth:pending:"+redisPhone, "1", 15*time.Minute).Err()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process login"})
 		return

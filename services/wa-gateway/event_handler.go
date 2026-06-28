@@ -328,8 +328,32 @@ func handleWAOTPRequest(tenantID, senderJID, senderPhone string) {
 	// For whatsmeow: Check for pending login request from web
 	ctx := context.Background()
 	pendingKey := "auth:pending:" + senderPhone
-	pendingVal, err := redisShared.Get(ctx, pendingKey).Result()
-	if err != nil || pendingVal == "" {
+	pendingVal, redisErr := redisShared.Get(ctx, pendingKey).Result()
+	if redisErr != nil || pendingVal == "" {
+		// ponytail: connection error vs key-not-found — redis.Nil indicates key miss
+		if redisErr != nil {
+			slog.Warn("redis auth:pending lookup", "error", redisErr, "key", pendingKey)
+		}
+		// ponytail: try alternate prefix (62xx vs 0xx mismatch between form input and JID)
+		pendingKey2 := ""
+		if strings.HasPrefix(senderPhone, "62") {
+			pendingKey2 = "auth:pending:0" + senderPhone[2:]
+		} else if strings.HasPrefix(senderPhone, "0") {
+			pendingKey2 = "auth:pending:62" + senderPhone[1:]
+		}
+		if pendingKey2 != "" {
+			if v, e := redisShared.Get(ctx, pendingKey2).Result(); e == nil && v != "" {
+				pendingKey = pendingKey2
+				pendingVal = v
+				redisErr = nil
+			}
+		}
+	}
+	if redisErr != nil || pendingVal == "" {
+		slog.Warn("OTP request without pending login",
+			"phone", senderPhone,
+			"key_tried", pendingKey,
+		)
 		sendWAMessage(tenantID, senderJID, "❌ Tidak ada permintaan login. Silakan coba login di website terlebih dahulu.")
 		return
 	}
