@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -140,28 +139,17 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
-	err = Redis.Set(ctx, otpKey, otp, 1*time.Hour).Err()
+	// Set pending login state - OTP will be generated when user sends "OTP" to WA Center
+	err = Redis.Set(ctx, "auth:pending:"+req.PhoneNumber, "1", 5*time.Minute).Err()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process login"})
 		return
 	}
-	if waProvider == "whatsmeow" {
-		slog.Info("Login OTP generated (whatsmeow mode, skip send)", "phone", req.PhoneNumber, "otp", otp)
-		writeJSON(w, http.StatusOK, Response{
-			Success: true,
-			Message: "WhatsApp tidak tersedia untuk kirim OTP otomatis.\n\nLangkah:\n1. Kirim pesan ke WA Center dengan ketik: OTP\n2. Ikuti instruksi di WhatsApp untuk login.\n\nCatatan: Jika dalam 5 menit belum dapat kode, kirim lagi: OTP",
-			Data:    map[string]any{"wa_center_required": true},
-		})
-		return
-	}
 
-	go sendLoginOTP(req.PhoneNumber, authWAProvider, otp)
-
-	slog.Info("Phone login OTP sent", "phone", req.PhoneNumber, "otp", otp)
+	slog.Info("Phone login pending - awaiting WA Center OTP trigger", "phone", req.PhoneNumber)
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
-		Message: "OTP telah dikirim ke WhatsApp Anda. Silakan verifikasi.",
+		Message: "Permintaan login diterima. Silakan kirim pesan 'OTP' ke WA Center untuk menerima kode.",
 	})
 }
 
