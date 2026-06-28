@@ -104,6 +104,12 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Block if there's a pending WA registration in progress (wa-otp:{otp} → phone already stored)
+	if _, err := Redis.Get(ctx, "wa-otp:"+lookupPhone).Result(); err == nil {
+		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Nomor HP sedang dalam proses pendaftaran via WhatsApp. Selesaikan atau tunggu 1 jam."})
+		return
+	}
+
 	// waVerify=true → skip auto-send WA, store wa-otp mapping for VERIF flow
 	waVerify := r.URL.Query().Get("wa_verify") == "true"
 

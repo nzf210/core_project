@@ -201,6 +201,16 @@ func startWARegistration(tenantID, senderJID, senderPhone string) {
 		}
 	}
 
+	// Also check Redis for pending web registration with this phone
+	if redisClient != nil {
+		ctx := context.Background()
+		otpKey := "otp:" + senderPhone
+		if val, _ := redisClient.Get(ctx, otpKey).Result(); val != "" {
+			sendWAMessage(tenantID, senderJID, "Nomor ini sedang dalam proses pendaftaran di website. Selesaikan verifikasi di website terlebih dahulu, atau tunggu 1 jam.")
+			return
+		}
+	}
+
 	// Start session
 	waRegistrationSessions[senderJID] = &waRegistrationSession{
 		SenderJID:   senderJID,
