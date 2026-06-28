@@ -205,7 +205,9 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	val, err := Redis.Get(ctx, "otp:"+req.PhoneNumber).Result()
+	otpKey := "otp:" + req.PhoneNumber
+	slog.Info("handleVerifyOTP: looking up", "key", otpKey, "phone", req.PhoneNumber)
+	val, err := Redis.Get(ctx, otpKey).Result()
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "OTP expired or invalid"})
 		return
@@ -226,6 +228,14 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	regReq, telegramChatID := parseRegistrationData(reqJSON)
+	slog.Info("handleVerifyOTP: parsed", "phone", req.PhoneNumber, "regReq.phone", regReq.PhoneNumber, "username", regReq.Username, "password_set", regReq.Password != "")
+
+	// Defensive: reject if critical fields are missing (parsing failed or empty payload)
+	if regReq.Username == "" || regReq.Password == "" || regReq.PhoneNumber == "" {
+		slog.Warn("handleVerifyOTP: missing critical fields, rejecting", "username", regReq.Username, "password_set", regReq.Password != "", "phone", regReq.PhoneNumber)
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Data registrasi tidak lengkap. Silakan daftar ulang."})
+		return
+	}
 
 	tx, _ := DB.Begin(ctx)
 	defer tx.Rollback(ctx)
@@ -234,6 +244,7 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 	email := getEmailOrGenerate(regReq)
 
 	if !insertUser(ctx, tx, regReq, tenantID, email, telegramChatID) {
+		slog.Warn("handleVerifyOTP: insertUser returned false (constraint violation)", "phone", req.PhoneNumber, "username", regReq.Username, "regReqPhone", regReq.PhoneNumber)
 		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Phone number or username already exists"})
 		return
 	}
@@ -241,6 +252,7 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 	linkReferralCode(ctx, tx, regReq.ReferralCode, tenantID)
 
 	tx.Commit(ctx)
+	slog.Info("handleVerifyOTP: success, user created", "phone", req.PhoneNumber, "username", regReq.Username)
 	writeJSON(w, http.StatusCreated, Response{Success: true, Message: "Account verified and created"})
 }
 
@@ -469,9 +481,14 @@ func handleRegisterWA(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Check phone uniqueness
+	// Check phone uniqueness: match both 62xxx AND 08xxx variants
+	// After normalization above, req.PhoneNumber is always 62xxx (e.g., 6281298765432)
+	// But DB may store EITHER 62xxx OR 08xxx, so we check BOTH
 	var exists bool
-	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1)", req.PhoneNumber).Scan(&exists); err == nil && exists {
+	localPhone := "0" + req.PhoneNumber[2:] // 6281298765432 -> 081298765432
+	slog.Info("handleRegisterWA: checking duplicate", "normalized", req.PhoneNumber, "local", localPhone)
+	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1 OR phone_number = $2)", req.PhoneNumber, localPhone).Scan(&exists); err == nil && exists {
+		slog.Warn("handleRegisterWA: duplicate phone found", "normalized", req.PhoneNumber, "local", localPhone)
 		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Nomor HP sudah terdaftar"})
 		return
 	}
@@ -592,6 +609,12 @@ func handleVerifyOTPWA(w http.ResponseWriter, r *http.Request) {
 	if regReq.PhoneNumber == "" {
 		regReq.PhoneNumber = phoneNumber
 	}
+	// Defensive: reject if critical fields are missing
+	if regReq.Username == "" || regReq.Password == "" || regReq.PhoneNumber == "" {
+		slog.Warn("handleVerifyOTPWA: missing critical fields", "username", regReq.Username, "password_set", regReq.Password != "", "phone", regReq.PhoneNumber)
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Data registrasi tidak lengkap. Silakan daftar ulang."})
+		return
+	}
 
 	tx, _ := DB.Begin(ctx)
 	defer tx.Rollback(ctx)
@@ -641,10 +664,31 @@ func handleVerifyPhoneLoginWA(w http.ResponseWriter, r *http.Request) {
 
 	var userID, tenantID, role string
 	var isDataVerified bool
+	// Try original format first, then normalized (08xx↔62xx)
+	lookupPhone := req.PhoneNumber
 	err = DB.QueryRow(ctx,
 		"SELECT id, tenant_id, role, is_phone_verified FROM users WHERE phone_number = $1",
-		req.PhoneNumber,
+		lookupPhone,
 	).Scan(&userID, &tenantID, &role, &isDataVerified)
+	if err == pgx.ErrNoRows {
+		normPhone := req.PhoneNumber
+		if strings.HasPrefix(normPhone, "0") {
+			normPhone = "62" + normPhone[1:]
+		} else if strings.HasPrefix(normPhone, "62") {
+			normPhone = "0" + normPhone[2:]
+		}
+		slog.Info("handleVerifyPhoneLoginWA: retry with normalized phone", "original", req.PhoneNumber, "normalized", normPhone)
+		err = DB.QueryRow(ctx,
+			"SELECT id, tenant_id, role, is_phone_verified FROM users WHERE phone_number = $1",
+			normPhone,
+		).Scan(&userID, &tenantID, &role, &isDataVerified)
+		if err != nil {
+			slog.Warn("handleVerifyPhoneLoginWA: phone not found", "original", req.PhoneNumber, "normalized", normPhone)
+			writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Nomor tidak terdaftar."})
+			return
+		}
+		lookupPhone = normPhone
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return

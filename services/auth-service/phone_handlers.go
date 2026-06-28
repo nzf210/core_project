@@ -83,12 +83,35 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
+	slog.Info("handlePhoneLogin: looking for phone", "phone", req.PhoneNumber)
+
+	// Normalize phone for DB lookup: try original first, then 62xx/08xx variants
+	lookupPhone := req.PhoneNumber
 	var userID string
-	err := DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", req.PhoneNumber).Scan(&userID)
-	if err == pgx.ErrNoRows {
-		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Phone number not registered"})
-		return
-	} else if err != nil {
+	var err error
+	err = DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", lookupPhone).Scan(&userID)
+	if err == pgx.ErrNoRows && strings.HasPrefix(lookupPhone, "0") {
+		// Try normalized format (62xx)
+		lookupPhone = "62" + lookupPhone[1:]
+		slog.Info("handlePhoneLogin: not found as 08xx, trying 62xx", "original", req.PhoneNumber, "normalized", lookupPhone)
+		err = DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", lookupPhone).Scan(&userID)
+		if err == pgx.ErrNoRows {
+			// Try other direction: DB stores 08xx but request is 62xx
+			normPhone := req.PhoneNumber
+			if strings.HasPrefix(normPhone, "62") {
+				normPhone = "0" + normPhone[2:]
+			}
+			slog.Info("handlePhoneLogin: not found as 62xx, trying 08xx", "original", req.PhoneNumber, "local", normPhone)
+			err = DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", normPhone).Scan(&userID)
+			if err == pgx.ErrNoRows {
+				slog.Warn("handlePhoneLogin: phone not found in DB", "tried_original", req.PhoneNumber, "tried_62xx", "62"+req.PhoneNumber[1:], "tried_08xx", normPhone)
+				writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Phone number not registered"})
+				return
+			}
+			lookupPhone = normPhone
+		}
+	}
+	if err != nil && err != pgx.ErrNoRows {
 		slog.Error("DB query failed", "error", err)
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
@@ -96,7 +119,7 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 
 	var authWAProvider = "auto"
 	var tenantIDForPref string
-	if err := DB.QueryRow(ctx, "SELECT tenant_id FROM users WHERE phone_number = $1", req.PhoneNumber).Scan(&tenantIDForPref); err == nil {
+	if err := DB.QueryRow(ctx, "SELECT tenant_id FROM users WHERE phone_number = $1", lookupPhone).Scan(&tenantIDForPref); err == nil {
 		DB.QueryRow(ctx, "SELECT COALESCE(auth_wa_provider_preference::text, 'auto') FROM tenants WHERE id = $1", tenantIDForPref).Scan(&authWAProvider)
 	}
 
@@ -168,11 +191,29 @@ func handleVerifyPhoneLogin(w http.ResponseWriter, r *http.Request) {
 
 	var userID, tenantID, role string
 	var isDataVerified bool
+	// Try original format first, then normalized (08xx↔62xx)
+	lookupPhone := req.PhoneNumber
 	err = DB.QueryRow(ctx,
 		"SELECT id, tenant_id, role, is_phone_verified FROM users WHERE phone_number = $1",
-		req.PhoneNumber,
+		lookupPhone,
 	).Scan(&userID, &tenantID, &role, &isDataVerified)
-
+	if err == pgx.ErrNoRows {
+		normPhone := req.PhoneNumber
+		if strings.HasPrefix(normPhone, "0") {
+			normPhone = "62" + normPhone[1:]
+		} else if strings.HasPrefix(normPhone, "62") {
+			normPhone = "0" + normPhone[2:]
+		}
+		err = DB.QueryRow(ctx,
+			"SELECT id, tenant_id, role, is_phone_verified FROM users WHERE phone_number = $1",
+			normPhone,
+		).Scan(&userID, &tenantID, &role, &isDataVerified)
+		if err != nil {
+			writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Nomor tidak terdaftar."})
+			return
+		}
+		lookupPhone = normPhone
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
