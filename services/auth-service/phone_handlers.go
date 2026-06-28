@@ -139,8 +139,14 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Normalize to 08xx format for consistency with wa-gateway extractPhoneFromJID
+	redisPhone := req.PhoneNumber
+	if strings.HasPrefix(redisPhone, "62") {
+		redisPhone = "0" + redisPhone[2:]
+	}
+
 	// Set pending login state - OTP will be generated when user sends "OTP" to WA Center
-	err = Redis.Set(ctx, "auth:pending:"+req.PhoneNumber, "1", 5*time.Minute).Err()
+	err = Redis.Set(ctx, "auth:pending:"+redisPhone, "1", 5*time.Minute).Err()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process login"})
 		return
