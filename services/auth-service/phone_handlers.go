@@ -196,6 +196,13 @@ func handleVerifyPhoneLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	storedOTP, err := Redis.Get(ctx, "phone-login-otp:"+otpPhone).Result()
+	slog.Info("handleVerifyPhoneLogin: OTP check",
+		"phone", req.PhoneNumber,
+		"normalizedPhone", otpPhone,
+		"key", "phone-login-otp:"+otpPhone,
+		"storedOTP", storedOTP,
+		"reqOTP", req.OTP,
+		"redisErr", err)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "OTP expired or invalid"})
 		return

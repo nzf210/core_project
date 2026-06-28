@@ -651,13 +651,30 @@ func handleVerifyPhoneLoginWA(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	storedOTP, err := Redis.Get(ctx, "phone-login-otp:"+req.PhoneNumber).Result()
+	// Normalize phone to 0xxx (same as wa-gateway stores it)
+	otpPhone := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, req.PhoneNumber)
+	if strings.HasPrefix(otpPhone, "62") {
+		otpPhone = "0" + otpPhone[2:]
+	}
+
+	storedOTP, err := Redis.Get(ctx, "phone-login-otp:"+otpPhone).Result()
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "OTP expired atau tidak ditemukan"})
 		return
 	}
 
-	if storedOTP != req.OTP {
+	// wa-gateway stores "otp|phone" format; extract just the OTP
+	storedCode := storedOTP
+	if idx := strings.Index(storedOTP, "|"); idx >= 0 {
+		storedCode = storedOTP[:idx]
+	}
+
+	if storedCode != req.OTP {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Kode OTP salah"})
 		return
 	}
@@ -665,7 +682,7 @@ func handleVerifyPhoneLoginWA(w http.ResponseWriter, r *http.Request) {
 	var userID, tenantID, role string
 	var isDataVerified bool
 	// Try original format first, then normalized (08xx↔62xx)
-	lookupPhone := req.PhoneNumber
+	lookupPhone := otpPhone
 	err = DB.QueryRow(ctx,
 		"SELECT id, tenant_id, role, is_phone_verified FROM users WHERE phone_number = $1",
 		lookupPhone,

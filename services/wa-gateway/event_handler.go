@@ -404,11 +404,15 @@ func handleWAOTPRequest(tenantID, senderJID, senderPhone string) {
 
 func generateAndSendOTP(ctx context.Context, tenantID, senderJID, senderPhone string) {
 	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
-	// Value stores registered phone so verify step can use it (senderPhone may be LID-masked)
-	otpKey := "phone-login-otp:" + senderPhone
-	redisShared.Set(ctx, otpKey, otp+"|"+senderPhone, 1*time.Hour)
+	// Normalize to 0xxx so auth-service verify lookup is consistent
+	normPhone := senderPhone
+	if strings.HasPrefix(normPhone, "62") {
+		normPhone = "0" + normPhone[2:]
+	}
+	otpKey := "phone-login-otp:" + normPhone
+	redisShared.Set(ctx, otpKey, otp+"|"+normPhone, 1*time.Hour)
 	sendWAMessage(tenantID, senderJID, "📩 Kode OTP Anda: *"+otp+"*\n\nBalas pesan ini dengan 6 digit kode OTP tersebut.\n\nContoh: 123456")
-	slog.Info("OTP generated & sent via WA Center", "phone", senderPhone, "otp", otp)
+	slog.Info("OTP generated & sent via WA Center", "phone", normPhone, "otp", otp)
 }
 
 // ─── VERIF {code} → Verify Web Registration OTP ───────────────────
