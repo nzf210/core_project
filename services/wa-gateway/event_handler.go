@@ -78,7 +78,7 @@ func eventHandler(tenantID string, evt interface{}) {
 }
 
 const (
-	authServiceURLDefault = "http://localhost:8001"
+	authServiceURLDefault = "http://auth-service:8001"
 	contentTypeJSON       = "application/json"
 )
 
