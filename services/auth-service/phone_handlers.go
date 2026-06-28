@@ -89,25 +89,25 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 	var userID string
 	var err error
 	err = DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", lookupPhone).Scan(&userID)
-	if err == pgx.ErrNoRows && strings.HasPrefix(lookupPhone, "0") {
-		// Try normalized format (62xx)
-		lookupPhone = "62" + lookupPhone[1:]
-		slog.Info("handlePhoneLogin: not found as 08xx, trying 62xx", "original", req.PhoneNumber, "normalized", lookupPhone)
-		err = DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", lookupPhone).Scan(&userID)
-		if err == pgx.ErrNoRows {
-			// Try other direction: DB stores 08xx but request is 62xx
-			normPhone := req.PhoneNumber
-			if strings.HasPrefix(normPhone, "62") {
-				normPhone = "0" + normPhone[2:]
-			}
-			slog.Info("handlePhoneLogin: not found as 62xx, trying 08xx", "original", req.PhoneNumber, "local", normPhone)
+	if err == pgx.ErrNoRows {
+		// Try alternate formats: DB stores 08xx but request is 62xx, or vice versa
+		normPhone := req.PhoneNumber
+		if strings.HasPrefix(normPhone, "62") {
+			normPhone = "0" + normPhone[2:]
+		} else if strings.HasPrefix(normPhone, "0") {
+			normPhone = "62" + normPhone[1:]
+		}
+		if normPhone != lookupPhone {
+			slog.Info("handlePhoneLogin: not found, trying alternate format", "original", req.PhoneNumber, "alternate", normPhone)
 			err = DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", normPhone).Scan(&userID)
-			if err == pgx.ErrNoRows {
-				slog.Warn("handlePhoneLogin: phone not found in DB", "tried_original", req.PhoneNumber, "tried_62xx", "62"+req.PhoneNumber[1:], "tried_08xx", normPhone)
-				writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Phone number not registered"})
-				return
+			if err == nil {
+				lookupPhone = normPhone
 			}
-			lookupPhone = normPhone
+		}
+		if err == pgx.ErrNoRows {
+			slog.Warn("handlePhoneLogin: phone not found in DB", "tried_original", req.PhoneNumber, "tried_alternate", normPhone)
+			writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Phone number not registered"})
+			return
 		}
 	}
 	if err != nil && err != pgx.ErrNoRows {
