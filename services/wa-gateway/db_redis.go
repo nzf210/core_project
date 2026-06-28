@@ -125,6 +125,13 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func ReleaseSessionLock(ctx context.Context, tenantID string) {
 	if redisClient == nil {
 		return
