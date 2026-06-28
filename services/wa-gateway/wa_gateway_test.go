@@ -272,8 +272,8 @@ func TestExtractPhoneFromJID(t *testing.T) {
 		jid      string
 		expected string
 	}{
-		{"62812123456789@s.whatsapp.net", "62812123456789"},
-		{"62812123456789@c.us", "62812123456789"},
+		{"62812123456789@s.whatsapp.net", "0812123456789"},
+		{"62812123456789@c.us", "0812123456789"},
 		{"081212345678@s.whatsapp.net", "081212345678"},
 		{"noatsign", "noatsign"},
 		{"", ""},

@@ -91,10 +91,22 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Normalize to international format for DB lookup consistency
+	lookupPhone := req.PhoneNumber
+	if strings.HasPrefix(lookupPhone, "0") {
+		lookupPhone = "62" + lookupPhone[1:]
+	}
+	// Check for existing user with this phone number BEFORE generating OTP
+	ctx := context.Background()
+	var exists bool
+	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1 OR phone_number = $2)", req.PhoneNumber, lookupPhone).Scan(&exists); err == nil && exists {
+		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Nomor HP sudah terdaftar"})
+		return
+	}
+
 	// waVerify=true → skip auto-send WA, store wa-otp mapping for VERIF flow
 	waVerify := r.URL.Query().Get("wa_verify") == "true"
 
-	ctx := context.Background()
 	waProvider, _ := getPlatformWAProvider(ctx)
 	otpKey := "otp:" + req.PhoneNumber
 

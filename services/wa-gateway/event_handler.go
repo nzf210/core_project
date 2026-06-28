@@ -173,10 +173,15 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 }
 
 func extractPhoneFromJID(jid string) string {
+	phone := jid
 	if idx := strings.Index(jid, "@"); idx > 0 {
-		return jid[:idx]
+		phone = jid[:idx]
 	}
-	return jid
+	// Normalize to local format (DB stores 08xx, JID is 62xx)
+	if strings.HasPrefix(phone, "62") {
+		phone = "0" + phone[2:]
+	}
+	return phone
 }
 
 func isSixDigitOTP(text string) bool {
