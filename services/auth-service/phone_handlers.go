@@ -140,9 +140,11 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Normalize to 08xx format for consistency with wa-gateway extractPhoneFromJID
+	// Handles +, 62, and 0 prefixes
 	redisPhone := req.PhoneNumber
+	redisPhone = strings.TrimPrefix(redisPhone, "+")  // strip +
 	if strings.HasPrefix(redisPhone, "62") {
-		redisPhone = "0" + redisPhone[2:]
+		redisPhone = "0" + redisPhone[2:]  // 62xxx → 0xxx
 	}
 
 	// Set pending login state - OTP will be generated when user sends "OTP" to WA Center
