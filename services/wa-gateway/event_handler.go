@@ -517,7 +517,11 @@ func getAuthServiceURL() string {
 	if url := os.Getenv("AUTH_SERVICE_URL"); url != "" {
 		return url
 	}
-	return authServiceURLDefault
+	// Native dev uses localhost, Docker uses service name
+	if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+		return authServiceURLDefault
+	}
+	return "http://localhost:8001"
 }
 
 func extractMessageText(v *events.Message) string {
