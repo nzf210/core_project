@@ -19,7 +19,7 @@ import (
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	waLog "go.mau.fi/whatsmeow/util/log"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 // Redis key prefixes
@@ -55,6 +55,7 @@ var (
 func init() {
 	hostname, _ := os.Hostname()
 	instanceID = fmt.Sprintf("%s-%d", hostname, os.Getpid())
+	sqlstore.PostgresArrayWrapper = pq.Array
 }
 
 // ─────────────────────────────────────────────
@@ -201,7 +202,9 @@ func setupDB() {
 		if err != nil {
 			slog.Error("Failed to create wa_tenant_sessions", "error", err)
 		}
-		db.Exec(`ALTER TABLE wa_tenant_sessions ALTER COLUMN tenant_id TYPE TEXT`)
+		if _, err := db.Exec(`ALTER TABLE wa_tenant_sessions ALTER COLUMN tenant_id TYPE TEXT`); err != nil {
+			slog.Error("Failed to alter wa_tenant_sessions", "error", err)
+		}
 	} else {
 		slog.Error("Failed to open DB for mapping")
 	}

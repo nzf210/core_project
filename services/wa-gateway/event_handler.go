@@ -236,7 +236,9 @@ func startWARegistration(tenantID, senderJID, senderPhone string) {
 	// Check if already has account
 	if db != nil {
 		var exists bool
-		db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1)", senderPhone).Scan(&exists)
+		if err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1)", senderPhone).Scan(&exists); err != nil {
+			slog.Error("Failed to check existing user", "phone", senderPhone, "error", err)
+		}
 		if exists {
 			sendWAMessage(tenantID, senderJID, "Nomor ini sudah terdaftar. Gunakan menu LOGIN atau hubungi admin.")
 			return
@@ -290,7 +292,9 @@ func handleWARegistrationStep(tenantID string, session *waRegistrationSession, r
 		}
 		if db != nil {
 			var exists bool
-			db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", rawText).Scan(&exists)
+			if err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", rawText).Scan(&exists); err != nil {
+				slog.Error("Failed to check username", "username", rawText, "error", err)
+			}
 			if exists {
 				sendWAMessage(tenantID, session.SenderJID, "❌ Username sudah digunakan. Coba yang lain:")
 				return true
@@ -788,8 +792,10 @@ func mapUserJIDIfNeeded(senderJID, senderPhone string) {
 	if strings.HasPrefix(phone, "62") {
 		phone = "0" + phone[2:]
 	}
-	db.Exec(`UPDATE users SET wa_jid = $1 WHERE phone_number = $2 AND (wa_jid IS NULL OR wa_jid = '')`,
-		senderJID, phone)
+	if _, err := db.Exec(`UPDATE users SET wa_jid = $1 WHERE phone_number = $2 AND (wa_jid IS NULL OR wa_jid = '')`,
+		senderJID, phone); err != nil {
+		slog.Error("Failed to update user wa_jid", "phone", phone, "error", err)
+	}
 }
 
 func handleConnectedEvent(tenantID string) {
@@ -799,6 +805,8 @@ func handleConnectedEvent(tenantID string) {
 	c := clientMap[tenantID]
 	clientMu.RUnlock()
 	if c != nil && c.Store.ID != nil && db != nil {
-		db.Exec(`INSERT INTO wa_tenant_sessions (tenant_id, jid) VALUES ($1, $2) ON CONFLICT (tenant_id) DO UPDATE SET jid = EXCLUDED.jid`, tenantID, c.Store.ID.String())
+		if _, err := db.Exec(`INSERT INTO wa_tenant_sessions (tenant_id, jid) VALUES ($1, $2) ON CONFLICT (tenant_id) DO UPDATE SET jid = EXCLUDED.jid`, tenantID, c.Store.ID.String()); err != nil {
+			slog.Error("Failed to save wa_tenant_sessions on connect", "tenant_id", tenantID, "error", err)
+		}
 	}
 }
