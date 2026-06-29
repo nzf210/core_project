@@ -42,7 +42,7 @@ func SetTenantPlan(ctx context.Context, tenantID, tier string) {
 func GetPlan(tenantID string) PlanFeaturesRow {
 	row, err := GetPlanFeatures(context.Background(), tenantID)
 	if err != nil {
-		return PlanFeaturesRow{Tier: "inactive"}
+		return PlanFeaturesRow{Tier: "inactive", Features: make(map[string]bool)}
 	}
 	return row
 }
@@ -140,55 +140,23 @@ func DeductWalletBalance(ctx context.Context, tenantID string, amountRupiah int6
 		return err
 	}
 	defer tx.Rollback(ctx)
-	
+
 	_, err = tx.Exec(ctx, "UPDATE wallet_credits SET balance_rupiah = balance_rupiah - $1, updated_at = NOW() WHERE tenant_id = $2 AND balance_rupiah >= $1", amountRupiah, tenantID)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	_, err = tx.Exec(ctx, "INSERT INTO wallet_transactions (tenant_id, amount_rupiah, transaction_type, reference, description) VALUES ($1, $2, 'consume', $3, $4)", tenantID, -amountRupiah, ref, desc)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
 // HasFeatureAccess checks if a tenant has access to a specific feature.
-// DEPRECATED: Use CanUseFeature instead. This only checks bundled plan features,
-// not addon purchases. Kept for backward compatibility during F052 transition.
-// Returns (allowed, reason) where reason is a human-readable message if denied.
+// DEPRECATED: Use CanUseFeature instead. Kept for backward compatibility.
+// Now fully delegates to CanUseFeature — no more switch-case.
 func HasFeatureAccess(tenantID string, feature string) (bool, string) {
-	plan := GetPlan(tenantID)
-
-	switch feature {
-	case "pos":
-		if !plan.HasPOS && plan.Tier != "superadmin" {
-			return false, "Fitur POS memerlukan paket Lite atau lebih tinggi."
-		}
-	case "chatbot":
-		if !plan.HasChatbot && plan.Tier != "superadmin" {
-			return false, "Fitur Chatbot memerlukan paket Lite atau lebih tinggi."
-		}
-	case "ai":
-		if !plan.HasAI && plan.Tier != "superadmin" {
-			return false, "Fitur AI memerlukan paket Lite atau lebih tinggi."
-		}
-	case "inventory":
-		if !plan.HasInventory && plan.Tier != "superadmin" {
-			return false, "Fitur Inventory memerlukan paket Lite atau lebih tinggi."
-		}
-	case "reports":
-		if !plan.HasReports && plan.Tier != "superadmin" {
-			return false, "Fitur Laporan memerlukan paket Lite atau lebih tinggi."
-		}
-	case "multi_user":
-		if !plan.HasMultiUser && plan.Tier != "superadmin" {
-			return false, "Fitur Multi-User memerlukan paket Lite atau lebih tinggi."
-		}
-	case "api_access":
-		if !plan.HasAPIAccess && plan.Tier != "superadmin" {
-			return false, "API Access memerlukan paket Pro."
-		}
-	case "accounting":
-		// All plans have accounting
-	}
-
-	return true, ""
+	return CanUseFeature(context.Background(), tenantID, feature)
 }
 
 // RequireFeature returns a middleware that blocks access to a feature

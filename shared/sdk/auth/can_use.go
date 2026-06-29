@@ -85,13 +85,26 @@ func CanUseFeature(ctx context.Context, tenantID, featureKey string) (bool, stri
 		return ok, boolToReason(ok, feat.Name, GetTenantPlan(ctx, tenantID))
 	}
 
-	// 3. Bundled feature: check plan_features via PlanFeaturesRow
+	// 3. Bundled feature: check plan_features map + default_enabled fallback
 	pf, _ := GetPlanFeatures(ctx, tenantID)
-	if isEnabledViaPlan(pf, featureKey) {
+	if pf.Features[featureKey] {
 		return true, ""
 	}
 
-	// 4. Not enabled via plan — check if it's an addon the tenant purchased
+	// 4. Not found in plan_features — check default_enabled in registry
+	if feat != nil {
+		for _, t := range feat.DefaultEnabled {
+			if t == "superadmin" {
+				continue
+			}
+			if t == GetTenantPlan(ctx, tenantID) {
+				// Found in default_enabled but not in plan_features — treat as enabled
+				return true, ""
+			}
+		}
+	}
+
+	// 5. Not enabled via plan — check if it's an addon the tenant purchased
 	if feat != nil && feat.IsAddon {
 		ok, _ := CanUseAddon(ctx, tenantID, featureKey)
 		if ok {
@@ -187,32 +200,22 @@ func boolToReason(ok bool, name, tier string) string {
 	return fmt.Sprintf("Fitur %s tidak tersedia di paket %s.", name, tier)
 }
 
+// isEnabledViaPlan checks the dynamic Features map and falls back to default_enabled.
+// Only called from CanUseFeature but kept exported for any direct callers.
 func isEnabledViaPlan(pf PlanFeaturesRow, featureKey string) bool {
-	switch featureKey {
-	case "pos":
-		return pf.HasPOS
-	case "chatbot":
-		return pf.HasChatbot
-	case "ai", "ai_text":
-		return pf.HasAI
-	case "inventory":
-		return pf.HasInventory
-	case "reports":
-		return pf.HasReports
-	case "multi_user":
-		return pf.HasMultiUser
-	case "api_access":
-		return pf.HasAPIAccess
-	case "advanced_reports":
-		return pf.HasAdvancedReport
-	case "custom_branding":
-		return pf.HasCustomBranding
-	case "priority_support":
-		return pf.HasPrioritySupport
-	case "accounting":
-		return pf.HasAccounting
-	case "wa_cloud_api":
-		return false // only via addon purchase
+	if pf.Features[featureKey] {
+		return true
+	}
+	// Feature not in plan_features map — check default_enabled from registry.
+	// This path handles features added to available_features after plan_features was seeded.
+	feat, _ := GetFeatureDef(context.Background(), featureKey)
+	if feat != nil {
+		for _, t := range feat.DefaultEnabled {
+			if t == pf.Tier {
+				return true
+			}
+		}
 	}
 	return false
 }
+

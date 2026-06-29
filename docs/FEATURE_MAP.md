@@ -132,6 +132,7 @@ Format per feature:
 | F063 | WA Keyword Registration (REG/OTP/VERIF) + WA Center | ✅ Approved | ✅ Done | 2026-06-27 |
 | F064 | Platform WA Provider Detection & OTP Routing | ✅ Approved | ✅ Done | 2026-06-28 |
 | F065 | Landing Page Content Management — Superadmin JSON Editor | ✅ Approved | ✅ Done | 2026-06-29 |
+| F066 | Dynamic Feature Gating — Zero-Hardcode Feature Toggle System | ✅ Approved | ✅ Done | 2026-06-30 |
 
 ## F058: Superadmin Impersonate + Grafana Monitoring
 
@@ -4348,3 +4349,82 @@ Halaman/Dialog untuk menampilkan daftar karyawan/staff sebuah UMKM dan melakukan
 - `services/auth-service/main.go` — `handleStaffList`, `handleStaffUpdate`, `handleStaffDelete` + routes
 - `frontend/umkm-web/src/components/Settings.vue` — staff section (form + list)
 - `frontend/umkm-web/src/api.ts` — `authApi.getStaffList()`, `updateStaff()`, `deleteStaff()`
+
+---
+
+## F066: Dynamic Feature Gating — Zero-Hardcode Feature Toggle System
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+
+**Description:**
+Hilangkan semua switch-case hardcode di feature gating layer. Superadmin bisa hidup/matiin fitur per tier kapan saja via DB — tanpa deploy ulang. Source of truth tunggal di `available_features.default_enabled[]` + `plan_features.is_enabled`.
+
+### Arsitektur
+
+```
+available_features                    plan_features                     tenant_addons
+────────────────────                  ──────────────────────            ─────────────────
+feature_key (PK)                      plan_id + feature_key (PK)        tenant_id + addon_key
+is_addon                              is_enabled                        status
+default_enabled[] ← source of truth   min_tier                          expires_at
+addon_price_rupiah                    feature_value (numeric limits)
+```
+
+**Node:**
+| Node | Tabel | Fungsi |
+|------|-------|--------|
+| N1 | `available_features` | Registry fitur + bundle tier di `default_enabled[]` |
+| N2 | `plan_features` | Override `is_enabled` + numeric limits per plan |
+| N3 | `tenant_addons` | Addon aktif per tenant (wallet-gated) |
+
+### Enforcement Flow
+
+```
+CanUseFeature(ctx, tenantID, "feature_key")
+  ├─ Superadmin? → true
+  ├─ Addon? → CanUseAddon() → cek min_tier → cek tenant_addons
+  ├─ Cek plan_features.is_enabled (dynamic map, no switch!)
+  │   └─ Ada di map? → return value
+  └─ Fallback ke available_features.default_enabled[]
+      └─ Apakah tier tenant ada di array default_enabled? → return true
+```
+
+### Yang Dihapus
+
+| File | Yang Dihapus | Baris |
+|------|-------------|-------|
+| `plan_features.go` | Switch-case `GetPlanFeatures()` mapping DB → Has* bool | ~25 baris |
+| `can_use.go` | `isEnabledViaPlan()` switch-case 25 baris | ~25 baris |
+| `quota.go` | `HasFeatureAccess()` switch-case 15 baris | ~15 baris |
+
+### Yang Ditambah
+
+| File | Yang Ditambah | Baris |
+|------|--------------|-------|
+| `plan_features.go` | `Features map[string]bool` + `syncHasFields()` backward compat | ~20 baris |
+| `plan_features.go` | `GetPlanFeatures()` loop generic — query `plan_features` → populate map | ~15 baris |
+| `can_use.go` | `CanUseFeature()` step 3-4 — dynamic map + default_enabled fallback | ~12 baris |
+| `can_use.go` | `isEnabledViaPlan()` — generic, no hardcode | ~10 baris |
+
+### Keuntungan
+
+- Superadmin bisa: tambah fitur baru ke `available_features` → assign `default_enabled` → **langsung jalan tanpa deploy**
+- Ganti harga addon via superadmin UI → **langsung生效**
+- Pindahin fitur dari bundled ke addon → ubah `is_addon=true` + set harga
+- Matiin fitur untuk suatu tier → PATCH `plan_features.is_enabled=false` → langsung diblok
+
+### Acceptance Criteria
+
+- [x] AC-1: `CanUseFeature()` membaca `pf.Features[featureKey]` — tanpa switch-case
+- [x] AC-2: Fallback ke `default_enabled[]` di `available_features` jika feature tidak ada di `plan_features`
+- [x] AC-3: `syncHasFields()` populate `Has*` bool dari `Features` map untuk backward compat JSON
+- [x] AC-4: `HasFeatureAccess()` delegasi penuh ke `CanUseFeature()` — deprecated wrapper
+- [x] AC-5: `isEnabledViaPlan()` generic — loop `feat.DefaultEnabled`, cek `t == pf.Tier`
+- [x] AC-6: Semua test existing pass (40+ test di `shared/sdk/auth/`, 1 test di `chatbot`)
+- [x] AC-7: `go build` clean — `shared/sdk/auth/`, `services/billing-service/`, `apps/umkm/chatbot/`, `services/api-gateway/`
+
+**Files Changed:**
+- `shared/sdk/auth/plan_features.go` — `Features map[string]bool` field + `syncHasFields()` + generic plan_features loop
+- `shared/sdk/auth/can_use.go` — `isEnabledViaPlan()` generic + `CanUseFeature()` dynamic lookup
+- `shared/sdk/auth/quota.go` — `HasFeatureAccess()` now delegates to `CanUseFeature()`
