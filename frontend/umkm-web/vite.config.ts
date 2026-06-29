@@ -4,4 +4,14 @@ import vue from '@vitejs/plugin-vue'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue()],
+  server: {
+    proxy: {
+      // F060: Proxy /plans to API gateway (billing-service public endpoint)
+      '/plans': {
+        target: 'http://localhost:8010',
+        changeOrigin: true,
+        rewrite: (path) => path,
+      },
+    },
+  },
 })

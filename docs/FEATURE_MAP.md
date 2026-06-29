@@ -923,13 +923,16 @@ Tab "Transaksi":
 - `frontend/umkm-web/src/router/index.ts` — route `/` → LandingPage, `meta.landing` guard di `beforeEach`, redirect ke `/dashboard` jika authed
 - `frontend/umkm-web/src/App.vue` — hide sidebar/chrome untuk landing, `landing-mode` class di main
 - `frontend/umkm-web/src/api.ts` — `getPublicPlans()` untuk fetch pricing dari backend
+- `frontend/umkm-web/vite.config.ts` — Vite dev proxy `/plans` → `localhost:8010`
 
 ### Notes:
 
 - Backend: `GET /plans` (public, no auth) via billing-service → `saas_plans` + `plan_features` tables
 - Frontend: `api.getPublicPlans()` → `GET /plans`, no auth header needed
+- Routing: Vite dev proxy (`/plans` → `localhost:8010`), Nginx prod (`/plans` → api-gateway → billing-service)
 - Pricing table maps: `plan.id`, `plan.name`, `plan.price_monthly`, `plan.price_yearly`, `plan.description`, `plan.features[].feature_name`, `plan.sort_order` (featured = sort_order === 2)
 - Billing toggle: `billingCycle` ref switches between monthly/yearly prices; CTA passes `&cycle=monthly|yearly` query param
+- Fallback static plans jika API gagal (landing page tidak pernah kosong)
 - Landing page HARUS lightweight — no Chart.js, no heavy dependencies
 - Gunakan CSS Variables existing (F056) untuk theme consistency
 

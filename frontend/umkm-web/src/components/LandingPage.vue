@@ -287,17 +287,66 @@ const mobileOpen = ref(false)
 // F059: Dynamic plans from backend (public endpoint, no auth)
 const plans = ref<any[]>([])
 const plansLoading = ref(false)
+
+// Fallback static plans if API fails (matches saas_plans seed data)
+const fallbackPlans = [
+  {
+    id: 'lite', name: 'Lite', sort_order: 1,
+    price_monthly: 3500000, price_yearly: 35000000,
+    description: 'Untuk bisnis kecil yang baru memulai.',
+    features: [
+      { feature_key: 'pos', feature_name: 'Kasir POS Dasar' },
+      { feature_key: 'journal', feature_name: '100 Transaksi/bulan' },
+      { feature_key: 'reports', feature_name: 'Laporan Keuangan Dasar' },
+      { feature_key: 'chatbot', feature_name: 'AI Chatbot WhatsApp (50 pesan)' },
+      { feature_key: 'users', feature_name: '1 Pengguna' },
+    ]
+  },
+  {
+    id: 'pro', name: 'Pro', sort_order: 2,
+    price_monthly: 15000000, price_yearly: 150000000,
+    description: 'Untuk bisnis berkembang yang butuh lebih.',
+    features: [
+      { feature_key: 'pos', feature_name: 'Kasir POS Lengkap' },
+      { feature_key: 'journal', feature_name: '10.000 Transaksi/bulan' },
+      { feature_key: 'reports', feature_name: 'Semua Laporan Keuangan' },
+      { feature_key: 'chatbot', feature_name: 'AI Chatbot Unlimited' },
+      { feature_key: 'users', feature_name: '5 Pengguna' },
+      { feature_key: 'ai_vision', feature_name: 'AI Vision (foto produk)' },
+      { feature_key: 'marketplace', feature_name: 'Integrasi Marketplace' },
+    ]
+  },
+  {
+    id: 'ultimate', name: 'Ultimate', sort_order: 3,
+    price_monthly: 30000000, price_yearly: 300000000,
+    description: 'Untuk bisnis menengah dan franchise.',
+    features: [
+      { feature_key: 'pos', feature_name: 'Kasir POS Lengkap' },
+      { feature_key: 'journal', feature_name: 'Transaksi Unlimited' },
+      { feature_key: 'reports', feature_name: 'Semua Laporan Keuangan' },
+      { feature_key: 'chatbot', feature_name: 'AI Chatbot Unlimited' },
+      { feature_key: 'users', feature_name: 'User Unlimited' },
+      { feature_key: 'multi_branch', feature_name: 'Multi-Toko (5 Cabang)' },
+      { feature_key: 'ai_multimodal', feature_name: 'AI Multimodal (vision + audio)' },
+      { feature_key: 'custom_branding', feature_name: 'Custom Branding' },
+      { feature_key: 'priority_support', feature_name: 'Priority Support' },
+    ]
+  },
+]
 const billingCycle = ref<'monthly' | 'yearly'>('monthly')
 
 const fetchPlans = async () => {
   plansLoading.value = true
   try {
     const res = await api.getPublicPlans()
-    if (res?.success && Array.isArray(res.data)) {
+    if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
       plans.value = res.data
+    } else {
+      plans.value = fallbackPlans
     }
   } catch (e) {
     console.error('Failed to fetch plans', e)
+    plans.value = fallbackPlans
   } finally {
     plansLoading.value = false
   }
