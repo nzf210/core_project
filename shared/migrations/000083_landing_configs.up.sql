@@ -3,7 +3,7 @@
 -- Superadmin can edit landing page content via JSON editor
 
 CREATE TABLE IF NOT EXISTS landing_configs (
-    id          VARCHAR(50) PRIMARY KEY,   -- e.g. 'hero', 'features', 'testimonials', 'cta', 'footer'
+    id          VARCHAR(50) PRIMARY KEY,   -- e.g. 'hero', 'features', 'steps', 'testimonials', 'trust', 'cta', 'footer'
     content     JSONB NOT NULL DEFAULT '{}',
     is_active   BOOLEAN NOT NULL DEFAULT true,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -29,6 +29,10 @@ INSERT INTO landing_configs (id, content) VALUES
 (
   'testimonials',
   '[{"quote":"Dulu pembukuan pakai Excel, sekarang semua otomatis. Owner warung kopi saya bisa fokus layani pelanggan.","name":"Budi Santoso","role":"Pemilik Warung Kopi, Bandung"},{"quote":"AI chatbot-nya jawab pertanyaan pelanggan di malam hari. Servis tetap prima meski saya lagi tutup.","name":"Siti Rahayu","role":"Pemilik Toko Fashion, Surabaya"},{"quote":"Laporan keuangan langsung jadi, tinggal export ke PDF untuk pengajuan KUR ke bank.","name":"Ahmad Hidayat","role":"Pemilik Klinik Pratama, Medan"}]'
+),
+(
+  'trust',
+  '{"label":"Telah dipercaya oleh pelaku UMKM di","cities":["Jakarta","Surabaya","Bandung","Medan","Makassar","Semarang"]}'
 ),
 (
   'cta',

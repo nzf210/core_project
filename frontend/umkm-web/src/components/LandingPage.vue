@@ -75,14 +75,9 @@
 
     <!-- Logos / Trust bar -->
     <div class="trust-bar reveal">
-      <p class="trust-label">Telah dipercaya oleh pelaku UMKM di</p>
+      <p class="trust-label">{{ trust.label }}</p>
       <div class="trust-badges">
-        <span>Jakarta</span>
-        <span>Surabaya</span>
-        <span>Bandung</span>
-        <span>Medan</span>
-        <span>Makassar</span>
-        <span>Semarang</span>
+        <span v-for="city in trust.cities" :key="city">{{ city }}</span>
       </div>
     </div>
 
@@ -315,6 +310,10 @@ const fallbackLandingContent: Record<string, any> = {
     subtitle: 'Bergabung dengan 100+ UMKM Indonesia hari ini. Gratis selamanya.',
     button: 'Daftar Sekarang — Gratis',
   },
+  trust: {
+    label: 'Telah dipercaya oleh pelaku UMKM di',
+    cities: ['Jakarta', 'Surabaya', 'Bandung', 'Medan', 'Makassar', 'Semarang'],
+  },
 }
 
 const fallbackPlans = [
@@ -362,6 +361,7 @@ const features = computed(() => (landingContent.value.features || fallbackLandin
 const steps = computed(() => (landingContent.value.steps || fallbackLandingContent.steps) as typeof fallbackLandingContent.steps)
 const testimonials = computed(() => (landingContent.value.testimonials || fallbackLandingContent.testimonials) as typeof fallbackLandingContent.testimonials)
 const cta = computed(() => (landingContent.value.cta || fallbackLandingContent.cta) as typeof fallbackLandingContent.cta)
+const trust = computed(() => (landingContent.value.trust || fallbackLandingContent.trust) as typeof fallbackLandingContent.trust)
 
 // Dark landing always — matches existing WCH dark theme
 const themeClass = computed(() => 'theme-dark')

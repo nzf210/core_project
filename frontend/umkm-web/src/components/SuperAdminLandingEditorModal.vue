@@ -46,7 +46,7 @@
 
             <!-- Live preview hint -->
             <div class="preview-hint">
-              <a :href="`/landing#${activeSection === 'cta' ? '' : activeSection}`" target="_blank" class="preview-link">
+              <a :href="`/landing#${activeSection === 'trust' || activeSection === 'cta' ? '' : activeSection}`" target="_blank" class="preview-link">
                 👁 Lihat preview di landing page →
               </a>
               <span class="cache-note">Cache: 6 jam (auto-invalidated setelah save)</span>
@@ -78,6 +78,7 @@ const sectionLabel = (id: string) => ({
   features: '⭐ Features',
   steps: '🪜 Steps',
   testimonials: '💬 Testimonials',
+  trust: '🏙️ Trust Bar',
   cta: '📢 CTA Banner',
   footer: '📄 Footer',
 }[id] || id)
