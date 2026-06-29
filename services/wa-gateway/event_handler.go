@@ -99,6 +99,16 @@ type waRegistrationSession struct {
 	CreatedAt    time.Time
 }
 
+// waPasswordResetSession stores in-progress WA password reset conversation state.
+var waPasswordResetSessions = make(map[string]*waPasswordResetSession)
+
+type waPasswordResetSession struct {
+	SenderJID   string
+	PhoneNumber string
+	Step        int // 1=await_otp, 2=await_password
+	CreatedAt  time.Time
+}
+
 func handleMessageEvent(tenantID string, v *events.Message) {
 	if v.Info.IsGroup || v.Info.IsFromMe || time.Since(v.Info.Timestamp) > 5*time.Minute {
 		slog.Debug("handleMessageEvent: filtered message",
@@ -132,6 +142,19 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 	if upperText == "REG" || upperText == "DAFTAR" {
 		startWARegistration(tenantID, senderJID, senderPhone)
 		return
+	}
+
+	// RESET / LUPA SANDI → start password reset flow
+	if upperText == "RESET" || upperText == "LUPA SANDI" || upperText == "LUPA PASSWORD" || upperText == "FORGOT PASSWORD" {
+		startWAPasswordReset(tenantID, senderJID, senderPhone)
+		return
+	}
+
+	// Password reset step reply (6-digit OTP or new password)
+	if session, ok := waPasswordResetSessions[senderJID]; ok {
+		if handleWAPasswordResetStep(tenantID, session, rawText, upperText) {
+			return
+		}
 	}
 
 	// OTP [phone] → trigger login OTP via auth-service
@@ -480,6 +503,179 @@ func handleWALoginOTPReply(tenantID, senderJID, senderPhone, code string) {
 		}
 		sendWAMessage(tenantID, senderJID, "❌ "+msg+"\n\nKetik OTP untuk mengirim ulang kode.")
 	}
+}
+
+// ─── RESET / LUPA SANDI → Password Reset ──────────────────────
+
+func startWAPasswordReset(tenantID, senderJID, senderPhone string) {
+	// Start session asking for phone number (user's registered phone)
+	waPasswordResetSessions[senderJID] = &waPasswordResetSession{
+		SenderJID:  senderJID,
+		PhoneNumber: senderPhone,
+		Step:        0, // 0=await_phone, 1=await_otp_check, 2=await_password
+		CreatedAt:  time.Now(),
+	}
+	sendWAMessage(tenantID, senderJID,
+		"🔑 *Reset Password*\n\n"+
+			"Kirim nomor HP Anda yang terdaftar di platform WCH.\n"+
+			"Contoh: 0812xxxxxxxx\n\n"+
+			"Ketik *batal* untuk membatalkan.")
+}
+
+func handleWAPasswordResetStep(tenantID string, session *waPasswordResetSession, rawText, upperText string) bool {
+	switch session.Step {
+	case 0:
+		// Await phone number
+		if upperText == "BATAL" {
+			delete(waPasswordResetSessions, session.SenderJID)
+			sendWAMessage(tenantID, session.SenderJID, "✅ Reset password dibatalkan.")
+			return true
+		}
+		phone := normalizePhone(rawText)
+		if len(phone) < 10 || !strings.HasPrefix(phone, "62") {
+			sendWAMessage(tenantID, session.SenderJID, "❌ Format nomor HP tidak valid. Contoh: 0812xxxxxxxx")
+			return true
+		}
+
+		// Verify user exists with this phone
+		if db != nil {
+			var userID string
+			err := db.QueryRow("SELECT id FROM users WHERE phone_number = $1 OR phone_number = $2", phone, "0"+phone[2:]).Scan(&userID)
+			if err != nil {
+				// Don't leak whether phone exists
+				sendWAMessage(tenantID, session.SenderJID,
+					"📱 Nomor tidak ditemukan di sistem kami.\n\n"+
+						"Ketik nomor HP lain, atau ketik *batal* untuk membatalkan.")
+				return true
+			}
+			session.PhoneNumber = phone
+		}
+
+		// Generate 6-digit OTP and store in Redis
+		otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+		ctx := context.Background()
+		otpKey := "pw-reset-otp:" + session.PhoneNumber
+		redisShared.Set(ctx, otpKey, otp, 1*time.Hour)
+
+		session.Step = 1
+		session.CreatedAt = time.Now()
+
+		// Send OTP via WA
+		sendWAMessage(tenantID, session.SenderJID,
+			"📩 Kode OTP telah dikirim ke chat ini.\n\n"+
+				"Silakan balas dengan 6 digit kode OTP tersebut.\n\n"+
+				"Ketik *batal* untuk membatalkan.")
+
+		// Actually send the OTP message
+		sendWAMessage(tenantID, session.SenderJID,
+			"🔑 *Kode Reset Password WCH*\n\n"+
+				"Kode OTP Anda: *"+otp+"*\n\n"+
+				"📌 Masukkan kode ini untuk mereset password.\n"+
+				"⚠️ Jangan bagikan kode ini kepada siapapun.\n"+
+				"Berlaku selama 1 jam.")
+		slog.Info("WA password reset OTP generated", "phone", session.PhoneNumber, "otp", otp)
+		return true
+
+	case 1:
+		// Await OTP reply
+		if upperText == "BATAL" {
+			delete(waPasswordResetSessions, session.SenderJID)
+			sendWAMessage(tenantID, session.SenderJID, "✅ Reset password dibatalkan.")
+			return true
+		}
+		if !isSixDigitOTP(strings.TrimSpace(upperText)) {
+			sendWAMessage(tenantID, session.SenderJID, "❌ Kode OTP harus 6 digit angka. Coba lagi.")
+			return true
+		}
+		otpKey := "pw-reset-otp:" + session.PhoneNumber
+		ctx := context.Background()
+		storedOTP, _ := redisShared.Get(ctx, otpKey).Result()
+		if storedOTP != strings.TrimSpace(upperText) {
+			sendWAMessage(tenantID, session.SenderJID, "❌ Kode OTP salah. Silakan coba lagi.")
+			return true
+		}
+
+		// OTP valid — advance to password step
+		session.Step = 2
+		session.CreatedAt = time.Now()
+		sendWAMessage(tenantID, session.SenderJID,
+			"✅ Kode OTP verified!\n\n"+
+				"Sekarang kirim password baru Anda (minimal 8 karakter).\n\n"+
+				"Ketik *batal* untuk membatalkan.")
+		return true
+
+	case 2:
+		// Await new password
+		if upperText == "BATAL" {
+			delete(waPasswordResetSessions, session.SenderJID)
+			sendWAMessage(tenantID, session.SenderJID, "✅ Reset password dibatalkan.")
+			return true
+		}
+		if len(rawText) < 8 {
+			sendWAMessage(tenantID, session.SenderJID, "❌ Password minimal 8 karakter. Silakan coba lagi.")
+			return true
+		}
+
+		// Call auth-service to reset password (OTP already validated above via Redis)
+		authSvcURL := getAuthServiceURL()
+		body, _ := json.Marshal(map[string]interface{}{
+			"phoneNumber": session.PhoneNumber,
+			"newPassword": rawText,
+		})
+		req, _ := http.NewRequest("POST", authSvcURL+"/reset-password-verify", bytes.NewReader(body))
+		req.Header.Set("Content-Type", contentTypeJSON)
+		req.Header.Set("X-OTP-Verified", "true")
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil || resp == nil {
+			sendWAMessage(tenantID, session.SenderJID, "❌ Gagal mereset password. Silakan coba lagi.")
+			delete(waPasswordResetSessions, session.SenderJID)
+			return true
+		}
+		defer resp.Body.Close()
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+
+		delete(waPasswordResetSessions, session.SenderJID)
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			// Consume the OTP key
+			ctx := context.Background()
+			otpKey := "pw-reset-otp:" + session.PhoneNumber
+			redisShared.Del(ctx, otpKey)
+
+			sendWAMessage(tenantID, session.SenderJID,
+				"✅ *Password berhasil direset!*\n\n"+
+					"Silakan login dengan password baru Anda di aplikasi WCH.")
+			slog.Info("WA password reset complete", "phone", session.PhoneNumber)
+		} else {
+			msg := "Terjadi kesalahan."
+			if m, ok := result["message"].(string); ok {
+				msg = m
+			}
+			sendWAMessage(tenantID, session.SenderJID, "❌ Gagal: "+msg+"\n\nKetik RESET untuk mulai ulang.")
+		}
+		return true
+	}
+	return false
+}
+
+// normalizePhone converts a phone number to 62 format.
+func normalizePhone(phone string) string {
+	p := strings.TrimSpace(phone)
+	p = strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, p)
+	if strings.HasPrefix(p, "0") {
+		p = "62" + p[1:]
+	} else if strings.HasPrefix(p, "+") {
+		p = p[1:]
+	}
+	return p
 }
 
 // ─── Send WA Message via whatsmeow ────────────────────────────────

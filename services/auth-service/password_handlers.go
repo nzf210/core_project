@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
-	"database/sql"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"math/big"
 	"net/http"
+	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -14,247 +18,279 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Constants shared via auth_handlers.go: msgMethodNotAllowed, msgInvalidPayload, msgInternalServerError
+// ─────────────────────────────────────────────
+// Chat-based Password Reset (WA + Telegram)
+// F055 v2: User chat WA/Telegram → OTP → reset
+// ─────────────────────────────────────────────
 
-func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
-		return
-	}
-
-	var req struct {
-		Email string `json:"email"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid payload"})
-		return
-	}
-
-	ctx := context.Background()
-	var userID string
-	err := DB.QueryRow(ctx, "SELECT id FROM users WHERE email = $1", req.Email).Scan(&userID)
-	if err == pgx.ErrNoRows {
-		// Don't leak whether email exists
-		writeJSON(w, http.StatusOK, Response{Success: true, Message: "If the email is registered, a reset token will be sent."})
-		return
-	} else if err != nil {
-		slog.Error("DB error in forgot password", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
-		return
-	}
-
-	// Generate a mock random token
-	tokenStr := fmt.Sprintf("%x", time.Now().UnixNano())
-
-	expiresAt := time.Now().Add(1 * time.Hour)
-	_, err = DB.Exec(ctx, "INSERT INTO password_resets (email, token, expires_at) VALUES ($1, $2, $3)", req.Email, tokenStr, expiresAt)
-	if err != nil {
-		slog.Error("Failed to insert reset token", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
-		return
-	}
-
-	// In a real application, send via SMTP here. For now, print to log.
-	slog.Info("🔑 PASSWORD RESET TOKEN GENERATED (Simulating Email)", "email", req.Email, "token", tokenStr)
-
-	writeJSON(w, http.StatusOK, Response{Success: true, Message: "If the email is registered, a reset token will be sent."})
+// ResetPasswordChatRequest is the payload for requesting a password reset OTP
+// via WhatsApp or Telegram chat.
+type ResetPasswordChatRequest struct {
+	PhoneNumber string `json:"phoneNumber"` // required: registered phone number
+	Channel     string `json:"channel"`    // "wa" or "telegram"
 }
 
-func handleResetPassword(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
-		return
-	}
-
-	var req struct {
-		Token       string `json:"token"`
-		NewPassword string `json:"newPassword"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid payload"})
-		return
-	}
-
-	if req.NewPassword == "" || req.Token == "" {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Token and new password are required"})
-		return
-	}
-
-	ctx := context.Background()
-	var email string
-	err := DB.QueryRow(ctx, "SELECT email FROM password_resets WHERE token = $1 AND expires_at > NOW()", req.Token).Scan(&email)
-	if err == pgx.ErrNoRows {
-		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Invalid or expired token"})
-		return
-	} else if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
-		return
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 12)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to hash password"})
-		return
-	}
-
-	_, err = DB.Exec(ctx, "UPDATE users SET password_hash = $1 WHERE email = $2", string(hashedPassword), email)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to reset password"})
-		return
-	}
-
-	// Consume token
-	DB.Exec(ctx, "DELETE FROM password_resets WHERE email = $1", email)
-
-	writeJSON(w, http.StatusOK, Response{Success: true, Message: "Password has been successfully reset."})
+// ResetPasswordVerifyRequest is the payload for verifying the OTP and setting
+// a new password.
+type ResetPasswordVerifyRequest struct {
+	PhoneNumber string `json:"phoneNumber"`
+	OTP         string `json:"otp"`
+	NewPassword string `json:"newPassword"`
+	Channel     string `json:"channel"` // "wa" or "telegram"
 }
 
-// handleResetPasswordDefault - reset password ke default berdasarkan username + phone
-func handleResetPasswordDefault(w http.ResponseWriter, r *http.Request) {
+// handleRequestResetPasswordOTP sends a 6-digit OTP for password reset.
+// It works for both WhatsApp and Telegram channels.
+func handleRequestResetPasswordOTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
-	var req ResetPasswordDefaultRequest
+	var req ResetPasswordChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: msgInvalidPayload})
 		return
 	}
 
-	if req.Username == "" || req.PhoneNumber == "" {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Username dan nomor HP wajib diisi"})
+	if req.PhoneNumber == "" {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "phoneNumber wajib diisi"})
 		return
 	}
+
+	if req.Channel == "" {
+		req.Channel = "wa" // default to WhatsApp
+	}
+	if req.Channel != "wa" && req.Channel != "telegram" {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "channel harus 'wa' atau 'telegram'"})
+		return
+	}
+
+	// Normalize phone number
+	phone := normalizePhone(req.PhoneNumber)
 
 	ctx := context.Background()
 
-	// Cari user berdasarkan username, pastikan phone number cocok
-	var userID string
-	var storedPhone sql.NullString
-	err := DB.QueryRow(ctx, "SELECT id, phone_number FROM users WHERE username = $1", req.Username).Scan(&userID, &storedPhone)
+	// Find user by phone
+	var userID, telegramChatID string
+	err := DB.QueryRow(ctx,
+		"SELECT id, COALESCE(telegram_chat_id, '') FROM users WHERE phone_number = $1 OR phone_number = $2",
+		phone, "0"+phone[2:],
+	).Scan(&userID, &telegramChatID)
 	if err == pgx.ErrNoRows {
-		writeJSON(w, http.StatusOK, Response{Success: true, Message: "Jika username terdaftar, password akan direset."})
+		// Don't leak whether phone exists
+		writeJSON(w, http.StatusOK, Response{Success: true, Message: "Jika nomor terdaftar, kode OTP akan dikirim."})
 		return
-	} else if err != nil {
+	}
+	if err != nil {
 		slog.Error("DB error looking up user for password reset", "error", err)
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
-	// Validasi nomor HP cocok (jika user punya phone number)
-	if storedPhone.Valid && storedPhone.String != req.PhoneNumber {
-		writeJSON(w, http.StatusOK, Response{Success: true, Message: "Jika username terdaftar, password akan direset."})
+	// Rate limit: prevent abuse
+	otpKey := "pw-reset-otp:" + phone
+	if existingVal, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingVal != "" {
+		ttl, _ := Redis.TTL(ctx, otpKey).Result()
+		slog.Info("Password reset OTP rate-limited", "phone", phone, "ttl_remaining_sec", int(ttl.Seconds()))
+		writeJSON(w, http.StatusOK, Response{
+			Success: true,
+			Message: fmt.Sprintf("Kode OTP sudah dikirim sebelumnya. Berlaku selama %d menit. Silakan cek %s Anda.",
+				int(ttl.Minutes())+1, mapChannelName(req.Channel)),
+		})
 		return
 	}
 
-	// Default password hardcoded sesuai spesifikasi
-	defaultPw := "x210wchsaasumkm"
-
-	// Hash dengan bcrypt cost=12
-	hashed, err := bcrypt.GenerateFromPassword([]byte(defaultPw), 12)
+	// Generate 6-digit OTP
+	otpNum, err := rand.Int(rand.Reader, new(big.Int).SetUint64(1000000))
 	if err != nil {
-		slog.Error("Failed to hash default password", "error", err)
+		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
+		return
+	}
+	otp := fmt.Sprintf("%06d", otpNum.Int64())
+
+	// Store OTP in Redis (1-hour TTL)
+	ttl := 1 * time.Hour
+	if err := Redis.Set(ctx, otpKey, otp, ttl).Err(); err != nil {
+		slog.Error("Failed to store password reset OTP in Redis", "error", err)
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
-	// Update password di DB + set flag must_change_password
-	_, err = DB.Exec(ctx, "UPDATE users SET password_hash = $1, must_change_password = true, updated_at = NOW() WHERE id = $2", string(hashed), userID)
-	if err != nil {
-		slog.Error("Failed to update password", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
-		return
+	// Send OTP via the requested channel
+	channelName := mapChannelName(req.Channel)
+	if req.Channel == "wa" {
+		go func() {
+			waTarget := phone + "@s.whatsapp.net"
+			if err := sendWAPasswordResetOTP("system", waTarget, otp); err != nil {
+				slog.Error("Failed to send password reset OTP via WA", "phone", phone, "error", err)
+			} else {
+				slog.Info("Password reset OTP sent via WA", "phone", phone)
+			}
+		}()
+	} else {
+		if telegramChatID == "" {
+			// User has no Telegram chat ID registered
+			Redis.Del(ctx, otpKey)
+			writeJSON(w, http.StatusBadRequest, Response{
+				Success: false,
+				Message: "Akun Anda belum terhubung dengan Telegram. Gunakan chat WhatsApp untuk reset password.",
+			})
+			return
+		}
+		go func() {
+			msg := fmt.Sprintf("🔑 *Kode Reset Password WCH*\n\nKode OTP Anda: *%s*\n\n📌 Masukkan kode ini untuk mereset password.\n\n⚠️ Jangan bagikan kode ini kepada siapapun.\n\nBerlaku selama 1 jam.", otp)
+			if err := sendTelegramMessage(telegramChatID, msg); err != nil {
+				slog.Error("Failed to send password reset OTP via Telegram", "chatID", telegramChatID, "error", err)
+			} else {
+				slog.Info("Password reset OTP sent via Telegram", "chatID", telegramChatID)
+			}
+		}()
 	}
 
-	slog.Info("Password reset to default (force change required)", "username", req.Username, "phone", req.PhoneNumber)
+	slog.Info("Password reset OTP generated", "phone", phone, "channel", req.Channel)
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
-		Message: "Password berhasil direset ke default. Silakan login dan ubah password Anda.",
+		Message: fmt.Sprintf("Kode OTP telah dikirim ke %s Anda. Berlaku selama 1 jam.", channelName),
 	})
 }
 
-// handleForceChangePassword - wajib dipanggil setelah reset password default
-// User harus mengirim old_password (password default) + new_password
-func handleForceChangePassword(w http.ResponseWriter, r *http.Request) {
+// handleVerifyResetPasswordOTP verifies the OTP and sets the new password.
+func handleVerifyResetPasswordOTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
-	// Auth middleware sudah validate token
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Missing authorization"})
+	var req ResetPasswordVerifyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: msgInvalidPayload})
 		return
 	}
 
-	claims, err := validateToken(strings.TrimPrefix(authHeader, "Bearer "))
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Invalid token"})
+	if req.PhoneNumber == "" || req.NewPassword == "" {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "phoneNumber dan newPassword wajib diisi"})
 		return
 	}
-
-	var req struct {
-		OldPassword string `json:"oldPassword"`
-		NewPassword string `json:"newPassword"`
-	}
-	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
+	if req.OTP == "" && r.Header.Get("X-OTP-Verified") != "true" {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "otp wajib diisi"})
 		return
 	}
-
-	if req.OldPassword == "" || req.NewPassword == "" {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "oldPassword dan newPassword wajib diisi"})
-		return
-	}
-
 	if len(req.NewPassword) < 8 {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Password baru minimal 8 karakter"})
 		return
 	}
 
+	phone := normalizePhone(req.PhoneNumber)
 	ctx := context.Background()
 
-	// Cek apakah user memang wajib ganti password
-	var mustChange bool
-	var currentHash string
-	err = DB.QueryRow(ctx, "SELECT password_hash, must_change_password FROM users WHERE id = $1", claims.UserID).Scan(&currentHash, &mustChange)
+	var otpKey string
+	// Verify OTP only if not bypassed (X-OTP-Verified set by internal services like wa-gateway)
+	if r.Header.Get("X-OTP-Verified") != "true" {
+		otpKey = "pw-reset-otp:" + phone
+		storedOTP, err := Redis.Get(ctx, otpKey).Result()
+		if err != nil || storedOTP != req.OTP {
+			writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Kode OTP tidak valid atau sudah kadaluarsa."})
+			return
+		}
+	}
+
+	// Find user
+	var userID string
+	err := DB.QueryRow(ctx,
+		"SELECT id FROM users WHERE phone_number = $1 OR phone_number = $2",
+		phone, "0"+phone[2:],
+	).Scan(&userID)
 	if err != nil {
-		slog.Error("DB error checking force change password", "error", err)
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Nomor tidak terdaftar."})
 		return
 	}
 
-	if !mustChange {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Password tidak perlu diganti"})
-		return
-	}
-
-	// Verifikasi old password (password default)
-	if bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.OldPassword)) != nil {
-		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Password lama tidak sesuai"})
-		return
-	}
-
-	// Update password baru + reset flag
-	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 12)
+	// Hash and set new password (clear must_change_password if present)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 12)
 	if err != nil {
 		slog.Error("Failed to hash new password", "error", err)
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
-	_, err = DB.Exec(ctx, "UPDATE users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE id = $2", string(newHash), claims.UserID)
+	_, err = DB.Exec(ctx,
+		"UPDATE users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE id = $2",
+		string(hashed), userID,
+	)
 	if err != nil {
 		slog.Error("Failed to update password", "error", err)
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
-	slog.Info("Password changed successfully after forced reset", "user_id", claims.UserID)
+	// Consume OTP
+	if otpKey != "" {
+		Redis.Del(ctx, otpKey)
+	}
+
+	slog.Info("Password reset successful via chat", "user_id", userID, "phone", phone)
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,
-		Message: "Password berhasil diubah. Silakan login kembali.",
+		Message: "Password berhasil direset. Silakan login dengan password baru Anda.",
 	})
+}
+
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+
+// sendWAPasswordResetOTP sends a password reset OTP via the wa-gateway.
+func sendWAPasswordResetOTP(senderTenant, target, otp string) error {
+	waURL := os.Getenv("WA_GATEWAY_URL")
+	if waURL == "" {
+		waURL = "http://wa-gateway:8202"
+	}
+
+	msg := fmt.Sprintf("🔑 *Kode Reset Password WCH*\n\nKode OTP Anda: *%s*\n\n📌 Masukkan kode ini untuk mereset password.\n\n⚠️ Jangan bagikan kode ini kepada siapapun.\n\nBerlaku selama 1 jam.", otp)
+
+	formData := url.Values{}
+	formData.Set("tenant_id", senderTenant)
+	formData.Set("target", target)
+	formData.Set("message", msg)
+
+	payload := strings.NewReader(formData.Encode())
+	req, err := http.NewRequest("POST", waURL+"/api/wa/send", payload)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Message-Type", "otp")
+	req.Header.Set("X-Source", "auth-service")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, _ = io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("wa-gateway returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// normalizePhone converts a phone number to the "62" format.
+func normalizePhone(phone string) string {
+	p := strings.TrimSpace(phone)
+	if strings.HasPrefix(p, "0") {
+		p = "62" + p[1:]
+	} else if strings.HasPrefix(p, "+") {
+		p = p[1:]
+	}
+	return p
+}
+
+// mapChannelName returns a human-readable channel name.
+func mapChannelName(channel string) string {
+	if channel == "telegram" {
+		return "Telegram"
+	}
+	return "WhatsApp"
 }

@@ -198,3 +198,4 @@ get_func.js
 .claude/worktrees/wf_31b8eabb-a21-10
 .claude/worktrees/wf_31b8eabb-a21-11
 fix.patch
+tools/scripts/update_chatbot_workflow.py

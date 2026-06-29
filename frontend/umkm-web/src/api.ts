@@ -357,22 +357,22 @@ export const api = {
     return res.json()
   },
 
-  // F055: Reset password ke default via username + no HP
-  async resetPasswordDefault(username: string, phoneNumber: string) {
-    const res = await fetch(`${API_BASE}/auth/reset-password-default`, {
+  // F055 v2: Request password reset OTP via chat (WA or Telegram)
+  async requestPasswordResetOTP(phoneNumber: string, channel: 'wa' | 'telegram' = 'wa') {
+    const res = await fetch(`${API_BASE}/auth/reset-password-request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, phoneNumber }),
+      body: JSON.stringify({ phoneNumber, channel }),
     })
     return res.json()
   },
 
-  // F055: Force change password setelah reset ke default
-  async forceChangePassword(oldPassword: string, newPassword: string) {
-    const res = await fetch(`${API_BASE}/auth/force-change-password`, {
+  // F055 v2: Verify OTP and set new password
+  async verifyPasswordReset(phoneNumber: string, otp: string, newPassword: string, channel: 'wa' | 'telegram' = 'wa') {
+    const res = await fetch(`${API_BASE}/auth/reset-password-verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oldPassword, newPassword }),
+      body: JSON.stringify({ phoneNumber, otp, newPassword, channel }),
     })
     return res.json()
   },
