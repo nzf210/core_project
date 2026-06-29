@@ -1,5 +1,5 @@
 <template>
-  <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
+  <div v-if="show" class="modal-overlay">
     <div class="modal-content landing-editor-modal">
       <div class="modal-header">
         <h3>📝 Edit Landing Page Content</h3>
@@ -28,6 +28,7 @@
               <span class="editor-label">{{ sectionLabel(activeSection) }}</span>
               <div class="editor-actions">
                 <button class="btn btn-secondary btn-sm" @click="formatJSON" :disabled="saving">Format</button>
+                <button class="btn btn-cancel btn-sm" @click="$emit('close')" :disabled="saving" v-if="!saving">Batal</button>
                 <button class="btn btn-primary btn-sm" @click="saveContent" :disabled="saving">
                   {{ saving ? 'Menyimpan...' : '💾 Simpan' }}
                 </button>
@@ -85,7 +86,7 @@ const loadConfigs = async () => {
   loading.value = true
   try {
     const res = await superadminApi.getLandingConfigs()
-    if (res?.success && Array.isArray(res.data)) {
+    if (res?.data && Array.isArray(res.data)) {
       configs.value = res.data.sort((a: any, b: any) => a.id.localeCompare(b.id))
     }
   } catch (e) {
@@ -128,7 +129,7 @@ const saveContent = async () => {
   saving.value = true
   try {
     const res = await superadminApi.updateLandingConfig(activeSection.value, { content })
-    if (res?.success) {
+    if (res?.status === 200) {
       saveSuccess.value = '✅ Tersimpan! Perubahan langsung tampil di landing page.'
     } else {
       editorError.value = res?.message || 'Gagal menyimpan'
@@ -198,6 +199,8 @@ watch(() => props.show, (val) => {
 .editor-actions { display: flex; gap: 0.5rem; }
 
 .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.8rem; }
+.btn-cancel { background: transparent; border: 1px solid var(--border-color, #e5e7eb); color: var(--text-muted, #6b7280); }
+.btn-cancel:hover { border-color: #ef4444; color: #ef4444; }
 
 .json-editor {
   flex: 1;
