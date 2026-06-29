@@ -85,21 +85,40 @@ func CanUseFeature(ctx context.Context, tenantID, featureKey string) (bool, stri
 		return ok, boolToReason(ok, feat.Name, GetTenantPlan(ctx, tenantID))
 	}
 
-	// 3. Bundled feature: check plan_features map + default_enabled fallback
+	// 3. Bundled feature: check plan_features map
 	pf, _ := GetPlanFeatures(ctx, tenantID)
-	if pf.Features[featureKey] {
-		return true, ""
+
+	// Check primary key + known aliases ("ai" → "ai_requests"/"ai_text")
+	// If the key EXISTS in plan_features (even =false), that's authoritative.
+	// If key is ABSENT from plan_features, fall back to default_enabled below.
+	keys := []string{featureKey}
+	switch featureKey {
+	case "ai":
+		keys = append(keys, "ai_requests", "ai_text")
+	}
+	for _, k := range keys {
+		if v, exists := pf.Features[k]; exists {
+			return v, ""
+		}
 	}
 
-	// 4. Not found in plan_features — check default_enabled in registry
+	// 4. Key not in plan_features at all — check default_enabled from registry
 	if feat != nil {
 		for _, t := range feat.DefaultEnabled {
-			if t == "superadmin" {
-				continue
-			}
 			if t == GetTenantPlan(ctx, tenantID) {
-				// Found in default_enabled but not in plan_features — treat as enabled
 				return true, ""
+			}
+		}
+	}
+	// Also check alias feature defs for default_enabled (handles "ai" → "ai_text" etc.)
+	if featureKey == "ai" {
+		for _, alias := range []string{"ai_requests", "ai_text"} {
+			if aliasFeat, _ := GetFeatureDef(ctx, alias); aliasFeat != nil {
+				for _, t := range aliasFeat.DefaultEnabled {
+					if t == GetTenantPlan(ctx, tenantID) {
+						return true, ""
+					}
+				}
 			}
 		}
 	}
@@ -201,13 +220,12 @@ func boolToReason(ok bool, name, tier string) string {
 }
 
 // isEnabledViaPlan checks the dynamic Features map and falls back to default_enabled.
-// Only called from CanUseFeature but kept exported for any direct callers.
+// Not called from within this package anymore, but kept exported in case
+// external consumers reference it directly.
 func isEnabledViaPlan(pf PlanFeaturesRow, featureKey string) bool {
 	if pf.Features[featureKey] {
 		return true
 	}
-	// Feature not in plan_features map — check default_enabled from registry.
-	// This path handles features added to available_features after plan_features was seeded.
 	feat, _ := GetFeatureDef(context.Background(), featureKey)
 	if feat != nil {
 		for _, t := range feat.DefaultEnabled {
