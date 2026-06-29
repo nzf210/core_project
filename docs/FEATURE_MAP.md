@@ -911,7 +911,7 @@ Tab "Transaksi":
 - [x] AC-1: Guest buka `/landing` → lihat landing page (hero, features, pricing, footer)
 - [x] AC-2: User login buka `/` → redirect ke `/login` → `/dashboard`
 - [x] AC-3: "Mulai Gratis" CTA → `/register`
-- [x] AC-4: Pricing table menampilkan 3 tier (Lite/Pro/Ultimate) — static
+- [x] AC-4: Pricing table menampilkan 3 tier (Lite/Pro/Ultimate) — dynamic dari backend (`GET /plans` via billing-service), dengan toggle Bulanan/Tahunan dan harga per-bulan & per-tahun
 - [x] AC-5: Responsive — mobile & desktop layout rapi
 - [x] AC-6: Fixed dark theme konsisten dengan F056 dark aesthetic (landing dark-only)
 - [x] AC-7: SEO meta tags — @unhead/vue installed, useHead() added to LandingPage.vue
@@ -922,11 +922,14 @@ Tab "Transaksi":
 - `frontend/umkm-web/src/components/LandingPage.vue` (NEW — 500+ baris)
 - `frontend/umkm-web/src/router/index.ts` — route `/` → LandingPage, `meta.landing` guard di `beforeEach`, redirect ke `/dashboard` jika authed
 - `frontend/umkm-web/src/App.vue` — hide sidebar/chrome untuk landing, `landing-mode` class di main
+- `frontend/umkm-web/src/api.ts` — `getPublicPlans()` untuk fetch pricing dari backend
 
 ### Notes:
 
-- **Pure frontend** — tidak perlu backend endpoint baru
-- Pricing bisa static dulu. Dynamic dari backend bisa ditambahkan nanti jika diperlukan
+- Backend: `GET /plans` (public, no auth) via billing-service → `saas_plans` + `plan_features` tables
+- Frontend: `api.getPublicPlans()` → `GET /plans`, no auth header needed
+- Pricing table maps: `plan.id`, `plan.name`, `plan.price_monthly`, `plan.price_yearly`, `plan.description`, `plan.features[].feature_name`, `plan.sort_order` (featured = sort_order === 2)
+- Billing toggle: `billingCycle` ref switches between monthly/yearly prices; CTA passes `&cycle=monthly|yearly` query param
 - Landing page HARUS lightweight — no Chart.js, no heavy dependencies
 - Gunakan CSS Variables existing (F056) untuk theme consistency
 

@@ -132,32 +132,51 @@
         <div class="section-label">Harga Transparan</div>
         <h2 class="section-title">Paket yang cocok untuk<br>semua ukuran usaha</h2>
         <p class="section-sub">Tidak ada biaya tersembunyi. Mulai gratis, upgrade sesuai kebutuhan.</p>
+
+        <!-- Billing cycle toggle -->
+        <div class="billing-toggle">
+          <button :class="['toggle-btn', billingCycle === 'monthly' ? 'active' : '']"
+            @click="billingCycle = 'monthly'">Bulanan</button>
+          <button :class="['toggle-btn', billingCycle === 'yearly' ? 'active' : '']"
+            @click="billingCycle = 'yearly'">Tahunan <span class="save-badge">Hemat</span></button>
+        </div>
+
         <div class="pricing-grid">
           <div
             v-for="plan in plans"
             :key="plan.id"
             class="pricing-card"
-            :class="{ 'pricing-featured': plan.featured }"
+            :class="{ 'pricing-featured': plan.sort_order === 2 }"
           >
-            <div v-if="plan.featured" class="pricing-badge">Paling Populer</div>
+            <div v-if="plan.sort_order === 2" class="pricing-badge">Paling Populer</div>
             <div class="plan-name">{{ plan.name }}</div>
             <div class="plan-price">
-              <span v-if="plan.price === 0" class="price-amount">Gratis</span>
+              <span v-if="billingCycle === 'monthly'">
+                <span v-if="plan.price_monthly === 0" class="price-amount">Gratis</span>
+                <span v-else>
+                  <span class="price-currency">Rp</span>
+                  <span class="price-amount">{{ formatPrice(plan.price_monthly) }}</span>
+                  <span class="price-period">/bulan</span>
+                </span>
+              </span>
               <span v-else>
-                <span class="price-currency">Rp</span>
-                <span class="price-amount">{{ (plan.price / 1000).toLocaleString('id-ID') }}K</span>
-                <span class="price-period">/bulan</span>
+                <span v-if="plan.price_yearly === 0" class="price-amount">Gratis</span>
+                <span v-else>
+                  <span class="price-currency">Rp</span>
+                  <span class="price-amount">{{ formatPrice(plan.price_yearly) }}</span>
+                  <span class="price-period">/tahun</span>
+                </span>
               </span>
             </div>
-            <p class="plan-desc">{{ plan.desc }}</p>
+            <p class="plan-desc">{{ plan.description }}</p>
             <ul class="plan-features">
-              <li v-for="f in plan.features" :key="f">
+              <li v-for="f in plan.features" :key="f.feature_key">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                {{ f }}
+                {{ f.feature_name }}
               </li>
             </ul>
-            <a :href="plan.ctaLink" class="plan-cta" :class="{ 'cta-active': plan.featured }">
-              {{ plan.cta }}
+            <a :href="'/register?plan=' + plan.id + '&cycle=' + billingCycle" class="plan-cta" :class="{ 'cta-active': plan.sort_order === 2 }">
+              {{ plan.price_monthly === 0 ? 'Mulai Gratis' : 'Mulai ' + plan.name }}
             </a>
           </div>
         </div>
@@ -244,6 +263,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useHead } from '@unhead/vue'
+import { api } from '../api'
 
 useHead({
   title: 'WCH Platform — Kasir, Pembukuan & AI Chatbot untuk UMKM Indonesia',
@@ -264,8 +284,31 @@ useHead({
 
 const mobileOpen = ref(false)
 
+// F059: Dynamic plans from backend (public endpoint, no auth)
+const plans = ref<any[]>([])
+const plansLoading = ref(false)
+const billingCycle = ref<'monthly' | 'yearly'>('monthly')
+
+const fetchPlans = async () => {
+  plansLoading.value = true
+  try {
+    const res = await api.getPublicPlans()
+    if (res?.success && Array.isArray(res.data)) {
+      plans.value = res.data
+    }
+  } catch (e) {
+    console.error('Failed to fetch plans', e)
+  } finally {
+    plansLoading.value = false
+  }
+}
+
 // Dark landing always — matches existing WCH dark theme
 const themeClass = computed(() => 'theme-dark')
+
+const formatPrice = (sen: number) => {
+  return (sen / 1000).toLocaleString('id-ID') + 'K'
+}
 
 const features = [
   {
@@ -315,59 +358,6 @@ const steps = [
   }
 ]
 
-const plans = [
-  {
-    id: 'lite',
-    name: 'Lite',
-    price: 0,
-    desc: 'Untuk usaha kecil dan baru memulai.',
-    features: [
-      'Kasir POS dasar',
-      '100 transaksi/bulan',
-      'Laporan keuangan dasar',
-      'AI Chatbot (50 pesan/bulan)',
-      '1 pengguna'
-    ],
-    cta: 'Mulai Gratis',
-    ctaLink: '/register'
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: 450000,
-    desc: 'Untuk usaha berkembang yang butuh lebih.',
-    features: [
-      'Kasir POS lengkap',
-      '10.000 transaksi/bulan',
-      'Semua laporan keuangan',
-      'AI Chatbot unlimited',
-      '5 pengguna',
-      'AI Vision (foto produk)',
-      'Integrasi marketplace'
-    ],
-    cta: 'Mulai Pro',
-    ctaLink: '/register?plan=pro',
-    featured: true
-  },
-  {
-    id: 'ultimate',
-    name: 'Ultimate',
-    price: 1000000,
-    desc: 'Untuk bisnis menengah dan franchise.',
-    features: [
-      'Semua fitur Pro',
-      'Transaksi unlimited',
-      'Multi-toko (5 cabang)',
-      'AI Multimodal (vision + audio)',
-      'User unlimited',
-      'Custom branding',
-      'Priority support'
-    ],
-    cta: 'Hubungi Sales',
-    ctaLink: '/register?plan=ultimate'
-  }
-]
-
 const testimonials = [
   {
     quote: 'Dulu pembukuan pakai Excel, sekarang semua otomatis. Owner warung kopi saya bisa fokus layani pelanggan.',
@@ -388,6 +378,7 @@ const testimonials = [
 
 // Scroll reveal via IntersectionObserver
 onMounted(() => {
+  fetchPlans()
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
@@ -907,6 +898,49 @@ onMounted(() => {
   grid-template-columns: repeat(3, 1fr);
   gap: 1.25rem;
   align-items: start;
+}
+
+/* Billing cycle toggle */
+.billing-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.billing-toggle .toggle-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #94a3b8;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.5rem 1.5rem;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.billing-toggle .toggle-btn.active {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #1a1a2e;
+}
+
+.billing-toggle .toggle-btn .save-badge {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 100px;
+}
+
+.billing-toggle .toggle-btn.active .save-badge {
+  background: rgba(0,0,0,0.2);
+  color: #1a1a2e;
 }
 
 .pricing-card {

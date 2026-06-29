@@ -433,6 +433,12 @@ export const api = {
     return res.json()
   },
 
+  // F059: Landing page — public plan/pricing data (no auth required)
+  async getPublicPlans() {
+    const res = await fetch(`${API_BASE}/plans`)
+    return res.json()
+  },
+
   // F034: Wallet
   async getWallet() {
     const res = await fetch(`${API_BASE}/api/billing/wallet`, { headers: headers() })
