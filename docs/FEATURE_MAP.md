@@ -897,8 +897,8 @@ Tab "Transaksi":
 #### Route & Redirect Logic
 
 ```
-- GET / → LandingPage.vue (jika guest), redirect /dashboard (jika authed)
-- GET /landing → LandingPage.vue (jika guest), redirect /dashboard (jika authed)
+- GET / → redirect /login (guest) atau /dashboard (authed)
+- GET /landing → LandingPage.vue (public, semua orang bisa akses)
 - Navbar "Login" → /login
 - Navbar "Daftar" → /register
 - CTA buttons:
@@ -908,8 +908,8 @@ Tab "Transaksi":
 
 ### ✅ Acceptance Criteria (AC)
 
-- [x] AC-1: Guest buka `/` → lihat landing page (hero, features, pricing, footer)
-- [x] AC-2: User login buka `/` → redirect ke `/dashboard`
+- [x] AC-1: Guest buka `/landing` → lihat landing page (hero, features, pricing, footer)
+- [x] AC-2: User login buka `/` → redirect ke `/login` → `/dashboard`
 - [x] AC-3: "Mulai Gratis" CTA → `/register`
 - [x] AC-4: Pricing table menampilkan 3 tier (Lite/Pro/Ultimate) — static
 - [x] AC-5: Responsive — mobile & desktop layout rapi

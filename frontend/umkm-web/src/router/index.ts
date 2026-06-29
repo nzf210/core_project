@@ -28,9 +28,10 @@ import Addons from '../components/Addons.vue'
 import LandingPage from '../components/LandingPage.vue'
 
 const routes = [
-  // F059: Landing page for guests, dashboard for authed users
-  { path: '/', component: LandingPage, name: 'Landing', meta: { landing: true } },
-  { path: '/landing', redirect: '/' },
+  // Landing page: public, dedicated URL
+  { path: '/landing', component: LandingPage, name: 'Landing', meta: { public: true } },
+  // Root redirects to login (authed → dashboard via beforeEach)
+  { path: '/', redirect: '/login' },
   { path: '/dashboard', component: DynamicDashboard, name: 'DynamicDashboard' },
   { path: '/dashboard-classic', component: Dashboard, name: 'DashboardClassic' },
   { path: '/onboarding', component: Onboarding, name: 'Onboarding' },
@@ -144,21 +145,15 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  // F059: If already logged in, redirect from landing page to dashboard
   const token = localStorage.getItem('access_token')
   const tenantId = localStorage.getItem('tenant_id')
   const role = localStorage.getItem('role')
   const isSuperadmin = role === 'superadmin'
   const isLoggedIn = !!(token && tenantId)
 
-  if (to.meta.landing && isLoggedIn) {
-    next({ path: '/dashboard' })
-    return
-  }
-
   if (to.meta.requiresGuest) {
     if (isLoggedIn || isSuperadmin) {
-      next({ path: '/' })
+      next({ path: '/dashboard' })
     } else {
       next()
     }

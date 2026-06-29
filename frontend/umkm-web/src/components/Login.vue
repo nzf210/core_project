@@ -211,7 +211,7 @@ async function applyLoginSuccess(d: any) {
     }
   } catch { console.error('Failed to check profile for onboarding status') }
   await redeemPendingReferral()
-  router.push('/')
+  router.push('/dashboard')
 }
 
 async function redeemPendingReferral() {

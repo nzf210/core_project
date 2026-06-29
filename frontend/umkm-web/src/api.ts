@@ -3,7 +3,10 @@ export const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 
 export async function initDomain() {
   const hostname = globalThis.window.location.hostname
   try {
-    const res = await fetch(`${API_BASE}/auth/public/tenant/resolve?domain=${hostname}`)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3000)
+    const res = await fetch(`${API_BASE}/auth/public/tenant/resolve?domain=${hostname}`, { signal: controller.signal })
+    clearTimeout(timeoutId)
     if (res.ok) {
       const data = await res.json()
       if (data.success && data.data) {
@@ -17,7 +20,14 @@ export async function initDomain() {
     localStorage.removeItem('active_domain_tenant_id')
     localStorage.removeItem('active_domain_business_name')
     localStorage.removeItem('active_domain_logo_url')
-  } catch(e) {
+  } catch(e: unknown) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      // timeout — domain resolve skipped, app mounts anyway
+      localStorage.removeItem('active_domain_tenant_id')
+      localStorage.removeItem('active_domain_business_name')
+      localStorage.removeItem('active_domain_logo_url')
+      return
+    }
     console.error('Failed to resolve domain', e)
   }
 }
