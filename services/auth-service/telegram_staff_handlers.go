@@ -219,16 +219,18 @@ func startTelegramPolling(cfg *config.Config) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	nextUpdateID := int64(0)
 
+	// Ponytail: abort immediately if webhook already set — prevents double processing
+	if isTelegramWebhookSet(client, baseURL) {
+		slog.Info("Telegram webhook already set, skipping polling entirely")
+		return
+	}
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	slog.Info("Telegram polling started", "bot", "Core_tesbot")
 
 	for range ticker.C {
-		if isTelegramWebhookSet(client, baseURL) {
-			slog.Info("Telegram webhook is set, stopping polling")
-			return
-		}
 		pollTelegramOnce(client, baseURL, &nextUpdateID)
 	}
 }
