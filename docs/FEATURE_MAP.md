@@ -131,6 +131,7 @@ Format per feature:
 | F062 | Staff Management UI (Settings.vue) | ✅ Approved | ✅ Done | 2026-06-22 |
 | F063 | WA Keyword Registration (REG/OTP/VERIF) + WA Center | ✅ Approved | ✅ Done | 2026-06-27 |
 | F064 | Platform WA Provider Detection & OTP Routing | ✅ Approved | ✅ Done | 2026-06-28 |
+| F065 | Landing Page Content Management — Superadmin JSON Editor | ✅ Approved | ✅ Done | 2026-06-29 |
 
 ## F058: Superadmin Impersonate + Grafana Monitoring
 
@@ -937,6 +938,87 @@ Tab "Transaksi":
 - Fallback static plans jika API gagal (landing page tidak pernah kosong)
 - Landing page HARUS lightweight — no Chart.js, no heavy dependencies
 - Gunakan CSS Variables existing (F056) untuk theme consistency
+
+---
+
+## F065: Landing Page Content Management — Superadmin JSON Editor
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+**Tanggal:** 2026-06-29
+
+### Deskripsi
+
+Landing page content (hero, features, steps, testimonials, CTA, footer) sekarang **dinamis dari database** via `landing_configs` table. Superadmin bisa edit konten via JSON editor di dashboard, dan perubahan langsung tampil di landing page.
+
+### Architecture
+
+```
+Superadmin UI (JSON Editor)
+  → PUT /api/superadmin/landing-configs/?id=hero
+  → billing-service:8003/admin/landing-configs
+  → PostgreSQL landing_configs table
+  → Invalidate cache (in-memory, 6h TTL)
+
+Landing Page (public)
+  → GET /landing-configs
+  → api-gateway:8000 → billing-service:8003
+  → Check cache → DB fallback
+  → Return all configs as JSON
+  → LandingPage.vue render with fallback
+```
+
+### Database
+
+```sql
+CREATE TABLE landing_configs (
+    id         VARCHAR(50) PRIMARY KEY,  -- 'hero', 'features', 'steps', 'testimonials', 'cta', 'footer'
+    content    JSONB NOT NULL DEFAULT '{}',
+    is_active  BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+### API Endpoints
+
+| Method | Path | Auth | Deskripsi |
+|:-------|:-----|:-----|:----------|
+| GET | `/landing-configs` | Public | Semua config (cached 6 jam) |
+| GET | `/api/superadmin/landing-configs` | Superadmin | List semua config + metadata |
+| PUT | `/api/superadmin/landing-configs/?id=hero` | Superadmin | Update config + auto invalidate cache |
+
+### Caching
+
+- **In-memory cache (sync.RWMutex)**, 6 jam TTL
+- Tidak perlu Redis — landing page load frequency rendah
+- Cache auto-invalidated saat superadmin update config
+- Response header `X-Cache: HIT/MISS` untuk debugging
+
+### Acceptance Criteria
+
+- [x] AC-1: Landing page fetch content dari `GET /landing-configs` (public)
+- [x] AC-2: Perubahan content via superadmin langsung tampil (cache invalidate)
+- [x] AC-3: Fallback static content jika API gagal (landing tidak pernah blank)
+- [x] AC-4: Hanya superadmin yang bisa edit (via `/api/superadmin/` route)
+- [x] AC-5: `vue-tsc` clean, `go build` clean
+
+### Files Changed
+
+- `shared/migrations/000083_landing_configs.{up,down}.sql` — NEW migration
+- `services/billing-service/landing_config_handlers.go` — NEW handlers (public + admin)
+- `services/billing-service/main.go` — register `/landing-config`, `/admin/landing-configs`
+- `services/api-gateway/main.go` — proxy `/landing-configs` (public) + `/api/superadmin/landing-configs` (admin)
+- `frontend/umkm-web/src/api.ts` — `getLandingConfigs()`
+- `frontend/umkm-web/src/superadminApi.ts` — `getLandingConfigs()`, `updateLandingConfig()`
+- `frontend/umkm-web/src/components/LandingPage.vue` — dynamic content via computed getters + fallback
+
+### Migration
+
+```bash
+make migrate-new NAME=landing_configs
+# → shared/migrations/000083_landing_configs.up.sql / .down.sql
+```
 
 ---
 

@@ -439,6 +439,12 @@ export const api = {
     return res.json()
   },
 
+  // F060: Landing page — public dynamic content (no auth required)
+  async getLandingConfigs() {
+    const res = await fetch(`${API_BASE}/landing-configs`)
+    return res.json()
+  },
+
   // F034: Wallet
   async getWallet() {
     const res = await fetch(`${API_BASE}/api/billing/wallet`, { headers: headers() })

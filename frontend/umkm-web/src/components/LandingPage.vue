@@ -44,39 +44,31 @@
       <div class="hero-inner reveal">
         <div class="hero-badge">
           <span class="badge-dot"></span>
-          Kasir · Pembukuan · AI Chatbot — dalam satu platform
+          {{ hero.badge }}
         </div>
         <h1 class="hero-title">
-          Kelola Usaha<br>
-          <span class="title-accent">Tanpa Ribet,</span><br>
-          Tanpa Accountant
+          {{ hero.title_line1 }}<br>
+          <span class="title-accent">{{ hero.title_line2 }}</span><br>
+          {{ hero.title_line3 }}
         </h1>
         <p class="hero-sub">
-          WCH Platform adalah all-in-one aplikasi kasir, pembukuan double-entry,
-          dan AI Customer Service untuk UMKM Indonesia. Mulai gratis, upgrade kapan saja.
+          {{ hero.subtitle }}
         </p>
         <div class="hero-cta">
           <a href="/register" class="cta-main">
-            <span>Mulai Gratis</span>
+            <span>{{ hero.cta_primary }}</span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </a>
-          <a href="#fitur" class="cta-secondary">Lihat Fitur</a>
+          <a href="#fitur" class="cta-secondary">{{ hero.cta_secondary }}</a>
         </div>
         <div class="hero-stats">
-          <div class="stat">
-            <strong>100+</strong>
-            <span>UMKM Aktif</span>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat">
-            <strong>50K+</strong>
-            <span>Transaksi/Bulan</span>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat">
-            <strong>24/7</strong>
-            <span>AI Chatbot</span>
-          </div>
+          <template v-for="(stat, i) in hero.stats" :key="i">
+            <div v-if="Number(i) > 0" class="stat-divider"></div>
+            <div class="stat">
+              <strong>{{ stat.value }}</strong>
+              <span>{{ stat.label }}</span>
+            </div>
+          </template>
         </div>
       </div>
     </section>
@@ -100,7 +92,7 @@
         <div class="section-label">Fitur Unggulan</div>
         <h2 class="section-title">Semua yang Anda butuhkan,<br>dalam satu aplikasi</h2>
         <div class="features-grid">
-          <div v-for="(f, i) in features" :key="i" class="feature-card" :style="{ '--delay': `${i * 80}ms` }">
+          <div v-for="(f, i) in features" :key="i" class="feature-card" :style="{ '--delay': `${Number(i) * 80}ms` }">
             <div class="feature-icon">{{ f.icon }}</div>
             <h3>{{ f.title }}</h3>
             <p>{{ f.desc }}</p>
@@ -115,8 +107,8 @@
         <div class="section-label">Cara Kerja</div>
         <h2 class="section-title">Dari nol ke operasional<br>dalam 3 menit</h2>
         <div class="steps">
-          <div v-for="(step, i) in steps" :key="i" class="step" :style="{ '--delay': `${i * 120}ms` }">
-            <div class="step-num">{{ String(i + 1).padStart(2, '0') }}</div>
+          <div v-for="(step, i) in steps" :key="i" class="step" :style="{ '--delay': `${Number(i) * 120}ms` }">
+            <div class="step-num">{{ String(Number(i) + 1).padStart(2, '0') }}</div>
             <div class="step-body">
               <h3>{{ step.title }}</h3>
               <p>{{ step.desc }}</p>
@@ -181,7 +173,7 @@
         <div class="section-label">Cerita User</div>
         <h2 class="section-title">Dipercaya oleh pelaku usaha<br>seperti Anda</h2>
         <div class="testimoni-grid">
-          <div v-for="(t, i) in testimonials" :key="i" class="testimoni-card" :style="{ '--delay': `${i * 100}ms` }">
+          <div v-for="(t, i) in testimonials" :key="i" class="testimoni-card" :style="{ '--delay': `${Number(i) * 100}ms` }">
             <div class="testimoni-stars">
               <span v-for="n in 5" :key="n">★</span>
             </div>
@@ -202,10 +194,10 @@
     <section class="section-cta reveal">
       <div class="cta-inner">
         <div class="cta-glow"></div>
-        <h2>Siap mengelola usaha dengan lebih cerdas?</h2>
-        <p>Bergabung dengan 100+ UMKM Indonesia hari ini. Gratis selamanya.</p>
+        <h2>{{ cta.title }}</h2>
+        <p>{{ cta.subtitle }}</p>
         <a href="/register" class="cta-main cta-large">
-          <span>Daftar Sekarang — Gratis</span>
+          <span>{{ cta.button }}</span>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </a>
       </div>
@@ -281,51 +273,56 @@ const mobileOpen = ref(false)
 const plans = ref<any[]>([])
 const plansLoading = ref(false)
 
-// Fallback static plans if API fails (matches saas_plans seed data)
+// F060: Dynamic landing content from backend
+const landingContent = ref<Record<string, any>>({})
+
+// Fallback static content if API fails
+const fallbackLandingContent: Record<string, any> = {
+  hero: {
+    badge: 'Kasir · Pembukuan · AI Chatbot — dalam satu platform',
+    title_line1: 'Kelola Usaha',
+    title_line2: 'Tanpa Ribet,',
+    title_line3: 'Tanpa Accountant',
+    subtitle: 'WCH Platform adalah all-in-one aplikasi kasir, pembukuan double-entry, dan AI Customer Service untuk UMKM Indonesia. Mulai gratis, upgrade kapan saja.',
+    cta_primary: 'Mulai Gratis',
+    cta_secondary: 'Lihat Fitur',
+    stats: [
+      { value: '100+', label: 'UMKM Aktif' },
+      { value: '50K+', label: 'Transaksi/Bulan' },
+      { value: '24/7', label: 'AI Chatbot' },
+    ],
+  },
+  features: [
+    { icon: '💰', title: 'Kasir POS', desc: 'Catat transaksi jual-beli dengan cepat. Dukung multi-pembayaran: Tunai, QRIS, Transfer, E-Wallet.' },
+    { icon: '📒', title: 'Pembukuan Otomatis', desc: 'Double-entry accounting. Setiap transaksi POS langsung tercatat di jurnal — tidak perlu accountant.' },
+    { icon: '🤖', title: 'AI Customer Service', desc: 'Bot WhatsApp otomatis jawab pertanyaan pelanggan 24/7. Bisa di-training dengan FAQ toko Anda.' },
+    { icon: '📊', title: 'Laporan Keuangan', desc: 'Laba rugi, arus kas, neraca — siap pakai untuk pajak dan pengajuan kredit bank.' },
+    { icon: '🏪', title: 'Multi-Toko', desc: 'Kelola beberapa cabang dalam satu akun. Cocok untuk franchise dan warung kopi.' },
+    { icon: '🔗', title: 'Integrasi Marketplace', desc: 'Hubungkan dengan GoFood, Grab, Shopee. Stok tersinkron otomatis di satu dashboard.' },
+  ],
+  steps: [
+    { title: 'Daftar dalam 30 detik', desc: 'Masukkan nomor WhatsApp, terima OTP, langsung masuk. Tanpa verifikasi email.' },
+    { title: 'Pilih paket atau mulai gratis', desc: 'Lite gratis selamanya. Atau pilih Pro/Ultimate untuk fitur AI dan multi-user.' },
+    { title: 'Mulai berjualan', desc: 'Kasir langsung bisa dipakai. Pembukuan berjalan otomatis di belakang layar.' },
+  ],
+  testimonials: [
+    { quote: 'Dulu pembukuan pakai Excel, sekarang semua otomatis. Owner warung kopi saya bisa fokus layani pelanggan.', name: 'Budi Santoso', role: 'Pemilik Warung Kopi, Bandung' },
+    { quote: 'AI chatbot-nya jawab pertanyaan pelanggan di malam hari. Servis tetap prima meski saya lagi tutup.', name: 'Siti Rahayu', role: 'Pemilik Toko Fashion, Surabaya' },
+    { quote: 'Laporan keuangan langsung jadi, tinggal export ke PDF untuk pengajuan KUR ke bank.', name: 'Ahmad Hidayat', role: 'Pemilik Klinik Pratama, Medan' },
+  ],
+  cta: {
+    title: 'Siap mengelola usaha dengan lebih cerdas?',
+    subtitle: 'Bergabung dengan 100+ UMKM Indonesia hari ini. Gratis selamanya.',
+    button: 'Daftar Sekarang — Gratis',
+  },
+}
+
 const fallbackPlans = [
-  {
-    id: 'lite', name: 'Lite', sort_order: 1,
-    price_monthly: 3500000, price_yearly: 35000000,
-    description: 'Untuk bisnis kecil yang baru memulai.',
-    features: [
-      { feature_key: 'pos', feature_name: 'Kasir POS Dasar' },
-      { feature_key: 'journal', feature_name: '100 Transaksi/bulan' },
-      { feature_key: 'reports', feature_name: 'Laporan Keuangan Dasar' },
-      { feature_key: 'chatbot', feature_name: 'AI Chatbot WhatsApp (50 pesan)' },
-      { feature_key: 'users', feature_name: '1 Pengguna' },
-    ]
-  },
-  {
-    id: 'pro', name: 'Pro', sort_order: 2,
-    price_monthly: 15000000, price_yearly: 150000000,
-    description: 'Untuk bisnis berkembang yang butuh lebih.',
-    features: [
-      { feature_key: 'pos', feature_name: 'Kasir POS Lengkap' },
-      { feature_key: 'journal', feature_name: '10.000 Transaksi/bulan' },
-      { feature_key: 'reports', feature_name: 'Semua Laporan Keuangan' },
-      { feature_key: 'chatbot', feature_name: 'AI Chatbot Unlimited' },
-      { feature_key: 'users', feature_name: '5 Pengguna' },
-      { feature_key: 'ai_vision', feature_name: 'AI Vision (foto produk)' },
-      { feature_key: 'marketplace', feature_name: 'Integrasi Marketplace' },
-    ]
-  },
-  {
-    id: 'ultimate', name: 'Ultimate', sort_order: 3,
-    price_monthly: 30000000, price_yearly: 300000000,
-    description: 'Untuk bisnis menengah dan franchise.',
-    features: [
-      { feature_key: 'pos', feature_name: 'Kasir POS Lengkap' },
-      { feature_key: 'journal', feature_name: 'Transaksi Unlimited' },
-      { feature_key: 'reports', feature_name: 'Semua Laporan Keuangan' },
-      { feature_key: 'chatbot', feature_name: 'AI Chatbot Unlimited' },
-      { feature_key: 'users', feature_name: 'User Unlimited' },
-      { feature_key: 'multi_branch', feature_name: 'Multi-Toko (5 Cabang)' },
-      { feature_key: 'ai_multimodal', feature_name: 'AI Multimodal (vision + audio)' },
-      { feature_key: 'custom_branding', feature_name: 'Custom Branding' },
-      { feature_key: 'priority_support', feature_name: 'Priority Support' },
-    ]
-  },
+  { id: 'lite', name: 'Lite', sort_order: 1, price_monthly: 3500000, price_yearly: 35000000, description: 'Untuk bisnis kecil yang baru memulai.', features: [{ feature_key: 'pos', feature_name: 'Kasir POS Dasar' }, { feature_key: 'journal', feature_name: '100 Transaksi/bulan' }, { feature_key: 'reports', feature_name: 'Laporan Keuangan Dasar' }, { feature_key: 'chatbot', feature_name: 'AI Chatbot WhatsApp (50 pesan)' }, { feature_key: 'users', feature_name: '1 Pengguna' }] },
+  { id: 'pro', name: 'Pro', sort_order: 2, price_monthly: 15000000, price_yearly: 150000000, description: 'Untuk bisnis berkembang yang butuh lebih.', features: [{ feature_key: 'pos', feature_name: 'Kasir POS Lengkap' }, { feature_key: 'journal', feature_name: '10.000 Transaksi/bulan' }, { feature_key: 'reports', feature_name: 'Semua Laporan Keuangan' }, { feature_key: 'chatbot', feature_name: 'AI Chatbot Unlimited' }, { feature_key: 'users', feature_name: '5 Pengguna' }, { feature_key: 'ai_vision', feature_name: 'AI Vision (foto produk)' }, { feature_key: 'marketplace', feature_name: 'Integrasi Marketplace' }] },
+  { id: 'ultimate', name: 'Ultimate', sort_order: 3, price_monthly: 30000000, price_yearly: 300000000, description: 'Untuk bisnis menengah dan franchise.', features: [{ feature_key: 'pos', feature_name: 'Kasir POS Lengkap' }, { feature_key: 'journal', feature_name: 'Transaksi Unlimited' }, { feature_key: 'reports', feature_name: 'Semua Laporan Keuangan' }, { feature_key: 'chatbot', feature_name: 'AI Chatbot Unlimited' }, { feature_key: 'users', feature_name: 'User Unlimited' }, { feature_key: 'multi_branch', feature_name: 'Multi-Toko (5 Cabang)' }, { feature_key: 'ai_multimodal', feature_name: 'AI Multimodal (vision + audio)' }, { feature_key: 'custom_branding', feature_name: 'Custom Branding' }, { feature_key: 'priority_support', feature_name: 'Priority Support' }] },
 ]
+
 const billingCycle = ref<'monthly' | 'yearly'>('monthly')
 
 const fetchPlans = async () => {
@@ -345,78 +342,34 @@ const fetchPlans = async () => {
   }
 }
 
+const fetchLandingContent = async () => {
+  try {
+    const res = await api.getLandingConfigs()
+    if (res?.success && res.data) {
+      landingContent.value = res.data
+    } else {
+      landingContent.value = fallbackLandingContent
+    }
+  } catch (e) {
+    console.error('Failed to fetch landing content', e)
+    landingContent.value = fallbackLandingContent
+  }
+}
+
+// Computed getters for dynamic content
+const hero = computed(() => (landingContent.value.hero || fallbackLandingContent.hero) as typeof fallbackLandingContent.hero)
+const features = computed(() => (landingContent.value.features || fallbackLandingContent.features) as typeof fallbackLandingContent.features)
+const steps = computed(() => (landingContent.value.steps || fallbackLandingContent.steps) as typeof fallbackLandingContent.steps)
+const testimonials = computed(() => (landingContent.value.testimonials || fallbackLandingContent.testimonials) as typeof fallbackLandingContent.testimonials)
+const cta = computed(() => (landingContent.value.cta || fallbackLandingContent.cta) as typeof fallbackLandingContent.cta)
+
 // Dark landing always — matches existing WCH dark theme
 const themeClass = computed(() => 'theme-dark')
-
-const features = [
-  {
-    icon: '💰',
-    title: 'Kasir POS',
-    desc: 'Catat transaksi jual-beli dengan cepat. Dukung multi-pembayaran: Tunai, QRIS, Transfer, E-Wallet.'
-  },
-  {
-    icon: '📒',
-    title: 'Pembukuan Otomatis',
-    desc: 'Double-entry accounting. Setiap transaksi POS langsung tercatat di jurnal — tidak perlu accountant.'
-  },
-  {
-    icon: '🤖',
-    title: 'AI Customer Service',
-    desc: 'Bot WhatsApp otomatis jawab pertanyaan pelanggan 24/7. Bisa di-training dengan FAQ toko Anda.'
-  },
-  {
-    icon: '📊',
-    title: 'Laporan Keuangan',
-    desc: 'Laba rugi, arus kas, neraca — siap pakai untuk pajak dan pengajuan kredit bank.'
-  },
-  {
-    icon: '🏪',
-    title: 'Multi-Toko',
-    desc: 'Kelola beberapa cabang dalam satu akun. Cocok untuk franchise dan warung kopi.',
-  },
-  {
-    icon: '🔗',
-    title: 'Integrasi Marketplace',
-    desc: 'Hubungkan dengan GoFood, Grab, Shopee. Stok tersinkron otomatis di satu dashboard.'
-  }
-]
-
-const steps = [
-  {
-    title: 'Daftar dalam 30 detik',
-    desc: 'Masukkan nomor WhatsApp, terima OTP, langsung masuk. Tanpa verifikasi email.'
-  },
-  {
-    title: 'Pilih paket atau mulai gratis',
-    desc: 'Lite gratis selamanya. Atau pilih Pro/Ultimate untuk fitur AI dan multi-user.'
-  },
-  {
-    title: 'Mulai berjualan',
-    desc: 'Kasir langsung bisa dipakai. Pembukuan berjalan otomatis di belakang layar.'
-  }
-]
-
-const testimonials = [
-  {
-    quote: 'Dulu pembukuan pakai Excel, sekarang semua otomatis. Owner warung kopi saya bisa fokus layani pelanggan.',
-    name: 'Budi Santoso',
-    role: 'Pemilik Warung Kopi, Bandung'
-  },
-  {
-    quote: 'AI chatbot-nya jawab pertanyaan pelanggan di malam hari. Servis tetap prima meski saya lagi tutup.',
-    name: 'Siti Rahayu',
-    role: 'Pemilik Toko Fashion, Surabaya'
-  },
-  {
-    quote: 'Laporan keuangan langsung jadi, tinggal export ke PDF untuk pengajuan KUR ke bank.',
-    name: 'Ahmad Hidayat',
-    role: 'Pemilik Klinik Pratama, Medan'
-  }
-]
 
 // Scroll reveal via IntersectionObserver
 onMounted(() => {
   fetchPlans()
+  fetchLandingContent()
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {

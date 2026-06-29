@@ -147,6 +147,9 @@
           <button class="btn" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 0.35rem 0.75rem; font-size: 0.8rem;" @click="openFeatureMatrix">
             Feature Matrix
           </button>
+          <button class="btn" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); padding: 0.35rem 0.75rem; font-size: 0.8rem;" @click="showLandingEditor = true">
+            🌐 Edit Landing Page
+          </button>
           <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" @click="fetchTenants"
             :disabled="loadingTenants">
             {{ loadingTenants ? '...' : 'Refresh' }}
@@ -320,6 +323,11 @@
       @save-gating="saveAddonMinTier"
     />
 
+    <!-- F065: Landing Page Content Editor -->
+    <SuperAdminLandingEditorModal
+      :show="showLandingEditor"
+      @close="showLandingEditor = false"
+    />
 
     <!-- Toast -->
     <Teleport to="body">
@@ -332,6 +340,7 @@
 
 <script setup lang="ts">
 import { useSuperAdmin } from '../composables/useSuperAdmin'
+import { ref } from 'vue'
 import SuperAdminAddTenantModal from './SuperAdminAddTenantModal.vue'
 import SuperAdminMyProfileModal from './SuperAdminMyProfileModal.vue'
 import SuperAdminEditProfileModal from './SuperAdminEditProfileModal.vue'
@@ -340,6 +349,7 @@ import SuperAdminVoucherModal from './SuperAdminVoucherModal.vue'
 import SuperAdminAddonModal from './SuperAdminAddonModal.vue'
 import SuperAdminPlanModal from './SuperAdminPlanModal.vue'
 import SuperAdminFeatureMatrixModal from './SuperAdminFeatureMatrixModal.vue'
+import SuperAdminLandingEditorModal from './SuperAdminLandingEditorModal.vue'
 
 const {
   verifierStatus, verifierJID, qrCode, loadingQR, checkingStatus, disconnecting,
@@ -365,6 +375,10 @@ const {
   openFeatureMatrix, toggleFeature,
   saveAddonMinTier, saveNewTenant,
 } = useSuperAdmin()
+
+// F065: Landing page content editor state (lokal di komponen)
+const showLandingEditor = ref(false)
+
 </script>
 
 <style scoped>

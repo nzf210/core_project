@@ -12,6 +12,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path,
       },
+      // F065: Proxy landing-configs to API gateway
+      '/landing-configs': {
+        target: 'http://localhost:8010',
+        changeOrigin: true,
+        rewrite: (path) => path,
+      },
     },
   },
 })

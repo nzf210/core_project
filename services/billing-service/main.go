@@ -51,6 +51,9 @@ func main() {
 	// Public routes
 	mux.HandleFunc("/plans", handleListPlans)
 	mux.HandleFunc("/vouchers/validate", handleValidateVoucher)
+	// F060: Landing page dynamic content
+	mux.HandleFunc("/landing-config", handleGetLandingConfig)
+	mux.HandleFunc("/landing-configs", handleGetAllLandingConfigs)
 
 	// Protected routes
 	mux.Handle("/subscribe", auth.Middleware(http.HandlerFunc(handleSubscribe)))
@@ -83,6 +86,9 @@ func main() {
 	mux.Handle("/admin/vouchers/generate", auth.Middleware(http.HandlerFunc(handleAdminGenerateVouchers)))
 	mux.Handle("/admin/vouchers", auth.Middleware(http.HandlerFunc(handleAdminVouchers)))
 	mux.Handle("/admin/tenants/", auth.Middleware(http.HandlerFunc(handleAdminTenantItem)))
+	// F060: Landing page content management
+	mux.Handle("/admin/landing-configs", auth.Middleware(http.HandlerFunc(handleAdminListLandingConfigs)))
+	mux.Handle("/admin/landing-configs/", auth.Middleware(http.HandlerFunc(handleAdminUpdateLandingConfig)))
 
 	// Cleanup expired pending subscriptions (F015)
 	mux.Handle("/admin/cleanup/pending", auth.Middleware(http.HandlerFunc(handleAdminCleanupPending)))

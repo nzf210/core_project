@@ -65,7 +65,7 @@ async function authFetch(url: string, options: RequestInit = {}): Promise<Respon
       })
     } else {
       localStorage.clear()
-      window.location.href = '/superadmin/login'
+      globalThis.window.location.href = '/superadmin/login'
       throw new Error('Session expired')
     }
   }
@@ -245,6 +245,21 @@ export const superadminApi = {
   async updateAddonGating(data: { feature_key: string; min_tier?: string; default_enabled: string[] }) {
     const res = await authFetch(`${API_BASE}/api/superadmin/billing/addon-gating`, {
       method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  },
+
+  // F060: Landing page content management
+  async getLandingConfigs() {
+    const res = await authFetch(`${API_BASE}/api/superadmin/landing-configs`)
+    return res.json()
+  },
+
+  async updateLandingConfig(id: string, data: { content: any; is_active?: boolean }) {
+    const res = await authFetch(`${API_BASE}/api/superadmin/landing-configs/?id=${encodeURIComponent(id)}`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     })
