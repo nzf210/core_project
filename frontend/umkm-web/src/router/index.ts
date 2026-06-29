@@ -13,7 +13,6 @@ import Login from '../components/Login.vue'
 import Register from '../components/Register.vue'
 import SuperAdminLogin from '../components/SuperAdminLogin.vue'
 import ForgotPassword from '../components/ForgotPassword.vue'
-import ResetPassword from '../components/ResetPassword.vue'
 import Automations from '../components/Automations.vue'
 import WASetup from '../components/WASetup.vue'
 import DataTransfer from '../components/DataTransfer.vue'
@@ -53,7 +52,8 @@ const routes = [
   { path: '/clinic/notifications', redirect: '/clinic/frontdesk?tab=notifications' },
   { path: '/superadmin-login', component: SuperAdminLogin, name: 'SuperAdminLogin', meta: { requiresGuest: true } },
   { path: '/forgot-password', component: ForgotPassword, name: 'ForgotPassword', meta: { requiresGuest: true } },
-  { path: '/reset-password', component: ResetPassword, name: 'ResetPassword', meta: { requiresGuest: true }, props: (route: any) => ({ initialEmail: route.query.email }) },
+  // Legacy token-based reset — dead endpoint, redirect to the chat-based flow
+  { path: '/reset-password', redirect: '/forgot-password' },
   // F036: Affiliate
   { path: '/affiliate', component: AffiliateDashboard, name: 'AffiliateDashboard' },
   { path: '/leaderboard', component: AffiliateLeaderboard, name: 'AffiliateLeaderboard', meta: { public: true } },

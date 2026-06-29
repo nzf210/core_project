@@ -375,6 +375,24 @@ func handleTelegramWebhookCommand(chatID, text string) {
 			return
 		}
 
+		// Security: verify the current chat matches the stored telegram_chat_id for this user
+		if telegramChatID == "" {
+			sendTelegramMessage(chatID,
+				"❌ Akun Anda belum terhubung dengan Telegram.\n\n"+
+					"Gunakan chat WhatsApp untuk reset password — buka aplikasi WCH dan klik *Lupa Password*.",
+			)
+			Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID)
+			return
+		}
+		if telegramChatID != chatID {
+			sendTelegramMessage(chatID,
+				"❌ Nomor HP ini tidak terdaftar di chat ini.\n\n"+
+					"Hubungi admin jika ini salah.",
+			)
+			Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID)
+			return
+		}
+
 		// Rate limit check
 		otpKey := "pw-reset-otp:" + phone
 		if existing, _ := Redis.Get(ctx, otpKey).Result(); existing != "" {

@@ -21,127 +21,87 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	redisStatus := "disconnected"
 	if redisClient != nil {
-		if err := redisClient.Ping(r.Context()).Err(); err == nil {
+		if redisClient.Ping(r.Context()).Err() == nil {
 			redisStatus = "connected"
 		}
 	}
 
 	dbStatus := "disconnected"
 	if db != nil {
-		if err := db.Ping(); err == nil {
+		if db.Ping() == nil {
 			dbStatus = "connected"
 		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"status":             "ok",
 		"instance_id":        instanceID,
 		"connected_sessions": connected,
-		"redis":              redisStatus,
+		"redis":             redisStatus,
 		"database":           dbStatus,
 	})
 }
 
-func handleHealthz(w http.ResponseWriter, r *http.Request) {
-	handleHealth(w, r)
-}
+func handleHealthz(w http.ResponseWriter, r *http.Request) { handleHealth(w, r) }
 
-// handleMetrics returns Prometheus-compatible metrics
 func handleMetrics(w http.ResponseWriter, r *http.Request) {
 	clientMu.RLock()
-	connectedSessions := len(clientMap)
+	n := len(clientMap)
 	clientMu.RUnlock()
 
-	totalTenants := int64(0)
-	if redisClient != nil {
-		keys, _ := redisClient.Keys(r.Context(), "wa:owner:*").Result()
-		totalTenants = int64(len(keys))
-	}
-
-	activeInstances := int64(0)
-	if redisClient != nil {
-		keys, _ := redisClient.Keys(r.Context(), "wa:instance:*").Result()
-		activeInstances = int64(len(keys))
-	}
-
-	metrics := fmt.Sprintf(`# HELP wa_gateway_info WA Gateway instance info
-# TYPE wa_gateway_info gauge
-wa_gateway_info{instance="%s"} 1
-
-# HELP wa_gateway_connected_sessions Current connected WhatsApp sessions
-# TYPE wa_gateway_connected_sessions gauge
-wa_gateway_connected_sessions{instance="%s"} %d
-
-# HELP wa_gateway_total_tenants Total tenants with sessions
-# TYPE wa_gateway_total_tenants gauge
-wa_gateway_total_tenants %d
-
-# HELP wa_gateway_active_instances Number of active gateway instances
-# TYPE wa_gateway_active_instances gauge
-wa_gateway_active_instances %d
-
-# HELP wa_gateway_messages_sent_total Total messages sent
-# TYPE wa_gateway_messages_sent_total counter
-wa_gateway_messages_sent_total{instance="%s"} %d
-
-# HELP wa_gateway_messages_received_total Total messages received
-# TYPE wa_gateway_messages_received_total counter
-wa_gateway_messages_received_total{instance="%s"} %d
-
-# HELP wa_gateway_errors_total Total errors
-# TYPE wa_gateway_errors_total counter
-wa_gateway_errors_total{instance="%s"} %d
-`, instanceID, instanceID, connectedSessions, totalTenants, activeInstances, instanceID, waMessagesSent, instanceID, waMessagesRecv, instanceID, waErrorsTotal)
-
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(metrics))
+	fmt.Fprintf(w, `# HELP wa_gateway_info WA Gateway instance info
+# TYPE wa_gateway_info gauge
+wa_gateway_info{instance=%q} 1
+# HELP wa_gateway_connected_sessions Current connected sessions
+# TYPE wa_gateway_connected_sessions gauge
+wa_gateway_connected_sessions{instance=%q} %d
+`, instanceID, instanceID, n)
 }
 
-// restoreSessions loads and reconnects existing sessions from DB
+// restoreSessions loads and reconnects existing sessions from DB.
 func restoreSessions(ctx context.Context, container *sqlstore.Container) {
 	if db == nil {
 		return
 	}
-
-	// Add jitter delay to avoid race condition between replicas
-	delayMs := 1000 + (time.Now().UnixNano() % 3000)
-	time.Sleep(time.Duration(delayMs) * time.Millisecond)
+	// Jitter to avoid race between replicas
+	time.Sleep(time.Duration(1000+time.Now().UnixNano()%3000) * time.Millisecond)
 
 	rows, err := db.Query(`SELECT tenant_id, jid FROM wa_tenant_sessions`)
 	if err != nil {
-		slog.Error("Failed to query sessions", "error", err)
+		slog.Error("restoreSessions: query failed", "error", err)
 		return
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var tID, jidStr string
-		if err := rows.Scan(&tID, &jidStr); err != nil {
+		if rows.Scan(&tID, &jidStr) != nil {
 			continue
 		}
-
 		if owned, _ := AcquireSessionLock(ctx, tID); !owned {
-			slog.Info("Session for tenant owned by another instance, skipping", "tenant_id", tID)
+			slog.Info("restoreSessions: owned by another instance, skipping", "tenant_id", tID)
 			continue
 		}
-
 		jid, _ := types.ParseJID(jidStr)
 		device, _ := container.GetDevice(context.Background(), jid)
-		if device != nil {
-			client := whatsmeow.NewClient(device, waLog.Stdout("Client-"+tID, "INFO", true))
-			client.AddEventHandler(func(evt interface{}) { eventHandler(tID, evt) })
-			if err := client.Connect(); err == nil {
-				clientMu.Lock()
-				clientMap[tID] = client
-				clientMu.Unlock()
-				slog.Info("Restored session for tenant", "tenant_id", tID)
-			} else {
-				slog.Error("Failed to restore session for tenant", "tenant_id", tID, "error", err)
-				ReleaseSessionLock(ctx, tID)
-			}
+		if device == nil {
+			ReleaseSessionLock(ctx, tID)
+			continue
+		}
+		client := whatsmeow.NewClient(device, waLog.Stdout("Client-"+tID, "INFO", true))
+		client.AddEventHandler(func(evt any) { eventHandler(tID, evt) })
+		if err := client.Connect(); err == nil {
+			clientMu.Lock()
+			clientMap[tID] = client
+			clientMu.Unlock()
+			slog.Info("restoreSessions: session restored", "tenant_id", tID)
+		} else {
+			slog.Error("restoreSessions: connect failed", "tenant_id", tID, "error", err)
+			ReleaseSessionLock(ctx, tID)
 		}
 	}
 }
