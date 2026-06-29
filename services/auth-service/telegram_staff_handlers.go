@@ -2,13 +2,10 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math/big"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -187,7 +184,7 @@ func processTelegramUpdates(updates []map[string]any, nextUpdateID *int64) {
 		chatID := fmt.Sprintf("%.0f", chatIDFloat)
 		text, _ := message["text"].(string)
 
-		handleTelegramCommand(chatID, text)
+		handleTelegramWebhookCommand(chatID, text)
 	}
 }
 
@@ -301,168 +298,97 @@ func handleTelegramWebhook(w http.ResponseWriter, r *http.Request) {
 
 // handleTelegramWebhookCommand dispatches Telegram commands with a multi-step
 // password-reset state machine.
-// Flow: /reset_password → send phone → receive OTP → send new password → done.
+// Flow: /reset_password → lookup by chat_id → confirm (ya/tidak) → new password → done.
+// No OTP needed — telegram_chat_id IS the identity proof.
 func handleTelegramWebhookCommand(chatID, text string) {
 	text = strings.TrimSpace(text)
 
-	// Check if user is in a password-reset conversation
+	// Strip bot username suffix (e.g. "/reset_password@WCHBot" → "/reset_password")
+	if idx := strings.Index(text, "@"); idx != -1 {
+		text = text[:idx]
+	}
+
 	ctx := context.Background()
 	stepKey := "pw-reset:step:" + chatID
 	currentStep, _ := Redis.Get(ctx, stepKey).Result()
 
 	switch text {
 	case "/start":
-		// Cancel any in-progress reset
 		Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID)
-		welcomeMsg := fmt.Sprintf(
+		sendTelegramMessage(chatID,
 			"👋 *Selamat datang di WCH Platform!*\n\n"+
 				"✅ Bot berhasil terhubung!\n"+
-				"Chat ID Anda: `%s`\n\n"+
+				"Chat ID Anda: `"+chatID+"`\n\n"+
 				"Buka aplikasi WCH dan pilih *Masuk dengan Telegram* untuk mendaftar atau login.\n\n"+
 				"Bot ini akan mengirimkan notifikasi penting seperti:\n"+
 				"• Update langganan & tagihan\n"+
 				"• Kode OTP untuk verifikasi\n"+
 				"• Pengingat automate\n\n"+
 				"Hubungi admin jika butuh bantuan.",
-			chatID,
 		)
-		sendTelegramOTP(chatID, welcomeMsg)
 		return
 
 	case "/reset_password", "/resetpassword":
-		// Cancel any in-progress session and start fresh
-		Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID)
-		Redis.Set(ctx, stepKey, "await_phone", 0)
-		sendTelegramMessage(chatID,
-			"🔑 *Reset Password*\n\n"+
-				"Kirim nomor HP Anda yang terdaftar (contoh: 0812xxxxxxxx)\n\n"+
-				"Ketik *batal* untuk membatalkan.",
-		)
-		return
-	}
-
-	// State machine for password reset
-	switch currentStep {
-	case "await_phone":
-		if strings.ToLower(text) == "batal" {
-			Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID)
-			sendTelegramMessage(chatID, "✅ Reset password dibatalkan.")
-			return
-		}
-		// Validate and normalize phone number
-		phone := normalizePhone(strings.TrimSpace(text))
-		if len(phone) < 10 || !strings.HasPrefix(phone, "62") {
-			sendTelegramMessage(chatID, "❌ Format nomor HP tidak valid. Contoh: 0812xxxxxxxx")
-			return
-		}
-		// Look up user
-		var userID, telegramChatID string
+		// Look up user by telegram_chat_id
+		var userID, phone string
 		err := DB.QueryRow(ctx,
-			"SELECT id, COALESCE(telegram_chat_id, '') FROM users WHERE phone_number = $1 OR phone_number = $2",
-			phone, "0"+phone[2:],
-		).Scan(&userID, &telegramChatID)
+			"SELECT id, phone_number FROM users WHERE telegram_chat_id = $1",
+			chatID,
+		).Scan(&userID, &phone)
 		if err == pgx.ErrNoRows {
-			// Don't leak whether phone exists
 			sendTelegramMessage(chatID,
-				"📱 Kami tidak dapat menemukan akun dengan nomor tersebut.\n\n"+
-					"Coba lagi atau ketik *batal* untuk membatalkan.",
+				"❌ Akun Telegram ini belum terhubung ke akun WCH manapun.\n\n"+
+					"Buka aplikasi WCH, lalu gunakan menu *Masuk dengan Telegram* untuk menghubungkan akun Anda.\n\n"+
+					"Hubungi admin jika butuh bantuan.",
 			)
 			return
 		}
 		if err != nil {
-			slog.Error("DB error in telegram reset step 1", "error", err)
+			slog.Error("DB error in telegram reset step 0", "error", err)
 			sendTelegramMessage(chatID, "⚠️ Terjadi kesalahan. Silakan coba lagi.")
 			return
 		}
 
-		// Security: verify the current chat matches the stored telegram_chat_id for this user
-		if telegramChatID == "" {
-			sendTelegramMessage(chatID,
-				"❌ Akun Anda belum terhubung dengan Telegram.\n\n"+
-					"Gunakan chat WhatsApp untuk reset password — buka aplikasi WCH dan klik *Lupa Password*.",
-			)
-			Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID)
-			return
-		}
-		if telegramChatID != chatID {
-			sendTelegramMessage(chatID,
-				"❌ Nomor HP ini tidak terdaftar di chat ini.\n\n"+
-					"Hubungi admin jika ini salah.",
-			)
-			Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID)
-			return
-		}
+		// Mask phone for display: 0851xxx0107
+		masked := phone[:4] + "xxx" + phone[len(phone)-4:]
 
-		// Rate limit check
-		otpKey := "pw-reset-otp:" + phone
-		if existing, _ := Redis.Get(ctx, otpKey).Result(); existing != "" {
-			ttl, _ := Redis.TTL(ctx, otpKey).Result()
-			sendTelegramMessage(chatID,
-				fmt.Sprintf("⏳ Kode OTP sudah dikirim. Berlaku dalam %d menit. Silakan cek WhatsApp Anda.\n\n"+
-					"Atau ketik *batal* untuk membatalkan.", int(ttl.Minutes())+1),
-			)
-			return
-		}
-
-		// Generate OTP
-		otpNum, _ := rand.Int(rand.Reader, new(big.Int).SetUint64(1000000))
-		otp := fmt.Sprintf("%06d", otpNum.Int64())
-		Redis.Set(ctx, otpKey, otp, 1*time.Hour)
-		Redis.Set(ctx, stepKey, "await_otp", 0)
-		Redis.Set(ctx, "pw-reset:data:"+chatID, phone, 24*time.Hour)
-
-		// Send OTP via Telegram directly
-		go func() {
-			msg := fmt.Sprintf("🔑 *Kode Reset Password WCH*\n\nKode OTP Anda: *%s*\n\n📌 Masukkan kode ini untuk mereset password.\n\n⚠️ Jangan bagikan kode ini kepada siapapun.\n\nBerlaku selama 1 jam.", otp)
-			if err := sendTelegramMessage(chatID, msg); err != nil {
-				slog.Error("Failed to send password reset OTP via Telegram", "chatID", chatID, "error", err)
-			} else {
-				slog.Info("Password reset OTP sent via Telegram", "chatID", chatID)
-			}
-		}()
+		// Store userID|phone for next step
+		Redis.Set(ctx, stepKey, "await_confirm", 0)
+		Redis.Set(ctx, "pw-reset:data:"+chatID, userID+"|"+phone, 10*time.Minute)
 
 		sendTelegramMessage(chatID,
-			"📨 Kode OTP telah dikirim ke chat ini.\n\n"+
-				"Silakan cek dan balas dengan kode OTP tersebut.\n\n"+
-				"Ketik *batal* untuk membatalkan.",
+			"🔑 *Reset Password*\n\n"+
+				"Apakah Anda yakin ingin mereset password untuk akun:\n"+
+				"`"+masked+"`\n\n"+
+				"Ketik *ya* untuk melanjutkan atau *tidak* untuk membatalkan.",
 		)
 		return
+	}
 
-	case "await_otp":
-		if strings.ToLower(text) == "batal" {
+	// State machine
+	switch currentStep {
+	case "await_confirm":
+		if strings.ToLower(text) == "tidak" || strings.ToLower(text) == "batal" {
 			Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID)
 			sendTelegramMessage(chatID, "✅ Reset password dibatalkan.")
 			return
 		}
-		if !regexp.MustCompile(`^\d{6}$`).MatchString(strings.TrimSpace(text)) {
-			sendTelegramMessage(chatID, "❌ Kode OTP harus 6 digit angka. Coba lagi.")
-			return
-		}
-		phone, _ := Redis.Get(ctx, "pw-reset:data:"+chatID).Result()
-		if phone == "" {
-			Redis.Del(ctx, stepKey)
-			sendTelegramMessage(chatID, "⚠️ Sesi expired. Ketik /reset_password untuk mulai ulang.")
-			return
-		}
-		otpKey := "pw-reset-otp:" + phone
-		storedOTP, _ := Redis.Get(ctx, otpKey).Result()
-		if storedOTP != strings.TrimSpace(text) {
-			sendTelegramMessage(chatID, "❌ Kode OTP salah. Silakan coba lagi.")
+		if strings.ToLower(text) != "ya" {
+			sendTelegramMessage(chatID, "❌ Ketik *ya* untuk melanjutkan atau *tidak* untuk membatalkan.")
 			return
 		}
 
-		// OTP valid — advance to password step
 		Redis.Set(ctx, stepKey, "await_password", 0)
 		sendTelegramMessage(chatID,
-			"✅ Kode OTP verified!\n\n"+
-				"Sekarang kirim password baru Anda.\n\n"+
+			"✅ Baik!\n\n"+
+				"Kirim password baru Anda.\n"+
 				"📌 Minimal 8 karakter.\n\n"+
-				"Ketik *batal* untuk membatalkan.",
+				"Ketik *tidak* untuk membatalkan.",
 		)
 		return
 
 	case "await_password":
-		if strings.ToLower(text) == "batal" {
+		if strings.ToLower(text) == "tidak" || strings.ToLower(text) == "batal" {
 			Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID)
 			sendTelegramMessage(chatID, "✅ Reset password dibatalkan.")
 			return
@@ -471,26 +397,16 @@ func handleTelegramWebhookCommand(chatID, text string) {
 			sendTelegramMessage(chatID, "❌ Password minimal 8 karakter. Silakan coba lagi.")
 			return
 		}
-		phone, _ := Redis.Get(ctx, "pw-reset:data:"+chatID).Result()
-		if phone == "" {
+
+		data, _ := Redis.Get(ctx, "pw-reset:data:"+chatID).Result()
+		parts := strings.Split(data, "|")
+		if len(parts) != 2 {
 			Redis.Del(ctx, stepKey)
 			sendTelegramMessage(chatID, "⚠️ Sesi expired. Ketik /reset_password untuk mulai ulang.")
 			return
 		}
+		userID, phone := parts[0], parts[1]
 
-		// Find user
-		var userID string
-		err := DB.QueryRow(ctx,
-			"SELECT id FROM users WHERE phone_number = $1 OR phone_number = $2",
-			phone, "0"+phone[2:],
-		).Scan(&userID)
-		if err != nil {
-			sendTelegramMessage(chatID, "⚠️ Terjadi kesalahan. Ketik /reset_password untuk mulai ulang.")
-			Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID)
-			return
-		}
-
-		// Hash and set new password
 		hashed, err := bcrypt.GenerateFromPassword([]byte(text), 12)
 		if err != nil {
 			sendTelegramMessage(chatID, "⚠️ Terjadi kesalahan. Ketik /reset_password untuk mulai ulang.")
@@ -502,14 +418,13 @@ func handleTelegramWebhookCommand(chatID, text string) {
 			string(hashed), userID,
 		)
 		if err != nil {
+			slog.Error("Telegram password reset: failed to update", "user_id", userID, "error", err)
 			sendTelegramMessage(chatID, "⚠️ Terjadi kesalahan. Ketik /reset_password untuk mulai ulang.")
 			Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID)
 			return
 		}
 
-		// Cleanup
-		Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID, "pw-reset-otp:"+phone)
-
+		Redis.Del(ctx, stepKey, "pw-reset:data:"+chatID)
 		slog.Info("Password reset via Telegram complete", "user_id", userID, "phone", phone)
 		sendTelegramMessage(chatID,
 			"✅ *Password berhasil direset!*\n\n"+
@@ -518,9 +433,11 @@ func handleTelegramWebhookCommand(chatID, text string) {
 		return
 
 	default:
-		// Unknown command
 		sendTelegramMessage(chatID,
-			fmt.Sprintf("✅ Bot aktif!\n\nChat ID Anda: `%s`\n\nKirim `/start` untuk melihat panduan.\n\nGunakan `/reset_password` jika lupa password.", chatID),
+			"✅ Bot aktif!\n\n"+
+				"Chat ID Anda: `"+chatID+"`\n\n"+
+				"Kirim `/start` untuk melihat panduan.\n"+
+				"Gunakan `/reset_password` jika lupa password.",
 		)
 		return
 	}
