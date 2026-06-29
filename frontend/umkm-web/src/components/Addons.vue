@@ -121,7 +121,7 @@
           <h3>Beli Add-on</h3>
           <div class="confirm-detail">
             <span class="confirm-name">{{ confirmAddon.feature_name }}</span>
-            <span class="confirm-price">Rp {{ formatRupiah(confirmAddon.price_rupiah) }}</span>
+            <span class="confirm-price">{{ formatRupiah(confirmAddon.price_rupiah) }}</span>
           </div>
           <p class="confirm-subtitle">
             Saldo wallet Anda: <strong>Rp {{ formattedWalletBalance }}</strong>
@@ -143,7 +143,7 @@
               @click="executePurchase"
               :disabled="purchasing === confirmAddon.addon_key"
             >
-              {{ purchasing === confirmAddon.addon_key ? 'Memproses...' : `Beli — Rp ${formatRupiah(confirmAddon.price_rupiah)}` }}
+              {{ purchasing === confirmAddon.addon_key ? 'Memproses...' : `Beli — ${formatRupiah(confirmAddon.price_rupiah)}` }}
             </button>
           </div>
         </div>
@@ -155,6 +155,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../api'
+import { formatRupiah } from '../composables/useCurrency'
 
 interface AddonItem {
   addon_key: string
@@ -194,7 +195,7 @@ const filteredAddons = computed(() =>
 )
 
 const formattedWalletBalance = computed(() =>
-  (walletBalance.value ).toLocaleString('id-ID')
+  formatRupiah(walletBalance.value)
 )
 const walletBalanceRupiah = computed(() => walletBalance.value)
 
@@ -210,8 +211,6 @@ const getAddonIcon = (key: string): string => {
   return map[key] || '⚙️'
 }
 
-const formatRupiah = (rupiah: number): string =>
-  (rupiah ).toLocaleString('id-ID')
 
 const formatUnit = (unit: string): string => {
   const map: Record<string, string> = {

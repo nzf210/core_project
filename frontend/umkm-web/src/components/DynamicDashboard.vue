@@ -144,6 +144,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Bar } from 'vue-chartjs'
+import { formatRupiah } from '../composables/useCurrency'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -297,7 +298,7 @@ const activeWidgets = computed(() => {
 })
 
 const formatCurrency = (val: number) => {
-  return 'Rp ' + Math.abs(val).toLocaleString('id-ID')
+  return formatRupiah(Math.abs(val))
 }
 
 const checkWAWarning = async () => {

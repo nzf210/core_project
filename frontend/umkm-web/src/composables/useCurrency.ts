@@ -5,12 +5,17 @@
  * Fungsi ini mengkonversi sen → rupiah dan format sesuai locale ID.
  *
  * Display format: "Rp 35.000" (Indonesian locale, ribuan separator = titik)
+ * Negatif: "(Rp 35.000)" — parentheses style, cocok untuk laporan keuangan
  */
 
 export function formatRupiah(sen: number): string {
-  if (!sen || sen <= 0) return 'Rp 0'
+  if (sen == null || isNaN(sen)) return 'Rp 0'
   const rupiah = sen / 100
-  return `Rp ${rupiah.toLocaleString('id-ID')}`
+  const negative = rupiah < 0
+  const abs = Math.abs(rupiah)
+  const formatted = abs.toLocaleString('id-ID')
+  if (negative) return `(Rp ${formatted})`
+  return `Rp ${formatted}`
 }
 
 export function formatRupiahShort(sen: number): string {

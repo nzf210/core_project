@@ -97,7 +97,7 @@
             <!-- F058: Wallet balance indicator -->
             <div v-if="walletBalance > 0" class="wallet-indicator">
               <span class="wallet-icon">💳</span>
-              <span>Saldo Wallet: <strong>Rp {{ (walletBalance ).toLocaleString('id-ID') }}</strong></span>
+              <span>Saldo Wallet: <strong>{{ formatRupiah(walletBalance) }}</strong></span>
             </div>
 
             <div class="plan-selector">
@@ -106,9 +106,9 @@
                 <div class="plan-badge" v-if="plan.sort_order === 2">Populer</div>
                 <div class="plan-name">{{ plan.name }}</div>
                 <div class="plan-price">
-                  <span v-if="billingCycle === 'monthly'">Rp {{ formatPrice(plan.price_monthly)
+                  <span v-if="billingCycle === 'monthly'">{{ formatRupiah(plan.price_monthly)
                   }}<span>/bulan</span></span>
-                  <span v-else>Rp {{ formatPrice(plan.price_yearly) }}<span>/tahun</span></span>
+                  <span v-else>{{ formatRupiah(plan.price_yearly) }}<span>/tahun</span></span>
                 </div>
                 <ul class="plan-features">
                   <li v-for="f in plan.features" :key="f.feature_key">{{ f.feature_name }}</li>
@@ -124,10 +124,7 @@
               </label>
               <label class="pay-radio">
                 <input type="radio" :value="true" v-model="payViaWallet" />
-                <span>Bayar dari Wallet (Rp {{((walletBalance >= (plans.find(p => p.id === selectedPlan)?.price_monthly
-                  || 0)) ? ((plans.find(p => p.id === selectedPlan)?.price_monthly ).toLocaleString('id-ID')) :
-                  '0')
-                  }})</span>
+                <span>Bayar dari Wallet ({{ formatRupiah(plans.find(p => p.id === selectedPlan)?.price_monthly || 0) }})</span>
               </label>
             </div>
 
@@ -181,6 +178,7 @@
 import { ref, onMounted } from 'vue'
 import { api } from '../api'
 import { useRouter } from 'vue-router'
+import { formatRupiah } from '../composables/useCurrency'
 
 const router = useRouter()
 
@@ -283,12 +281,7 @@ const getTypeName = (id: string) => {
   return bt ? bt.name : id
 }
 
-const formatPrice = (sen: number) => {
-  const rp = sen 
-  if (rp >= 1_000_000) return (rp / 1_000_000).toFixed(1) + 'jt'
-  if (rp >= 1000) return Math.round(rp / 1000) + 'rb'
-  return rp
-}
+
 
 const submitBusinessDetails = async () => {
   try {

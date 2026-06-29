@@ -158,6 +158,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { api } from '../api'
+import { formatRupiah } from '../composables/useCurrency'
 
 const tabs = [
   { key: 'income-statement', label: 'Laba Rugi', icon: '📈' },
@@ -303,23 +304,6 @@ const cashFlowSections = computed(() => {
     { title: 'Pendanaan', lines: a.financing?.lines || [], net: a.financing?.net || 0 },
   ]
 })
-
-function formatRupiah(rupiah: number): string {
-  if (rupiah == null || Number.isNaN(rupiah)) return 'Rp 0'
-  // Convert from sen to rupiah if value looks like sen (>1000); otherwise treat as raw rupiah
-  // Heuristic: values >= 100000 are likely sen; but to stay safe, just show as raw IDR
-  const amount = Math.round(rupiah)
-  const negative = amount < 0
-  const abs = Math.abs(amount)
-  const s = String(abs)
-  const len = s.length
-  let result = ''
-  for (let i = 0; i < len; i++) {
-    if (i > 0 && (len - i) % 3 === 0) result += '.'
-    result += s[i]
-  }
-  return (negative ? '(Rp ' : 'Rp ') + result + (negative ? ')' : '')
-}
 
 function formatDate(d: string): string {
   if (!d) return ''

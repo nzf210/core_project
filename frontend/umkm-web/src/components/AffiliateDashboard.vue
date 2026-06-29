@@ -44,12 +44,12 @@
       <div class="stats-row">
         <div class="card stat-card">
           <span class="stat-label">Saldo Tersedia</span>
-          <div class="stat-value">Rp {{ formatRupiah(balance) }}</div>
+          <div class="stat-value">{{ formatRupiah(balance) }}</div>
           <p class="hint">Bisa ditarik kapan saja</p>
         </div>
         <div class="card stat-card">
           <span class="stat-label">Total Pendapatan</span>
-          <div class="stat-value gold">Rp {{ formatRupiah(totalEarnings) }}</div>
+          <div class="stat-value gold">{{ formatRupiah(totalEarnings) }}</div>
           <p class="hint">Seumur hidup</p>
         </div>
       </div>
@@ -93,6 +93,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { api } from '../api'
+import { formatRupiah } from '../composables/useCurrency'
 
 const loading = ref(true)
 const registering = ref(false)
@@ -112,10 +113,6 @@ const withdrawAmount = ref<number | null>(null)
 const copyTooltip = ref('Copy')
 const copyIcon = ref('📋')
 
-function formatRupiah(rupiah: number): string {
-  const rp = Math.floor(rupiah)
-  return rp.toLocaleString('id-ID')
-}
 
 async function loadProfile() {
   loading.value = true

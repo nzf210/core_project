@@ -153,19 +153,11 @@
             <div class="plan-price">
               <span v-if="billingCycle === 'monthly'">
                 <span v-if="plan.price_monthly === 0" class="price-amount">Gratis</span>
-                <span v-else>
-                  <span class="price-currency">Rp</span>
-                  <span class="price-amount">{{ formatPrice(plan.price_monthly) }}</span>
-                  <span class="price-period">/bulan</span>
-                </span>
+                <span v-else class="price-amount">{{ formatRupiah(plan.price_monthly) }}<span class="price-period">/bulan</span></span>
               </span>
               <span v-else>
                 <span v-if="plan.price_yearly === 0" class="price-amount">Gratis</span>
-                <span v-else>
-                  <span class="price-currency">Rp</span>
-                  <span class="price-amount">{{ formatPrice(plan.price_yearly) }}</span>
-                  <span class="price-period">/tahun</span>
-                </span>
+                <span v-else class="price-amount">{{ formatRupiah(plan.price_yearly) }}<span class="price-period">/tahun</span></span>
               </span>
             </div>
             <p class="plan-desc">{{ plan.description }}</p>
@@ -264,6 +256,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useHead } from '@unhead/vue'
 import { api } from '../api'
+import { formatRupiah } from '../composables/useCurrency'
 
 useHead({
   title: 'WCH Platform — Kasir, Pembukuan & AI Chatbot untuk UMKM Indonesia',
@@ -354,10 +347,6 @@ const fetchPlans = async () => {
 
 // Dark landing always — matches existing WCH dark theme
 const themeClass = computed(() => 'theme-dark')
-
-const formatPrice = (sen: number) => {
-  return (sen / 1000).toLocaleString('id-ID') + 'K'
-}
 
 const features = [
   {
@@ -1035,15 +1024,8 @@ onMounted(() => {
   margin-bottom: 0.75rem;
 }
 
-.price-currency {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #64748b;
-  vertical-align: super;
-}
-
 .price-amount {
-  font-size: 2.4rem;
+  font-size: 2rem;
   font-weight: 800;
   color: #f1f5f9;
   letter-spacing: -0.04em;
@@ -1052,7 +1034,8 @@ onMounted(() => {
 .price-period {
   font-size: 0.85rem;
   color: #64748b;
-  margin-left: 0.2rem;
+  margin-left: 0.3rem;
+  font-weight: 500;
 }
 
 .plan-desc {

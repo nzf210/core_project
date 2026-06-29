@@ -916,6 +916,7 @@ Tab "Transaksi":
 - [x] AC-6: Fixed dark theme konsisten dengan F056 dark aesthetic (landing dark-only)
 - [x] AC-7: SEO meta tags — @unhead/vue installed, useHead() added to LandingPage.vue
 - [x] AC-8: `vue-tsc` clean, build pass
+- [x] AC-9: Harga Rupiah seragam — `formatRupiah()` dari `composables/useCurrency.ts`, semua komponen pakai formatter ini
 
 ### 📁 Files Changed
 
@@ -924,6 +925,7 @@ Tab "Transaksi":
 - `frontend/umkm-web/src/App.vue` — hide sidebar/chrome untuk landing, `landing-mode` class di main
 - `frontend/umkm-web/src/api.ts` — `getPublicPlans()` untuk fetch pricing dari backend
 - `frontend/umkm-web/vite.config.ts` — Vite dev proxy `/plans` → `localhost:8010`
+- `frontend/umkm-web/src/composables/useCurrency.ts` — F061: `formatRupiah()` (NEW)
 
 ### Notes:
 
@@ -935,6 +937,69 @@ Tab "Transaksi":
 - Fallback static plans jika API gagal (landing page tidak pernah kosong)
 - Landing page HARUS lightweight — no Chart.js, no heavy dependencies
 - Gunakan CSS Variables existing (F056) untuk theme consistency
+
+---
+
+## F061: Standardisasi Format Rupiah
+
+**Spec Status:** ✅ Approved
+**Implementation:** ✅ Done
+**Tanggal:** 2026-06-29
+
+### Deskripsi
+
+Semua tampilan harga di frontend WCH HARUS menggunakan formatter seragam dari `composables/useCurrency.ts`. Ini memastikan konsistensi format di seluruh platform.
+
+### Standar
+
+| Aspek | Aturan |
+|:------|:-------|
+| **Satuan DB** | SEN (1 rupiah = 100 sen) — `BIGINT` di PostgreSQL |
+| **Konversi** | Selalu bagi 100 sebelum display |
+| **Format** | `Rp X.XXX.XXX` (Indonesian locale, separator = titik) |
+| **Komponen** | `formatRupiah(sen)` — full format |
+| **Komponen** | `formatRupiahShort(sen)` — short: `Rp 35jt`, `Rp 150rb` |
+| **Gratis** | Jika `sen === 0` → tampilkan "Gratis" |
+
+### Signature
+
+```typescript
+// composables/useCurrency.ts
+export function formatRupiah(sen: number): string
+// → "Rp 35.000" atau "Gratis" jika sen <= 0
+
+export function formatRupiahShort(sen: number): string
+// → "Rp 35jt" / "Rp 150rb" / "Gratis"
+```
+
+### Components Using This Standard
+
+| File | Usage | Before |
+|:-----|:------|:-------|
+| `LandingPage.vue` | plan prices | ad-hoc `formatPrice` (wrong: ÷1000) |
+| `Onboarding.vue` | plan prices, wallet balance | inline `formatPrice`, `.toLocaleString()` |
+
+### Migration Guide
+
+Semua komponen yang menampilkan harga HARUS di-migrate ke `formatRupiah()`:
+1. Import: `import { formatRupiah } from '../composables/useCurrency'`
+2. Ganti `Rp ${value.toLocaleString('id-ID')}` → `formatRupiah(value)` (hapus duplikasi "Rp " di template)
+3. Ganti `value.toLocaleString('id-ID')` → `formatRupiah(value)`
+4. Hapus lokal `formatRupiah` / `formatPrice` function jika ada
+5. Pastikan nilai yang di-pass SUDAH dalam sen (÷100 dilakukan oleh formatter)
+
+### Files
+
+- `frontend/umkm-web/src/composables/useCurrency.ts` (NEW)
+- ✅ `frontend/umkm-web/src/components/LandingPage.vue` — migrated
+- ✅ `frontend/umkm-web/src/components/Onboarding.vue` — migrated
+- ✅ `frontend/umkm-web/src/components/Wallet.vue` — migrated (was: missing ÷100)
+- ✅ `frontend/umkm-web/src/components/DynamicDashboard.vue` — migrated
+- ✅ `frontend/umkm-web/src/components/Reports.vue` — migrated (was: broken heuristic)
+- ✅ `frontend/umkm-web/src/components/AffiliateDashboard.vue` — migrated
+- ✅ `frontend/umkm-web/src/components/AffiliateLeaderboard.vue` — migrated
+- ✅ `frontend/umkm-web/src/components/Addons.vue` — migrated
+- ⬜ Remaining: Dashboard, ClinicFrontdesk, ProductCatalog, Journal, SuperAdmin*
 
 ---
 

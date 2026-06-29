@@ -9,7 +9,7 @@
         <span class="currency">Rp</span>
         <span class="amount">{{ formattedBalance }}</span>
       </div>
-      <p class="balance-subtitle">{{ walletData.balance_rupiah }} sen</p>
+      <p class="balance-subtitle">Sen: {{ walletData.balance_rupiah }}</p>
     </div>
 
     <!-- Top-up Section -->
@@ -71,7 +71,7 @@
             <span class="tx-time">{{ formatDate(tx.time) }}</span>
           </div>
           <div :class="['tx-amount', tx.type === 'topup' ? 'positive' : 'negative']">
-            {{ tx.type === 'topup' ? '+' : '-' }}Rp {{ formatRupiah(Math.abs(tx.amount)) }}
+            {{ tx.type === 'topup' ? '+' : '-' }}{{ formatRupiah(Math.abs(tx.amount)) }}
           </div>
         </div>
       </div>
@@ -92,6 +92,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../api'
+import { formatRupiah } from '../composables/useCurrency'
 
 const walletData = ref<any>({ balance_rupiah: 0, transactions: [] })
 const loadingWallet = ref(false)
@@ -102,8 +103,7 @@ const topupError = ref('')
 const topupInvoiceUrl = ref('')
 
 const formattedBalance = computed(() => {
-  const rupiah = walletData.value.balance_rupiah || 0
-  return (rupiah ).toLocaleString('id-ID')
+  return formatRupiah(walletData.value.balance_rupiah || 0)
 })
 
 const loadWallet = async () => {
@@ -148,10 +148,6 @@ const handleTopup = async () => {
   } finally {
     loadingTopup.value = false
   }
-}
-
-const formatRupiah = (rupiah: number) => {
-  return (rupiah ).toLocaleString('id-ID')
 }
 
 const formatDate = (time: string) => {
