@@ -8,7 +8,7 @@ const {
   showAddTenant, formData, savingAddTenant,
   planCounts, fetchTenants,
   openEditProfile, editTarget, editForm, editFormRaw,
-  editLogoPreview, profileError, savingProfile,
+  editLogoPreview, profileError, profileSuccess, savingProfile,
   onLogoFileChange, saveProfile, saveNewTenant,
   confirmDelete, executeDelete,
   planOptions,
@@ -302,6 +302,7 @@ function formatPrice(priceCents: number) {
             </button>
           </div>
           <p v-if="profileError" class="error-msg">{{ profileError }}</p>
+          <p v-if="profileSuccess" class="success-msg">{{ profileSuccess }}</p>
         </div>
       </div>
     </Teleport>
@@ -375,12 +376,13 @@ function formatPrice(priceCents: number) {
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 .logo-upload-section { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-.logo-preview { width: 72px; height: 72px; border-radius: 8px; border: 1px solid var(--border); overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--bg); flex-shrink: 0; }
-.logo-preview img { width: 100%; height: 100%; object-fit: cover; }
-.logo-placeholder { font-size: 0.7rem; color: var(--muted); text-align: center; }
+.logo-preview { width: 72px; height: 72px; border-radius: 8px; border: 1px solid #333; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #1a1a1a; flex-shrink: 0; }
+.logo-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.logo-placeholder { font-size: 0.7rem; color: #888; text-align: center; }
 
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .error-msg { color: var(--danger); font-size: 13px; margin-top: 10px; }
+.success-msg { color: #10b981; font-size: 13px; margin-top: 10px; font-weight: 600; }
 .password-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
 
 /* Global btn helpers */

@@ -19,6 +19,7 @@ export function useTenantManagement() {
   const editTarget = ref<any>(null)
   const savingProfile = ref(false)
   const profileError = ref('')
+  const profileSuccess = ref('')
   const editForm = ref({
     name: '', business_name: '', wa_number: '', owner_phone: '',
     business_address: '', business_type: 'umum', plan: 'lite',
@@ -58,6 +59,7 @@ export function useTenantManagement() {
   const openEditProfile = async (tenant: any) => {
     editTarget.value = tenant
     profileError.value = ''
+    profileSuccess.value = ''
     editLogoFile.value = null
     editLogoPreview.value = ''  // ponytail: clear old blob URL
     editFormRaw.value.new_password = ''
@@ -120,8 +122,12 @@ export function useTenantManagement() {
         }
       }
 
-      editTarget.value = null
-      fetchTenants()
+      // Success toast
+      profileSuccess.value = '✅ Profil tenant berhasil diperbarui'
+      setTimeout(() => {
+        editTarget.value = null
+        fetchTenants()
+      }, 1500)
     } catch {
       profileError.value = 'Kesalahan jaringan'
     } finally {
@@ -176,7 +182,7 @@ export function useTenantManagement() {
     showAddTenant, formData, savingAddTenant,
     planCounts, fetchTenants,
     openEditProfile, editTarget, editForm, editFormRaw,
-    editLogoFile, editLogoPreview, profileError, savingProfile,
+    editLogoFile, editLogoPreview, profileError, profileSuccess, savingProfile,
     onLogoFileChange, saveProfile, saveNewTenant,
     confirmDelete, executeDelete,
     planOptions,
