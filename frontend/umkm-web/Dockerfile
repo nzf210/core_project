@@ -6,8 +6,10 @@ COPY package*.json ./
 RUN npm install
 
 COPY . .
-# Add environment variable for production build API URL if needed
-# Since we proxy /api via Nginx to the same host, VITE_API_URL should usually be empty or "/" in production
+# VITE_API_URL must be passed at build time so Vite embeds it into the bundle
+# (import.meta.env.VITE_* is read at npm run build, not runtime)
+ARG VITE_API_URL=http://localhost:3201
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 # Stage 2: Serve with Nginx
