@@ -35,6 +35,7 @@ function doLogout() {
       <div class="brand">⚡ WCH Superadmin</div>
       <nav>
         <RouterLink to="/">Dashboard</RouterLink>
+        <RouterLink to="/tenants">Tenant</RouterLink>
         <RouterLink to="/vouchers/programs">Voucher Programs</RouterLink>
         <RouterLink to="/vouchers/generate">Generate Links</RouterLink>
         <RouterLink to="/vouchers/analytics">Analytics</RouterLink>
@@ -45,6 +46,7 @@ function doLogout() {
         <RouterLink to="/referral-config">Referral</RouterLink>
         <RouterLink to="/campaign-licenses">Licenses</RouterLink>
         <RouterLink to="/">📱 WA Center</RouterLink>
+        <RouterLink to="/landing-editor">🌐 Landing Editor</RouterLink>
       </nav>
       <div class="user-info">
         <span class="role">{{ role }}</span>

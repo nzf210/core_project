@@ -3,6 +3,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import Login from './views/Login.vue'
 import Dashboard from './views/Dashboard.vue'
+import TenantManagement from './views/TenantManagement.vue'
+import LandingEditor from './views/LandingEditor.vue'
 import VoucherPrograms from './views/VoucherPrograms.vue'
 import VoucherAnalytics from './views/VoucherAnalytics.vue'
 import GenerateVouchers from './views/GenerateVouchers.vue'
@@ -20,6 +22,8 @@ const router = createRouter({
   routes: [
     { path: '/login', component: Login, name: 'login', meta: { public: true } },
     { path: '/', component: Dashboard, name: 'dashboard' },
+    { path: '/tenants', component: TenantManagement, name: 'tenant-management' },
+    { path: '/landing-editor', component: LandingEditor, name: 'landing-editor' },
     { path: '/vouchers/programs', component: VoucherPrograms, name: 'voucher-programs' },
     { path: '/vouchers/generate', component: GenerateVouchers, name: 'generate-vouchers' },
     { path: '/vouchers/analytics', component: VoucherAnalytics, name: 'voucher-analytics' },

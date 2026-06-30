@@ -98,6 +98,29 @@ export const api = {
 
   // Plans & features
   listPlans: () => request('/admin/plans'),
+
+  // Tenant management
+  getTenants: () => request('/admin/tenants'),
+  createTenant: (body: any) =>
+    request('/admin/tenants', { method: 'POST', body: JSON.stringify(body) }),
+  getTenantProfile: (tenantId: string) =>
+    request(`/admin/tenants/profile?id=${encodeURIComponent(tenantId)}`),
+  updateTenantProfile: (data: any) =>
+    request('/admin/tenants/profile', { method: 'PUT', body: JSON.stringify(data) }),
+  uploadTenantLogo: (tenantId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('logo', file)
+    const tok = getToken()
+    return fetch(`${API_BASE}/admin/tenants/profile/logo?id=${encodeURIComponent(tenantId)}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${tok}` },
+      body: formData,
+    }).then(r => r.json())
+  },
+  deleteTenant: (tenantId: string) =>
+    request(`/admin/tenants?id=${encodeURIComponent(tenantId)}`, { method: 'DELETE' }),
+  impersonateTenant: (tenantId: string) =>
+    request(`/admin/tenants/${encodeURIComponent(tenantId)}/impersonate`, { method: 'POST' }),
   listPlanFeatures: (planId?: string) =>
     request(`/admin/plan-features${planId ? `?plan_id=${planId}` : ''}`),
   fetchPlanFeatureMatrix: (planId: string) =>
