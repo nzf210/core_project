@@ -70,7 +70,7 @@ core_project/
 ├── services/      ← Shared services (auth, ai-gateway, billing, dll)
 ├── shared/        ← SDK bersama (config, db, cache, migrations)
 ├── frontend/      ← Vue 3 apps (umkm-web, campaign-web)
-├── infra/         ← Docker, n8n, deploy scripts
+├── infra/         ← Docker, n8n, observability (Grafana/Prometheus/Loki)
 └── docs/          ← Dokumentasi
 ```
 
@@ -93,26 +93,46 @@ make check         # Semua quality checks sekaligus
 - **WhatsApp:** whatsmeow library
 - **Billing:** Xendit
 - **Frontend:** Vue 3 + TypeScript + Vite
+- **Observability:** Prometheus + Grafana + Loki
 - **CI/CD:** GitHub Actions
 
-<!-- Run new Config -->
-Cara pakai:
+## 🚀 Deployment
 
-# 1. Pastikan Docker postgres+redis jalan
-docker compose up -d postgres redis
+### Development (Hot-Reload)
 
-# 2. Jalankan semua dengan hot-reload
+```bash
+# 1. Infrastruktur + Observability
+docker compose up -d postgres redis prometheus grafana loki
+
+# 2. Jalankan semua service dengan hot-reload
 ./scripts/dev-native.sh
 
 # Atau per service:
-make dev-auth      # Auth Service (8001)
-make dev-gateway   # API Gateway (8000)
-make dev-accounting # UMKM Accounting (8201)
+make dev-auth          # Auth Service (8001)
+make dev-gateway       # API Gateway (8000)
+make dev-accounting    # UMKM Accounting (8201)
 
-# Stop:
+# Stop semua:
 ./scripts/dev-native.sh --stop
+```
 
-Perubahan yang dirasakan:
-- Go service auto-rebuild saat file .go di-save (tanpa restart manual)
-- Frontend Vue sudah natively hot-reload via Vite
-- Production = Docker semua (env sama, tinggal docker compose up)
+**Benefits:**
+- Go services auto-rebuild saat file `.go` disave (via `air`)
+- Frontend Vue hot-reload native via Vite
+- Grafana dashboard: http://localhost:3001 (admin/admin123)
+- Prometheus metrics: http://localhost:9091
+
+### Production
+
+```bash
+# Deploy dengan compose override
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# Grafana accessible via reverse proxy (nginx)
+# Internal services + Prometheus tidak expose port ke host
+```
+
+**Production differences:**
+- Prometheus retention: 90d (vs 30d dev)
+- No port exposure (internal network only)
+- Grafana `GF_SERVER_ROOT_URL` configured for reverse proxy

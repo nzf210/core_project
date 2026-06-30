@@ -100,7 +100,6 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handleHealth)
 	mux.HandleFunc("GET /healthz", handleHealthz)
-	mux.HandleFunc("/metrics", handleMetrics)
 	mux.HandleFunc("/chat", handleChat)
 	mux.HandleFunc("/webhook/wa", handleWAWebhook)
 	mux.Handle("/metrics", observability.PrometheusHandler())

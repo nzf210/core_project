@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"core_project/shared/observability"
 	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/cache"
 	"core_project/shared/sdk/config"
@@ -133,7 +134,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:         ":8000",
-		Handler:      corsMiddleware(ipRateLimitMiddleware(mux)),
+		Handler:      observability.Middleware("api-gateway")(corsMiddleware(ipRateLimitMiddleware(mux))),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,

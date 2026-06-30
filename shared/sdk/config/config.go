@@ -116,13 +116,18 @@ var GlobalConfig *Config
 func LoadConfig(envPath string) *Config {
 	if envPath != "" {
 		if err := godotenv.Load(envPath); err != nil {
-			log.Printf("Warning: No custom .env file found at %s. Relying on system environment variables.", envPath)
+			// envPath not found in cwd — walk up to find .env (monorepo: services/*, apps/*)
+			log.Printf("Warning: No .env at %s, searching parent dirs.", envPath)
+			_ = godotenv.Load("../.env")
+			_ = godotenv.Load("../../.env")
+			_ = godotenv.Load("../../../.env")
 		}
 	} else {
 		// Try reading .env from current directory or parent directory
 		_ = godotenv.Load(".env")
-		_ = godotenv.Load("../../../.env")
+		_ = godotenv.Load("../.env")
 		_ = godotenv.Load("../../.env")
+		_ = godotenv.Load("../../../.env")
 	}
 
 	cfg := &Config{}

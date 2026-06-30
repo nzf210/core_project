@@ -3,7 +3,7 @@ tmp_dir = "tmp"
 
 [build]
   bin = "tmp/main"
-  full_bin = "set -a && . ../../../.env && set +a && ./tmp/main"
+  full_bin = "./tmp/main"
   cmd = "go build -o tmp/main ."
   delay = 100
   exclude_dir = ["tmp", "vendor", "logs", "uploads"]

@@ -176,10 +176,7 @@ func main() {
 	http.DefaultServeMux = originalMux
 	setupRoutes(ctx, container)
 
-	// Prometheus metrics endpoint
-	http.DefaultServeMux.Handle("/metrics", observability.PrometheusHandler())
-
-	// Wrap handler with observability middleware
+	// /metrics registered by setupRoutes (handleMetrics). Wrap with observability middleware.
 	handler := observability.Middleware("wa-gateway")(http.DefaultServeMux)
 
 	go shutdownHandler(cancel)

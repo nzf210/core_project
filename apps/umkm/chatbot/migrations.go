@@ -17,12 +17,16 @@ func runMigrations(db *pgxpool.Pool) error {
 	// Get migrations directory path relative to working directory
 	migrationsDir := "shared/migrations"
 
-	// Check if running from service directory (e.g., services/billing-service)
+	// Try paths from different working directory depths:
+	// - services/* run from services/*/ -> ../../shared/migrations
+	// - apps/* run from apps/*/ -> ../../../shared/migrations
 	if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
-		// Try from project root
 		migrationsDir = "../../shared/migrations"
 		if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
-			return fmt.Errorf("migrations directory not found")
+			migrationsDir = "../../../shared/migrations"
+			if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
+				return fmt.Errorf("migrations directory not found")
+			}
 		}
 	}
 

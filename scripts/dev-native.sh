@@ -79,8 +79,8 @@ start_service() {
   [[ -f "$pidfile" ]] && kill "$(cat "$pidfile")" 2>/dev/null || true
 
   echo "🔄 $svc (hot-reload)..."
-  # Source .env then exec air directly — avoids set -a side-effects
-  nohup sh -c "cd $ROOT_DIR/$dir && . $envfile && exec $AIR" > "$logfile" 2>&1 &
+  # Go config.LoadConfig() loads .env itself via godotenv (searches ., ../../, ../../../)
+  nohup sh -c "cd $ROOT_DIR/$dir && exec $AIR" > "$logfile" 2>&1 &
   echo $! > "$pidfile"
   echo "  → $logfile"
 }
