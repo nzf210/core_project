@@ -82,6 +82,12 @@ help:
 	@echo "    make vet              — Static analysis (go vet)"
 	@echo "    make tidy             — Bersihkan dependencies"
 	@echo "    make check            — tidy + vet + build + test"
+	@echo ""
+	@echo "  HOT-RELOAD (air):"
+	@echo "    make dev-auth         — Auth Service dengan hot-reload"
+	@echo "    make dev-gateway      — API Gateway dengan hot-reload"
+	@echo "    make dev-accounting   — UMKM Accounting dengan hot-reload"
+	@echo "    make dev-all          — Semua Go services + frontend hot-reload (BE+FE bersamaan)"
 	@echo "    make test-umkm        — Jalankan semua unit test untuk service UMKM"        — Jalankan semua unit test untuk service UMKM
 	@echo ""
 	@echo "  CLEANUP:"
@@ -160,6 +166,66 @@ run-campaign: _ensure_dirs
 run-subscription-worker: _ensure_dirs
 	@echo "▶ Starting Subscription Worker on port 8006..."
 	@go run ./services/subscription-worker
+
+# =============================================================================
+# Hot-Reload Development (air) — Ganti 'go run' dengan auto-rebuild on change
+# Usage: make dev-auth  |  make dev-accounting
+# =============================================================================
+dev-gateway: _ensure_dirs
+	@echo "🔄 API Gateway hot-reload on port 8000..."
+	cd services/api-gateway && ~/go/bin/air
+
+dev-auth: _ensure_dirs
+	@echo "🔄 Auth Service hot-reload on port 8001..."
+	cd services/auth-service && ~/go/bin/air
+
+dev-ai: _ensure_dirs
+	@echo "🔄 AI Gateway hot-reload on port 8002..."
+	cd services/ai-gateway && ~/go/bin/air
+
+dev-billing: _ensure_dirs
+	@echo "🔄 Billing Service hot-reload on port 8003..."
+	cd services/billing-service && ~/go/bin/air
+
+dev-notification: _ensure_dirs
+	@echo "🔄 Notification Service hot-reload on port 8005..."
+	cd services/notification-service && ~/go/bin/air
+
+dev-wa-gateway: _ensure_dirs
+	@echo "🔄 WA Gateway hot-reload on port 8202..."
+	cd services/wa-gateway && ~/go/bin/air
+
+dev-accounting: _ensure_dirs
+	@echo "🔄 UMKM Accounting hot-reload on port 8201..."
+	cd apps/umkm/accounting && ~/go/bin/air
+
+dev-chatbot: _ensure_dirs
+	@echo "🔄 UMKM Chatbot hot-reload on port 8202..."
+	cd apps/umkm/chatbot && ~/go/bin/air
+
+dev-business: _ensure_dirs
+	@echo "🔄 UMKM Business hot-reload on port 9005..."
+	cd apps/umkm/business && ~/go/bin/air
+
+dev-automation: _ensure_dirs
+	@echo "🔄 UMKM Automation hot-reload..."
+	cd apps/umkm/automation && ~/go/bin/air
+
+dev-campaign: _ensure_dirs
+	@echo "🔄 Campaign API hot-reload on port 9002..."
+	cd apps/campaign/api && ~/go/bin/air
+
+# =============================================================================
+# Dev All — BE (air) + FE (Vite) hot-reload, via scripts/dev-native.sh
+# =============================================================================
+dev-all: _ensure_dirs
+	@echo "🚀 Starting BE + FE hot-reload..."
+	@nohup bash $(ROOT_DIR)/scripts/dev-native.sh > /dev/null 2>&1 &
+	@sleep 2
+	@echo "✅ Services started. Check: tail -f logs/dev-*.log"
+	@echo "   Port registry: 8000(api-gw) 8001(auth) 8002(ai) 8003(billing) 8005(notif)"
+	@echo "                 8201(accounting) 8202(wa/chatbot) 9001(business) 9002(campaign)"
+	@echo "   FE: http://localhost:3201(umkm) 3301(campaign) 3401(superadmin)"
 
 # =============================================================================
 # Frontend

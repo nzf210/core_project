@@ -127,8 +127,8 @@ core_project/                   ← Root monorepo (satu go.mod)
 │   └── testdata/              ← Sample data untuk testing manual
 │
 ├── docs/                       ← Semua dokumentasi proyek
-├── infra/                      ← Docker, Nginx, n8n, deploy scripts
-├── scripts/                    ← CI/CD, loadtest, e2e, utility scripts
+├── infra/                      ← Docker, Nginx, n8n, observability (Grafana/Loki/Promtail)
+├── scripts/                    ← CI/CD, loadtest, utility scripts, dev-native.sh
 │
 ├── logs/                       ← LOG FILES (jangan edit manual!)
 │   └── *.log                   ← Diisi otomatis oleh make start-all
@@ -152,28 +152,28 @@ core_project/                   ← Root monorepo (satu go.mod)
 
 | Port | Service | Direktori |
 |:-----|:--------|:----------|
-| `8010` | API Gateway | `services/api-gateway` (Docker mapped: `8010:8000`) |
-| `8001` | Auth Service | `services/auth-service` (via API Gateway, no direct listen) |
-| `8002` | AI Gateway | `services/ai-gateway` (via API Gateway, no direct listen) |
-| `8013` | Billing Service | `services/billing-service` (Docker mapped: `8013:8003`) |
-| `8015` | Notification Service | `services/notification-service` (Docker mapped: `8015:8005`) |
-| `8016` | Subscription Worker | `services/subscription-worker` (Docker mapped: `8016:8006`) |
-| `8201` | UMKM Accounting | `apps/umkm/accounting` (native, no Docker mapping) |
-| `8202` | WA Gateway | `services/wa-gateway` (native, shared port with Chatbot) |
-| `8210` | WA Cloud API | `services/wa-cloud-api` (Docker mapped: `8210:8210`) |
-| `8202` | UMKM Chatbot | `apps/umkm/chatbot` (native, shared port with WA Gateway) |
-| `8213` | UMKM Automation | `apps/umkm/automation` (Docker mapped: `8213:8203`) |
-| `9005` | UMKM Business | `apps/umkm/business` |
+| `8000` | API Gateway | `services/api-gateway` |
+| `8001` | Auth Service | `services/auth-service` |
+| `8002` | AI Gateway | `services/ai-gateway` |
+| `8003` | Billing Service | `services/billing-service` |
+| `8005` | Notification Service | `services/notification-service` |
+| `8006` | Subscription Worker | `services/subscription-worker` |
+| `8201` | UMKM Accounting | `apps/umkm/accounting` |
+| `8202` | WA Gateway / Chatbot (mutual exclusive) | `services/wa-gateway` / `apps/umkm/chatbot` |
+| `8210` | WA Cloud API | `services/wa-cloud-api` |
+| `9001` | UMKM Business | `apps/umkm/business` |
 | `9002` | Campaign API | `apps/campaign/api` |
 | `3000` | Chatwoot (Self-hosted) | docker-compose (`3000:3000`) |
-| `3201` | Frontend UMKM | `frontend/umkm-web` (Docker `3201:80`, scaled 3x → 3201-3203) |
-| `3202` | Frontend Superadmin | `frontend/superadmin-web` |
-| `3203` | Frontend Campaign | `frontend/campaign-web` |
-| `5433` | PostgreSQL + pgvector (Docker) | docker-compose (`5433:5432`) |
+| `3001` | Grafana | docker-compose (`3001:3000`) |
+| `3100` | Loki (log aggregator) | docker-compose (`3100:3100`) |
+| `3201` | Frontend UMKM | `frontend/umkm-web` |
+| `3301` | Frontend Campaign | `frontend/campaign-web` |
+| `3401` | Frontend Superadmin | `frontend/superadmin-web` |
+| `5433` | PostgreSQL + pgvector | docker-compose (`5433:5432`) |
 | `5678` | N8N Main (Queue Mode) | docker-compose (`5678:5678`) |
-| `6381` | Redis (Docker) | docker-compose (`6381:6379`) |
+| `6381` | Redis | docker-compose (`6381:6379`) |
 
-> ⚠️ WA Gateway dan UMKM Chatbot **tidak bisa jalan bersamaan di satu host** karena berbagi port 8202. Saat berjalan native, jalankan salah satu saja — jika dua-duanya perlu, gunakan Docker di mana Chatbot internal via API Gateway.
+> ⚠️ WA Gateway (8202) dan UMKM Chatbot (8202) **mutual exclusive** di native dev — jalan salah satu saja.
 
 ---
 
@@ -318,7 +318,7 @@ N8N menggunakan database PostgreSQL terpisah (`wch_n8n`) dari database utama pla
 | Var | Nilai Default | Deskripsi |
 |:----|:--------------|:----------|
 | `N8N_DB_NAME` | `wch_n8n` | Database name |
-| `N8N_DB_HOST` | `127.0.0.1` | PostgreSQL host |
+| `N8N_DB_HOST` | `postgres` | PostgreSQL host (container network) |
 | `N8N_DB_PORT` | `5433` | PostgreSQL port (Docker) |
 | `N8N_DB_USER` | `wch_admin` | Database user |
 | `N8N_ENCRYPTION_KEY` | *(wajib di-set)* | 32-byte key untuk enkripsi credential di DB |
@@ -343,6 +343,30 @@ tenant_a → wa-001 (connected)
 tenant_b → wa-002 (connected)
 tenant_c → wa-003 (qr_pending)
 ```
+
+---
+
+## 📊 Grafana Monitoring (Development)
+
+Grafana dashboard tersedia untuk observability infrastructure-level. HA monitoring service (up/down) yang sebelumnya di Vue dihapus — cukup gunakan Grafana.
+
+```bash
+# Jalankan observability stack
+docker compose up -d grafana loki promtail
+
+# Akses
+# Grafana: http://localhost:3001 (admin/admin123)
+# Loki datasource sudah auto-provisioned
+```
+
+**Yang ada di Grafana (native):**
+- Loki: container logs (Docker logs via Promtail)
+- Service health: HTTP up/down per endpoint
+- Webhook metrics, message throughput (butuh Prometheus scraper)
+
+**Yang tetap di Vue Dashboard (business metrics):**
+- Tenant stats, revenue, vouchers, subscriptions
+- WA Center (WhatsApp platform management)
 
 ---
 
@@ -678,7 +702,18 @@ go vet ./... && go test ./... -count=1
 ## 📋 Perintah Cepat
 
 ```bash
-# Jalankan semua service di background
+# Docker dev (Go services di container)
+docker compose up -d postgres redis grafana loki promtail n8n
+make start-all          # Semua Go binary + frontend
+
+# Native dev HOT-RELOAD (BE: air, FE: Vite)
+# Prerequisites: ~/go/bin/air (go install github.com/air-verse/air@latest)
+#               Docker: postgres + redis harus jalan
+make dev-all           # Semua BE (air) + FE (Vite) hot-reload sekaligus
+./scripts/dev-native.sh           # Alias dengan cleanup otomatis
+./scripts/dev-native.sh --stop    # Stop semua
+
+# Docker dev (Go services di container)
 make start-all
 # Log otomatis ke logs/*.log, PID ke run/*.pid
 
@@ -698,12 +733,11 @@ go test ./apps/campaign/api/handlers/ -v -run "TestHandleAssignCoordinator|TestC
 make check
 
 # Jalankan service individual
-make run-auth          # Auth Service (port 8001)
-make run-ai            # AI Gateway (port 8002)
-make run-accounting    # UMKM Accounting (port 8201)
-make run-chatbot       # UMKM Chatbot (port 8202)
-make run-campaign      # Campaign API (port 9002)
-make run-frontend      # Semua frontend
+make dev-auth          # Auth Service (air hot-reload, port 8001)
+make dev-gateway       # API Gateway (air hot-reload, port 8000)
+make dev-accounting    # UMKM Accounting (air hot-reload, port 8201)
+make dev-chatbot       # UMKM Chatbot (air hot-reload, port 8202)
+make dev-all           # Semua BE + FE hot-reload sekaligus
 
 # Build binary ke bin/ (BUKAN ke root!)
 make build-all         # Semua service → bin/<service>

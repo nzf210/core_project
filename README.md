@@ -94,3 +94,25 @@ make check         # Semua quality checks sekaligus
 - **Billing:** Xendit
 - **Frontend:** Vue 3 + TypeScript + Vite
 - **CI/CD:** GitHub Actions
+
+<!-- Run new Config -->
+Cara pakai:
+
+# 1. Pastikan Docker postgres+redis jalan
+docker compose up -d postgres redis
+
+# 2. Jalankan semua dengan hot-reload
+./scripts/dev-native.sh
+
+# Atau per service:
+make dev-auth      # Auth Service (8001)
+make dev-gateway   # API Gateway (8000)
+make dev-accounting # UMKM Accounting (8201)
+
+# Stop:
+./scripts/dev-native.sh --stop
+
+Perubahan yang dirasakan:
+- Go service auto-rebuild saat file .go di-save (tanpa restart manual)
+- Frontend Vue sudah natively hot-reload via Vite
+- Production = Docker semua (env sama, tinggal docker compose up)

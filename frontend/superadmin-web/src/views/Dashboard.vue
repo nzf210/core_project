@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { api } from '../api/client'
-import HAMonitoring from '../components/HAMonitoring.vue'
 import WACenter from '../components/WACenter.vue'
 
 const data = ref<any>(null)
@@ -48,20 +47,20 @@ async function impersonateTenant(tenantId: string) {
 
 <template>
   <div>
-    <h1>Overview Dashboard</h1>
-    <p class="subtitle">Snapshot seluruh WCH Platform: UMKM, Campaign, voucher & revenue</p>
-
-    <!-- HA Monitoring: WA Gateway + Chatbot -->
-    <section class="block">
-      <HAMonitoring />
-    </section>
+    <div class="page-title-row">
+      <div>
+        <h1>Overview Dashboard</h1>
+        <p class="subtitle">Snapshot seluruh WCH Platform: UMKM, Campaign, voucher & revenue</p>
+      </div>
+      <a href="http://localhost:3001" target="_blank" class="grafana-link">
+        📊 Grafana Monitoring
+      </a>
+    </div>
 
     <!-- F063: WA Center — platform-level WhatsApp for REG/OTP/VERIF -->
     <section class="block">
       <WACenter />
     </section>
-
-    
     <div v-if="loading" class="loading">Loading...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <div v-else-if="data">
@@ -151,8 +150,13 @@ async function impersonateTenant(tenantId: string) {
 </template>
 
 <style scoped>
-h1 { font-size: 24px; margin-bottom: 4px; }
-.subtitle { color: var(--muted); margin-bottom: 24px; font-size: 14px; }
+h1 { font-size: 24px; margin: 0; }
+.subtitle { color: var(--muted); margin: 0; font-size: 14px; }
+.page-title-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+.grafana-link {
+  background: var(--card); border: 1px solid var(--border); color: var(--accent); padding: 8px 16px; border-radius: 6px; font-size: 13px; text-decoration: none; white-space: nowrap;
+}
+.grafana-link:hover { background: var(--bg); }
 .block { margin-top: 32px; }
 .block h2 { font-size: 16px; margin-bottom: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }

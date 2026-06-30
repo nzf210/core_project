@@ -7,6 +7,7 @@ const router = useRouter()
 const route = useRoute()
 const authed = ref(isAuthed())
 const role = ref(getRole())
+const grafanaUrl = import.meta.env.VITE_GRAFANA_URL || 'http://localhost:3001'
 
 watch(
   () => route.path,
@@ -46,6 +47,7 @@ function doLogout() {
         <RouterLink to="/referral-config">Referral</RouterLink>
         <RouterLink to="/campaign-licenses">Licenses</RouterLink>
         <RouterLink to="/">📱 WA Center</RouterLink>
+        <a :href="grafanaUrl" target="_blank" rel="noopener noreferrer" class="grafana-link">📊 Grafana</a>
         <RouterLink to="/landing-editor">🌐 Landing Editor</RouterLink>
       </nav>
       <div class="user-info">
@@ -90,6 +92,8 @@ nav a {
 }
 nav a:hover { color: var(--text); background: var(--bg); text-decoration: none; }
 nav a.router-link-exact-active { color: var(--accent); background: rgba(59, 130, 246, 0.1); }
+nav a.grafana-link { color: var(--muted); padding: 5px 9px; border-radius: 6px; font-size: 13px; white-space: nowrap; }
+nav a.grafana-link:hover { color: var(--text); background: var(--bg); text-decoration: none; }
 .user-info { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .role {
   font-size: 11px;

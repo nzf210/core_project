@@ -115,14 +115,16 @@ func handleHealthStatus(w http.ResponseWriter, r *http.Request) {
 		name string
 		port string
 	}{
-		{"wa-gateway", "8202"},
-		{"umkm-chatbot", "8203"},
+		{"api-gateway", "8000"},
 		{"auth-service", "8001"},
 		{"ai-gateway", "8002"},
-		{"umkm-accounting", "8201"},
-		{"campaign-api", "9002"},
 		{"billing-service", "8003"},
 		{"notification-service", "8005"},
+		{"wa-gateway", "8202"},
+		{"umkm-accounting", "8201"},
+		{"umkm-chatbot", "8202"},
+		{"umkm-business", "9001"},
+		{"campaign-api", "9002"},
 	}
 
 	getTargetURL := func(svcName, port, endpoint string) string {

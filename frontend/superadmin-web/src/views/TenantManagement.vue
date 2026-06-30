@@ -202,9 +202,9 @@ function formatPrice(priceCents: number) {
           <!-- Logo upload -->
           <div class="logo-upload-section">
             <div class="logo-preview">
-              <img v-if="editLogoPreview" :src="editLogoPreview" alt="Logo preview" />
-              <img v-else-if="editForm.logo_url" :src="editForm.logo_url.startsWith('http') ? editForm.logo_url : editForm.logo_url + '?t=' + Date.now()" alt="Current logo" />
-              <div v-else class="logo-placeholder">No Logo <span style="font-size:9px;display:block;color:#888;">{{ typeof editForm.logo_url !== 'undefined' ? editForm.logo_url : 'MISSING' }}</span></div>
+              <img v-if="editLogoPreview" :src="editLogoPreview" alt="Logo preview" style="width:100%;height:100%;object-fit:cover;display:block;" />
+              <div v-else-if="editForm.logo_url" :style="`background-image: url('${editForm.logo_url.startsWith('http') ? editForm.logo_url : editForm.logo_url}'); background-size: cover; background-position: center; width: 72px; height: 72px; border-radius: 4px; background-color: #f00;`" />
+              <div v-else class="logo-placeholder">No Logo</div>
             </div>
             <label class="file-input-label">
               <input type="file" accept="image/png,image/jpeg,image/webp" @change="onLogoFileChange"
@@ -601,26 +601,6 @@ function formatPrice(priceCents: number) {
   flex-wrap: wrap;
 }
 
-.logo-preview {
-  width: 72px;
-  height: 72px;
-  border-radius: 8px;
-  border: 1px solid #333;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #1a1a1a;
-  flex-shrink: 0;
-}
-
-.logo-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
 .logo-placeholder {
   font-size: 0.7rem;
   color: #888;
@@ -707,5 +687,23 @@ function formatPrice(priceCents: number) {
 
 textarea.form-control {
   resize: vertical;
+}
+
+/* Non-scoped: scoped styles don't apply inside <Teleport> */
+.logo-preview {
+  width: 72px !important;
+  height: 72px !important;
+  border-radius: 8px;
+  border: 1px solid #333;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a1a;
+  flex-shrink: 0;
+}
+.logo-preview > * {
+  width: 72px !important;
+  height: 72px !important;
 }
 </style>

@@ -1,0 +1,25 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  bin = "tmp/main"
+  full_bin = "set -a && . ../../.env && set +a && ./tmp/main"
+  cmd = "go build -o tmp/main ."
+  delay = 100
+  exclude_dir = ["tmp", "vendor", "logs", "uploads"]
+  exclude_regex = []
+  exclude_unchanged = false
+  include_ext = ["go"]
+  kill_delay = "2s"
+  log = "build-errors.log"
+  send_interrupt = false
+  stop_on_error = false
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true
+
+[run]
+  restart_on_rebuild = true
