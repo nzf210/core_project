@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 
+	"core_project/shared/observability"
 	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/config"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -180,8 +181,9 @@ func main() {
 	mux.HandleFunc("/upgrade", handleUpgradePlan)
 	mux.HandleFunc("/stores", handleStoresCollection)
 	mux.HandleFunc("/stores/", handleStoresItem)
+	mux.Handle("/metrics", observability.PrometheusHandler())
 
-	handler := auth.QuotaMiddleware(auth.Middleware(mux))
+	handler := observability.Middleware("umkm-business")(auth.QuotaMiddleware(auth.Middleware(mux)))
 	port := "9001"
 
 	slog.Info("UMKM Business Service starting", "port", port)

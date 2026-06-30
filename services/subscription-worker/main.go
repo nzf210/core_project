@@ -17,11 +17,22 @@ import (
 	"os"
 	"time"
 
+	"core_project/shared/observability"
 	"core_project/shared/sdk/config"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var DB *pgxpool.Pool
+var (
+	DB *pgxpool.Pool
+
+	// Business metrics
+	subscriptionWorkerRunsTotal = observability.NewCounter(
+		"subscription_worker_runs_total",
+		"Total subscription worker runs by action",
+		[]string{"action"},
+	)
+)
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -66,7 +77,14 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
-	go http.ListenAndServe(":8006", mux)
+
+	// Prometheus metrics endpoint
+	mux.Handle("/metrics", observability.PrometheusHandler())
+
+	// Wrap handler with observability middleware
+	handler := observability.Middleware("subscription-worker")(mux)
+
+	go http.ListenAndServe(":8006", handler)
 
 	slog.Info("Subscription worker started", "interval", interval.String(), "grace_hours", graceHours)
 
@@ -234,6 +252,7 @@ func runFreezePass(graceHours int) {
 
 	if len(items) == 0 {
 		slog.Info("Freeze pass: nothing to freeze")
+		subscriptionWorkerRunsTotal.WithLabelValues("check_pending").Inc()
 		return
 	}
 
@@ -276,5 +295,6 @@ func runFreezePass(graceHours int) {
 		return
 	}
 
+	subscriptionWorkerRunsTotal.WithLabelValues("hold_expired").Inc()
 	slog.Info("Freeze pass: tenants frozen", "count", len(items))
 }

@@ -1,0 +1,23 @@
+# Production override: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+version: '3.8'
+services:
+  prometheus:
+    ports: []
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-90d}
+
+  grafana:
+    ports: []
+    environment:
+      - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN}
+      - GF_SERVER_DOMAIN=grafana.${DOMAIN}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASS}
+      - GF_USERS_ALLOW_SIGN_UP=false
+
+  postgres-exporter:
+    ports: []
+
+  redis-exporter:
+    ports: []

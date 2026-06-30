@@ -78,6 +78,11 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		slog.Error("Meta API error", "tenant", tenantID,
 			"meta_code", result.Error.Code,
 			"meta_message", result.Error.Message)
+		templateName := "custom"
+		if req.Type == "template" && req.Template != "" {
+			templateName = req.Template
+		}
+		waCloudMessagesTotal.WithLabelValues(templateName, "failed").Inc()
 		response.Error(w, http.StatusBadGateway,
 			fmt.Sprintf("Meta API error: %s", result.Error.Message), nil)
 		return
@@ -87,6 +92,12 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 	if len(result.Messages) > 0 {
 		waMsgID = result.Messages[0].ID
 	}
+
+	templateName := "custom"
+	if req.Type == "template" && req.Template != "" {
+		templateName = req.Template
+	}
+	waCloudMessagesTotal.WithLabelValues(templateName, "sent").Inc()
 
 	slog.Info("Message sent via Cloud API",
 		"tenant", tenantID,

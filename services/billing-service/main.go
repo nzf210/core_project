@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"core_project/shared/observability"
 	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/config"
 )
@@ -19,6 +20,15 @@ const (
 	keyWalletTopup         = "-wallet-topup-"
 	timeFormatWIB          = "02 Jan 2006, 15:04 WIB"
 	errDB                  = "DB error"
+)
+
+var (
+	// Business metrics
+	billingSubscriptionsActive = observability.NewGauge("billing_subscriptions_active", "Active subscriptions count", nil)
+	billingPaymentsTotal       = observability.NewCounter("billing_payments_total", "Total payments", []string{"method", "status"})
+	billingTenantsActive       = observability.NewGauge("billing_tenants_active", "Active tenants count", nil)
+	billingRevenueCents        = observability.NewCounter("billing_revenue_cents", "Revenue in cents", nil)
+	billingSubscriptionsNew    = observability.NewCounter("billing_subscriptions_new", "New subscriptions created", nil)
 )
 
 func main() {
@@ -44,6 +54,9 @@ func main() {
 	startPendingCleanupWorker(ctx)
 
 	mux := http.NewServeMux()
+
+	// Metrics endpoint
+	mux.Handle("/metrics", observability.PrometheusHandler())
 
 	// Health check
 	mux.HandleFunc("GET /health", handleHealth)
@@ -131,7 +144,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:    ":8003",
-		Handler: mux,
+		Handler: observability.Middleware("billing-service")(mux),
 	}
 
 	slog.Info("Billing Service listening", "port", 8003)

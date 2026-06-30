@@ -577,6 +577,43 @@ services:
     restart: unless-stopped
     depends_on:
       - loki
+      - prometheus
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: wch-prometheus
+    ports:
+      - "127.0.0.1:9091:9090"
+    volumes:
+      - ./infra/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+    restart: unless-stopped
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: wch-postgres-exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-wch_core}?sslmode=disable
+    ports:
+      - "127.0.0.1:9187:9187"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.59.0
+    container_name: wch-redis-exporter
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    ports:
+      - "127.0.0.1:9121:9121"
+    restart: unless-stopped
+    depends_on:
+      - redis
 
 volumes:
   pgdata: null
@@ -585,3 +622,4 @@ volumes:
   chatwoot_redis_data: null
   loki_data: null
   grafana_data: null
+  prometheus_data: null

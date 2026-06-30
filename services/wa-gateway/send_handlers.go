@@ -80,10 +80,12 @@ func handleSendRequest(w http.ResponseWriter, r *http.Request) {
 	_, err = client.SendMessage(context.Background(), jid, msg)
 	if err != nil {
 		slog.Error("Failed to send message", "tenant_id", tenantID, "target", jid.String(), "error", err)
+		waMessagesTotal.WithLabelValues("whatsmeow", "out", "failed").Inc()
 		http.Error(w, `{"error":"Failed to send message"}`, http.StatusInternalServerError)
 		return
 	}
 
+	waMessagesTotal.WithLabelValues("whatsmeow", "out", "sent").Inc()
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
 }

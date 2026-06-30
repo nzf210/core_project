@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"time"
 
+	"core_project/shared/observability"
 	"core_project/shared/sdk/config"
 
 	"golang.org/x/crypto/bcrypt"
@@ -20,6 +21,18 @@ var (
 	usernameRE = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 	emailRE    = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 	phoneRE    = regexp.MustCompile(`^62[0-9]{6,15}$`)
+
+	// Business metrics
+	authLoginsTotal = observability.NewCounter(
+		"auth_logins_total",
+		"Total login attempts by method and success status",
+		[]string{"method", "success"},
+	)
+	authActiveSessions = observability.NewGauge(
+		"auth_active_sessions",
+		"Active user sessions",
+		[]string{},
+	)
 )
 
 var telegramBotToken string
@@ -208,6 +221,7 @@ func main() {
 	mux.HandleFunc("/telegram/webhook", handleTelegramWebhook)
 
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(uploadDir))))
+	mux.Handle("/metrics", observability.PrometheusHandler())
 
 	slog.Info(fmt.Sprintf("🔑 Starting Auth Service in %s mode on port %s...", cfg.Env, port))
 
@@ -219,8 +233,8 @@ func main() {
 
 	serverAddress := fmt.Sprintf(":%s", port)
 
-	// Wrap mux with CORS then Logging
-	handler := corsMiddleware(loggingMiddleware(mux))
+	// Wrap: observability -> CORS -> logging
+	handler := observability.Middleware("auth-service")(corsMiddleware(loggingMiddleware(mux)))
 
 	if err := http.ListenAndServe(serverAddress, handler); err != nil {
 		slog.Error("Failed to start Auth Service", "error", err)

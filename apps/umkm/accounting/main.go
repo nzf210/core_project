@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"core_project/shared/observability"
 	"core_project/shared/sdk/config"
 )
 
@@ -156,10 +157,11 @@ func main() {
 	mux.HandleFunc("/internal/tenant/{tenant_id}/faqs", handleInternalFAQs)
 	mux.HandleFunc("/internal/tenant/{tenant_id}/products", handleInternalProducts)
 	mux.HandleFunc("/internal/tenant/{tenant_id}/rag/single", handleInternalRAGSingle)
+	mux.Handle("/metrics", observability.PrometheusHandler())
 
 	server := &http.Server{
 		Addr:    ":8201",
-		Handler: corsMiddleware(loggingMiddleware(mux)),
+		Handler: observability.Middleware("umkm-accounting")(corsMiddleware(loggingMiddleware(mux))),
 	}
 	slog.Info("UMKM Accounting Engine listening", "port", 8201)
 	if err := server.ListenAndServe(); err != nil {

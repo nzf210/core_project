@@ -48,10 +48,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	if err == pgx.ErrNoRows {
 		slog.Error("Login: user not found", "username", req.Username)
+		authLoginsTotal.WithLabelValues("password", "false").Inc()
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Invalid credentials"})
 		return
 	} else if err != nil {
 		slog.Error("DB query failed", "error", err)
+		authLoginsTotal.WithLabelValues("password", "false").Inc()
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
@@ -102,6 +104,9 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if err := DB.QueryRow(ctx, "SELECT plan FROM tenants WHERE id = $1", tenantID).Scan(&plan); err == nil && plan != "" {
 		Redis.Set(ctx, "tenant:plan:"+tenantID, plan, 30*24*time.Hour)
 	}
+
+	// Metrics: successful login
+	authLoginsTotal.WithLabelValues("password", "true").Inc()
 
 	writeJSON(w, http.StatusOK, Response{
 		Success: true,

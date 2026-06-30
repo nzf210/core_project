@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"core_project/shared/observability"
 	"core_project/shared/sdk/config"
 	"github.com/redis/go-redis/v9"
 	"log/slog"
@@ -102,6 +103,7 @@ func main() {
 	mux.HandleFunc("/metrics", handleMetrics)
 	mux.HandleFunc("/chat", handleChat)
 	mux.HandleFunc("/webhook/wa", handleWAWebhook)
+	mux.Handle("/metrics", observability.PrometheusHandler())
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -110,7 +112,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:    ":" + port,
-		Handler: loggingMiddleware(mux),
+		Handler: observability.Middleware("umkm-chatbot")(loggingMiddleware(mux)),
 	}
 
 	startWorkerPool(100)

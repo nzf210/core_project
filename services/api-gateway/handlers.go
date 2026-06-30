@@ -81,6 +81,8 @@ func handleAggregatedHealthz(getTarget func(string, string) string, cfg *config.
 	}
 }
 
+// DEPRECATED: handleAggregatedMetrics removed — each service now exposes /metrics directly
+// Prometheus scrapes individual service endpoints, not aggregated
 func handleAggregatedMetrics(getTarget func(string, string) string, cfg *config.Config) http.HandlerFunc {
 	type serviceMetrics struct {
 		name     string

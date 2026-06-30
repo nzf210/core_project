@@ -13,7 +13,16 @@ import (
 	"os"
 	"strings"
 
+	"core_project/shared/observability"
 	"core_project/shared/sdk/webhook"
+)
+
+// ─────────────────────────────────────────────
+// Business Metrics
+// ─────────────────────────────────────────────
+
+var (
+	notificationsSentTotal = observability.NewCounter("notifications_sent_total", "Total notifications sent", []string{"channel", "status"})
 )
 
 // ─────────────────────────────────────────────
@@ -36,6 +45,10 @@ func main() {
 	slog.SetDefault(logger)
 
 	mux := http.NewServeMux()
+
+	// Metrics endpoint
+	mux.Handle("/metrics", observability.PrometheusHandler())
+
 	mux.HandleFunc("/api/notification/send", handleSendNotification)
 	mux.HandleFunc("/health", handleHealth)
 	
@@ -48,7 +61,7 @@ func main() {
 
 	port := "8005"
 	slog.Info("Notification Service listening", "port", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
+	if err := http.ListenAndServe(":"+port, observability.Middleware("notification-service")(mux)); err != nil {
 		slog.Error("Failed to start server", "error", err)
 	}
 }

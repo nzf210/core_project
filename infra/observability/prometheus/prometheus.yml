@@ -1,0 +1,35 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    env: dev
+
+scrape_configs:
+  - job_name: 'wch-services'
+    static_configs:
+      - targets:
+          - 'api-gateway:8000'
+          - 'auth-service:8001'
+          - 'ai-gateway:8002'
+          - 'billing-service:8003'
+          - 'notification-service:8005'
+          - 'subscription-worker:8006'
+          - 'umkm-accounting:8201'
+          - 'wa-gateway:8202'
+          - 'umkm-chatbot:8203'
+          - 'umkm-automation:8204'
+          - 'umkm-business:9005'
+          - 'campaign-api:9002'
+          - 'wa-cloud-api:8210'
+    relabel_configs:
+      - source_labels: ['__address__']
+        regex: '([a-z0-9\-]+):\d+'
+        target_label: 'service'
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']

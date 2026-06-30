@@ -9,7 +9,32 @@ import (
 
 	"core_project/apps/campaign/api/handlers"
 	"core_project/apps/campaign/api/repository"
+	"core_project/shared/observability"
 	"core_project/shared/sdk/config"
+)
+
+var (
+	// Business metrics (Prometheus)
+	campaignVolunteersActive = observability.NewGauge(
+		"campaign_volunteers_active",
+		"Active campaign volunteers count",
+		[]string{},
+	)
+	campaignVotersOnboarded = observability.NewCounter(
+		"campaign_voters_onboarded",
+		"Total voters onboarded",
+		[]string{},
+	)
+	campaignRealcountProgress = observability.NewGauge(
+		"campaign_realcount_progress",
+		"Real count progress percentage",
+		[]string{},
+	)
+	campaignLogisticsStatus = observability.NewGauge(
+		"campaign_logistics_status",
+		"Logistics item count by status",
+		[]string{"status"},
+	)
 )
 
 func main() {
@@ -123,9 +148,12 @@ func main() {
 	mux.HandleFunc("/audit-logs", handlers.HandleAuditLogs)
 	mux.HandleFunc("/reports", handlers.HandleReports)
 
+	// Prometheus metrics endpoint
+	mux.Handle("/metrics", observability.PrometheusHandler())
+
 	server := &http.Server{
 		Addr:    ":9002", // Campaign port
-		Handler: loggingMiddleware(mux),
+		Handler: observability.Middleware("campaign-api")(loggingMiddleware(mux)),
 	}
 
 	slog.Info("Campaign API Server listening", "port", 9002)

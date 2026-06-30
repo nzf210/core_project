@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"core_project/shared/observability"
 	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/config"
 	"github.com/redis/go-redis/v9"
@@ -57,7 +58,7 @@ var (
 	cfg      *config.Config
 	aiClient *openai.Client
 
-	// Metrics (Prometheus-style, using atomic for thread safety)
+	// Legacy atomic metrics (kept for backward compat)
 	aiRequestsTotal  atomic.Int64
 	aiCacheHits      atomic.Int64
 	aiTokensInTotal  atomic.Int64
@@ -68,6 +69,19 @@ var (
 	// Per-model metrics (protected by mutex for map access)
 	modelRequests   map[string]int64
 	modelRequestsMu sync.RWMutex
+
+	// Business metrics (Prometheus)
+	aiRequestsTotalCounter = observability.NewCounter(
+		"ai_requests_total",
+		"Total AI requests by provider, model, modality, and status",
+		[]string{"provider", "model", "modality", "status"},
+	)
+	aiRequestDurationHistogram = observability.NewHistogram(
+		"ai_request_duration_seconds",
+		"AI request latency in seconds by provider and model",
+		[]string{"provider", "model"},
+		[]float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 30},
+	)
 )
 
 func init() {
@@ -120,11 +134,14 @@ func main() {
 
 	mux.HandleFunc("/v1/models", handleListModels)
 	mux.HandleFunc("/health", handleHealth)
-	mux.HandleFunc("/metrics", handleMetrics)
+	// Legacy text metrics kept for backward compat
+	// mux.HandleFunc("/metrics", handleMetrics)
+	// Prometheus metrics endpoint
+	mux.Handle("/metrics", observability.PrometheusHandler())
 
 	server := &http.Server{
 		Addr:         ":8002",
-		Handler:      loggingMiddleware(rateLimitMiddleware(mux)),
+		Handler:      observability.Middleware("ai-gateway")(loggingMiddleware(rateLimitMiddleware(mux))),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 60 * time.Second,
 	}

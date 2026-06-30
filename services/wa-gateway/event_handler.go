@@ -129,6 +129,7 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 		"sender", v.Info.Sender.ToNonAD().String(),
 		"text", rawText,
 		"tenant_id", tenantID)
+	waMessagesTotal.WithLabelValues("whatsmeow", "in", "received").Inc()
 	upperText := strings.TrimSpace(strings.ToUpper(rawText))
 
 	senderJID := v.Info.Sender.ToNonAD().String()
@@ -708,8 +709,10 @@ func sendWAMessage(tenantID, targetJID, message string) {
 	_, err = client.SendMessage(context.Background(), jid, msg)
 	if err != nil {
 		slog.Error("Failed to send WA reply", "tenant_id", tenantID, "target", targetJID, "error", err)
+		waMessagesTotal.WithLabelValues("whatsmeow", "out", "failed").Inc()
 	} else {
 		slog.Info("Sent WA reply", "tenant_id", tenantID, "target", targetJID, "len", len(message))
+		waMessagesTotal.WithLabelValues("whatsmeow", "out", "sent").Inc()
 	}
 }
 

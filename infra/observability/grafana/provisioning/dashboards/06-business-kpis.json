@@ -1,0 +1,47 @@
+{
+  "uid": "wch-business-kpis",
+  "title": "💼 Business KPIs",
+  "tags": [
+    "wch-platform"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Placeholder — Edit in Grafana UI",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"wch-services\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "textMode": "auto",
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "refresh": "30s",
+  "version": 1
+}

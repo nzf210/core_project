@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"core_project/shared/observability"
 	"core_project/shared/sdk/config"
 )
 
@@ -105,6 +106,13 @@ var (
 	DB           *pgxpool.Pool
 	graphBaseURL string
 	graphVersion string
+
+	// Business metrics
+	waCloudMessagesTotal = observability.NewCounter(
+		"wa_cloud_messages_total",
+		"Total WhatsApp Cloud API messages by template and status",
+		[]string{"template", "status"},
+	)
 )
 
 // ─────────────────────────────────────────────
@@ -152,6 +160,12 @@ func main() {
 	mux.HandleFunc("/admin/credentials/", handleAdminCredentialsItem)
 	mux.HandleFunc("/validate", handleValidateCredential)
 
+	// Prometheus metrics endpoint
+	mux.Handle("/metrics", observability.PrometheusHandler())
+
+	// Wrap handler with observability middleware
+	handler := observability.Middleware("wa-cloud-api")(mux)
+
 	port := cfg.WhatsApp.CloudAPIPort
 	if port == "" {
 		port = "8210"
@@ -159,7 +173,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:         ":" + port,
-		Handler:      corsMiddleware(mux),
+		Handler:      corsMiddleware(handler),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,

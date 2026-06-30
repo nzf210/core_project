@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"core_project/shared/observability"
+
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 	"go.mau.fi/whatsmeow"
@@ -35,6 +37,13 @@ var (
 	waMessagesSent int64
 	waMessagesRecv int64
 	waErrorsTotal  int64
+
+	// Business metrics
+	waMessagesTotal = observability.NewCounter(
+		"wa_messages_total",
+		"Total WA messages by channel, direction, and status",
+		[]string{"channel", "direction", "status"},
+	)
 )
 
 var (
@@ -167,13 +176,19 @@ func main() {
 	http.DefaultServeMux = originalMux
 	setupRoutes(ctx, container)
 
+	// Prometheus metrics endpoint
+	http.DefaultServeMux.Handle("/metrics", observability.PrometheusHandler())
+
+	// Wrap handler with observability middleware
+	handler := observability.Middleware("wa-gateway")(http.DefaultServeMux)
+
 	go shutdownHandler(cancel)
 
 	port := ":8202"
 	slog.Info("WA Gateway running", "port", port, "instance_id", instanceID)
 	slog.Info("Active WhatsApp sessions", "count", len(clientMap))
 	go func() {
-		if err := http.ListenAndServe(port, corsMiddleware(http.DefaultServeMux)); err != nil {
+		if err := http.ListenAndServe(port, corsMiddleware(handler)); err != nil {
 			slog.Error("WA Gateway server error", "error", err)
 			os.Exit(1)
 		}

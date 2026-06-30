@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"core_project/shared/observability"
 	"core_project/shared/sdk/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -58,6 +59,17 @@ func main() {
 
 	pubsub := client.Subscribe(context.Background(), "tenant_events")
 	defer pubsub.Close()
+
+	// Start metrics HTTP server in background
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", observability.PrometheusHandler())
+	go func() {
+		port := "8204"
+		slog.Info("UMKM Automation metrics server starting", "port", port)
+		if err := http.ListenAndServe(":"+port, mux); err != nil {
+			slog.Error("Metrics server failed", "error", err)
+		}
+	}()
 
 	slog.Info("UMKM Automation Worker started. Listening on channel: tenant_events")
 
