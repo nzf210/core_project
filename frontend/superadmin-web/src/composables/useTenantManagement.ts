@@ -74,7 +74,7 @@ export function useTenantManagement() {
           business_address: p.business_address || '',
           business_type: p.business_type || 'umum', plan: p.plan || 'lite',
           subdomain: p.subdomain || '', custom_domain: p.custom_domain || '',
-          xendit_merchant_id: p.xendit_merchant_id || '', logo_url: p.logo_url ? `/api${p.logo_url}` : '',
+          xendit_merchant_id: p.xendit_merchant_id || '', logo_url: p.logo_url || '',
           owner_email: p.owner_email || '',
         }
         // Don't set editLogoPreview — let template fallback to editForm.logo_url

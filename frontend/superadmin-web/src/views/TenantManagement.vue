@@ -203,8 +203,8 @@ function formatPrice(priceCents: number) {
           <div class="logo-upload-section">
             <div class="logo-preview">
               <img v-if="editLogoPreview" :src="editLogoPreview" alt="Logo preview" />
-              <img v-else-if="editForm.logo_url" :src="`${editForm.logo_url}`" alt="Current logo" />
-              <div v-else class="logo-placeholder">No Logo</div>
+              <img v-else-if="editForm.logo_url" :src="editForm.logo_url.startsWith('http') ? editForm.logo_url : editForm.logo_url + '?t=' + Date.now()" alt="Current logo" />
+              <div v-else class="logo-placeholder">No Logo <span style="font-size:9px;display:block;color:#888;">{{ typeof editForm.logo_url !== 'undefined' ? editForm.logo_url : 'MISSING' }}</span></div>
             </div>
             <label class="file-input-label">
               <input type="file" accept="image/png,image/jpeg,image/webp" @change="onLogoFileChange"
