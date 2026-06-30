@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { request } from '../api/client'
 
 const loading = ref(false)
@@ -24,7 +24,7 @@ const sectionLabel = (id: string) => ({
 const loadConfigs = async () => {
   loading.value = true
   try {
-    const res = await request('/landing-configs')
+    const res = await request('/admin/landing-configs')
     if (res?.data && Array.isArray(res.data)) {
       configs.value = res.data.sort((a: any, b: any) => a.id.localeCompare(b.id))
     }
@@ -84,6 +84,8 @@ const saveContent = async () => {
     saving.value = false
   }
 }
+
+onMounted(() => loadConfigs())
 
 watch(() => activeSection.value, (val) => {
   if (val) {
