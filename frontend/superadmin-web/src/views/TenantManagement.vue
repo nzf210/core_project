@@ -109,7 +109,8 @@ function formatPrice(priceCents: number) {
             <td>{{ t.owner_username || '-' }}</td>
             <td>{{ t.owner_phone || '-' }}</td>
             <td>{{ t.user_count ?? 0 }}</td>
-            <td><span :class="['badge', 'badge-' + (t.plan || 'lite')]">{{ (t.plan || 'lite').toUpperCase() }}</span></td>
+            <td><span :class="['badge', 'badge-' + (t.plan || 'lite')]">{{ (t.plan || 'lite').toUpperCase() }}</span>
+            </td>
             <td>
               <code v-if="t.xendit_merchant_id" style="font-size: 11px;">{{ t.xendit_merchant_id }}</code>
               <span v-else style="color: var(--muted); font-size: 12px;">SaaS</span>
@@ -139,8 +140,7 @@ function formatPrice(priceCents: number) {
 
           <div class="form-group">
             <label>Username Pemilik
-              <input
-                :value="formData.username"
+              <input :value="formData.username"
                 @input="formData.username = ($event.target as HTMLInputElement).value.replace(/ /g, '_').toLowerCase()"
                 type="text" class="form-control" placeholder="cth: budi_sembako" />
             </label>
@@ -160,13 +160,15 @@ function formatPrice(priceCents: number) {
 
           <div class="form-group">
             <label>Subdomain (Opsional)
-              <input v-model="formData.subdomain" type="text" class="form-control" placeholder="cth: Sembako.saas.com" />
+              <input v-model="formData.subdomain" type="text" class="form-control"
+                placeholder="cth: Sembako.saas.com" />
             </label>
           </div>
 
           <div class="form-group">
             <label>Custom Domain (Opsional)
-              <input v-model="formData.custom_domain" type="text" class="form-control" placeholder="cth: www.tokosembako.com" />
+              <input v-model="formData.custom_domain" type="text" class="form-control"
+                placeholder="cth: www.tokosembako.com" />
             </label>
           </div>
 
@@ -201,11 +203,12 @@ function formatPrice(priceCents: number) {
           <div class="logo-upload-section">
             <div class="logo-preview">
               <img v-if="editLogoPreview" :src="editLogoPreview" alt="Logo preview" />
-              <img v-else-if="editForm.logo_url" :src="editForm.logo_url" alt="Current logo" />
+              <img v-else-if="editForm.logo_url" :src="`${editForm.logo_url}`" alt="Current logo" />
               <div v-else class="logo-placeholder">No Logo</div>
             </div>
             <label class="file-input-label">
-              <input type="file" accept="image/png,image/jpeg,image/webp" @change="onLogoFileChange" style="display:none" />
+              <input type="file" accept="image/png,image/jpeg,image/webp" @change="onLogoFileChange"
+                style="display:none" />
               <span class="btn btn-secondary btn-inline">Pilih Logo</span>
             </label>
           </div>
@@ -238,7 +241,8 @@ function formatPrice(priceCents: number) {
 
           <div class="form-group">
             <label>Xendit Merchant ID <span class="label-hint">(kosongkan jika pakai SaaS pool)</span>
-              <input v-model="editForm.xendit_merchant_id" class="form-control" placeholder="opsional — untuk tenant B2B dengan akun Xendit sendiri" />
+              <input v-model="editForm.xendit_merchant_id" class="form-control"
+                placeholder="opsional — untuk tenant B2B dengan akun Xendit sendiri" />
             </label>
           </div>
 
@@ -263,7 +267,8 @@ function formatPrice(priceCents: number) {
 
           <div class="form-group">
             <label>Alamat Usaha
-              <textarea v-model="editForm.business_address" class="form-control" rows="2" placeholder="Alamat lengkap"></textarea>
+              <textarea v-model="editForm.business_address" class="form-control" rows="2"
+                placeholder="Alamat lengkap"></textarea>
             </label>
           </div>
 
@@ -288,7 +293,8 @@ function formatPrice(priceCents: number) {
 
           <div class="form-group">
             <label>Reset Password Owner <span class="label-hint">(kosongkan jika tidak diubah)</span>
-              <input v-model="editFormRaw.new_password" type="password" class="form-control" placeholder="Password baru" />
+              <input v-model="editFormRaw.new_password" type="password" class="form-control"
+                placeholder="Password baru" />
             </label>
             <div v-if="editFormRaw.new_password" class="password-hint">
               ⚠️ Password baru akan diterapkan saat klik Simpan
@@ -327,71 +333,379 @@ function formatPrice(priceCents: number) {
 </template>
 
 <style scoped>
-.page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; gap: 16px; }
-.page-header h1 { font-size: 22px; margin-bottom: 2px; }
-.subtitle { color: var(--muted); font-size: 13px; }
-.header-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  gap: 16px;
+}
 
-.stats-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 20px; min-width: 90px; }
-.stat-label { font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.5px; }
-.stat-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+.page-header h1 {
+  font-size: 22px;
+  margin-bottom: 2px;
+}
 
-.action-row { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
-.action-btn { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 7px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; }
-.action-btn:hover { background: var(--bg); }
+.subtitle {
+  color: var(--muted);
+  font-size: 13px;
+}
 
-.section { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 24px; }
-.section-title { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 16px 20px 12px; border-bottom: 1px solid var(--border); margin: 0; }
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
 
-.data-table { width: 100%; border-collapse: collapse; }
-.data-table th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--muted); padding: 10px 16px; border-bottom: 1px solid var(--border); letter-spacing: 0.3px; }
-.data-table td { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; }
-.data-table tr:last-child td { border-bottom: none; }
-.data-table tr:hover td { background: rgba(255,255,255,0.02); }
-.copy-btn { background: none; border: none; cursor: pointer; font-size: 12px; opacity: 0.5; margin-left: 4px; }
-.copy-btn:hover { opacity: 1; }
+.stats-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
 
-.badge { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; }
-.badge-lite { background: rgba(100,116,139,0.2); color: #94a3b8; }
-.badge-pro { background: rgba(59,130,246,0.15); color: #60a5fa; }
-.badge-ultimate { background: rgba(168,85,247,0.15); color: #a855f7; }
-.badge-inactive, .badge-unknown { background: rgba(239,68,68,0.15); color: #f87171; }
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 20px;
+  min-width: 90px;
+}
 
-.actions { display: flex; gap: 6px; align-items: center; }
-.btn-sm { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 5px; font-size: 12px; cursor: pointer; }
-.btn-sm.btn-danger { border-color: rgba(239,68,68,0.4); color: var(--danger); }
-.btn-sm.btn-impersonate { background: linear-gradient(135deg, #7c3aed, #4f46e5); border: none; color: white; padding: 4px 8px; border-radius: 5px; font-size: 12px; cursor: pointer; }
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
 
-.loading, .empty { text-align: center; color: var(--muted); padding: 40px; }
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.action-btn:hover {
+  background: var(--bg);
+}
+
+.section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 14px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.3px;
+}
+
+.data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  font-size: 13px;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.copy-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.5;
+  margin-left: 4px;
+}
+
+.copy-btn:hover {
+  opacity: 1;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.badge-lite {
+  background: rgba(100, 116, 139, 0.2);
+  color: #94a3b8;
+}
+
+.badge-pro {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.badge-ultimate {
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+}
+
+.badge-inactive,
+.badge-unknown {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-sm {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-sm.btn-danger {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: var(--danger);
+}
+
+.btn-sm.btn-impersonate {
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  border: none;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.loading,
+.empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 40px;
+}
 
 /* Modal */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
-.modal-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 100%; max-height: 90vh; overflow-y: auto; }
-.modal-title { margin: 0 0 4px; font-size: 18px; }
-.modal-subtitle { color: var(--muted); font-size: 0.85rem; margin: 0 0 20px; }
-.form-group { margin-bottom: 12px; }
-.form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
-.label-hint { color: var(--muted); font-weight: 400; font-size: 0.8rem; text-transform: none; }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
 
-.logo-upload-section { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-.logo-preview { width: 72px; height: 72px; border-radius: 8px; border: 1px solid #333; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #1a1a1a; flex-shrink: 0; }
-.logo-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.logo-placeholder { font-size: 0.7rem; color: #888; text-align: center; }
+.modal-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
 
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
-.error-msg { color: var(--danger); font-size: 13px; margin-top: 10px; }
-.success-msg { color: #10b981; font-size: 13px; margin-top: 10px; font-weight: 600; }
-.password-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.modal-title {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.modal-subtitle {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0 20px;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.label-hint {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.8rem;
+  text-transform: none;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.logo-upload-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.logo-preview {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a1a;
+  flex-shrink: 0;
+}
+
+.logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.logo-placeholder {
+  font-size: 0.7rem;
+  color: #888;
+  text-align: center;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.error-msg {
+  color: var(--danger);
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.success-msg {
+  color: #10b981;
+  font-size: 13px;
+  margin-top: 10px;
+  font-weight: 600;
+}
+
+.password-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
 
 /* Global btn helpers */
-.btn { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; }
-.btn-accent { background: var(--accent); border-color: var(--accent); color: white; }
-.btn-secondary { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
-.btn-danger { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: var(--danger); }
-.btn-inline { padding: 0.35rem 0.75rem; font-size: 0.8rem; cursor: pointer; }
-.form-control { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 14px; width: 100%; box-sizing: border-box; font-family: inherit; }
-.form-control:focus { outline: none; border-color: var(--accent); }
-textarea.form-control { resize: vertical; }
+.btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.btn-secondary {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: var(--danger);
+}
+
+.btn-inline {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.form-control {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+textarea.form-control {
+  resize: vertical;
+}
 </style>
