@@ -59,6 +59,7 @@ export function useTenantManagement() {
     editTarget.value = tenant
     profileError.value = ''
     editLogoFile.value = null
+    editLogoPreview.value = ''  // ponytail: clear old blob URL
     editFormRaw.value.new_password = ''
 
     try {
@@ -74,7 +75,7 @@ export function useTenantManagement() {
           xendit_merchant_id: p.xendit_merchant_id || '', logo_url: p.logo_url || '',
           owner_email: p.owner_email || '',
         }
-        editLogoPreview.value = p.logo_url || ''
+        // Don't set editLogoPreview — let template fallback to editForm.logo_url
       }
     } catch {
       profileError.value = 'Kesalahan jaringan'
@@ -93,26 +94,34 @@ export function useTenantManagement() {
     savingProfile.value = true
     profileError.value = ''
     try {
+      // ponytail: save profile first — logo upload only after user confirms
+      const payload: any = { tenant_id: editTarget.value.id, ...editForm.value }
+      if (editFormRaw.value.new_password) payload.new_password = editFormRaw.value.new_password
+
+      const result = await api.updateTenantProfile(payload)
+      if (!result.success) {
+        profileError.value = result.message || 'Gagal menyimpan'
+        savingProfile.value = false
+        return
+      }
+
+      // Upload logo AFTER profile saved successfully
       if (editLogoFile.value) {
         const logoResult = await api.uploadTenantLogo(editTarget.value.id, editLogoFile.value)
-        if (!logoResult.success) {
-          profileError.value = logoResult.message || 'Gagal upload logo'
+        if (logoResult.success) {
+          editForm.value.logo_url = logoResult.data?.logo_url || ''
+          editLogoPreview.value = logoResult.data?.logo_url || ''
+          editLogoFile.value = null
+        } else {
+          // Profile saved, logo failed — non-fatal, warn user
+          profileError.value = 'Profil tersimpan. Logo gagal diupload: ' + (logoResult.message || 'error')
           savingProfile.value = false
           return
         }
-        editForm.value.logo_url = logoResult.data?.logo_url || ''
-        editLogoPreview.value = logoResult.data?.logo_url || ''
-        editLogoFile.value = null
       }
-      const payload: any = { tenant_id: editTarget.value.id, ...editForm.value }
-      if (editFormRaw.value.new_password) payload.new_password = editFormRaw.value.new_password
-      const result = await api.updateTenantProfile(payload)
-      if (result.success) {
-        editTarget.value = null
-        fetchTenants()
-      } else {
-        profileError.value = result.message || 'Gagal menyimpan'
-      }
+
+      editTarget.value = null
+      fetchTenants()
     } catch {
       profileError.value = 'Kesalahan jaringan'
     } finally {

@@ -63,12 +63,11 @@ func handleUploadTenantLogo(w http.ResponseWriter, r *http.Request) {
 		outExt = ".webp"
 	}
 
-	// Delete existing old files with different extensions before writing new one
+	// Delete ALL existing logo files for this tenant (including same extension)
+	// ponytail: os.Remove is idempotent — fails silently if file doesn't exist
 	oldExts := []string{".png", ".jpg", ".jpeg", ".webp"}
 	for _, e := range oldExts {
-		if e != outExt {
-			os.Remove(filepath.Join(uploadDir, "logos", tenantID+e))
-		}
+		os.Remove(filepath.Join(uploadDir, "logos", tenantID+e))
 	}
 
 	filename := tenantID + outExt

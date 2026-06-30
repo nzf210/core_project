@@ -25,6 +25,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/admin/, '/api/superadmin/billing'),
       },
+      // Proxy /uploads/* → api-gateway (static files dari auth-service)
+      '/uploads': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
       // Proxy /api/* → api-gateway
       '/api': {
         target: 'http://localhost:8000',
