@@ -13,6 +13,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/admin\/wa/, '/api/superadmin/wa'),
       },
+      // Tenant management → auth-service (has full tenant CRUD + list handlers)
+      '/admin/tenants': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/admin\/tenants/, '/api/superadmin/tenants'),
+      },
       // Proxy /admin/* → api-gateway (billing-service endpoints)
       '/admin': {
         target: 'http://localhost:8000',
