@@ -21,7 +21,7 @@ Semua produk berbagi `services/` (auth, billing, ai-gateway, notification, wa-ga
 
 ## 🔒 Spec-First Workflow — WAJIB DIIKUTI
 
-**Sebelum coding APAPUN, selalu cek `docs/FEATURE_MAP.md`.**
+**Sebelum coding APAPUN, selalu cek `docs/FEATURE_MAP.md` (registry) dan `docs/specs/` (detailed specs).**
 
 ```
 USER menulis SPEC      →       AI review & clarify      →       USER approve
@@ -38,21 +38,24 @@ USER menulis SPEC      →       AI review & clarify      →       USER approve
 ### Checklist Sebelum Coding:
 
 1. **Cek FEATURE_MAP.md** — Apakah fitur sudah ada di registry?
-2. **Cek SPEC status** — Sudah ✅ Approved?
+2. **Baca detailed spec** — Jika ada link `→ docs/specs/F<ID>_*.md`, baca file spec lengkap
+3. **Cek SPEC status** — Sudah ✅ Approved?
    - Jika ⏳ Draft: Tanya USER dulu, jangan implement
    - Jika ❌ Rejected: Jangan implement
-3. **Ambiguitas?** — Tanya USER clarification dulu
-4. **Implementasi selesai?** — Update `Implementation` status di FEATURE_MAP.md
+4. **Ambiguitas?** — Tanya USER clarification dulu
+5. **Implementasi selesai?** — Update `Implementation` status di FEATURE_MAP.md
 5. **Testing Wajib** — Setiap kali ada *perubahan*, *tambah fungsi*, atau *hapus fungsi*, JALANKAN TEST sebelum menyelesaikan task:
    - `make check` (untuk menjalankan linter, build, dan semua test)
    - Atau `go test ./apps/umkm/... -v` (untuk test spesifik)
 
 ### Cara Menambah Fitur Baru:
 
-1. User tambah entry di `docs/FEATURE_MAP.md` dengan format SPEC
-2. User ubah status ke "✅ Approved" saat sudah siap
-3. AI implement berdasarkan SPEC yang approved
-4. AI update `Implementation` → "✅ Done" setelah selesai
+1. User tambah entry di `docs/FEATURE_MAP.md` (tabel registry)
+2. Untuk fitur kompleks: User buat detailed spec di `docs/specs/F<ID>_<nama>.md`
+3. User ubah status ke "✅ Approved" saat sudah siap
+4. AI baca registry + detailed spec (jika ada link)
+5. AI implement berdasarkan SPEC yang approved
+6. AI update `Implementation` → "✅ Done" di FEATURE_MAP.md setelah selesai
 
 ---
 
@@ -771,7 +774,8 @@ cd frontend/umkm-web && npm run dev
 
 | Dokumen | Tujuan |
 |:--------|:-------|
-| **[docs/FEATURE_MAP.md](docs/FEATURE_MAP.md)** | **SPEC & feature registry — WAJIB baca sebelum coding** |
+| **[docs/FEATURE_MAP.md](docs/FEATURE_MAP.md)** | **Feature registry — tabel status + links ke detailed specs** |
+| **[docs/specs/](docs/specs/)** | **Detailed specs per-feature (F001-F067) — AC, tech details, examples** |
 | **[docs/WA_PROVIDER_GUIDE.md](docs/WA_PROVIDER_GUIDE.md)** | **WA provider operations — QR scan, send, reconnect, anti-ban** |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Panduan lengkap menambah & mengubah fitur |
 | [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Skenario-skenario pengembangan + contoh kode |
