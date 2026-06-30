@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTenantManagement } from '../composables/useTenantManagement'
-import { api } from '../api/client'
 
 const {
   tenants, loading, deleting, deleteTarget, deleteError,
@@ -12,16 +11,14 @@ const {
   editLogoPreview, profileError, savingProfile,
   onLogoFileChange, saveProfile, saveNewTenant,
   confirmDelete, executeDelete,
+  planOptions,
   businessTypes,
 } = useTenantManagement()
 
 const router = useRouter()
-const planOptions = ref<any[]>([])
 
 onMounted(async () => {
   await fetchTenants()
-  const res = await api.listPlans()
-  if (res.success && res.data) planOptions.value = res.data
 })
 
 async function impersonateTenant(tenantId: string, name: string) {
@@ -259,6 +256,12 @@ function formatPrice(priceCents: number) {
           </div>
 
           <div class="form-group">
+            <label>Email Owner (Login) <span class="label-hint">(hanya dibaca)</span>
+              <input :value="editForm.owner_email" class="form-control" disabled />
+            </label>
+          </div>
+
+          <div class="form-group">
             <label>Alamat Usaha
               <textarea v-model="editForm.business_address" class="form-control" rows="2" placeholder="Alamat lengkap"></textarea>
             </label>
@@ -287,6 +290,9 @@ function formatPrice(priceCents: number) {
             <label>Reset Password Owner <span class="label-hint">(kosongkan jika tidak diubah)</span>
               <input v-model="editFormRaw.new_password" type="password" class="form-control" placeholder="Password baru" />
             </label>
+            <div v-if="editFormRaw.new_password" class="password-hint">
+              ⚠️ Password baru akan diterapkan saat klik Simpan
+            </div>
           </div>
 
           <div class="modal-actions">
@@ -375,6 +381,7 @@ function formatPrice(priceCents: number) {
 
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .error-msg { color: var(--danger); font-size: 13px; margin-top: 10px; }
+.password-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
 
 /* Global btn helpers */
 .btn { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; }

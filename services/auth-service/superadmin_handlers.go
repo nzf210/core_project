@@ -382,16 +382,17 @@ func superadminGetTenantProfile(w http.ResponseWriter, r *http.Request, ctx cont
 		return
 	}
 
-	var id, name, plan, ownerUsername, ownerID string
+	var id, name, plan, ownerUsername, ownerID, ownerEmail string
 	var businessName, waNumber, logoURL, businessAddress, businessType, ownerPhone, customDomain, subdomain, xenditMerchantID *string
 	if err := DB.QueryRow(ctx, `
 		SELECT t.id, t.name, t.plan, t.business_name, t.wa_number, t.logo_url, t.business_address, t.business_type,
 		       t.custom_domain, t.subdomain, t.xendit_merchant_id,
-		       COALESCE(u.username, '') as owner_username, COALESCE(u.id::text, '') as owner_id, u.phone_number as owner_phone
+		       COALESCE(u.username, '') as owner_username, COALESCE(u.id::text, '') as owner_id,
+		       u.phone_number as owner_phone, COALESCE(u.email, '') as owner_email
 		FROM tenants t
 		LEFT JOIN users u ON u.tenant_id = t.id AND u.role = 'owner'
 		WHERE t.id = $1
-	`, tenantID).Scan(&id, &name, &plan, &businessName, &waNumber, &logoURL, &businessAddress, &businessType, &customDomain, &subdomain, &xenditMerchantID, &ownerUsername, &ownerID, &ownerPhone); err != nil {
+	`, tenantID).Scan(&id, &name, &plan, &businessName, &waNumber, &logoURL, &businessAddress, &businessType, &customDomain, &subdomain, &xenditMerchantID, &ownerUsername, &ownerID, &ownerPhone, &ownerEmail); err != nil {
 		if err == pgx.ErrNoRows {
 			writeJSON(w, http.StatusNotFound, Response{Success: false, Message: errTenantNotFound})
 			return
@@ -416,6 +417,7 @@ func superadminGetTenantProfile(w http.ResponseWriter, r *http.Request, ctx cont
 		"xendit_merchant_id": derefStr(xenditMerchantID),
 		"owner_username":     ownerUsername,
 		"owner_id":           ownerID,
+		"owner_email":        ownerEmail,
 	}
 	writeJSON(w, http.StatusOK, Response{Success: true, Data: data})
 }

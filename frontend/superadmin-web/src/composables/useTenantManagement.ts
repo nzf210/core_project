@@ -23,6 +23,7 @@ export function useTenantManagement() {
     name: '', business_name: '', wa_number: '', owner_phone: '',
     business_address: '', business_type: 'umum', plan: 'lite',
     subdomain: '', custom_domain: '', xendit_merchant_id: '', logo_url: '',
+    owner_email: '',
   })
   const editFormRaw = ref({ new_password: '' })
   const editLogoFile = ref<File | null>(null) // used internally only
@@ -37,11 +38,18 @@ export function useTenantManagement() {
     return counts
   })
 
+  const planOptions = ref<any[]>([])
+
   const fetchTenants = async () => {
     loading.value = true
     try {
       const data = await api.getTenants()
       if (data.success && data.data) tenants.value = data.data
+      // ponytail: fetch plans here so modal always has options ready
+      if (!planOptions.value.length) {
+        const plansRes = await api.listPlans()
+        if (plansRes.success && plansRes.data) planOptions.value = plansRes.data
+      }
     } finally {
       loading.value = false
     }
@@ -64,6 +72,7 @@ export function useTenantManagement() {
           business_type: p.business_type || 'umum', plan: p.plan || 'lite',
           subdomain: p.subdomain || '', custom_domain: p.custom_domain || '',
           xendit_merchant_id: p.xendit_merchant_id || '', logo_url: p.logo_url || '',
+          owner_email: p.owner_email || '',
         }
         editLogoPreview.value = p.logo_url || ''
       }
@@ -92,6 +101,7 @@ export function useTenantManagement() {
           return
         }
         editForm.value.logo_url = logoResult.data?.logo_url || ''
+        editLogoPreview.value = logoResult.data?.logo_url || ''
         editLogoFile.value = null
       }
       const payload: any = { tenant_id: editTarget.value.id, ...editForm.value }
@@ -160,6 +170,7 @@ export function useTenantManagement() {
     editLogoFile, editLogoPreview, profileError, savingProfile,
     onLogoFileChange, saveProfile, saveNewTenant,
     confirmDelete, executeDelete,
+    planOptions,
     businessTypes: [
       { id: 'umum', name: 'Umum / General' },
       { id: 'warung', name: 'Warung / Toko Kelontong' },
