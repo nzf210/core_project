@@ -10,8 +10,9 @@ export function useTenantManagement() {
 
   const showAddTenant = ref(false)
   const savingAddTenant = ref(false)
+  // Password is NOT sent — backend auto-generates. Username is auto-lowercased on input.
   const formData = ref({
-    name: '', username: '', password: '', email: '',
+    name: '', username: '', email: '',
     phone_number: '', plan: 'lite', subdomain: '', custom_domain: '',
   })
 
@@ -20,11 +21,11 @@ export function useTenantManagement() {
   const profileError = ref('')
   const editForm = ref({
     name: '', business_name: '', wa_number: '', owner_phone: '',
-    owner_username: '', business_address: '', business_type: 'umum', plan: 'lite',
+    business_address: '', business_type: 'umum', plan: 'lite',
     subdomain: '', custom_domain: '', xendit_merchant_id: '', logo_url: '',
   })
   const editFormRaw = ref({ new_password: '' })
-  const editLogoFile = ref<File | null>(null)
+  const editLogoFile = ref<File | null>(null) // used internally only
   const editLogoPreview = ref('')
 
   const planCounts = computed(() => {
@@ -59,7 +60,7 @@ export function useTenantManagement() {
         editForm.value = {
           name: p.name || '', business_name: p.business_name || '',
           wa_number: p.wa_number || '', owner_phone: p.owner_phone || '',
-          owner_username: p.owner_username || '', business_address: p.business_address || '',
+          business_address: p.business_address || '',
           business_type: p.business_type || 'umum', plan: p.plan || 'lite',
           subdomain: p.subdomain || '', custom_domain: p.custom_domain || '',
           xendit_merchant_id: p.xendit_merchant_id || '', logo_url: p.logo_url || '',
@@ -112,6 +113,7 @@ export function useTenantManagement() {
   const saveNewTenant = async () => {
     savingAddTenant.value = true
     try {
+      // No password — backend auto-generates
       const res = await api.createTenant({
         name: formData.value.name,
         username: formData.value.username,
@@ -123,7 +125,7 @@ export function useTenantManagement() {
       })
       if (res.success) {
         showAddTenant.value = false
-        formData.value = { name: '', username: '', password: '', email: '', phone_number: '', plan: 'lite', subdomain: '', custom_domain: '' }
+        formData.value = { name: '', username: '', email: '', phone_number: '', plan: 'lite', subdomain: '', custom_domain: '' }
         fetchTenants()
       }
     } finally {
