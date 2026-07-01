@@ -173,7 +173,12 @@ func main() {
 	defer DB.Close()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", handleHealth)
+	// Health check and metrics endpoints should NOT be behind auth middleware
+	healthMux := http.NewServeMux()
+	healthMux.HandleFunc("/health", handleHealth)
+	healthMux.Handle("/metrics", observability.PrometheusHandler())
+
+	// Business endpoints behind auth
 	mux.HandleFunc("/business-types", handleGetBusinessTypes)
 	mux.HandleFunc("/onboarding", handleOnboarding)
 	mux.HandleFunc("/dashboard", handleGetDashboard)
@@ -181,9 +186,19 @@ func main() {
 	mux.HandleFunc("/upgrade", handleUpgradePlan)
 	mux.HandleFunc("/stores", handleStoresCollection)
 	mux.HandleFunc("/stores/", handleStoresItem)
-	mux.Handle("/metrics", observability.PrometheusHandler())
 
-	handler := observability.Middleware("umkm-business")(auth.QuotaMiddleware(auth.Middleware(mux)))
+	protectedHandler := observability.Middleware("umkm-business")(auth.QuotaMiddleware(auth.Middleware(mux)))
+
+	// Combine: health/metrics public, business endpoints protected
+	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" || r.URL.Path == "/metrics" {
+			healthMux.ServeHTTP(w, r)
+		} else {
+			protectedHandler.ServeHTTP(w, r)
+		}
+	})
+
+	handler := finalHandler
 	port := "9001"
 
 	slog.Info("UMKM Business Service starting", "port", port)

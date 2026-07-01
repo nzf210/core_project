@@ -1,0 +1,191 @@
+# Prometheus Alert Rules untuk WCH Platform
+# Loaded via prometheus.yml: rule_files: ['alerts.yml']
+
+groups:
+  - name: wch_service_health
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up{job="wch-services"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Service {{ $labels.service }} is down"
+          description: "{{ $labels.service }} has been down for more than 2 minutes. Check logs and restart if needed."
+
+      - alert: ServiceFlapping
+        expr: changes(up{job="wch-services"}[10m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Service {{ $labels.service }} is flapping"
+          description: "{{ $labels.service }} has restarted {{ $value }} times in the last 10 minutes. Investigate stability issues."
+
+  - name: wch_http_errors
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum by (service) (rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (service) (rate(http_requests_total[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High error rate on {{ $labels.service }}"
+          description: "{{ $labels.service }} has {{ $value | humanizePercentage }} error rate over the last 5 minutes."
+
+      - alert: CriticalErrorRate
+        expr: |
+          sum by (service) (rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (service) (rate(http_requests_total[5m]))
+          > 0.15
+        for: 3m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Critical error rate on {{ $labels.service }}"
+          description: "{{ $labels.service }} has {{ $value | humanizePercentage }} error rate. Immediate action required."
+
+  - name: wch_database
+    interval: 60s
+    rules:
+      - alert: PostgresDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database has been unreachable for more than 1 minute."
+
+      - alert: PostgresHighConnections
+        expr: |
+          pg_stat_database_numbackends{datname="wch_platform"}
+          /
+          pg_settings_max_connections
+          > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "PostgreSQL connection pool usage high"
+          description: "PostgreSQL is using {{ $value | humanizePercentage }} of max connections. Consider scaling."
+
+      - alert: PostgresSlowQueries
+        expr: rate(pg_stat_statements_mean_exec_time_seconds[5m]) > 1
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "Average query execution time is {{ $value }}s over the last 5 minutes."
+
+  - name: wch_redis
+    interval: 60s
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache has been unreachable for more than 1 minute."
+
+      - alert: RedisHighMemoryUsage
+        expr: |
+          redis_memory_used_bytes{job="redis"}
+          /
+          redis_memory_max_bytes{job="redis"}
+          > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis is using {{ $value | humanizePercentage }} of max memory. Eviction policy: allkeys-lru."
+
+      - alert: RedisHighConnectionCount
+        expr: redis_connected_clients{job="redis"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Redis connection count high"
+          description: "Redis has {{ $value }} active connections. Check for connection leaks."
+
+  - name: wch_response_time
+    interval: 30s
+    rules:
+      - alert: HighResponseTime
+        expr: |
+          histogram_quantile(0.95,
+            sum by (service, le) (rate(http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High response time on {{ $labels.service }}"
+          description: "{{ $labels.service }} p95 response time is {{ $value }}s. Expected < 2s."
+
+      - alert: CriticalResponseTime
+        expr: |
+          histogram_quantile(0.95,
+            sum by (service, le) (rate(http_request_duration_seconds_bucket[5m]))
+          ) > 5
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Critical response time on {{ $labels.service }}"
+          description: "{{ $labels.service }} p95 response time is {{ $value }}s. Users experiencing severe degradation."
+
+  - name: wch_disk_space
+    interval: 300s
+    rules:
+      - alert: LowDiskSpace
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"}
+          /
+          node_filesystem_size_bytes{mountpoint="/"})
+          < 0.2
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Low disk space on root partition"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining. Clean up or expand volume."
+
+      - alert: CriticalDiskSpace
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"}
+          /
+          node_filesystem_size_bytes{mountpoint="/"})
+          < 0.1
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Critical disk space on root partition"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining. Immediate action required."
