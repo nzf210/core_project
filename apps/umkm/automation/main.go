@@ -63,6 +63,20 @@ func main() {
 	// Start metrics HTTP server in background
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", observability.PrometheusHandler())
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		dbStatus := "disconnected"
+		if DB != nil {
+			if err := DB.Ping(r.Context()); err == nil {
+				dbStatus = "connected"
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"status":   "ok",
+			"database": dbStatus,
+		})
+	})
 	go func() {
 		port := "8204"
 		slog.Info("UMKM Automation metrics server starting", "port", port)
