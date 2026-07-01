@@ -31,6 +31,10 @@ FROM alpine:3.21
 
 WORKDIR /app
 
+# ponytail: ca-certificates for TLS to external APIs (Meta, Xendit, Telegram, LLM);
+# wget for docker-compose healthchecks (test: ["CMD","wget",...]).
+RUN apk add --no-cache ca-certificates wget
+
 # Copy binaries from builder
 COPY --from=builder /bin/auth-service /usr/local/bin/
 COPY --from=builder /bin/api-gateway /usr/local/bin/

@@ -40,21 +40,26 @@ Script akan install:
 
 ## 2. Generate Production Secrets
 
-```bash
-# JWT Secret (32 bytes)
-openssl rand -base64 32
+**PENTING:** JWT_SECRET dan ENCRYPTION_KEY harus TEPAT 32 karakter. N8N_ENCRYPTION_KEY harus 64 karakter hex.
 
-# Encryption Key (32 bytes)
-openssl rand -base64 32
+```bash
+# JWT Secret (32 karakter, trim ke 32)
+openssl rand -base64 32 | head -c 32
+
+# Encryption Key (32 karakter, trim ke 32)
+openssl rand -base64 32 | head -c 32
+
+# N8N Encryption Key (64 karakter hex)
+openssl rand -hex 32
 
 # Grafana Password
 openssl rand -base64 16
 
 # Database Password
-openssl rand -base64 16
+openssl rand -base64 24
 
 # Redis Password
-openssl rand -base64 16
+openssl rand -base64 24
 ```
 
 ---
@@ -63,17 +68,17 @@ openssl rand -base64 16
 
 ```bash
 cd /opt/wch-platform
-cp .env.example .env
-nano .env
+cp .env.staging.example .env.staging
+nano .env.staging
 ```
 
-**WAJIB diisi:**
+**WAJIB diisi (ikuti checklist di .env.staging.example):**
 
 ```bash
-# Security
+# Security (TEPAT 32 karakter!)
 APP_ENV=production
-JWT_SECRET=<generated-32-byte-secret>
-ENCRYPTION_KEY=<generated-32-byte-key>
+JWT_SECRET=<generated-32-char-secret>
+ENCRYPTION_KEY=<generated-32-char-key>
 
 # Database
 DB_HOST=postgres
@@ -87,14 +92,32 @@ REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_PASSWORD=<strong-password>
 
+# N8N (64 karakter hex!)
+N8N_ENCRYPTION_KEY=<generated-64-char-hex>
+N8N_DB_PASSWORD=<strong-password>
+N8N_ADMIN_PASSWORD=<strong-password>
+
 # Monitoring
 GRAFANA_ADMIN_PASSWORD=<strong-password>
 
 # API Keys
-MINIMAX_API_KEY=<your-key>
-XENDIT_API_KEY=<your-key>
-TELEGRAM_BOT_TOKEN=<your-token>
-# ... (sesuai kebutuhan)
+MINIMAX_API_KEY=<anthropic-api-key>
+GEMINI_API_KEY=<google-gemini-key>
+XENDIT_API_KEY=<xendit-staging-key>
+TELEGRAM_BOT_TOKEN=<telegram-bot-token>
+WA_CLOUD_API_TOKEN=<meta-cloud-api-token>
+# ... (lengkap di .env.staging.example)
+```
+
+**Validasi sebelum deploy:**
+
+```bash
+# Cek panjang JWT_SECRET dan ENCRYPTION_KEY (harus 32)
+echo -n "$JWT_SECRET" | wc -c
+echo -n "$ENCRYPTION_KEY" | wc -c
+
+# Cek panjang N8N_ENCRYPTION_KEY (harus 64)
+echo -n "$N8N_ENCRYPTION_KEY" | wc -c
 ```
 
 ---

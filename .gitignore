@@ -6,6 +6,7 @@
 .env
 .env.*
 !.env.example
+!.env.staging.example
 *.bin
 # =============================================================================
 # Go Artifacts — Compiled Binaries

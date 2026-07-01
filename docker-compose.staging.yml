@@ -9,6 +9,7 @@ services:
   # API Gateway (public facing)
   # ============================================================================
   api-gateway:
+    env_file: .env.staging
     ports:
       - "8010:8000"  # Public access via Nginx reverse proxy
     healthcheck:
@@ -29,6 +30,7 @@ services:
   # Backend Services (internal only)
   # ============================================================================
   auth-service:
+    env_file: .env.staging
     ports:
       - "127.0.0.1:8001:8001"
     healthcheck:
@@ -46,6 +48,7 @@ services:
           memory: 256M
 
   ai-gateway:
+    env_file: .env.staging
     ports:
       - "127.0.0.1:8002:8002"
     healthcheck:
@@ -63,6 +66,7 @@ services:
           memory: 256M
 
   billing-service:
+    env_file: .env.staging
     ports:
       - "127.0.0.1:8003:8003"
     healthcheck:
@@ -80,6 +84,7 @@ services:
           memory: 256M
 
   notification-service:
+    env_file: .env.staging
     ports:
       - "127.0.0.1:8005:8005"
     healthcheck:
@@ -97,6 +102,7 @@ services:
           memory: 128M
 
   subscription-worker:
+    env_file: .env.staging
     ports:
       - "127.0.0.1:8006:8006"
     healthcheck:
@@ -114,6 +120,7 @@ services:
           memory: 128M
 
   umkm-accounting:
+    env_file: .env.staging
     ports:
       - "127.0.0.1:8201:8201"
     healthcheck:
@@ -131,6 +138,7 @@ services:
           memory: 256M
 
   wa-gateway:
+    env_file: .env.staging
     ports:
       - "127.0.0.1:8202:8202"
     healthcheck:
@@ -148,6 +156,7 @@ services:
           memory: 256M
 
   umkm-chatbot:
+    env_file: .env.staging
     ports:
       - "127.0.0.1:8203:8203"
     healthcheck:
@@ -165,6 +174,7 @@ services:
           memory: 256M
 
   umkm-automation:
+    env_file: .env.staging
     ports:
       - "127.0.0.1:8204:8204"
     healthcheck:
@@ -182,6 +192,7 @@ services:
           memory: 128M
 
   umkm-business:
+    env_file: .env.staging
     ports:
       - "127.0.0.1:9001:9001"
     healthcheck:
@@ -199,6 +210,7 @@ services:
           memory: 256M
 
   campaign-api:
+    env_file: .env.staging
     ports:
       - "127.0.0.1:9002:9002"
     healthcheck:
@@ -216,6 +228,7 @@ services:
           memory: 256M
 
   wa-cloud-api:
+    env_file: .env.staging
     ports:
       - "127.0.0.1:8210:8210"
     healthcheck:
