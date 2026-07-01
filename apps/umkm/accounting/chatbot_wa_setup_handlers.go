@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"core_project/shared/sdk/config"
+	"core_project/shared/sdk/encryption"
 )
 
 // handleWASetup returns the current WA provider status for the setup UI.
@@ -192,7 +195,14 @@ func handleWACloudAPICredentialPost(ctx context.Context, w http.ResponseWriter, 
 		body.VerifyToken = tenantID
 	}
 
-	_, err := DB.Exec(ctx, `
+	// Encrypt access_token before storing
+	encryptedToken, err := encryption.Encrypt(body.AccessToken, config.GlobalConfig.EncryptionKey)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to encrypt token: " + err.Error()})
+		return
+	}
+
+	_, err = DB.Exec(ctx, `
 		INSERT INTO wa_cloud_api_credentials (tenant_id, phone_number_id, waba_id, access_token, verify_token)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (tenant_id) DO UPDATE SET
@@ -203,7 +213,7 @@ func handleWACloudAPICredentialPost(ctx context.Context, w http.ResponseWriter, 
 			is_active = true,
 			verification_status = 'unverified',
 			updated_at = NOW()
-	`, tenantID, body.PhoneNumberID, body.WABAID, body.AccessToken, body.VerifyToken)
+	`, tenantID, body.PhoneNumberID, body.WABAID, encryptedToken, body.VerifyToken)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Gagal menyimpan credential: " + err.Error()})
 		return

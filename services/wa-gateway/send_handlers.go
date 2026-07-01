@@ -37,15 +37,17 @@ func handleSendRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pref := resolveProviderPreference(r, tenantID)
-	forceCloud := pref == "cloud_api"
-	forceWhatsmeow := pref == "whatsmeow"
+	// Respect whatsmeow-only preference (skip Cloud API entirely)
+	// For auto/cloud_api: try Cloud first, fallback to whatsmeow on failure
+	skipCloud := pref == "whatsmeow"
 
-	if handleCloudAPIRouting(w, r, tenantID, target, message, forceCloud, forceWhatsmeow) {
+	if handleCloudAPIRouting(w, r, tenantID, target, message, skipCloud) {
 		return
 	}
 
 	if !rateLimiter.Allow(tenantID) {
 		slog.Warn("Rate limit exceeded for whatsmeow", "tenant_id", tenantID)
+		waRateLimitedTotal.WithLabelValues().Inc()
 		http.Error(w, `{"error":"Rate limit exceeded (max 5 msg/min). Use Cloud API for broadcasting."}`, http.StatusTooManyRequests)
 		return
 	}
@@ -86,6 +88,7 @@ func handleSendRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	waMessagesTotal.WithLabelValues("whatsmeow", "out", "sent").Inc()
+	waRoutedTotal.WithLabelValues("whatsmeow").Inc()
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
 }
@@ -131,29 +134,47 @@ func writeServiceUnavailable(w http.ResponseWriter, msg string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
-func handleCloudAPIRouting(w http.ResponseWriter, r *http.Request, tenantID, target, message string, forceCloud, forceWhatsmeow bool) bool {
-	if forceCloud || (!forceWhatsmeow && isTransactional(r)) {
-		msgType := r.Header.Get("X-Message-Type")
-		if msgType == "" {
-			msgType = "text"
-		}
-		waMsgID, err := routeToCloudAPI(tenantID, target, message, msgType)
-		if err == nil {
-			w.Header().Set(headerContentType, mimeApplicationJSON)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"success":       true,
-				"routed":        "cloud_api",
-				"wa_message_id": waMsgID,
-			})
-			return true
-		}
-		if forceCloud {
-			slog.Error("Cloud API forced but failed", "tenant_id", tenantID, "error", err)
-			http.Error(w, `{"error":"Cloud API forced but failed"}`, http.StatusBadGateway)
-			return true
-		}
-		slog.Warn("Cloud API fallback to whatsmeow", "tenant_id", tenantID, "error", err)
+func handleCloudAPIRouting(w http.ResponseWriter, r *http.Request, tenantID, target, message string, skipCloud bool) bool {
+	// skipCloud=true → force whatsmeow, no Cloud API attempt
+	if skipCloud {
+		return false
 	}
+
+	// Try Cloud API if: explicitly forced (cloud_api pref) OR transactional message type
+	pref := resolveProviderPreference(r, tenantID)
+	shouldTryCloud := pref == "cloud_api" || (pref == "auto" && isTransactional(r))
+
+	if !shouldTryCloud {
+		return false
+	}
+
+	msgType := r.Header.Get("X-Message-Type")
+	if msgType == "" {
+		msgType = "text"
+	}
+	waMsgID, err := routeToCloudAPI(tenantID, target, message, msgType)
+	if err == nil {
+		waRoutedTotal.WithLabelValues("cloud_api").Inc()
+		w.Header().Set(headerContentType, mimeApplicationJSON)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success":       true,
+			"routed":        "cloud_api",
+			"wa_message_id": waMsgID,
+		})
+		return true
+	}
+
+	// Cloud API failed
+	if pref == "cloud_api" {
+		// Forced Cloud API → no fallback, return error
+		slog.Error("Cloud API forced but failed", "tenant_id", tenantID, "error", err)
+		http.Error(w, `{"error":"Cloud API forced but failed"}`, http.StatusBadGateway)
+		return true
+	}
+
+	// auto mode → fallback to whatsmeow
+	slog.Warn("Cloud API fallback to whatsmeow", "tenant_id", tenantID, "error", err)
+	waFallbackTotal.WithLabelValues().Inc()
 	return false
 }
 

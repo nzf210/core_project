@@ -44,6 +44,21 @@ var (
 		"Total WA messages by channel, direction, and status",
 		[]string{"channel", "direction", "status"},
 	)
+	waRoutedTotal = observability.NewCounter(
+		"wa_messages_routed_total",
+		"Messages routed by provider (cloud_api vs whatsmeow)",
+		[]string{"provider"},
+	)
+	waFallbackTotal = observability.NewCounter(
+		"wa_fallback_total",
+		"Cloud API fallback to whatsmeow count",
+		[]string{},
+	)
+	waRateLimitedTotal = observability.NewCounter(
+		"wa_rate_limited_total",
+		"Messages rate-limited (whatsmeow 5msg/min)",
+		[]string{},
+	)
 )
 
 var (

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"core_project/shared/sdk/config"
+	"core_project/shared/sdk/encryption"
 	"core_project/shared/sdk/response"
 )
 
@@ -245,13 +247,20 @@ func handleAdminCredentials(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Encrypt access_token before storing
+		encryptedToken, err := encryption.Encrypt(req.AccessToken, config.GlobalConfig.EncryptionKey)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to encrypt token", err)
+			return
+		}
+
 		var id string
-		err := DB.QueryRow(r.Context(), `
+		err = DB.QueryRow(r.Context(), `
 			INSERT INTO wa_cloud_api_credentials (tenant_id, phone_number_id, waba_id, access_token, verify_token, is_active)
 			VALUES ($1, $2, $3, $4, $5, true)
 			ON CONFLICT (tenant_id) DO UPDATE SET phone_number_id = EXCLUDED.phone_number_id, waba_id = EXCLUDED.waba_id, access_token = EXCLUDED.access_token, is_active = true, updated_at = NOW()
 			RETURNING id
-		`, req.TenantID, req.PhoneNumberID, req.WABAID, req.AccessToken, req.VerifyToken).Scan(&id)
+		`, req.TenantID, req.PhoneNumberID, req.WABAID, encryptedToken, req.VerifyToken).Scan(&id)
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, "Failed to save credential", err)
 			return
@@ -305,11 +314,22 @@ func handleAdminCredentialsItem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Encrypt access_token if provided
+		tokenToStore := req.AccessToken
+		if req.AccessToken != "" {
+			encrypted, err := encryption.Encrypt(req.AccessToken, config.GlobalConfig.EncryptionKey)
+			if err != nil {
+				response.Error(w, http.StatusInternalServerError, "Failed to encrypt token", err)
+				return
+			}
+			tokenToStore = encrypted
+		}
+
 		_, err := DB.Exec(r.Context(), `
 			UPDATE wa_cloud_api_credentials
 			SET phone_number_id = $1, waba_id = $2, access_token = $3, is_active = $4, updated_at = NOW()
 			WHERE id = $5
-		`, req.PhoneNumberID, req.WABAID, req.AccessToken, req.IsActive, id)
+		`, req.PhoneNumberID, req.WABAID, tokenToStore, req.IsActive, id)
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, "Failed to update credential", err)
 			return

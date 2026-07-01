@@ -200,3 +200,9 @@ get_func.js
 fix.patch
 tools/scripts/update_chatbot_workflow.py
 tmp/build-errors.log
+apps/umkm/accounting/tmp/build-errors.log
+services/wa-gateway/tmp/main
+services/wa-gateway/tmp/build-errors.log
+apps/umkm/accounting/tmp/main
+apps/umkm/accounting/tmp/main
+services/wa-gateway/tmp/main

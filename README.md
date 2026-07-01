@@ -92,9 +92,36 @@ make check         # Semua quality checks sekaligus
 - **AI/LLM:** MiniMax M2.7 (via internal AI Gateway)
 - **WhatsApp:** whatsmeow library
 - **Billing:** Xendit
+- **Automation:** N8N (Queue Mode with Bull/Redis, PostgreSQL persistence)
 - **Frontend:** Vue 3 + TypeScript + Vite
 - **Observability:** Prometheus + Grafana + Loki
 - **CI/CD:** GitHub Actions
+
+## 🔄 N8N Automation (Queue Mode)
+
+**Horizontal Scaling:**
+
+```bash
+# Scale workers (max recommended: CPU cores)
+docker-compose up -d --scale n8n-worker=3
+
+# Check worker distribution
+docker ps --filter "name=n8n-worker"
+
+# Monitor queue (Redis DB 2)
+docker exec wch-redis redis-cli -n 2 KEYS "bull:*"
+```
+
+**Architecture:**
+- `n8n-main`: UI + webhook receiver (port 5678)
+- `n8n-worker`: Execution workers (scalable, shared PostgreSQL + Redis queue)
+- Workflows auto-imported from `infra/n8n/workflows/*.json`
+- Credential sync via shared `N8N_ENCRYPTION_KEY` + persistent database
+
+**Production Notes:**
+- Workers auto-sync from DB, no manual import needed
+- Use `N8N_METRICS=true` + Prometheus scraper for queue depth monitoring
+- Set `N8N_WORKER_CONCURRENCY` per worker (default: 10)
 
 ## 🚀 Deployment
 

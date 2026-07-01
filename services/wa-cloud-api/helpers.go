@@ -8,15 +8,32 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"core_project/shared/sdk/config"
+	"core_project/shared/sdk/encryption"
 )
 
 func getCredential(ctx context.Context, tenantID string) (*CloudAPICredential, error) {
 	var cred CloudAPICredential
+	var encryptedToken string
 	err := DB.QueryRow(ctx, `
 		SELECT id, tenant_id, phone_number_id, COALESCE(waba_id, ''), access_token, verify_token, is_active, created_at, updated_at
 		FROM wa_cloud_api_credentials WHERE tenant_id = $1 AND is_active = true
-	`, tenantID).Scan(&cred.ID, &cred.TenantID, &cred.PhoneNumberID, &cred.WABAID, &cred.AccessToken, &cred.VerifyToken, &cred.IsActive, &cred.CreatedAt, &cred.UpdatedAt)
-	return &cred, err
+	`, tenantID).Scan(&cred.ID, &cred.TenantID, &cred.PhoneNumberID, &cred.WABAID, &encryptedToken, &cred.VerifyToken, &cred.IsActive, &cred.CreatedAt, &cred.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decrypt access token using EncryptionKey from config
+	if encryptedToken != "" {
+		decrypted, err := encryption.Decrypt(encryptedToken, config.GlobalConfig.EncryptionKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt access_token: %w", err)
+		}
+		cred.AccessToken = decrypted
+	}
+
+	return &cred, nil
 }
 
 func verifyWebhookToken(ctx context.Context, token string) bool {

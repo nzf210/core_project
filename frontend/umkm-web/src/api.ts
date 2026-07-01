@@ -281,6 +281,10 @@ export const api = {
       headers: headers(),
       body: JSON.stringify(cred),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }))
+      throw new Error(err.message || `Validation failed: ${res.statusText}`)
+    }
     return res.json()
   },
 

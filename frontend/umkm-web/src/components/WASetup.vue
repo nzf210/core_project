@@ -641,8 +641,16 @@ async function saveCloudApiCredential() {
         return
       }
     } catch (e: any) {
-      cloudApiError.value = e?.message || 'Gagal validasi credential'
+      cloudApiValidationResult.value = 'invalid'
       cloudApiValidated.value = false
+      // Extract error message with fallback chain
+      let errMsg = 'Gagal validasi credential'
+      if (e?.message) {
+        errMsg = e.message
+      } else if (typeof e === 'string') {
+        errMsg = e
+      }
+      cloudApiError.value = `❌ ${errMsg}. Periksa kembali access token dan phone number ID Anda.`
       cloudApiLoading.value = false
       return
     } finally {
