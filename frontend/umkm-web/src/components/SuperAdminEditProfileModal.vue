@@ -1,8 +1,8 @@
 <template>
   <div class="modal-overlay" @click.self="$emit('update:editTarget', null)">
-    <div class="modal-card" style="max-width: 540px; max-height: 85vh; overflow-y: auto;">
-      <h3 style="margin: 0 0 0.25rem 0;">Edit Profil Tenant</h3>
-      <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.25rem;">
+    <div class="modal-card">
+      <h3 class="modal-title">Edit Profil Tenant</h3>
+      <p class="modal-subtitle">
         {{ editTarget.name }} ({{ editTarget.owner_username || 'no owner' }})
       </p>
 
@@ -15,12 +15,10 @@
         </div>
         <label class="file-input-label">
           <input type="file" accept="image/png,image/jpeg,image/webp" @change="$emit('logo-change', $event)"
-            style="display:none" />
-          <span class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; cursor: pointer;">Pilih
-            Logo</span>
+            class="file-input-hidden" />
+          <span class="btn btn-secondary btn-sm">Pilih Logo</span>
         </label>
-        <button v-if="editLogoFile" class="btn"
-          style="background: transparent; color: var(--accent-primary); border: 1px solid var(--border-color); padding: 0.35rem 0.75rem; font-size: 0.8rem;"
+        <button v-if="editLogoFile" class="btn btn-upload"
           @click="$emit('upload-logo')" :disabled="uploadingLogo">
           {{ uploadingLogo ? 'Uploading...' : 'Upload Logo' }}
         </button>
@@ -34,7 +32,7 @@
         <input v-model="editForm.subdomain" class="form-control" placeholder="opsional" /></label></div>
       <div class="form-group"><label>Custom Domain
         <input v-model="editForm.custom_domain" class="form-control" placeholder="opsional" /></label></div>
-      <div class="form-group"><label>Xendit Merchant ID <span style="color: var(--text-secondary); font-weight: 400; font-size: 0.75rem;">(kosongkan jika pakai SaaS pool)</span>
+      <div class="form-group"><label>Xendit Merchant ID <span class="label-hint">(kosongkan jika pakai SaaS pool)</span>
         <input v-model="editForm.xendit_merchant_id" class="form-control" placeholder="opsional — untuk tenant B2B dengan akun Xendit sendiri" /></label></div>
       <div class="form-group"><label>Nomor WA Toko (CS)
         <input v-model="editForm.wa_number" class="form-control" placeholder="0812..." /></label></div>
@@ -50,19 +48,16 @@
         <select v-model="editForm.plan" class="form-control">
           <option v-for="plan in planOptions" :key="plan.id" :value="plan.id">{{ plan.name }}</option>
         </select></label></div>
-      <div class="form-group"><label>Reset Password Owner <span
-            style="color: var(--text-secondary); font-weight: 400; font-size: 0.8rem;">(kosongkan jika tidak ingin
-            diubah)</span>
+      <div class="form-group"><label>Reset Password Owner <span class="label-hint">(kosongkan jika tidak ingin diubah)</span>
         <input v-model="editForm.new_password" type="password" class="form-control" placeholder="Password baru" /></label></div>
 
-      <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem;">
+      <div class="modal-actions">
         <button class="btn btn-secondary" @click="$emit('update:editTarget', null)" :disabled="savingProfile">Batal</button>
         <button class="btn btn-primary" @click="$emit('save')" :disabled="savingProfile">
           {{ savingProfile ? 'Menyimpan...' : 'Simpan' }}
         </button>
       </div>
-      <div v-if="profileError" style="margin-top: 0.75rem; color: #ef4444; font-size: 0.85rem;">{{ profileError }}
-      </div>
+      <div v-if="profileError" class="profile-error">{{ profileError }}</div>
     </div>
   </div>
 </template>
@@ -70,20 +65,50 @@
 <script setup lang="ts">
 const apiBase = import.meta.env.VITE_API_URL || ''
 
+interface BusinessType {
+  id: string
+  name: string
+}
+
+interface PlanOption {
+  id: string
+  name: string
+}
+
+interface EditForm {
+  logo_url?: string
+  business_name?: string
+  name?: string
+  subdomain?: string
+  custom_domain?: string
+  xendit_merchant_id?: string
+  wa_number?: string
+  owner_phone?: string
+  business_address?: string
+  business_type?: string
+  plan?: string
+  new_password?: string
+}
+
+interface EditTarget {
+  name: string
+  owner_username?: string
+}
+
 defineProps<{
-  editTarget: any
-  editForm: any
-  editLogoFile: any
+  editTarget: EditTarget
+  editForm: EditForm
+  editLogoFile: File | null
   editLogoPreview: string
   uploadingLogo: boolean
   savingProfile: boolean
   profileError: string
-  businessTypes: any[]
-  planOptions: any[]
+  businessTypes: BusinessType[]
+  planOptions: PlanOption[]
 }>()
 
 defineEmits<{
-  'update:editTarget': [value: any]
+  'update:editTarget': [value: null]
   'logo-change': [event: Event]
   'upload-logo': []
   'save': []
@@ -91,6 +116,22 @@ defineEmits<{
 </script>
 
 <style scoped>
+.modal-card {
+  max-width: 540px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.modal-title {
+  margin: 0 0 0.25rem 0;
+}
+
+.modal-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
 .logo-upload-section {
   display: flex;
   align-items: center;
@@ -124,6 +165,30 @@ defineEmits<{
   text-align: center;
 }
 
+.file-input-hidden {
+  display: none;
+}
+
+.btn-sm {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.btn-upload {
+  background: transparent;
+  color: var(--accent-primary);
+  border: 1px solid var(--border-color);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.label-hint {
+  color: var(--text-secondary);
+  font-weight: 400;
+  font-size: 0.75rem;
+}
+
 .form-group {
   margin-bottom: 0.75rem;
 }
@@ -151,5 +216,18 @@ defineEmits<{
 .form-control:focus {
   outline: none;
   border-color: var(--accent-primary);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+.profile-error {
+  margin-top: 0.75rem;
+  color: #ef4444;
+  font-size: 0.85rem;
 }
 </style>

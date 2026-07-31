@@ -32,7 +32,7 @@ describe('Superadmin Web - Authentication', () => {
 })
 
 describe('Superadmin Web - Tenant Management', () => {
-  it('lists all tenants', async () => {
+  it('lists all tenants', () => {
     const mockTenants = [
       { id: '1', name: 'Tenant A', plan: 'lite', user_count: 5 },
       { id: '2', name: 'Tenant B', plan: 'pro', user_count: 10 }

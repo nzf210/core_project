@@ -251,8 +251,7 @@ const loadMarketplace = async () => {
     } else {
       marketplace.value = []
     }
-  } catch (e) {
-    console.warn('Marketplace load failed:', e)
+  } catch {
     loadError.value = 'Gagal memuat marketplace. Pastikan koneksi stabil.'
   } finally {
     loading.value = false
@@ -293,8 +292,8 @@ const executePurchase = async () => {
     } else {
       alert(res.message || 'Pembelian gagal')
     }
-  } catch (e: any) {
-    alert(e.message || 'Terjadi kesalahan')
+  } catch (e) {
+    alert(e instanceof Error ? e.message : 'Terjadi kesalahan')
   } finally {
     purchasing.value = ''
   }
