@@ -129,7 +129,9 @@ watch(() => activeSection.value, (val) => {
             </button>
           </div>
         </div>
+        <label for="landing-editor-content" class="sr-only">JSON Editor</label>
         <textarea
+          id="landing-editor-content"
           v-model="editorContent"
           class="json-editor"
           rows="22"

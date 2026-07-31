@@ -127,8 +127,9 @@ function extractPhone(jid: string) {
     <!-- F064: Platform WA Provider Selector -->
     <div class="provider-selector">
       <div class="provider-header">
-        <span class="provider-label">📡 WA Provider</span>
+        <label for="platform-wa-provider" class="provider-label">📡 WA Provider</label>
         <select
+          id="platform-wa-provider"
           class="provider-select"
           :value="platformProvider?.data?.wa_provider || 'auto'"
           :disabled="savingProvider"

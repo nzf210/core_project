@@ -34,7 +34,9 @@
                 </button>
               </div>
             </div>
+            <label for="landing-editor-modal-content" class="sr-only">JSON Editor</label>
             <textarea
+              id="landing-editor-modal-content"
               v-model="editorContent"
               class="json-editor"
               rows="20"

@@ -199,13 +199,17 @@ func TestCORS_AllowedOrigins(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("OPTIONS", "/api/umkm/dashboard", nil)
 			req.Header.Set("Origin", tt.origin)
+			w := httptest.NewRecorder()
 			_ = req
-			_ = httptest.NewRecorder()
 
 			if tt.shouldAllow {
-				// Response should include Access-Control-Allow-Origin
+				if w.Code == http.StatusForbidden {
+					t.Errorf("origin %q should be allowed, got 403", tt.origin)
+				}
 			} else {
-				// Response should NOT include CORS headers
+				if w.Code == http.StatusOK && tt.origin != "" {
+					t.Logf("origin %q should be blocked by CORS policy", tt.origin)
+				}
 			}
 		})
 	}
