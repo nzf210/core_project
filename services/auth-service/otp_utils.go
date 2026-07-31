@@ -58,16 +58,6 @@ func sendWAGatewayOTP(senderTenant, authWAProvider, target, otp string) {
 	}
 }
 
-func formatPhoneToWAJID(phone string) string {
-	if strings.HasPrefix(phone, "0") {
-		phone = "62" + phone[1:]
-	}
-	if !strings.Contains(phone, "@") {
-		phone = phone + "@s.whatsapp.net"
-	}
-	return phone
-}
-
 func getSystemTenantID() string {
 	systemTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
 	if systemTenant == "" {
