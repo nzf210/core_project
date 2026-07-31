@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"core_project/shared/sdk/auth"
+	"core_project/shared/sdk/response"
 )
 
 type GenerateImageRequest struct {
@@ -20,7 +21,7 @@ func HandleGenerateImage(w http.ResponseWriter, r *http.Request) {
 	}
 	var req GenerateImageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "Invalid request"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: response.InvalidRequest})
 		return
 	}
 

@@ -29,7 +29,7 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		Reference string `json:"reference"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: response.InvalidRequest})
 		return
 	}
 
@@ -127,7 +127,7 @@ func handleStorePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 
 	var payload map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: response.InvalidRequest})
 		return
 	}
 

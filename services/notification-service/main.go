@@ -15,6 +15,7 @@ import (
 
 	"core_project/shared/observability"
 	"core_project/shared/sdk/webhook"
+	"core_project/shared/sdk/response"
 )
 
 // ─────────────────────────────────────────────
@@ -93,7 +94,7 @@ func handleSendNotification(w http.ResponseWriter, r *http.Request) {
 
 	var req NotificationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		http.Error(w, response.InvalidRequest, http.StatusBadRequest)
 		return
 	}
 

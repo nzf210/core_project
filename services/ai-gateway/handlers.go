@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	openai "github.com/sashabaranov/go-openai"
+	"core_project/shared/sdk/response"
 )
 
 const (
@@ -299,7 +300,7 @@ func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		TenantID string `json:"tenant_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "Invalid request"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: response.InvalidRequest})
 		return
 	}
 	if req.Input == "" {

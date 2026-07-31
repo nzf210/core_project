@@ -76,7 +76,7 @@ func HandleLogistics(w http.ResponseWriter, r *http.Request) {
 		// Create logistic item
 		var req LogisticItemPayload
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request"})
+			WriteJSON(w, http.StatusBadRequest, APIResponse{Message: response.InvalidRequest})
 			return
 		}
 
@@ -106,7 +106,7 @@ func HandleDistributeLogistics(w http.ResponseWriter, r *http.Request) {
 
 	var req DistributePayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request"})
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: response.InvalidRequest})
 		return
 	}
 

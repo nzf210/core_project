@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
+	"core_project/shared/sdk/response"
 )
 
 func handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -291,7 +292,7 @@ func handleManualRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request"})
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: response.InvalidRequest})
 		return
 	}
 

@@ -41,7 +41,7 @@ func handleCheckout(w http.ResponseWriter, r *http.Request) {
 			Items         []CheckoutItem `json:"items"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request"})
+			writeJSON(w, http.StatusBadRequest, APIResponse{Message: response.InvalidRequest})
 			return
 		}
 

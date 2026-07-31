@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"core_project/shared/sdk/auth"
+	"core_project/shared/sdk/response"
 )
 
 type VisionRequest struct {
@@ -21,7 +22,7 @@ func HandleVision(w http.ResponseWriter, r *http.Request) {
 	}
 	var req VisionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "Invalid request"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: response.InvalidRequest})
 		return
 	}
 	if req.ImageURL == "" {

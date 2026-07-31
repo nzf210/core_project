@@ -32,7 +32,7 @@ func handleAdminTenants(w http.ResponseWriter, r *http.Request) {
 func deleteAdminTenant(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" || DB == nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: response.InvalidRequest})
 		return
 	}
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"core_project/shared/sdk/auth"
+	"core_project/shared/sdk/response"
 )
 
 type TranscribeRequest struct {
@@ -20,7 +21,7 @@ func HandleTranscribe(w http.ResponseWriter, r *http.Request) {
 	}
 	var req TranscribeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "Invalid request"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: response.InvalidRequest})
 		return
 	}
 
@@ -54,7 +55,7 @@ func HandleSpeak(w http.ResponseWriter, r *http.Request) {
 	}
 	var req SpeakRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "Invalid request"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: response.InvalidRequest})
 		return
 	}
 

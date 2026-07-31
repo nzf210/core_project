@@ -27,7 +27,7 @@ func HandleKTPScan(w http.ResponseWriter, r *http.Request) {
 		CampaignID string `json:"campaign_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request"})
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: response.InvalidRequest})
 		return
 	}
 

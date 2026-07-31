@@ -248,7 +248,7 @@ func handleAdminCredentials(w http.ResponseWriter, r *http.Request) {
 			VerifyToken   string `json:"verify_token"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			response.Error(w, http.StatusBadRequest, "Invalid request", err)
+			response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 			return
 		}
 
@@ -315,7 +315,7 @@ func handleAdminCredentialsItem(w http.ResponseWriter, r *http.Request) {
 			IsActive      bool   `json:"is_active"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			response.Error(w, http.StatusBadRequest, "Invalid request", err)
+			response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 			return
 		}
 
@@ -377,7 +377,7 @@ func handleValidateCredential(w http.ResponseWriter, r *http.Request) {
 		AccessToken   string `json:"access_token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, http.StatusBadRequest, "Invalid request", err)
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 		return
 	}
 

@@ -12,7 +12,7 @@ import (
 
 const (
 	errMethodNotAllowedBiz = response.MethodNotAllowed
-	errInvalidRequestBiz   = "Invalid request"
+	errInvalidRequestBiz   = response.InvalidRequest
 	headerTenantBiz       = "X-Tenant-ID"
 	errMissingTenantBiz   = "Missing tenant ID"
 )
