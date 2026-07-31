@@ -611,55 +611,39 @@ async function openCloudApiModal() {
   } catch { }
 }
 
-async function saveCloudApiCredential() {
-  if (!cloudApiForm.phone_number_id.trim() || !cloudApiForm.access_token.trim()) {
-    cloudApiError.value = 'Phone Number ID dan Access Token wajib diisi.'
-    return
-  }
-
-  // Step 1: Validasi credential dulu sebelum save
-  if (!cloudApiValidated.value) {
-    cloudApiValidating.value = true
-    cloudApiError.value = ''
-    cloudApiSuccess.value = ''
-    try {
-      const res = await api.validateCloudAPICredential({
-        access_token: cloudApiForm.access_token.trim(),
-        phone_number_id: cloudApiForm.phone_number_id.trim(),
-        waba_id: cloudApiForm.waba_id.trim(),
-      })
-      if (res.success) {
-        cloudApiValidated.value = true
-        cloudApiValidationResult.value = 'valid'
-        cloudApiSuccess.value = '✅ Credential valid! Silakan klik "Simpan" untuk menyimpan.'
-        cloudApiLoading.value = false
-      } else {
-        cloudApiValidationResult.value = 'invalid'
-        cloudApiError.value = res.message || 'Credential tidak valid. Periksa access token dan phone number ID.'
-        cloudApiValidated.value = false
-        cloudApiLoading.value = false
-        return
-      }
-    } catch (e: any) {
-      cloudApiValidationResult.value = 'invalid'
-      cloudApiValidated.value = false
-      // Extract error message with fallback chain
-      let errMsg = 'Gagal validasi credential'
-      if (e?.message) {
-        errMsg = e.message
-      } else if (typeof e === 'string') {
-        errMsg = e
-      }
-      cloudApiError.value = `❌ ${errMsg}. Periksa kembali access token dan phone number ID Anda.`
+async function validateCredentialStep() {
+  cloudApiValidating.value = true
+  cloudApiError.value = ''
+  cloudApiSuccess.value = ''
+  try {
+    const res = await api.validateCloudAPICredential({
+      access_token: cloudApiForm.access_token.trim(),
+      phone_number_id: cloudApiForm.phone_number_id.trim(),
+      waba_id: cloudApiForm.waba_id.trim(),
+    })
+    if (res.success) {
+      cloudApiValidated.value = true
+      cloudApiValidationResult.value = 'valid'
+      cloudApiSuccess.value = '✅ Credential valid! Silakan klik "Simpan" untuk menyimpan.'
       cloudApiLoading.value = false
-      return
-    } finally {
-      cloudApiValidating.value = false
+    } else {
+      cloudApiValidationResult.value = 'invalid'
+      cloudApiError.value = res.message || 'Credential tidak valid. Periksa access token dan phone number ID.'
+      cloudApiValidated.value = false
+      cloudApiLoading.value = false
     }
-    return // Jangan save dulu, tunggu user klik "Simpan" setelah validasi sukses
+  } catch (e: any) {
+    cloudApiValidationResult.value = 'invalid'
+    cloudApiValidated.value = false
+    const errMsg = e?.message || (typeof e === 'string' ? e : 'Gagal validasi credential')
+    cloudApiError.value = `❌ ${errMsg}. Periksa kembali access token dan phone number ID Anda.`
+    cloudApiLoading.value = false
+  } finally {
+    cloudApiValidating.value = false
   }
+}
 
-  // Step 2: Simpan credential setelah validasi sukses
+async function persistCredentialStep() {
   cloudApiLoading.value = true
   cloudApiError.value = ''
   cloudApiSuccess.value = ''
@@ -672,10 +656,8 @@ async function saveCloudApiCredential() {
     })
     if (res.success) {
       cloudApiSuccess.value = '✅ Cloud API credential berhasil disimpan!'
-      // Refresh WA setup state
       const resWA = await api.getWASetup()
       if (resWA.success) waSetupState.value = resWA.data
-      // Reset state
       cloudApiForm.access_token = ''
       cloudApiValidated.value = false
       cloudApiValidationResult.value = ''
@@ -690,6 +672,20 @@ async function saveCloudApiCredential() {
   } finally {
     cloudApiLoading.value = false
   }
+}
+
+async function saveCloudApiCredential() {
+  if (!cloudApiForm.phone_number_id.trim() || !cloudApiForm.access_token.trim()) {
+    cloudApiError.value = 'Phone Number ID dan Access Token wajib diisi.'
+    return
+  }
+
+  if (!cloudApiValidated.value) {
+    await validateCredentialStep()
+    return
+  }
+
+  await persistCredentialStep()
 }
 
 // --- QR STATE ---
