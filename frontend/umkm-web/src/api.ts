@@ -10,9 +10,10 @@ export async function initDomain() {
     if (res.ok) {
       const data = await res.json()
       if (data.success && data.data) {
-        localStorage.setItem('active_domain_tenant_id', data.data.tenant_id)
-        localStorage.setItem('active_domain_business_name', data.data.business_name)
-        localStorage.setItem('active_domain_logo_url', data.data.logo_url)
+        const sanitize = (v: unknown) => String(v ?? '').replace(/[<>"'`]/g, '')
+        localStorage.setItem('active_domain_tenant_id', sanitize(data.data.tenant_id))
+        localStorage.setItem('active_domain_business_name', sanitize(data.data.business_name))
+        localStorage.setItem('active_domain_logo_url', sanitize(data.data.logo_url))
         return
       }
     }
