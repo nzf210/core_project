@@ -15,6 +15,11 @@ import (
 	"time"
 )
 
+const (
+	headerContentType = "Content-Type"
+	contentTypeJSON   = "application/json"
+)
+
 type APIResponse struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message"`
@@ -22,7 +27,7 @@ type APIResponse struct {
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
 }

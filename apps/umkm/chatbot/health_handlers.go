@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+const (
+	contentTypeTextPlain = "text/plain; version=0.0.4"
+)
+
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	status := "ok"
 	dbStatus := "disconnected"
@@ -44,7 +48,7 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 		status = "degraded"
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":     status,
@@ -91,7 +95,7 @@ chatbot_errors_total{instance="%s"} %d
 chatbot_queue_depth{instance="%s"} %d
 `, hostname, hostname, chatbotMessagesProcessed, hostname, chatbotLLMCalls, hostname, chatbotErrors, hostname, queueDepth)
 
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	w.Header().Set(headerContentType, contentTypeTextPlain)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(metrics))
 }

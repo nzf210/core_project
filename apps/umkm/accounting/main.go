@@ -14,6 +14,11 @@ import (
 	"core_project/shared/sdk/config"
 )
 
+const (
+	headerContentType = "Content-Type"
+	contentTypeJSON   = "application/json"
+)
+
 type APIResponse struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message"`
@@ -71,7 +76,7 @@ type ChatbotConfig struct {
 var AIGatewayURL = "http://localhost:8002/v1/chat"
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
@@ -220,7 +225,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
 }
