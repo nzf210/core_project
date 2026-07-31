@@ -270,10 +270,10 @@ jobs:
               -f "$DEPLOY_DIR/${{ needs.set-env.outputs.compose_override }}" logs --tail=100
 
   # ============================================================================
-  # JOB: Deploy umkm-web to Cloudflare Pages (only runs on *-umkm-v* tags)
+  # JOB: Deploy umkm-web to Cloudflare Workers (only runs on *-umkm-v* tags)
   # ============================================================================
   deploy-umkm-web:
-    name: Deploy umkm-web → CF Pages (${{ needs.set-env.outputs.environment }})
+    name: Deploy umkm-web → CF Workers (${{ needs.set-env.outputs.environment }})
     needs: set-env
     if: needs.set-env.outputs.deploy_umkm == 'true'
     runs-on: ubuntu-latest
@@ -300,18 +300,31 @@ jobs:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: npm run build
 
-      - name: Deploy to Cloudflare Pages
+      - name: Generate wrangler.jsonc
+        run: |
+          cat > wrangler.jsonc <<EOF
+          {
+            "name": "${{ needs.set-env.outputs.cf_project_umkm }}",
+            "compatibility_date": "$(date -u +%Y-%m-%d)",
+            "assets": {
+              "directory": "./dist"
+            }
+          }
+          EOF
+
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=${{ needs.set-env.outputs.cf_project_umkm }} --branch=main
+          workingDirectory: frontend/umkm-web
+          command: deploy
 
   # ============================================================================
-  # JOB: Deploy superadmin-web to Cloudflare Pages (only runs on *-admin-v* tags)
+  # JOB: Deploy superadmin-web to Cloudflare Workers (only runs on *-admin-v* tags)
   # ============================================================================
   deploy-superadmin-web:
-    name: Deploy superadmin-web → CF Pages (${{ needs.set-env.outputs.environment }})
+    name: Deploy superadmin-web → CF Workers (${{ needs.set-env.outputs.environment }})
     needs: set-env
     if: needs.set-env.outputs.deploy_admin == 'true'
     runs-on: ubuntu-latest
@@ -339,18 +352,31 @@ jobs:
           VITE_GRAFANA_URL: ${{ secrets.VITE_GRAFANA_URL }}
         run: npm run build
 
-      - name: Deploy to Cloudflare Pages
+      - name: Generate wrangler.jsonc
+        run: |
+          cat > wrangler.jsonc <<EOF
+          {
+            "name": "${{ needs.set-env.outputs.cf_project_admin }}",
+            "compatibility_date": "$(date -u +%Y-%m-%d)",
+            "assets": {
+              "directory": "./dist"
+            }
+          }
+          EOF
+
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=${{ needs.set-env.outputs.cf_project_admin }} --branch=main
+          workingDirectory: frontend/superadmin-web
+          command: deploy
 
   # ============================================================================
-  # JOB: Deploy campaign-web to Cloudflare Pages (only runs on *-campaign-v* tags)
+  # JOB: Deploy campaign-web to Cloudflare Workers (only runs on *-campaign-v* tags)
   # ============================================================================
   deploy-campaign-web:
-    name: Deploy campaign-web → CF Pages (${{ needs.set-env.outputs.environment }})
+    name: Deploy campaign-web → CF Workers (${{ needs.set-env.outputs.environment }})
     needs: set-env
     if: needs.set-env.outputs.deploy_campaign == 'true'
     runs-on: ubuntu-latest
@@ -377,9 +403,22 @@ jobs:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: npm run build
 
-      - name: Deploy to Cloudflare Pages
+      - name: Generate wrangler.jsonc
+        run: |
+          cat > wrangler.jsonc <<EOF
+          {
+            "name": "${{ needs.set-env.outputs.cf_project_campaign }}",
+            "compatibility_date": "$(date -u +%Y-%m-%d)",
+            "assets": {
+              "directory": "./dist"
+            }
+          }
+          EOF
+
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=${{ needs.set-env.outputs.cf_project_campaign }} --branch=main
+          workingDirectory: frontend/campaign-web
+          command: deploy
