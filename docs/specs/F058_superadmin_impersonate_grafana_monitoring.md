@@ -1,204 +1,325 @@
 # F058: Superadmin Impersonate + Grafana Monitoring
 
-
-## 🔄 Spec-First Workflow
-
-```
-USER menulis SPEC      →       AI review & clarify      →       USER approve
-     ↓                         ↓                                  ↓
- FEATURE_MAP.md         AI tanya clarifications           USER comment/approve
-                              ↓                                  ↓
-                      AI wait for approval          AI implement dari SPEC
-                                                            ↓
-                                                    USER review diff\n                                                            ↓\n                                                    JALANKAN TESTING
-```
-
-### Aturan untuk AI:
-1. Baca FEATURE_MAP.md sebelum coding
-2. Kalau ada feature baru/wubah, tanya USER dulu:
-   - "Ada SPEC untuk fitur ini?" → kalau belum, buat draft SPEC
-   - "SPEC ini sudah diapprove?" → kalau belum, jangan implement
-3. Ambiguitas? → Tanya clarification dulu
-4. **Setiap feature baru WAJIB punya plan dulu**:
-   - Buat file plan di `docs/plans/<YYYY-MM-DD>-<feature-name>.md`
-   - Plan harus bite-sized, copy-pasteable, dan siap dieksekusi oleh subagent
-   - Jangan coding sebelum plan selesai di-review/approve
-5. Implementasi selesai? → Update kolom `Implementation` di tabel
-6. **Testing Wajib** — Setiap kali ada *perubahan*, *tambah fungsi*, atau *hapus fungsi*, JALANKAN TEST sebelum menyelesaikan task:
-   - `make check` (untuk menjalankan linter, build, dan semua test)
-   - Atau `go test ./apps/umkm/... -v` (untuk test spesifik)
-7. Setelah selesai → Update kembali `FEATURE_MAP.md` (status + testing result)
-
-
-## 📊 Feature Registry
-
-| ID | Feature | Spec Status | Implementation | Last Updated |
-|:---|:--------|:------------|:---------------|:-------------|
-| F001 | Multi-Store Quota | ✅ Approved | ✅ Done | 2026-06-12 |
-| F002 | Voucher Link Subscription | ✅ Approved | ✅ Done | 2026-06-12 |
-| F003 | Subscription Hold Worker | ✅ Approved | ✅ Done | 2026-06-12 |
-| F004 | Read-only Enforcement (Frozen) | ✅ Approved | ✅ Done | 2026-06-12 |
-| F005 | Superadmin Dashboard | ✅ Approved | ✅ Done | 2026-06-12 |
-| F006 | Multi-Tenant WA Session Pool | ✅ Approved | ✅ Done | 2026-06-01 |
-| F007 | Chatbot with RAG | ✅ Approved | ✅ Done | 2026-06-01 |
-| F008 | Escalation to Chatwoot | ✅ Approved | ✅ Done | 2026-06-01 |
-| F009 | N8N Queue Mode Automation | ✅ Approved | ✅ Done | 2026-06-01 |
-| F010 | Campaign Volunteer Management | ✅ Approved | ✅ Done | 2026-06-12 |
-| F011 | Campaign Voter Onboarding | ✅ Approved | ✅ Done | 2026-06-12 |
-| F012 | Sidebar Navigation UI | ✅ Approved | ✅ Done | 2026-06-12 |
-| F013 | N8N Integration via Super Admin | ❌ Removed | — | — |
-| F014 | Flexible LLM Model System | ✅ Approved | ✅ Done | 2026-06-12 |
-| F015 | Onboarding Activation Flow | ✅ Approved | ✅ Done | 2026-06-13 (UI: 2026-06-14) |
-| F016 | Hybrid WhatsApp (Cloud API + whatsmeow) | ✅ Approved | ✅ Done | 2026-06-13 |
-| F017 | OTP 1-Hour Reuse Window | ✅ Approved | ✅ Done | 2026-06-13 |
-| F018 | Telegram Auth (Register & Login) | ✅ Approved | ✅ Done | 2026-06-13 |
-| F019 | Onboarding Sync via /me (Fix Lite Tier) | ✅ Approved | ✅ Done | 2026-06-14 |
-| F020 | AI CS Setup Wizard (Per-Tenant Config UI) | ✅ Approved | ✅ Done | 2026-06-14 |
-| F021 | Cash Flow PDF Export | ✅ Approved | ✅ Done | 2026-06-14 |
-| F022 | Excel/Google Sheet Import & Export | ✅ Approved | ✅ Done | 2026-06-14 |
-| F023 | FAQ Bot AI — Edit & Generate | ✅ Approved | ✅ Done | 2026-06-14 |
-| F024 | Paid-Only Enforcement (Hardening) | ✅ Approved | ✅ Done | 2026-06-14 |
-| F025 | Tier Restrictions Overhaul + AI Multimodal | ✅ Approved | ✅ Done | 2026-06-22 |
-| F026 | N8N Notification Webhooks & Workflows | ✅ Approved | ✅ Done | 2026-06-14 |
-| F027 | Core Business Flow Fixes & Optimizations | ✅ Approved | ✅ Done | 2026-06-14 |
-| F029 | Dynamic Multimodal Guardrails | ✅ Approved | ✅ Done | 2026-06-14 |
-| F030 | GetPlanFeatures DB Integration | ✅ Approved | ✅ Done | 2026-06-14 |
-| F031 | Campaign Anti-Double Validation | ✅ Approved | ✅ Done | 2026-06-17 |
-| F032 | Modul Saksi & Real Count C1 | ✅ Approved | ✅ Done | 2026-06-17 |
-| F033 | Campaign Logistics Tracking | ✅ Approved | ✅ Done | 2026-06-17 |
-| F034 | Add-on Wallet & Meta API Connector | ✅ Approved | ✅ Done | 2026-06-20 |
-| F035 | Discount Vouchers (Percent & Fixed) | ✅ Approved | ✅ Done | 2026-06-20 |
-| F036 | Lifetime Affiliate, External Agent & Public Leaderboard | ✅ Approved | ✅ Done | 2026-06-20 |
-| F037 | Dashboard Sentimen Isu Harian (AI NLP) | ✅ Approved | ✅ Done | 2026-06-17 |
-| F038 | Wargame & Simulasi Kemenangan | ✅ Approved | ✅ Done | 2026-06-17 |
-| F039 | Peta Kerawanan & Pelaporan Pelanggaran | ✅ Approved | ✅ Done | 2026-06-17 |
-| F040 | WA Bot FAQ Panduan Kampanye (RAG) | ✅ Approved | ✅ Done | 2026-06-17 |
-| F041 | Gamification & Leaderboard Relawan | ✅ Approved | ✅ Done | 2026-06-17 |
-| F042 | Auto-Scan KTP (AI OCR Vision) | ✅ Approved | ✅ Done | 2026-06-17 |
-| F043 | Multi-Level Election & Sainte-Laguë Simulator | ✅ Approved | ✅ Done | 2026-06-20 |
-| F044 | Campaign Modular License & Payment System | ✅ Approved | ✅ Done | 2026-06-20 |
-| F045 | UMKM Healthcare Clinic Queue System | ✅ Approved | ✅ Done | 2026-06-17 |
-| F046 | Hierarchical Coordinator Assignment | ✅ Approved | ✅ Done | 2026-06-20 |
-| F047 | Hardening Migration (F024 cleanup) | ✅ Approved | ✅ Done | 2026-06-17 |
-| F048 | WA Provider Preferences & Activation Guard | ✅ Approved | ✅ Done (v2) | 2026-06-20 |
-| F049 | Container Overhaul & Infrastructure Optimization | ✅ Approved | ✅ Done | 2026-06-17 |
-| F050 | WCH E2E MCP Server (UI Testing & Browser Automation) | ✅ Approved | ✅ Done | 2026-06-20 |
-| F051 | AI Quota Per-Modalitas (Text/Vision/Image) | ✅ Approved | ✅ Done | 2026-06-20 |
-| F052 | Tier-First Feature System + Per-Tenant Addon Guard | ✅ Approved | ✅ Done | 2026-06-20 |
-| F053 | Admin-Configurable Addon Pricing + Addon Purchase Flow | ✅ Approved | ✅ Done | 2026-06-22 |
-| F054 | Referral System: Discount Downline + Commission Upline | ✅ Approved | ✅ Done | 2026-06-22 |
-| F055 | Password Reset via Chat (WA + Telegram) v2 | ✅ Approved | ✅ Done | 2026-06-30 |
-| F056 | Theme Management (Dark/Light/System) | ✅ Approved | ✅ Done | 2026-06-21 |
-| F057 | Superadmin Feature Matrix + Addon Tier Gating | ✅ Approved | ✅ Done | 2026-06-22 |
-| F058 | Superadmin Impersonate + Grafana Monitoring | ✅ Approved | ✅ Done | 2026-06-22 |
-| F059 | Wallet Payment untuk Subscription & Topup | ✅ Approved | ✅ Done | 2026-06-21 |
-| F060 | Landing Page — Marketing & Onboarding | ✅ Approved | ✅ Done | 2026-06-21 |
-| F061 | Sales Dashboard Chart — Visual Penjualan | ✅ Approved | ✅ Done | 2026-06-21 |
-| F062 | Staff Management UI (Settings.vue) | ✅ Approved | ✅ Done | 2026-06-22 |
-| F063 | WA Keyword Registration (REG/OTP/VERIF) + WA Center | ✅ Approved | ✅ Done | 2026-06-27 |
-| F064 | Platform WA Provider Detection & OTP Routing | ✅ Approved | ✅ Done | 2026-06-28 |
-| F065 | Landing Page Content Management — Superadmin JSON Editor | ✅ Approved | ✅ Done | 2026-06-29 |
-| F066 | Dynamic Feature Gating — Zero-Hardcode Feature Toggle System | ✅ Approved | ✅ Done | 2026-06-30 |
-| F067 | Grafana Production-Ready Monitoring — Prometheus + 8 Dashboards | ✅ Approved | ✅ Done | 2026-07-01 |
-
-## F058: Superadmin Impersonate + Grafana Monitoring
-
-**Spec Status:** ✅ Approved  
+**Date:** 2026-06-22  
+**Status:** ✅ Approved  
 **Implementation:** ✅ Done  
-**Last Updated:** 2026-06-22
+**Related:** [F005](../FEATURE_MAP.md) (Superadmin Dashboard), [F067](../FEATURE_MAP.md) (Grafana Production Monitoring)
 
-### 🎯 Objectives
+---
 
-Superadmin dapat:
-1. Login sebagai tenant owner untuk troubleshooting tanpa password tenant (impersonate)
-2. Akses Grafana monitoring dashboard via external link dari navbar
+## 🎯 Objectives
 
-### 📝 Spec
+Superadmin dapat troubleshoot tenant issues dengan login langsung sebagai tenant owner dan mengakses monitoring infrastructure.
 
-#### AC-1: Impersonate API Endpoint
-- [x] `POST /api/superadmin/tenants/{tenant_id}/impersonate` — generate JWT token `role: owner` + `impersonated_by` audit trail
-- [x] Query owner tenant dari DB, validasi tenant exists
-- [x] JWT expiry 12 jam
-- [x] Response: `{ access_token, tenant: { id, business_name, owner_name, plan } }`
+**Tujuan eksplisit:**
+1. Impersonate tenant owner untuk troubleshooting tanpa perlu password tenant (audit trail lengkap)
+2. Akses Grafana monitoring dashboard via navbar link untuk observability real-time
+3. Simplifikasi support workflow — reduce back-and-forth saat debugging tenant-specific issues
 
-#### AC-2: Frontend Button "Login Sebagai"
-- [x] Button "🔓 Login Sebagai" di Tenant Management table (TenantManagement.vue)
-- [x] Click → POST impersonate → open `app.example.com?impersonate_token=<token>` di tab baru
-- [x] Confirmation dialog sebelum impersonate
+**Problem yang diselesaikan:**
+- Support team harus minta password tenant atau reset password untuk troubleshoot → privacy concern + friction
+- Grafana dashboard tersebar di bookmarks/docs → butuh unified entry point dari superadmin UI
+- No audit trail saat superadmin access tenant account → compliance risk
 
-#### AC-3: Grafana Monitoring Link
-- [x] Navbar link "📊 Monitoring (Grafana)" di SuperAdminDashboard navbar (App.vue)
-- [x] `target="_blank"` ke `VITE_GRAFANA_URL` (default: http://localhost:3001)
-- [x] Level 1 integration — external link only, no auth sharing
+---
 
-### 🛠️ Implementation Details
+## 📋 Acceptance Criteria (AC)
 
-**Backend Files:**
-- `services/auth-service/impersonate.go` (NEW) — `handleImpersonate()` handler
-- `services/auth-service/main.go` — register route `/superadmin/tenants/` + jwtMiddleware
-- `services/api-gateway/main.go` — proxy `/api/superadmin/tenants/` ke auth-service:8001
+- [x] **AC-1: Impersonate API Endpoint**
+  - *Verification:* `POST /api/superadmin/tenants/{tenant_id}/impersonate` generate JWT token dengan `role: owner` + `impersonated_by` field
+  - *Example:* Response: `{ access_token: "...", tenant: { id, business_name, owner_name, plan } }`, JWT expiry 12 jam
 
-**Frontend Files:**
-- `frontend/superadmin-web/src/views/TenantManagement.vue` — impersonate button + `impersonateTenant()` method
-- `frontend/superadmin-web/src/App.vue` — Grafana navbar link + `VITE_GRAFANA_URL` data property
-- `frontend/superadmin-web/.env` — `VITE_GRAFANA_URL=http://localhost:3001`
+- [x] **AC-2: Frontend Impersonate Button**
+  - *Verification:* Button "🔓 Login Sebagai" di Tenant Management table (TenantManagement.vue)
+  - *Example:* Click → confirmation dialog → POST impersonate → open `app.example.com?impersonate_token=<token>` di tab baru
 
-**Config:**
-- `.env.example` — documented `GRAFANA_URL=http://localhost:3001`
+- [x] **AC-3: Authorization Guard**
+  - *Verification:* Hanya superadmin yang bisa call impersonate endpoint (JWT role check)
+  - *Example:* Tenant owner coba akses → 403 Forbidden
 
-### 🔄 Flow
+- [x] **AC-4: Audit Trail**
+  - *Verification:* Impersonate token memiliki claim `impersonated_by: <superadmin_id>` untuk tracking
+  - *Example:* `/auth/validate` dengan impersonate token → response include `impersonated_by` field
+
+- [x] **AC-5: Grafana Monitoring Link**
+  - *Verification:* Navbar link "📊 Monitoring (Grafana)" di SuperAdminDashboard (App.vue)
+  - *Example:* Click → `target="_blank"` ke `VITE_GRAFANA_URL` (default: http://localhost:3001)
+
+- [x] **AC-6: Token Expiry**
+  - *Verification:* Impersonate token expire setelah 12 jam
+  - *Example:* Token generated 10:00 → valid sampai 22:00 → setelah itu 401 Unauthorized
+
+- [x] **AC-7: Tenant Validation**
+  - *Verification:* Impersonate endpoint validasi tenant exists di DB sebelum generate token
+  - *Example:* POST dengan `tenant_id` yang tidak ada → 404 Not Found
+
+---
+
+## 🛠️ Technical Specification
+
+### Architecture Overview
 
 ```
-Superadmin click "🔓 Login Sebagai" → Confirm dialog
-    ↓
-POST /api/superadmin/tenants/{id}/impersonate (Bearer: superadmin JWT)
-    ↓
-auth-service: query owner → generate JWT (role: owner, impersonated_by: superadmin_id)
-    ↓
-Frontend: sessionStorage.setItem('superadmin_token', ...) → open tab baru
-    ↓
-app.example.com?impersonate_token=<token> → umkm-web auto-login (future)
+┌─────────────────────────────────────────────────────┐
+│      Superadmin Dashboard (TenantManagement.vue)    │
+│  Button "🔓 Login Sebagai" → confirmation dialog    │
+└──────────────────────┬──────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│  POST /api/superadmin/tenants/{id}/impersonate      │
+│         (Bearer: superadmin JWT token)              │
+└──────────────────────┬──────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│            API Gateway :8000 (Proxy)                │
+│  /api/superadmin/tenants/* → auth-service:8001      │
+└──────────────────────┬──────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│         Auth Service :8001 (Impersonate Handler)    │
+│  1. Validate superadmin JWT                         │
+│  2. Query tenant + owner dari DB                    │
+│  3. Generate JWT: role=owner, impersonated_by=...   │
+│  4. Return impersonate token                        │
+└──────────────────────┬──────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│  Frontend: sessionStorage.setItem('superadmin_token'│
+│  Open new tab: app.example.com?impersonate_token=..│
+└─────────────────────────────────────────────────────┘
+         ↓ (future enhancement)
+┌─────────────────────────────────────────────────────┐
+│  UMKM Web: router guard detect query param          │
+│  → validate token → set localStorage → dashboard    │
+└─────────────────────────────────────────────────────┘
 ```
 
-### 🚧 Future Enhancements
+### Database Schema
 
-**Level 2 Grafana Integration:**
-- Embed via `<iframe>` (butuh `GF_SECURITY_ALLOW_EMBEDDING=true`)
+**No migration needed** — uses existing `tenants` and `users` tables.
 
-**Level 3 Grafana Integration:**
-- Backend `/api/superadmin/metrics` pull dari Grafana API → render Chart.js di Vue
+```sql
+-- Query untuk impersonate endpoint
+SELECT u.id AS user_id, u.name AS owner_name, u.role,
+       t.id AS tenant_id, t.business_name, t.plan
+FROM users u
+JOIN tenants t ON u.tenant_id = t.id
+WHERE t.id = $1 AND u.role = 'owner'
+LIMIT 1;
+```
 
-**Restore Flow:**
-- Button "Kembali ke Superadmin" di umkm-web navbar saat `impersonated_by` detected
-- Click → restore `superadmin_token` dari sessionStorage → redirect superadmin-web
+### API Endpoints
 
-**Umkm-web Auto-Login:**
-- Detect `?impersonate_token` query param di router guard
-- Validate token via `/auth/validate` → set localStorage → redirect dashboard
+#### `POST /api/superadmin/tenants/:tenant_id/impersonate`
 
-### ✅ Testing
+**Headers:**
+```
+Authorization: Bearer <superadmin_jwt_token>
+```
 
-**Manual Test:**
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "tenant": {
+      "id": "tenant-uuid",
+      "business_name": "Warung Bu Siti",
+      "owner_name": "Siti Rahman",
+      "plan": "lite"
+    }
+  }
+}
+```
+
+**JWT Claims (impersonate token):**
+```json
+{
+  "user_id": "owner-user-uuid",
+  "tenant_id": "tenant-uuid",
+  "role": "owner",
+  "impersonated_by": "superadmin-user-uuid",
+  "exp": 1719936000
+}
+```
+
+**Error Cases:**
+- `401 Unauthorized` — Missing/invalid superadmin JWT token
+- `403 Forbidden` — User role bukan `superadmin`
+- `404 Not Found` — Tenant tidak ditemukan atau tidak memiliki owner user
+- `500 Internal Server Error` — DB error atau JWT signing error
+
+---
+
+## 🧪 Testing Strategy
+
+### Unit Tests
+
+**Backend (auth-service):**
+```go
+// impersonate_test.go
+func TestHandleImpersonate_ValidSuperadmin(t *testing.T) {
+    // Mock DB query return owner user
+    // Generate impersonate token
+    // Verify JWT claims include impersonated_by
+}
+
+func TestHandleImpersonate_TenantNotFound(t *testing.T) {
+    // Mock DB query return no rows
+    // Expect 404 Not Found
+}
+
+func TestHandleImpersonate_NonSuperadminForbidden(t *testing.T) {
+    // JWT role = owner (not superadmin)
+    // Expect 403 Forbidden
+}
+```
+
+**Frontend (superadmin-web):**
+```typescript
+// TenantManagement.spec.ts
+describe('Impersonate Button', () => {
+  it('shows confirmation dialog on click', async () => {
+    // Click "🔓 Login Sebagai" → verify dialog open
+  })
+
+  it('calls impersonate API and opens new tab', async () => {
+    // Mock API response → verify window.open() called
+  })
+
+  it('stores superadmin token before impersonate', async () => {
+    // Verify sessionStorage.setItem('superadmin_token') called
+  })
+})
+```
+
+### Integration Tests
+
 ```bash
 # 1. Login superadmin
-curl -X POST http://localhost:8010/api/auth/superadmin/login \
+SUPERADMIN_TOKEN=$(curl -X POST http://localhost:8000/api/auth/superadmin/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"superadmin","password":"Admin123!"}'
-# → save access_token
+  -d '{"username":"admin","password":"admin123"}' | jq -r '.data.access_token')
 
 # 2. Impersonate tenant
-curl -X POST http://localhost:8010/api/superadmin/tenants/{tenant_id}/impersonate \
-  -H 'Authorization: Bearer <superadmin_token>'
-# → returns impersonate token
+IMPERSONATE_TOKEN=$(curl -X POST http://localhost:8000/api/superadmin/tenants/{tenant_id}/impersonate \
+  -H "Authorization: Bearer $SUPERADMIN_TOKEN" | jq -r '.data.access_token')
 
 # 3. Validate impersonate token
-curl -X POST http://localhost:8010/api/auth/validate \
-  -H 'Authorization: Bearer <impersonate_token>'
-# → should return role: owner, impersonated_by: <superadmin_id>
+curl -X POST http://localhost:8000/api/auth/validate \
+  -H "Authorization: Bearer $IMPERSONATE_TOKEN" | jq
+# → should show role: owner, impersonated_by: <superadmin_id>
+
+# 4. Use impersonate token to access tenant resources
+curl -X GET http://localhost:8000/api/umkm/dashboard \
+  -H "Authorization: Bearer $IMPERSONATE_TOKEN" \
+  -H "X-Tenant-ID: {tenant_id}"
+# → should return 200 OK with tenant dashboard data
+
+# 5. Non-superadmin cannot impersonate
+OWNER_TOKEN=$(curl -X POST http://localhost:8000/api/auth/login ...)
+curl -X POST http://localhost:8000/api/superadmin/tenants/{tenant_id}/impersonate \
+  -H "Authorization: Bearer $OWNER_TOKEN"
+# → 403 Forbidden
 ```
 
-**Frontend Test:**
-1. Login superadmin → go to Tenant Management
-2. Click "🔓 Login Sebagai" → confirm dialog → tab baru terbuka
-3. Check navbar → "📊 Monitoring (Grafana)" link muncul
-4. Click link → Grafana dashboard terbuka di tab baru
+### Manual Testing Checklist
+
+- [ ] Login sebagai superadmin → buka Tenant Management
+- [ ] Click "🔓 Login Sebagai" → confirmation dialog muncul
+- [ ] Confirm → API call success → new tab open dengan `?impersonate_token=...`
+- [ ] (Future) New tab auto-login → dashboard tenant terbuka
+- [ ] Verify `impersonated_by` claim di JWT token (decode via jwt.io)
+- [ ] Click "📊 Monitoring (Grafana)" → new tab open ke Grafana dashboard
+- [ ] Token expire setelah 12 jam → 401 Unauthorized
+- [ ] Non-superadmin coba akses impersonate endpoint → 403 Forbidden
+
+---
+
+## 📊 Monitoring & Observability
+
+**Logs:**
+```go
+slog.Info("Impersonate token generated", 
+  "superadmin_id", superadminID,
+  "tenant_id", tenantID,
+  "owner_id", ownerID,
+  "token_expiry", expiryTime)
+
+slog.Warn("Impersonate attempt by non-superadmin", 
+  "user_id", userID,
+  "role", role,
+  "tenant_id", tenantID)
+```
+
+**Metrics to track:**
+- Impersonate token generation count per day (detect abuse)
+- Impersonate token validation success/failure rate
+- Average time superadmin stay impersonated (session duration)
+
+**Alerts:**
+- Impersonate token generation > 50/day → investigate potential abuse
+- Impersonate from unexpected IP → security alert
+
+**Audit Log (Future Enhancement):**
+- Dedicated `impersonate_logs` table: `superadmin_id`, `tenant_id`, `started_at`, `ended_at`, `ip_address`
+- Dashboard di Superadmin UI untuk track impersonate history
+
+---
+
+## 🚀 Rollout Plan
+
+### Phase 1: Backend + API (Done ✅)
+- Deploy `services/auth-service/impersonate.go` dengan handler + JWT generation
+- Deploy api-gateway proxy route `/api/superadmin/tenants/*`
+- Test: cURL impersonate endpoint → verify JWT claims
+
+### Phase 2: Superadmin UI (Done ✅)
+- Deploy superadmin-web dengan impersonate button di Tenant Management
+- Deploy Grafana navbar link di App.vue
+- Test: Click button → API call → new tab open
+
+### Phase 3: Umkm-web Auto-Login (Future)
+- Umkm-web router guard detect `?impersonate_token` query param
+- Validate token via `/auth/validate` → set localStorage
+- Redirect ke dashboard tanpa manual login
+
+### Phase 4: Audit & Monitoring (Future)
+- Add impersonate_logs table migration
+- Add Grafana dashboard untuk impersonate activity
+- Add alert rule untuk suspicious impersonate patterns
+
+### Rollback
+- **API rollback:** Revert auth-service + api-gateway → impersonate endpoint 404
+- **Frontend rollback:** Revert superadmin-web → button hilang, no impact ke existing functionality
+- **Emergency:** Disable impersonate via feature flag: `if !cfg.Features.AllowImpersonate { return 403 }`
+
+---
+
+## 🔮 Future Enhancements (Out of Scope)
+
+- **Grafana Level 2 Integration:** Embed Grafana via `<iframe>` dengan `GF_SECURITY_ALLOW_EMBEDDING=true` + `GF_AUTH_PROXY_ENABLED=true` untuk seamless auth
+- **Grafana Level 3 Integration:** Backend `/api/superadmin/metrics` pull dari Grafana API → render Chart.js di Vue (no external redirect)
+- **Restore Flow:** Button "Kembali ke Superadmin" di umkm-web navbar saat `impersonated_by` detected → restore `superadmin_token` dari sessionStorage → redirect superadmin-web
+- **Impersonate Time Limit:** Auto-expire impersonate session setelah 1 jam activity idle (bukan 12 jam fixed)
+- **Permission Restriction:** Impersonate token tidak bisa akses sensitive endpoints (billing, password change) → reduced privilege mode
+- **Multi-Factor Confirmation:** Require 2FA/OTP sebelum allow impersonate untuk high-value tenants
+
+---
+
+## 📚 References
+
+- [F005: Superadmin Dashboard](../FEATURE_MAP.md) — Base superadmin UI feature
+- [F067: Grafana Production Monitoring](../FEATURE_MAP.md) — Monitoring infrastructure setup
+- [JWT Best Practices](https://tools.ietf.org/html/rfc8725) — JWT security considerations
+- [Auth Service Implementation](../../services/auth-service/impersonate.go) — Impersonate handler code
+
+---
+
+## 📝 Notes & Decisions
+
+**2026-06-22:** Decision: JWT expiry 12 jam (bukan 24 jam) untuk balance antara UX (tidak logout tengah troubleshoot) dan security (minimize blast radius jika token leaked).  
+**2026-06-22:** `impersonated_by` claim mandatory — wajib untuk audit trail dan compliance. Jika di masa depan butuh disable impersonate, bisa query DB untuk revoke semua token dengan `impersonated_by` claim.  
+**2026-06-22:** Grafana Level 1 integration (external link) untuk MVP — Level 2/3 defer ke future karena butuh Grafana config change + backend proxy logic yang kompleks.  
+**2026-06-22:** Umkm-web auto-login (AC-8) defer ke Phase 3 — butuh router guard logic + query param detection. Saat ini superadmin manual paste token di login form (acceptable untuk MVP).

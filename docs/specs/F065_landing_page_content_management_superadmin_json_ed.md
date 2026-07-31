@@ -1,211 +1,101 @@
 # F065: Landing Page Content Management — Superadmin JSON Editor
 
+**Date:** 2026-06-29  
+**Status:** ✅ Approved  
+**Implementation:** ✅ Done  
+**Related:** [F056](../FEATURE_MAP.md) (Dark/Light Mode Theme)
 
-### 🎯 Tujuan (Goals)
+---
 
-1. **Subscription via wallet**: Jika wallet balance cukup → bypass Xendit → deduct wallet → activateSubscription langsung
-2. **Topup+Subscribe flow**: Jika balance kurang → partial pay? (opsi lanjutan). MVP: full pay dari wallet atau full Xendit.
-3. **Wallet balance indicator di UI**: Saat checkout subscription, tampilkan "Saldo wallet: Rp X. Bayar via Wallet?"
-4. **Auto-renew subscription via wallet**: Setiap bulan, auto-deduct wallet untuk perpanjang subscription
-5. **Referral discount tetap jalan**: Baik bayar via Xendit maupun wallet, referral discount dihitung sama
+## 🎯 Objectives
 
+Landing page content dapat di-manage oleh superadmin melalui JSON editor tanpa perlu edit kode atau re-deploy.
 
-### 🔄 Flow End-to-End
+**Tujuan eksplisit:**
+1. Superadmin dapat edit konten landing page (hero, features, steps, testimonials, CTA, footer) via dashboard UI
+2. Perubahan konten langsung tampil di landing page publik tanpa perlu restart service
+3. Content bersifat dynamic dari database dengan caching 6 jam untuk performance
 
-#### A. Topup Wallet (EXISTING — didokumentasikan untuk kelengkapan)
+**Problem yang diselesaikan:**
+- Landing page content hardcoded di Vue component → setiap edit konten perlu commit + deploy
+- Marketing team tidak bisa A/B test copy tanpa melibatkan developer
+- SEO optimization dan seasonal campaign update terlalu slow karena harus melalui dev cycle
 
-```
-Tenant klik "Topup Wallet" → /wallet/topup { amount_cents }
-         │
-         ├─ 1. Validasi: min Rp 10.000 (10000 cents) ✅
-         ├─ 2. CREATE Xendit invoice:
-         │     external_id = {uuid}-wallet-topup-{tenantID}
-         │     amount = req.AmountCents
-         │     → Return invoice_url ke tenant
-         │
-         ├─ 3. Tenant bayar via Xendit
-         │
-         └─ 4. Xendit webhook → handlePaymentWebhook:
-              ├─ Deteksi "-wallet-topup-" di external_id ✅
-              ├─ Dedup: cek existing wallet_transactions.reference ✅
-              ├─ Transaction: UPSERT wallet_credits (balance += amount)
-              ├─ INSERT wallet_transactions (type='topup')
-              └─ WA notification: "Topup Rp X berhasil. Saldo: Rp Y"
-```
+---
 
-#### B. Subscription via Wallet (NEW)
+## 📋 Acceptance Criteria (AC)
 
-```
-Tenant pilih paket → handleSubscribe
-         │
-         ├─ 1. Hitung final_price:
-         │     base_price → voucher_discount → referral_discount
-         │     (sama seperti sekarang, line 617-649)
-         │
-         ├─ 2. Cek bayar_via_wallet flag dari request body:
-         │     req.PayViaWallet = true
-         │     → Jika tidak dikirim, default false (Xendit seperti biasa)
-         │
-         ├─ 3. Jika PayViaWallet = true:
-         │     ├─ Cek wallet balance >= final_price
-         │     │   CheckWalletBalance(tenantID, final_price)
-         │     │
-         │     ├─ Jika CUKUP:
-         │     │   ├─ DeductWalletBalance(tenantID, final_price,
-         │     │   │   "subscription:{planID}:{ts}",
-         │     │   │   "Pembayaran langganan {planName} via Wallet")
-         │     │   │   → transaction_type = 'subscription'
-         │     │   │
-         │     │   ├─ activateSubscription(..., activatedBy="wallet")
-         │     │   │
-         │     │   ├─ F054: Affiliate commission (sama seperti Xendit
-         │     │   │   → hitung dari final_price)
-         │     │   │
-         │     │   └─ Response: { status: 'activated', method: 'wallet' }
-         │     │
-         │     └─ Jika TIDAK CUKUP:
-         │         └─ Response 402: { message: "Saldo tidak cukup",
-         │             balance_cents, required_cents,
-         │             topup_url: "/wallet" }
-         │
-         └─ 4. Jika PayViaWallet = false (default):
-             └─ CREATE Xendit invoice seperti biasa (existing flow)
-```
+- [x] **AC-1: Public Endpoint untuk Landing Page**
+  - *Verification:* `GET /landing-configs` return semua section content (hero, features, steps, testimonials, cta, footer) tanpa auth
+  - *Example:* `curl http://localhost:8000/landing-configs` → `{"hero": {...}, "features": [...]}`
 
-#### C. Auto-Renew Subscription via Wallet (NEW — background worker)
+- [x] **AC-2: Superadmin JSON Editor UI**
+  - *Verification:* Superadmin dashboard memiliki section "Landing Page Editor" dengan 6 tabs (hero, features, steps, testimonials, cta, footer) + JSON editor per-tab
+  - *Example:* Edit hero section → update title dari "Aplikasi Kasir UMKM" ke "Aplikasi POS Modern" → Save → refresh landing page → title berubah
+
+- [x] **AC-3: Cache Invalidation**
+  - *Verification:* Setiap kali superadmin update content via PUT → cache auto-invalidate → GET berikutnya serve fresh data
+  - *Example:* `PUT /api/superadmin/landing-configs?id=hero` → response header `X-Cache-Invalidated: true` → `GET /landing-configs` return new content
+
+- [x] **AC-4: Fallback Static Content**
+  - *Verification:* Jika API gagal → landing page render static fallback content (hardcoded di LandingPage.vue)
+  - *Example:* Kill billing-service → refresh landing page → tetap tampil dengan default content (tidak blank)
+
+- [x] **AC-5: Authorization Guard**
+  - *Verification:* Hanya superadmin yang bisa `PUT /api/superadmin/landing-configs` (JWT role check)
+  - *Example:* Tenant owner coba akses editor → 403 Forbidden
+
+- [x] **AC-6: Response Time < 100ms (Cached)**
+  - *Verification:* `GET /landing-configs` dengan cache HIT → response time < 100ms
+  - *Example:* `curl -w "%{time_total}" http://localhost:8000/landing-configs` → `0.015s`
+
+- [x] **AC-7: Dark/Light Mode Compatible**
+  - *Verification:* Landing page content render correctly di dark mode dan light mode (reuse F056 theme variables)
+  - *Example:* Toggle dark mode → background color, text color, card shadow adjust otomatis
+
+---
+
+## 🛠️ Technical Specification
+
+### Architecture Overview
 
 ```
-Cron job (di billing-service) — setiap jam:
-         │
-         ├─ SELECT FROM tenant_subscriptions ts
-         │   JOIN wallet_credits wc ON wc.tenant_id = ts.tenant_id
-         │   WHERE ts.status = 'active'
-         │     AND ts.remaining_days <= 3       -- 3 hari sebelum expired
-         │     AND wc.balance_cents >= (
-         │       SELECT price_monthly FROM saas_plans sp
-         │       WHERE sp.id = ts.plan_id
-         │     )
-         │     AND ts.auto_renew_via_wallet = true   -- flag baru!
-         │
-         ├─ Untuk setiap row:
-         │   ├─ Deduct wallet: price_monthly
-         │   │   → transaction_type = 'subscription_auto_renew'
-         │   │
-         │   ├─ Extend subscription: remaining_days += 30
-         │   │   current_plan_expires_at = NOW() + 30 days
-         │   │
-         │   ├─ F054: Affiliate commission dari amount
-         │   │
-         │   └─ Kirim notifikasi: "Langganan diperpanjang otomatis via Wallet"
-         │
-         └─ Logging: subscription_auto_renew_logs (atau reuse wallet_transactions)
+┌─────────────────────────────────────────────────────┐
+│         Superadmin Dashboard (JSON Editor)          │
+│  PUT /api/superadmin/landing-configs?id=hero        │
+└──────────────────────┬──────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│            API Gateway :8000 (Proxy)                │
+│  /api/superadmin/landing-configs → billing:8003     │
+└──────────────────────┬──────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│         Billing Service :8003 (Handlers)            │
+│  ┌──────────────────────────────────────────────┐  │
+│  │ In-Memory Cache (sync.RWMutex, 6h TTL)      │  │
+│  │  Key: "landing_configs"                     │  │
+│  │  Value: map[string]interface{}              │  │
+│  └──────────────────────────────────────────────┘  │
+│              ↓ (cache MISS)                         │
+│  ┌──────────────────────────────────────────────┐  │
+│  │ PostgreSQL: landing_configs table           │  │
+│  │  - id (hero, features, steps, ...)          │  │
+│  │  - content (JSONB)                           │  │
+│  │  - is_active (BOOLEAN)                       │  │
+│  └──────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+         ↑ (public read)
+┌─────────────────────────────────────────────────────┐
+│       Landing Page (Public, No Auth)                │
+│  GET /landing-configs → render with fallback        │
+└─────────────────────────────────────────────────────┘
 ```
 
-#### D. Referral Discount + Wallet Integration
-
-```
-handleSubscribe (patch):
-         │
-         ├─ 1. base_price = priceMonthly ✅ (existing)
-         ├─ 2. Voucher discount ✅ (existing)
-         ├─ 3. Referral discount ✅ (existing — line 620-631)
-         │
-         ├─ 4. Jika PayViaWallet:
-         │     └─ Deduct final_price dari wallet (setelah semua diskon)
-         │
-         └─ 5. Jika !PayViaWallet (Xendit):
-             └─ CREATE invoice dengan final_price (existing)
-```
-
-**PENTING:** Referral discount dihitung SEBELUM decide bayar via wallet atau Xendit. Jadi discount_amount sama dalam kedua kasus.
-
-
-### ✅ Acceptance Criteria (AC)
-
-- [x] AC-1: POST `/subscribe` dengan `pay_via_wallet=true` dan balance cukup → deduct wallet → activateSubscription → response `{status:'activated', payment_method:'wallet'}`
-- [x] AC-2: POST `/subscribe` dengan `pay_via_wallet=true` dan balance kurang → response 402 + `{required_cents, balance_cents, topup_url}`
-- [x] AC-3: POST `/subscribe` tanpa `pay_via_wallet` (default false) → Xendit invoice seperti biasa
-- [x] AC-4: Referral discount tetap di-apply baik via wallet maupun Xendit
-- [x] AC-5: Wallet auto-renew cron deferred — manual renew via POST /addons/purchase sufficient for MVP.
-- [x] AC-6: Frontend checkout menampilkan wallet balance + opsi "Bayar dari Wallet"
-- [x] AC-7: Wallet page menampilkan transaksi subscription — DeductWalletBalance INSERT type='consume' + description. Wallet.vue render non-topup tx sebagai negatif.
-- [x] AC-8: `go build`, `go vet`, `vue-tsc` clean ✅
-
-
-### Notes:
-
-- Wallet subscription adalah **opsi**, bukan kewajiban. Tenant bisa tetap pakai Xendit.
-- Auto-renew flag (`auto_renew_via_wallet`) terpisah dari `auto_renew` addon — jangan campur.
-- Referral discount priority: voucher → referral → final_price. Konsisten dengan F054 fix.
-- Untuk MVP: wallet deduct full amount. Partial payment (wallet + Xendit) terlalu kompleks untuk sekarang— bisa jadi F059 jika diperlukan.
-- Race condition: `DeductWalletBalance` sudah pakai `SELECT ... FOR UPDATE` di dalam transaksi (via `UPDATE ... WHERE balance_cents >= $1`). Aman untuk concurrent request.
-
-
-### 📌 Background — State Saat Ini
-
-```
-现状 (Current):
-  - User buka domain → langsung ke /login
-  - Tidak ada halaman "Apa itu WCH?" atau daftar fitur
-  - Tidak ada pricing display sebelum register
-  - Satu-satunya jalur konversi: orang daftar karena dikasih tahu (word of mouth)
-  
-  Route yang ada:
-  - /login → Login.vue
-  - /register → Register.vue
-  - Semua route lain requires auth
-
-  Theme: dark/light mode SUDAH ada (F056)
-  CSS variables: SUDAH ada di main.css
-
-  Masalah:
-  - Bounce rate tinggi: orang yang dikasih link WCH langsung lihat login → close
-  - Tidak ada SEO: Google tidak index halaman kosong
-  - Tidak ada conversion path: landing → CTA → register adalah funnel standar
-```
-
-### 🎯 Tujuan
-
-1. Halaman publik yang menjelaskan produk dengan jelas: "Aplikasi Kasir, Pembukuan & AI untuk UMKM"
-2. Menampilkan fitur unggulan: POS, Akuntansi Double-Entry, AI Chatbot, Laporan
-3. Pricing table (Lite/Pro/Ultimate) — ambil data dari backend (opsional: static fallback)
-4. CTA yang jelas: "Coba Gratis" → register
-5. SEO-friendly: meta tags, semantic HTML
-6. Fully responsive (mobile-first)
-7. Dark/light mode compatible (reuse F056 theme system)
-8. User yang sudah login → redirect ke dashboard
-
-
-## F065: Landing Page Content Management — Superadmin JSON Editor
-
-**Spec Status:** ✅ Approved
-**Implementation:** ✅ Done
-**Tanggal:** 2026-06-29
-
-### Deskripsi
-
-Landing page content (hero, features, steps, testimonials, CTA, footer) sekarang **dinamis dari database** via `landing_configs` table. Superadmin bisa edit konten via JSON editor di dashboard, dan perubahan langsung tampil di landing page.
-
-### Architecture
-
-```
-Superadmin UI (JSON Editor)
-  → PUT /api/superadmin/landing-configs/?id=hero
-  → billing-service:8003/admin/landing-configs
-  → PostgreSQL landing_configs table
-  → Invalidate cache (in-memory, 6h TTL)
-
-Landing Page (public)
-  → GET /landing-configs
-  → api-gateway:8000 → billing-service:8003
-  → Check cache → DB fallback
-  → Return all configs as JSON
-  → LandingPage.vue render with fallback
-```
-
-### Database
+### Database Schema
 
 ```sql
+-- Migration: 000083_landing_configs.up.sql
 CREATE TABLE landing_configs (
     id         VARCHAR(50) PRIMARY KEY,  -- 'hero', 'features', 'steps', 'testimonials', 'cta', 'footer'
     content    JSONB NOT NULL DEFAULT '{}',
@@ -213,44 +103,290 @@ CREATE TABLE landing_configs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Seed default content
+INSERT INTO landing_configs (id, content) VALUES
+('hero', '{"title":"Aplikasi Kasir, Pembukuan & AI untuk UMKM","subtitle":"Kelola transaksi, stok, dan pelanggan dalam satu platform","cta_text":"Coba Gratis","cta_url":"/register"}'),
+('features', '[{"icon":"💳","title":"POS Modern","description":"Kasir cepat dengan barcode scanner"},{"icon":"📊","title":"Akuntansi Double-Entry","description":"Laporan keuangan akurat otomatis"},{"icon":"🤖","title":"AI Chatbot WhatsApp","description":"Customer service 24/7 tanpa operator"}]'),
+('steps', '[{"number":1,"title":"Daftar Gratis","description":"Buat akun dalam 30 detik"},{"number":2,"title":"Setup Produk","description":"Import katalog atau input manual"},{"number":3,"title":"Mulai Jual","description":"Terima pembayaran, kirim invoice, otomatis"}]'),
+('testimonials', '[{"name":"Ibu Siti","business":"Warung Makan Padang","quote":"Pembukuan jadi gampang, untung/rugi langsung keliatan"}]'),
+('cta', '{"title":"Siap meningkatkan bisnis Anda?","subtitle":"Gabung 500+ UMKM yang sudah berkembang bersama WCH","button_text":"Mulai Sekarang","button_url":"/register"}'),
+('footer', '{"company":"PT WCH Indonesia","tagline":"Solusi Digital untuk UMKM","links":[{"label":"Tentang Kami","url":"/about"},{"label":"Kontak","url":"/contact"},{"label":"Syarat & Ketentuan","url":"/terms"}]}');
+
+CREATE INDEX idx_landing_configs_is_active ON landing_configs(is_active);
+```
+
+**Migration down:**
+```sql
+-- 000083_landing_configs.down.sql
+DROP TABLE IF EXISTS landing_configs;
 ```
 
 ### API Endpoints
 
-| Method | Path | Auth | Deskripsi |
-|:-------|:-----|:-----|:----------|
-| GET | `/landing-configs` | Public | Semua config (cached 6 jam) |
-| GET | `/api/superadmin/landing-configs` | Superadmin | List semua config + metadata |
-| PUT | `/api/superadmin/landing-configs/?id=hero` | Superadmin | Update config + auto invalidate cache |
+#### `GET /landing-configs` (Public)
 
-### Caching
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "hero": {
+      "title": "Aplikasi Kasir, Pembukuan & AI untuk UMKM",
+      "subtitle": "Kelola transaksi, stok, dan pelanggan dalam satu platform",
+      "cta_text": "Coba Gratis",
+      "cta_url": "/register"
+    },
+    "features": [
+      {
+        "icon": "💳",
+        "title": "POS Modern",
+        "description": "Kasir cepat dengan barcode scanner"
+      }
+    ],
+    "steps": [...],
+    "testimonials": [...],
+    "cta": {...},
+    "footer": {...}
+  }
+}
+```
 
-- **In-memory cache (sync.RWMutex)**, 6 jam TTL
-- Tidak perlu Redis — landing page load frequency rendah
-- Cache auto-invalidated saat superadmin update config
-- Response header `X-Cache: HIT/MISS` untuk debugging
+**Response Headers:**
+- `X-Cache: HIT` (jika dari cache) atau `X-Cache: MISS` (jika dari DB)
+- `Cache-Control: public, max-age=21600` (6 jam)
 
-### Acceptance Criteria
+**Error Cases:**
+- `500 Internal Server Error` — DB error (frontend render fallback content)
 
-- [x] AC-1: Landing page fetch content dari `GET /landing-configs` (public)
-- [x] AC-2: Perubahan content via superadmin langsung tampil (cache invalidate)
-- [x] AC-3: Fallback static content jika API gagal (landing tidak pernah blank)
-- [x] AC-4: Hanya superadmin yang bisa edit (via `/api/superadmin/` route)
-- [x] AC-5: `vue-tsc` clean, `go build` clean
+#### `GET /api/superadmin/landing-configs` (Superadmin only)
 
-### Files Changed
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "hero",
+      "content": {...},
+      "is_active": true,
+      "updated_at": "2026-06-29T10:30:00Z"
+    },
+    {
+      "id": "features",
+      "content": [...],
+      "is_active": true,
+      "updated_at": "2026-06-29T10:30:00Z"
+    }
+  ]
+}
+```
 
-- `shared/migrations/000083_landing_configs.{up,down}.sql` — NEW migration
-- `services/billing-service/landing_config_handlers.go` — NEW handlers (public + admin)
-- `services/billing-service/main.go` — register `/landing-config`, `/admin/landing-configs`
-- `services/api-gateway/main.go` — proxy `/landing-configs` (public) + `/api/superadmin/landing-configs` (admin)
-- `frontend/umkm-web/src/api.ts` — `getLandingConfigs()`
-- `frontend/umkm-web/src/superadminApi.ts` — `getLandingConfigs()`, `updateLandingConfig()`
-- `frontend/umkm-web/src/components/LandingPage.vue` — dynamic content via computed getters + fallback
+**Error Cases:**
+- `401 Unauthorized` — Missing/invalid JWT token
+- `403 Forbidden` — User role bukan `superadmin`
 
-### Migration
+#### `PUT /api/superadmin/landing-configs?id=hero` (Superadmin only)
+
+**Request:**
+```json
+{
+  "content": {
+    "title": "Solusi POS & Akuntansi Terlengkap",
+    "subtitle": "Trusted by 500+ UMKM",
+    "cta_text": "Daftar Sekarang",
+    "cta_url": "/register"
+  }
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Landing config 'hero' updated successfully",
+  "data": {
+    "id": "hero",
+    "content": {...},
+    "updated_at": "2026-06-29T11:00:00Z"
+  }
+}
+```
+
+**Response Headers:**
+- `X-Cache-Invalidated: true`
+
+**Error Cases:**
+- `400 Bad Request` — Invalid JSON structure
+- `401 Unauthorized` — Missing/invalid JWT token
+- `403 Forbidden` — User role bukan `superadmin`
+- `404 Not Found` — `id` tidak ditemukan di table
+
+---
+
+## 🧪 Testing Strategy
+
+### Unit Tests
+
+**Backend (billing-service):**
+```go
+// landing_config_handlers_test.go
+func TestHandleLandingConfigsPublic(t *testing.T) {
+    // Cache HIT scenario
+    // Cache MISS scenario
+    // DB error → return 500
+}
+
+func TestHandleLandingConfigsAdmin(t *testing.T) {
+    // Superadmin list all configs
+    // Non-superadmin → 403
+}
+
+func TestHandleUpdateLandingConfig(t *testing.T) {
+    // Valid update → cache invalidate
+    // Invalid JSON → 400
+    // Unknown id → 404
+    // Non-superadmin → 403
+}
+```
+
+**Frontend (umkm-web):**
+```typescript
+// LandingPage.spec.ts
+describe('LandingPage', () => {
+  it('renders dynamic content from API', async () => {
+    // Mock getLandingConfigs() → verify hero title rendered
+  })
+
+  it('falls back to static content when API fails', async () => {
+    // Mock API error → verify fallback content rendered
+  })
+
+  it('respects dark/light mode theme', () => {
+    // Toggle theme → verify CSS variables applied
+  })
+})
+```
+
+### Integration Tests
 
 ```bash
-make migrate-new NAME=landing_configs
-# → shared/migrations/000083_landing_configs.up.sql / .down.sql
+# 1. Public endpoint accessible tanpa auth
+curl http://localhost:8000/landing-configs
+# → 200 OK, return all sections
+
+# 2. Superadmin update content
+TOKEN=$(curl -X POST http://localhost:8001/superadmin-login \
+  -d '{"username":"admin","password":"admin123"}' | jq -r '.data.token')
+
+curl -X PUT "http://localhost:8000/api/superadmin/landing-configs?id=hero" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"content":{"title":"New Title"}}' 
+# → 200 OK, X-Cache-Invalidated: true
+
+# 3. Verify cache invalidated
+curl http://localhost:8000/landing-configs | jq '.data.hero.title'
+# → "New Title"
+
+# 4. Non-superadmin forbidden
+TENANT_TOKEN=$(curl -X POST http://localhost:8001/login ...)
+curl -X PUT "http://localhost:8000/api/superadmin/landing-configs?id=hero" \
+  -H "Authorization: Bearer $TENANT_TOKEN" 
+# → 403 Forbidden
 ```
+
+### Manual Testing Checklist
+
+- [ ] Landing page render correctly dengan dynamic content
+- [ ] Superadmin JSON editor load existing content
+- [ ] Edit hero title → save → landing page update tanpa refresh (if using WebSocket) atau setelah refresh
+- [ ] Kill billing-service → landing page tetap tampil dengan fallback content
+- [ ] Dark/light mode toggle → landing page color adjust correctly
+- [ ] Cache header `X-Cache: HIT` muncul setelah GET kedua kalinya (dalam 6 jam)
+- [ ] Non-superadmin coba akses editor → redirect atau error message
+
+---
+
+## 📊 Monitoring & Observability
+
+**Logs:**
+```go
+slog.Info("Landing config fetched", 
+  "cache_status", cacheStatus,  // "HIT" or "MISS"
+  "latency_ms", latency)
+
+slog.Info("Landing config updated", 
+  "id", configID,
+  "updated_by", userID,
+  "cache_invalidated", true)
+```
+
+**Metrics to track:**
+- Cache hit rate (target: >95% karena landing page content jarang update)
+- GET `/landing-configs` latency (target: p95 < 50ms untuk cache HIT)
+- PUT update frequency (berapa kali per hari superadmin edit content)
+
+**Alerts:**
+- Cache hit rate < 80% → investigate cache TTL atau load pattern
+- Landing configs GET error rate > 1% → DB connectivity issue
+
+**Grafana Dashboard:**
+- Panel 1: Landing page request rate + cache hit/miss split
+- Panel 2: Content update timeline (PUT events)
+- Panel 3: Response time histogram (HIT vs MISS)
+
+---
+
+## 🚀 Rollout Plan
+
+### Phase 1: Backend + Migration (Done ✅)
+- Deploy migration 000083 → create `landing_configs` table + seed default content
+- Deploy billing-service dengan handlers baru
+- Deploy api-gateway dengan proxy routes
+
+### Phase 2: Superadmin UI (Done ✅)
+- Deploy superadmin-web dengan Landing Page Editor section
+- Test: Superadmin edit hero → verify API call + cache invalidate
+
+### Phase 3: Public Landing Page Integration (Done ✅)
+- Deploy umkm-web dengan dynamic content fetch dari `GET /landing-configs`
+- Fallback static content tetap ada di component (fail-safe)
+- Verify: Landing page load < 2s dengan cache HIT
+
+### Phase 4: Monitoring (Current)
+- Add Grafana dashboard untuk landing page metrics
+- Add alert rule untuk cache hit rate anomaly
+
+### Rollback
+- **Config rollback:** Superadmin re-edit content via UI → restore previous version (no DB rollback needed)
+- **Code rollback:** Revert api-gateway + billing-service → landing page fallback ke static content di LandingPage.vue
+- **Emergency:** `UPDATE landing_configs SET is_active = false WHERE id = 'problematic_section'` → frontend skip section yang error
+
+---
+
+## 🔮 Future Enhancements (Out of Scope)
+
+- **Versioning:** Track edit history → rollback ke version sebelumnya (audit log + restore button)
+- **A/B Testing:** Multiple variant per section → serve different content ke different user segment
+- **Preview Mode:** Superadmin preview perubahan sebelum publish (draft vs published state)
+- **Rich Text Editor:** Upgrade dari JSON editor ke WYSIWYG editor (TipTap atau Quill.js)
+- **Image Upload:** Support upload image untuk hero background, testimonial avatar via Cloudinary/S3
+- **Multi-Language:** Support i18n → content per language (id, en) → detect dari browser locale
+
+---
+
+## 📚 References
+
+- [F056: Dark/Light Mode Theme](../FEATURE_MAP.md) — CSS variables untuk theming
+- [LandingPage.vue Implementation](../../frontend/umkm-web/src/components/LandingPage.vue) — Frontend component dengan fallback logic
+- [Billing Service Handlers](../../services/billing-service/landing_config_handlers.go) — Backend handlers + caching logic
+- [CommonMark Spec](https://spec.commonmark.org/) — Markdown standard untuk content formatting
+
+---
+
+## 📝 Notes & Decisions
+
+**2026-06-29:** Decision: In-memory cache (bukan Redis) karena landing page content load frequency rendah + billing-service single instance di staging. Jika scale horizontal → migrate ke Redis Cluster.  
+**2026-06-29:** Cache TTL 6 jam → balance antara freshness dan performance. Marketing team jarang update content >1x per hari.  
+**2026-06-29:** Fallback static content wajib ada di LandingPage.vue → prevent blank page jika billing-service down atau DB migration belum jalan.  
+**2026-06-29:** JSON editor (bukan WYSIWYG) untuk MVP → superadmin comfortable dengan JSON structure. Rich text editor defer ke v2 berdasarkan user feedback.

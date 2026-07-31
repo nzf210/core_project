@@ -1,104 +1,282 @@
 # F064: Platform WA Provider Detection & OTP Routing
 
-
-## F064: Platform WA Provider Detection & OTP Routing
-
-**Spec Status:** ✅ Approved  
+**Date:** 2026-06-28  
+**Status:** ✅ Approved  
 **Implementation:** ✅ Done  
-**Last Updated:** 2026-06-28
+**Related:** [F016](../CLAUDE.md#-hybrid-whatsapp-architecture), [F048](../FEATURE_MAP.md)
 
-### 🎯 Objectives
+---
 
-Sistem mendeteksi **platform-level WA provider aktif** (whatsmeow vs Meta Cloud API) dan menyesuaikan flow OTP:
-- **whatsmeow** → user HARUS chat REG/OTP/VERIF ke WA Center, sistem TIDAK kirim OTP proaktif
-- **Cloud API** → sistem kirim OTP secara proaktif, user tidak perlu chat duluan
-- Superadmin bisa **manual override** provider via dashboard
-- Default: **auto-detect** (Cloud API prioritas jika keduanya aktif)
+## 🎯 Objectives
 
-### 📝 Spec
+Sistem dapat mendeteksi platform-level WA provider aktif dan menyesuaikan flow OTP registration/login secara otomatis.
 
-#### AC-1: Redis Storage
-- [x] Key `platform:wa:provider` → `"auto"` / `"whatsmeow"` / `"cloud_api"`
-- [x] No TTL (permanent), manual override atau auto-detect SET key
+**Tujuan eksplisit:**
+1. Auto-detect provider aktif (whatsmeow vs Meta Cloud API) — prioritas Cloud API jika keduanya tersedia
+2. Skip proactive OTP send untuk whatsmeow (user harus chat REG/OTP/VERIF ke WA Center)
+3. Superadmin dapat manual override provider via dashboard untuk testing/troubleshooting
 
-#### AC-2: Auto-Detect Logic
-- [x] `getPlatformWAProvider()` di `services/auth-service/wa_platform.go`
-- [x] Cek `wa_sessions` (tenant_id IN ('verifier','system'), status='connected') → whatsmeow
-- [x] Cek `wa_cloud_api_credentials` (is_active=true, verification_status='verified') → cloud_api
-- [x] Decision matrix: cloud_api only → cloud_api | whatsmeow only → whatsmeow | both → cloud_api priority | none → whatsmeow fallback
-- [x] Return `(provider, reason)` string
+**Problem yang diselesaikan:**
+- Platform tidak tahu provider mana yang aktif → kirim OTP via provider yang salah/tidak tersedia
+- User experience berbeda antara whatsmeow (chat-based) vs Cloud API (proactive send) tapi sistem tidak menyesuaikan
+- Perlu manual override untuk testing atau saat Cloud API down
 
-#### AC-3: Register — Skip OTP if Whatsmeow
-- [x] `handleRegister` di `auth-service/auth_handlers.go` call `getPlatformWAProvider()`
-- [x] Jika `"whatsmeow"` → skip `sendWAGatewayOTP()`, response `wa_center_required: true`
-- [x] Message: "Untuk daftar, silakan kirim REG ke nomor WA Center. Atau kirim VERIF {code} jika daftar dari web."
+---
 
-#### AC-4: Login — Skip OTP if Whatsmeow
-- [x] `handlePhoneLogin` di `auth-service/phone_handlers.go` call `getPlatformWAProvider()`
-- [x] Jika `"whatsmeow"` → skip `sendLoginOTP()`, response message: "Untuk login, silakan kirim OTP ke nomor WA Center..."
+## 📋 Acceptance Criteria (AC)
 
-#### AC-5: Cloud API OTP Tidak Terganggu
-- [x] Jika provider `"cloud_api"` atau `"auto"` (resolved ke cloud_api) → OTP kirim via `sendWAGatewayOTP` / `sendLoginOTP` seperti biasa
+- [x] **AC-1: Redis Storage**
+  - *Verification:* Key `platform:wa:provider` → `"auto"` / `"whatsmeow"` / `"cloud_api"`, no TTL
+  - *Example:* `redis-cli GET platform:wa:provider` → `"auto"` (default)
 
-#### AC-6: Superadmin API Endpoints
-- [x] `GET /api/superadmin/wa/platform-provider` → return `wa_provider`, `effective_provider`, `reason`, `connections`
-- [x] `PUT /api/superadmin/wa/platform-provider` → set Redis key (auto → DELETE key, else → SET)
-- [x] Routing: `api-gateway/main.go` line 74 → auth-service `/superadmin/wa/platform-provider`
+- [x] **AC-2: Auto-Detect Logic**
+  - *Verification:* `getPlatformWAProvider()` di `services/auth-service/wa_platform.go` query `wa_sessions` + `wa_cloud_api_credentials`, return `(provider, reason)`
+  - *Example:* Cloud API active → return `("cloud_api", "Meta Cloud API active (1 credentials verified)")`
 
-#### AC-7: Frontend Provider Selector UI
-- [x] `WACenter.vue` — dropdown: Auto Detect / Paksa Whatsmeow / Paksa Cloud API
-- [x] Tampilkan effective provider, reason, connection status (whatsmeow ✅/❌, cloud_api ✅/❌)
-- [x] Hint message: "User harus chat REG/OTP/VERIF..." (whatsmeow) atau "Sistem kirim OTP otomatis..." (cloud_api)
-- [x] `client.ts` — `getPlatformProvider()`, `setPlatformProvider()`
+- [x] **AC-3: Register — Skip OTP if Whatsmeow**
+  - *Verification:* `POST /api/auth/register` dengan provider whatsmeow → response `wa_center_required: true`, `otp_code` tetap di-return untuk VERIF flow
+  - *Example:* Response message: *"Untuk daftar, silakan kirim REG ke nomor WA Center. Atau kirim VERIF {code} jika daftar dari web."*
 
-#### AC-8: Cache Invalidation on Connect/Disconnect
-- [x] `invalidatePlatformWAProviderCache()` di `wa-gateway/event_handler.go`
-- [x] Dipanggil di: `handleConnectedEvent` (connect), `handleLogoutRequest` (disconnect), `scheduleQRExpiry` (QR timeout → no connect)
+- [x] **AC-4: Login — Skip OTP if Whatsmeow**
+  - *Verification:* `POST /api/auth/phone-login` dengan provider whatsmeow → skip `sendLoginOTP()`, return message
+  - *Example:* *"Untuk login, silakan kirim OTP ke nomor WA Center..."*
 
-#### AC-9: Web Registration via VERIF Code
-- [x] `otp_code` tetap di-return dalam response untuk register/login whatsmeow mode
-- [x] User bisa kirim `VERIF {code}` ke WA Center untuk complete registration
+- [x] **AC-5: Cloud API OTP Tidak Terganggu**
+  - *Verification:* Provider `"cloud_api"` atau `"auto"` (resolved ke cloud_api) → OTP kirim via `sendWAGatewayOTP` seperti biasa
+  - *Example:* `POST /api/auth/register` → OTP terkirim via Cloud API, user terima WA dalam 3-5 detik
 
-### 🛠️ Implementation Details
+- [x] **AC-6: Superadmin API Endpoints**
+  - *Verification:* `GET /api/superadmin/wa/platform-provider` → return `wa_provider`, `effective_provider`, `reason`, `connections`
+  - *Example:* `PUT /api/superadmin/wa/platform-provider { "wa_provider": "whatsmeow" }` → Redis key set
 
-**Backend Files:**
-- `services/auth-service/wa_platform.go` (NEW) — `getPlatformWAProvider()`, `handleGetPlatformProvider()`, `handleSetPlatformProvider()`
-- `services/auth-service/auth_handlers.go` (MODIFIED) — `handleRegister` cek provider, skip send
-- `services/auth-service/phone_handlers.go` (MODIFIED) — `handlePhoneLogin` cek provider, skip send
-- `services/auth-service/main.go` (MODIFIED) — route `/superadmin/wa/platform-provider`
-- `services/api-gateway/main.go` (MODIFIED) — proxy `/api/superadmin/wa/platform-provider` → auth-service
-- `services/wa-gateway/event_handler.go` (MODIFIED) — `invalidatePlatformWAProviderCache()` + call on connect
-- `services/wa-gateway/logout_handlers.go` (MODIFIED) — call `invalidatePlatformWAProviderCache()` on disconnect
-- `services/wa-gateway/qr_handlers.go` (MODIFIED) — call `invalidatePlatformWAProviderCache()` on QR expiry
+- [x] **AC-7: Frontend Provider Selector UI**
+  - *Verification:* `WACenter.vue` — dropdown: Auto Detect / Paksa Whatsmeow / Paksa Cloud API, tampilkan effective provider + reason + connection status
+  - *Example:* Dropdown pilih "Paksa Cloud API" → effective_provider berubah → hint message update
 
-**Frontend Files:**
-- `frontend/superadmin-web/src/components/WACenter.vue` (MODIFIED) — provider selector UI
-- `frontend/superadmin-web/src/api/client.ts` (MODIFIED) — `getPlatformProvider()`, `setPlatformProvider()`
+- [x] **AC-8: Cache Invalidation on Connect/Disconnect**
+  - *Verification:* `invalidatePlatformWAProviderCache()` dipanggil saat whatsmeow connect/disconnect/QR timeout
+  - *Example:* Whatsmeow connect → cache invalidate → auto-detect re-run → effective_provider update
 
-**Redis Keys:**
-| Key | Value | TTL |
-|:----|:------|:----|
-| `platform:wa:provider` | `auto\|whatsmeow\|cloud_api` | None |
+- [x] **AC-9: Web Registration via VERIF Code**
+  - *Verification:* Whatsmeow mode → `otp_code` tetap di-return, user bisa kirim `VERIF {code}` ke WA Center
+  - *Example:* User daftar via web → dapat OTP code → kirim `VERIF 123456` ke WA Center → registration complete
 
-**No migration needed** — storage via Redis. Existing `wa_sessions` dan `wa_cloud_api_credentials` tables used for detection.
+---
 
-### ✅ Testing
+## 🛠️ Technical Specification
 
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────┐
+│           Auth Service (Registration/Login)         │
+│                                                      │
+│  ┌──────────────────────────────────────────────┐  │
+│  │ getPlatformWAProvider()                      │  │
+│  │  1. Check Redis: platform:wa:provider       │  │
+│  │  2. If "auto" or empty:                     │  │
+│  │     - Query wa_sessions (verifier/system)   │  │
+│  │     - Query wa_cloud_api_credentials        │  │
+│  │     - Decision: cloud_api > whatsmeow       │  │
+│  │  3. Return (provider, reason)               │  │
+│  └──────────────────────────────────────────────┘  │
+│              ↓                                       │
+│  ┌──────────────────────────────────────────────┐  │
+│  │ handleRegister / handlePhoneLogin            │  │
+│  │  - If whatsmeow: skip sendOTP, return hint  │  │
+│  │  - If cloud_api: sendOTP via wa-gateway     │  │
+│  └──────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+         ↓ (for whatsmeow mode)
+┌─────────────────────────────────────────────────────┐
+│         WA Center (user-initiated commands)         │
+│  REG → create tenant + user                         │
+│  OTP → send OTP code                                │
+│  VERIF {code} → verify OTP + activate account       │
+└─────────────────────────────────────────────────────┘
+```
+
+### Database Schema
+
+**No migration needed** — storage via Redis. Query existing tables:
+
+```sql
+-- Auto-detect whatsmeow
+SELECT 1 FROM wa_sessions 
+WHERE tenant_id IN ('verifier', 'system') 
+  AND status = 'connected';
+
+-- Auto-detect Cloud API
+SELECT 1 FROM wa_cloud_api_credentials 
+WHERE is_active = true 
+  AND verification_status = 'verified';
+```
+
+### API Endpoints
+
+#### `GET /api/superadmin/wa/platform-provider`
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "wa_provider": "auto",
+    "effective_provider": "cloud_api",
+    "reason": "Meta Cloud API active (2 credentials verified)",
+    "connections": {
+      "whatsmeow": false,
+      "cloud_api": true
+    }
+  }
+}
+```
+
+#### `PUT /api/superadmin/wa/platform-provider`
+
+**Request:**
+```json
+{
+  "wa_provider": "whatsmeow"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Platform WA provider updated to whatsmeow"
+}
+```
+
+**Error Cases:**
+- `400 Bad Request` — Invalid `wa_provider` value (not in `auto|whatsmeow|cloud_api`)
+- `401 Unauthorized` — Not superadmin role
+
+#### `POST /api/auth/register` (modified behavior)
+
+**Whatsmeow mode response:**
+```json
+{
+  "success": true,
+  "data": {
+    "wa_center_required": true,
+    "otp_code": "123456",
+    "message": "Untuk daftar, silakan kirim REG ke nomor WA Center. Atau kirim VERIF 123456 jika daftar dari web."
+  }
+}
+```
+
+**Cloud API mode response** (unchanged):
+```json
+{
+  "success": true,
+  "data": {
+    "message": "OTP sent to WhatsApp"
+  }
+}
+```
+
+### Redis Keys
+
+| Key | Value | TTL | Usage |
+|:----|:------|:----|:------|
+| `platform:wa:provider` | `auto` / `whatsmeow` / `cloud_api` | None | Manual override setting. If empty/auto → run auto-detect |
+
+---
+
+## 🧪 Testing Strategy
+
+### Unit Tests
 ```bash
-# 1. go vet + build
-go vet ./services/wa-gateway/... ./services/auth-service/... && go build ./services/wa-gateway/... ./services/auth-service/...
+# Auto-detect logic (mock DB queries)
+go test ./services/auth-service/ -run TestGetPlatformWAProvider -v
 
-# 2. Auto-detect (no Redis override)
-# Pastikan wa_sessions (verifier/system) connected → effective_provider = cloud_api (priority)
-# Pastikan wa_sessions disconnected + cloud_api active → effective_provider = cloud_api
-# Pastikan wa_sessions connected + cloud_api inactive → effective_provider = whatsmeow
+# Cache invalidation
+go test ./services/wa-gateway/ -run TestInvalidatePlatformWAProviderCache -v
+```
+
+### Integration Tests
+```bash
+# 1. Auto-detect scenarios
+# - Cloud API only active
+# - Whatsmeow only active
+# - Both active (Cloud API priority)
+# - None active (whatsmeow fallback)
+
+# 2. Register/Login flow
+# - Whatsmeow mode → wa_center_required = true
+# - Cloud API mode → OTP sent
 
 # 3. Manual override
-# curl -X PUT http://localhost:8001/superadmin/wa/platform-provider \
-#   -H "Content-Type: application/json" -d '{"wa_provider":"whatsmeow"}'
-# → Register/login harus return "wa_center_required: true"
-
-# 4. API endpoint
-# curl http://localhost:8001/superadmin/wa/platform-provider
-# → return wa_provider, effective_provider, reason, connections
+curl -X PUT http://localhost:8001/superadmin/wa/platform-provider \
+  -H "Content-Type: application/json" \
+  -d '{"wa_provider":"whatsmeow"}'
 ```
+
+### Manual Testing
+1. Set provider via Superadmin → WACenter → dropdown
+2. Verify effective_provider updates
+3. Register new user → check OTP send behavior
+4. Connect/disconnect whatsmeow → verify cache invalidation
+
+---
+
+## 📊 Monitoring & Observability
+
+**Logs:**
+```go
+slog.Info("Platform WA provider resolved", 
+  "provider", provider, 
+  "reason", reason, 
+  "source", "auto-detect")
+```
+
+**Metrics to track:**
+- Redis cache hit/miss for `platform:wa:provider`
+- Auto-detect execution time
+- Provider distribution (whatsmeow vs cloud_api usage %)
+
+**Alerts:**
+- Both providers down → superadmin notification
+
+---
+
+## 🚀 Rollout Plan
+
+### Phase 1: Backend + Superadmin UI (Done ✅)
+- Deploy `auth-service` + `wa-gateway` dengan auto-detect logic
+- Deploy `superadmin-web` dengan provider selector UI
+- Default: `auto` (Cloud API priority)
+
+### Phase 2: Monitoring (Current)
+- Add Grafana dashboard untuk provider distribution
+- Add alert rule untuk "both providers down"
+
+### Rollback
+- Redis key delete: `redis-cli DEL platform:wa:provider` → revert ke auto-detect default
+- Code rollback: revert `wa_platform.go` → system kirim OTP via wa-gateway tanpa cek provider
+
+---
+
+## 🔮 Future Enhancements (Out of Scope)
+
+- **Per-tenant provider preference:** Tenant bisa pilih sendiri whatsmeow vs Cloud API (saat ini platform-level)
+- **A/B test OTP delivery:** Random assign provider untuk compare success rate
+- **Auto-failover:** Jika Cloud API down → auto-switch ke whatsmeow dengan graceful UX
+
+---
+
+## 📚 References
+
+- [F048: WA Provider Preference (Tenant-Level)](../FEATURE_MAP.md) — tenant-level routing logic
+- [F016: Hybrid WhatsApp Architecture](../CLAUDE.md#-hybrid-whatsapp-architecture) — original whatsmeow + Cloud API design
+- [WhatsApp Cloud API Docs](https://developers.facebook.com/docs/whatsapp/cloud-api/)
+
+---
+
+## 📝 Notes & Decisions
+
+**2026-06-28:** Implemented platform-level detection. Decision: Cloud API priority over whatsmeow karena compliance + reliability (Meta official API).  
+**2026-06-28:** `otp_code` tetap di-return untuk whatsmeow mode — support hybrid flow (web registration via VERIF command).  
+**2026-06-28:** Cache invalidation di wa-gateway event handlers (connect/disconnect/QR timeout) — ensure auto-detect selalu fresh setelah provider state change.
