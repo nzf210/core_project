@@ -141,12 +141,9 @@ describe('Frontend Security - Input Sanitization', () => {
 
 describe('Frontend Security - Authentication', () => {
   it('stores tokens securely', () => {
-    // Should NOT use localStorage for sensitive tokens (XSS vulnerable)
-    // Should use httpOnly cookies instead
-
-    // If localStorage is used, verify it's only for non-sensitive data
-    localStorage.setItem('theme', 'dark') // OK
-    // localStorage.setItem('password', 'secret') // NOT OK
+    localStorage.setItem('theme', 'dark')
+    expect(localStorage.getItem('theme')).toBe('dark')
+    expect(localStorage.getItem('password')).toBeNull()
   })
 
   it('clears auth data on logout', () => {
@@ -269,8 +266,7 @@ describe('Frontend Security - API Response Validation', () => {
 
 describe('Frontend Security - CSP Compliance', () => {
   it('uses nonce for inline scripts', () => {
-    // Inline scripts should use nonce attribute matching CSP header
-    const scriptTag = '<script nonce="random-nonce-123">console.log("ok")</script>'
+    const scriptTag = '<script nonce="random-nonce-123">document.title="ok"</script>'
     expect(scriptTag).toContain('nonce=')
   })
 
@@ -428,23 +424,28 @@ function isValidURL(url: string): boolean {
   return !dangerousProtocols.some(proto => lowerURL.startsWith(proto))
 }
 
-function isValidAPIResponse(response: any): boolean {
+interface APIResponse {
+  success: boolean
+  data?: Record<string, unknown>
+  message?: string
+}
+
+function isValidAPIResponse(response: unknown): boolean {
   if (!response || typeof response !== 'object') return false
-  if (typeof response.success !== 'boolean') return false
+  if (typeof (response as Record<string, unknown>).success !== 'boolean') return false
   return true
 }
 
-function sanitizeAPIResponse(response: any): any {
-  if (typeof response !== 'object') return response
-
+function sanitizeAPIResponse(response: APIResponse): APIResponse {
   const sanitized = { ...response }
 
   if (sanitized.data && typeof sanitized.data === 'object') {
+    const sanitizedData: Record<string, unknown> = {}
     Object.keys(sanitized.data).forEach(key => {
-      if (typeof sanitized.data[key] === 'string') {
-        sanitized.data[key] = escapeHTML(sanitized.data[key])
-      }
+      const val = (sanitized.data as Record<string, unknown>)[key]
+      sanitizedData[key] = typeof val === 'string' ? escapeHTML(val) : val
     })
+    sanitized.data = sanitizedData
   }
 
   return sanitized
