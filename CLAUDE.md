@@ -230,7 +230,7 @@ Tenant dapat meng-override hybrid routing dengan preferensi eksplisit di `tenant
 - `services/api-gateway/main.go` → route `/api/wa/validate`
 - `shared/migrations/000063_wa_provider_preferences.up.sql` → enum + kolom
 - `shared/migrations/000064_wa_cloud_api_plan_feature.up.sql` → seed plan_features
-- `shared/migrations/000070_wa_credential_verification.up.sql` → verification status columns
+- `shared/migrations/000075_wa_cloud_api_credentials.up.sql` → verification status columns (merged from original 000070)
 - `frontend/umkm-web/src/components/WASetup.vue` → 2-step validate+save wizard
 - `frontend/umkm-web/src/api.ts` → `validateCloudAPICredential()`
 - `frontend/umkm-web/src/components/ChatbotConfig.vue` → dropdown "📡 WA Provider"

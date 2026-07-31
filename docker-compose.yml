@@ -176,7 +176,7 @@ services:
     environment:
       # ── Database Persistence (dedicated N8N database) ────────────────────
       - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_DATABASE=${N8N_DB_NAME:-wch_n8n}
+      - DB_POSTGRESDB_DATABASE=${N8N_DB_NAME:-wch_n8n_db}
       - DB_POSTGRESDB_HOST=${N8N_DB_HOST:-postgres}
       - DB_POSTGRESDB_PORT=${N8N_DB_PORT:-5432}
       - DB_POSTGRESDB_USER=${N8N_DB_USER:-${DB_USER:-postgres}}
@@ -244,7 +244,7 @@ services:
     environment:
       # ── Database Persistence ──────────────────────────────────────────
       - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_DATABASE=${N8N_DB_NAME:-wch_n8n}
+      - DB_POSTGRESDB_DATABASE=${N8N_DB_NAME:-wch_n8n_db}
       - DB_POSTGRESDB_HOST=${N8N_DB_HOST:-postgres}
       - DB_POSTGRESDB_PORT=${N8N_DB_PORT:-5432}
       - DB_POSTGRESDB_USER=${N8N_DB_USER:-${DB_USER:-postgres}}
