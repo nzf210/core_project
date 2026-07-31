@@ -71,7 +71,7 @@ func routeToCloudAPI(tenantID, target, message, msgType string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerContentType, contentTypeJSON)
 	req.Header.Set("X-Tenant-ID", tenantID)
 
 	resp, err := http.DefaultClient.Do(req)

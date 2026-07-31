@@ -14,6 +14,12 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
 
+const (
+	headerContentType = "Content-Type"
+	contentTypeJSON   = "application/json"
+	contentTypeText   = "text/plain; charset=utf-8"
+)
+
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	clientMu.RLock()
 	connected := len(clientMap)
@@ -33,7 +39,7 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]any{
 		"status":             "ok",
@@ -51,7 +57,7 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 	n := len(clientMap)
 	clientMu.RUnlock()
 
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set(headerContentType, contentTypeText)
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `# HELP wa_gateway_info WA Gateway instance info
 # TYPE wa_gateway_info gauge

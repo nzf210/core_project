@@ -13,6 +13,11 @@ import (
 	"core_project/shared/sdk/response"
 )
 
+const (
+	headerContentType = "Content-Type"
+	contentTypeJSON   = "application/json"
+)
+
 func handleSend(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
@@ -107,7 +112,7 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		"wa_message_id", waMsgID,
 	)
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(SendResponse{
 		Success: true,

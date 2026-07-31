@@ -38,7 +38,7 @@ func handleLogoutRequest(w http.ResponseWriter, r *http.Request) {
 	invalidatePlatformWAProviderCache()
 	ReleaseSessionLock(r.Context(), tenantID)
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 

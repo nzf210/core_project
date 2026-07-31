@@ -14,7 +14,7 @@ func setupStatusHandler() {
 
 func handleStatusRequest(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("X-Tenant-ID")
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 
 	if owner, isOther := checkOtherInstanceOwner(tenantID); isOther {
 		jid := getSessionJIDFromDB(tenantID)
