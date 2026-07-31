@@ -1,0 +1,13 @@
+# PgBouncer userlist.txt
+# Format: "username" "md5{md5(password + username)}"
+#
+# Generate hash:
+#   echo -n "passwordusername" | md5sum
+#   Prefix with "md5"
+#
+# Example for user "wch_admin" with password "secretpass":
+#   echo -n "secretpasswch_admin" | md5sum
+#   Result: abc123...
+#   Entry: "wch_admin" "md5abc123..."
+
+"wch_admin" "CHANGE_THIS_TO_MD5_HASH"

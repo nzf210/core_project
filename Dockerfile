@@ -1,5 +1,5 @@
 # Build Stage
-FROM golang:1.25-alpine3.21 AS builder
+FROM golang:1.23-alpine AS builder
 
 ENV GOTOOLCHAIN=auto
 

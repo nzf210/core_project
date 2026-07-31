@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -82,7 +81,6 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store refresh token
 	tokenHash := hashToken(tokens.RefreshToken)
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 
@@ -96,16 +94,13 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Also set in Redis for fast revocation checks
 	Redis.Set(ctx, redisKeyRefreshToken+tokenHash, userID, 7*24*time.Hour)
 
-	// Cache tenant plan in Redis so feature gates (RequireFeature) resolve correctly.
 	var plan string
 	if err := DB.QueryRow(ctx, "SELECT plan FROM tenants WHERE id = $1", tenantID).Scan(&plan); err == nil && plan != "" {
 		Redis.Set(ctx, "tenant:plan:"+tenantID, plan, 30*24*time.Hour)
 	}
 
-	// Metrics: successful login
 	authLoginsTotal.WithLabelValues("password", "true").Inc()
 
 	writeJSON(w, http.StatusOK, Response{
@@ -142,10 +137,8 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	tokenHash := hashToken(req.RefreshToken)
 
-	// Check Redis first
 	_, err = Redis.Get(ctx, redisKeyRefreshToken+tokenHash).Result()
 	if err != nil {
-		// Try DB if not in redis
 		var storedUserID string
 		errDB := DB.QueryRow(ctx, "SELECT user_id FROM refresh_tokens WHERE token_hash = $1 AND expires_at > NOW()", tokenHash).Scan(&storedUserID)
 		if errDB != nil {
@@ -154,7 +147,6 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Token is valid. Rotate it.
 	DB.Exec(ctx, "DELETE FROM refresh_tokens WHERE token_hash = $1", tokenHash)
 	Redis.Del(ctx, redisKeyRefreshToken+tokenHash)
 
@@ -165,7 +157,6 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store new refresh token
 	newTokenHash := hashToken(tokens.RefreshToken)
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	_, err = DB.Exec(ctx, "INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)", claims.UserID, newTokenHash, expiresAt)
@@ -204,8 +195,6 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, Response{Success: true, Message: "Logged out successfully"})
 }
 
-// validateStaffBody validates the staff registration payload and returns a 4xx message
-// or empty string if valid.
 func validateStaffBody(req *AddStaffRequest) string {
 	req.PhoneNumber = strings.TrimSpace(req.PhoneNumber)
 	if strings.HasPrefix(req.PhoneNumber, "0") {
@@ -320,160 +309,4 @@ func requireAuth(r *http.Request) (*Claims, bool) {
 		return nil, false
 	}
 	return claims, true
-}
-
-func handleProfile(w http.ResponseWriter, r *http.Request) {
-	claims, ok := requireAuth(r)
-	if !ok {
-		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Authentication required"})
-		return
-	}
-
-	ctx := context.Background()
-	switch r.Method {
-	case http.MethodGet:
-		getProfileData(ctx, w, claims)
-	case http.MethodPut:
-		updateProfileData(ctx, w, r, claims)
-	default:
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
-	}
-}
-
-func getProfileData(ctx context.Context, w http.ResponseWriter, claims *Claims) {
-	var username, role string
-	var phoneNumber, email, businessName, waNumber, logoURL, businessAddress, businessType, plan, tenantName *string
-	var isFrozen, onboardingCompleted, mustChangePw bool
-	err := DB.QueryRow(ctx, `
-		SELECT u.username, u.email, u.phone_number, u.role,
-		       COALESCE(t.business_name, t.name), t.wa_number, t.logo_url, t.business_address, t.business_type, t.plan, t.name, COALESCE(t.is_frozen, false), COALESCE(t.onboarding_completed, false), u.must_change_password
-		FROM users u
-		JOIN tenants t ON t.id = u.tenant_id
-		WHERE u.id = $1 AND u.tenant_id = $2
-	`, claims.UserID, claims.TenantID).Scan(
-		&username, &email, &phoneNumber, &role,
-		&businessName, &waNumber, &logoURL, &businessAddress, &businessType, &plan, &tenantName, &isFrozen, &onboardingCompleted, &mustChangePw,
-	)
-
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			writeJSON(w, http.StatusNotFound, Response{Success: false, Message: "User not found"})
-			return
-		}
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, Response{
-		Success: true,
-		Data: map[string]any{
-			"username":             username,
-			"email":                derefStr(email),
-			"phone_number":         derefStr(phoneNumber),
-			"role":                 role,
-			"business_name":        derefStr(businessName),
-			"wa_number":            derefStr(waNumber),
-			"logo_url":             derefStr(logoURL),
-			"business_address":     derefStr(businessAddress),
-			"business_type":        derefStr(businessType),
-			"plan":                 derefStr(plan),
-			"tenant_id":            claims.TenantID,
-			"is_frozen":            isFrozen,
-			"onboarding_completed": onboardingCompleted,
-			"must_change_password": mustChangePw,
-		},
-	})
-}
-
-func updateProfileData(ctx context.Context, w http.ResponseWriter, r *http.Request, claims *Claims) {
-	var req UpdateProfileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Invalid request payload"})
-		return
-	}
-
-	if req.NewPassword != "" && !updatePassword(ctx, w, req, claims.UserID) {
-		return
-	}
-
-	if req.Username != "" && !updateUsername(ctx, w, req.Username, claims) {
-		return
-	}
-
-	if req.PhoneNumber != "" {
-		DB.Exec(ctx, "UPDATE users SET phone_number = $1 WHERE id = $2 AND tenant_id = $3", req.PhoneNumber, claims.UserID, claims.TenantID)
-	}
-
-	updateTenantFields(ctx, req, claims.TenantID)
-	writeJSON(w, http.StatusOK, Response{Success: true, Message: "Profile updated successfully"})
-}
-
-func updatePassword(ctx context.Context, w http.ResponseWriter, req UpdateProfileRequest, userID string) bool {
-	if req.OldPassword == "" {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "old_password is required to change password"})
-		return false
-	}
-	var currentHash string
-	err := DB.QueryRow(ctx, "SELECT password_hash FROM users WHERE id = $1", userID).Scan(&currentHash)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
-		return false
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.OldPassword)); err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Old password is incorrect"})
-		return false
-	}
-	newHash, _ := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
-	DB.Exec(ctx, "UPDATE users SET password_hash = $1, must_change_password = false WHERE id = $2", string(newHash), userID)
-	return true
-}
-
-func updateUsername(ctx context.Context, w http.ResponseWriter, username string, claims *Claims) bool {
-	var exists bool
-	err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1 AND id != $2)", username, claims.UserID).Scan(&exists)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Terjadi kesalahan saat memeriksa username"})
-		return false
-	}
-	if exists {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Username sudah digunakan"})
-		return false
-	}
-	_, err = DB.Exec(ctx, "UPDATE users SET username = $1 WHERE id = $2 AND tenant_id = $3", username, claims.UserID, claims.TenantID)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Gagal menyimpan username"})
-		return false
-	}
-	return true
-}
-
-func updateTenantFields(ctx context.Context, req UpdateProfileRequest, tenantID string) {
-	tenantUpdates := []string{}
-	tenantArgs := []any{}
-	argIdx := 1
-	if req.BusinessName != "" {
-		tenantUpdates = append(tenantUpdates, fmt.Sprintf("business_name = $%d", argIdx))
-		tenantArgs = append(tenantArgs, req.BusinessName)
-		argIdx++
-	}
-	if req.BusinessAddress != "" {
-		tenantUpdates = append(tenantUpdates, fmt.Sprintf("business_address = $%d", argIdx))
-		tenantArgs = append(tenantArgs, req.BusinessAddress)
-		argIdx++
-	}
-	if req.BusinessType != "" {
-		tenantUpdates = append(tenantUpdates, fmt.Sprintf("business_type = $%d", argIdx))
-		tenantArgs = append(tenantArgs, req.BusinessType)
-		argIdx++
-	}
-	if req.WaNumber != "" {
-		tenantUpdates = append(tenantUpdates, fmt.Sprintf("wa_number = $%d", argIdx))
-		tenantArgs = append(tenantArgs, req.WaNumber)
-		argIdx++
-	}
-	if len(tenantUpdates) > 0 {
-		tenantArgs = append(tenantArgs, tenantID)
-		query := fmt.Sprintf("UPDATE tenants SET %s, updated_at = NOW() WHERE id = $%d", strings.Join(tenantUpdates, ", "), argIdx)
-		DB.Exec(ctx, query, tenantArgs...)
-	}
 }

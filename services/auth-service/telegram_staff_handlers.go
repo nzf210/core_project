@@ -446,14 +446,3 @@ func handleTelegramWebhookCommand(chatID, text string) {
 }
 
 func formatPhoneToWAJID(phone string) string {
-	if strings.HasSuffix(phone, "@s.whatsapp.net") {
-		return phone
-	}
-	phone = strings.TrimSpace(phone)
-	if strings.HasPrefix(phone, "0") {
-		phone = "62" + phone[1:]
-	} else if strings.HasPrefix(phone, "+") {
-		phone = phone[1:]
-	}
-	return phone + "@s.whatsapp.net"
-}
