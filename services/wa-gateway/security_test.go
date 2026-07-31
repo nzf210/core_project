@@ -158,7 +158,7 @@ func TestWARouting_ProviderPreference(t *testing.T) {
 				actualProvider = "whatsmeow"
 			} else {
 				// Auto mode
-				if isTransactional(tt.messageType) {
+				if isTransactionalType(tt.messageType) {
 					actualProvider = "cloud_api"
 				} else {
 					actualProvider = "whatsmeow"
@@ -172,7 +172,7 @@ func TestWARouting_ProviderPreference(t *testing.T) {
 	}
 }
 
-func isTransactional(messageType string) bool {
+func isTransactionalType(messageType string) bool {
 	transactionalTypes := []string{"otp", "invoice", "subscription", "system", "broadcast"}
 	for _, t := range transactionalTypes {
 		if messageType == t {
@@ -206,7 +206,6 @@ func TestPhoneNumber_Normalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Normalize phone number to 62xxx format
 			normalized := normalizePhone(tt.input)
 
 			if tt.valid && normalized != tt.expected {
@@ -214,38 +213,6 @@ func TestPhoneNumber_Normalization(t *testing.T) {
 			}
 		})
 	}
-}
-
-func normalizePhone(phone string) string {
-	// Remove non-numeric characters
-	var cleaned string
-	for _, r := range phone {
-		if r >= '0' && r <= '9' {
-			cleaned += string(r)
-		}
-	}
-
-	// Convert 08xxx to 628xxx
-	if len(cleaned) > 0 && cleaned[0] == '0' {
-		cleaned = "62" + cleaned[1:]
-	}
-
-	// Remove leading +
-	if len(cleaned) > 0 && cleaned[0] == '+' {
-		cleaned = cleaned[1:]
-	}
-
-	// Validate length (Indonesian mobile: 62 + 9-13 digits)
-	if len(cleaned) < 11 || len(cleaned) > 15 {
-		return ""
-	}
-
-	// Validate prefix
-	if len(cleaned) < 2 || cleaned[:2] != "62" {
-		return ""
-	}
-
-	return cleaned
 }
 
 // ========================================
@@ -316,7 +283,7 @@ func TestMessageType_Detection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isTransactional(tt.headerValue)
+			result := isTransactionalType(tt.headerValue)
 			if result != tt.isTransactional {
 				t.Errorf("Expected isTransactional=%v for %s", tt.isTransactional, tt.headerValue)
 			}

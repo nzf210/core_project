@@ -36,16 +36,13 @@ func TestLegacyPoolConfig(t *testing.T) {
 }
 
 func TestConnect_InvalidDSN(t *testing.T) {
-	cfg := &config.Config{
-		DB: config.DatabaseConfig{
-			Host:     "invalid-host-that-does-not-exist",
-			Port:     9999,
-			User:     "test",
-			Password: "test",
-			Name:     "test",
-			SSLMode:  "disable",
-		},
-	}
+	cfg := &config.Config{}
+	cfg.DB.Host = "invalid-host-that-does-not-exist"
+	cfg.DB.Port = 9999
+	cfg.DB.User = "test"
+	cfg.DB.Password = "test"
+	cfg.DB.Name = "test"
+	cfg.DB.SSLMode = "disable"
 
 	pool, err := ConnectWithDefaults(cfg)
 	if err == nil {
@@ -59,16 +56,13 @@ func TestConnect_InvalidHost(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	cfg := &config.Config{
-		DB: config.DatabaseConfig{
-			Host:     "127.0.0.1",
-			Port:     9999, // Nothing listening here
-			User:     "test_user",
-			Password: "test_pass",
-			Name:     "test_db",
-			SSLMode:  "disable",
-		},
-	}
+	cfg := &config.Config{}
+	cfg.DB.Host = "127.0.0.1"
+	cfg.DB.Port = 9999
+	cfg.DB.User = "test_user"
+	cfg.DB.Password = "test_pass"
+	cfg.DB.Name = "test_db"
+	cfg.DB.SSLMode = "disable"
 
 	pool, err := ConnectWithDefaults(cfg)
 	if err == nil {

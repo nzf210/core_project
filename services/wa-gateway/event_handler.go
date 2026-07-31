@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log/slog"
+
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types/events"
 )
@@ -34,5 +36,5 @@ func handleStreamReplacedEvent(tenantID string) {
 }
 
 func handleTemporaryBanEvent(tenantID string, v *events.TemporaryBan) {
-	slog.Error("Temporary ban received", "tenant_id", tenantID, "code", v.Code, "reason", v.Reason)
+	slog.Error("Temporary ban received", "tenant_id", tenantID, "code", v.Code)
 }
