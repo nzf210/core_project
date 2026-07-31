@@ -72,6 +72,27 @@ const router = createRouter({
 let _meCache: { key: string; ts: number; data: any } | null = null
 const ME_CACHE_TTL_MS = 30_000 // 30s
 
+function syncUserDataToStorage(data: any) {
+  if (data.onboarding_completed !== undefined) {
+    localStorage.setItem('onboarding_completed', data.onboarding_completed ? 'true' : 'false')
+  }
+  if (data.plan !== undefined) {
+    localStorage.setItem('plan', data.plan || '')
+  }
+  if (data.role !== undefined) {
+    localStorage.setItem('role', data.role || '')
+  }
+  if (data.is_frozen !== undefined) {
+    sessionStorage.setItem('subscription_status', data.is_frozen ? 'frozen' : 'active')
+  }
+  if (data.addons !== undefined) {
+    localStorage.setItem('tenant_addons', JSON.stringify(data.addons))
+  }
+  if (data.must_change_password !== undefined) {
+    localStorage.setItem('must_change_password', data.must_change_password ? 'true' : 'false')
+  }
+}
+
 async function fetchAndSyncMe(): Promise<any | null> {
   const token = localStorage.getItem('access_token')
   const tenantId = localStorage.getItem('tenant_id')
@@ -84,25 +105,7 @@ async function fetchAndSyncMe(): Promise<any | null> {
   const res = await api.me()
   if (res && res.success && res.data) {
     _meCache = { key, ts: now, data: res.data }
-    // Sync flags to localStorage so the rest of the app sees consistent state.
-    if (res.data.onboarding_completed !== undefined) {
-      localStorage.setItem('onboarding_completed', res.data.onboarding_completed ? 'true' : 'false')
-    }
-    if (res.data.plan !== undefined) {
-      localStorage.setItem('plan', res.data.plan || '')
-    }
-    if (res.data.role !== undefined) {
-      localStorage.setItem('role', res.data.role || '')
-    }
-    if (res.data.is_frozen !== undefined) {
-      sessionStorage.setItem('subscription_status', res.data.is_frozen ? 'frozen' : 'active')
-    }
-    if (res.data.addons !== undefined) {
-      localStorage.setItem('tenant_addons', JSON.stringify(res.data.addons))
-    }
-    if (res.data.must_change_password !== undefined) {
-      localStorage.setItem('must_change_password', res.data.must_change_password ? 'true' : 'false')
-    }
+    syncUserDataToStorage(res.data)
   }
   return res && res.success ? res.data : null
 }
