@@ -259,7 +259,7 @@ func sendWAPasswordResetOTP(senderTenant, target, otp string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(headerContentType, contentTypeFormURLEncoded)
 	req.Header.Set("X-Message-Type", "otp")
 	req.Header.Set("X-Source", "auth-service")
 

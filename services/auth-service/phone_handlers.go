@@ -35,7 +35,7 @@ func sendLoginOTP(phoneNumber, authWAProvider, otp string) {
 	for range 3 {
 		payload := strings.NewReader(formData.Encode())
 		req, _ := http.NewRequest("POST", waURL+"/api/wa/send", payload)
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set(headerContentType, contentTypeFormURLEncoded)
 		req.Header.Set("X-Message-Type", "otp")
 		req.Header.Set("X-Source", "auth-service")
 		req.Header.Set("X-WA-Provider-Override", authWAProvider)

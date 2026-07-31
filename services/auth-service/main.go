@@ -17,6 +17,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const (
+	headerContentType          = "Content-Type"
+	contentTypeJSON            = "application/json"
+	contentTypeFormURLEncoded  = "application/x-www-form-urlencoded"
+)
+
 var (
 	usernameRE = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 	emailRE    = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
@@ -306,7 +312,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 func writeJSON(w http.ResponseWriter, status int, body Response) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
 }
