@@ -17,7 +17,7 @@ func handleTransactions(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: response.MissingXTenantID})
 		return
@@ -86,7 +86,7 @@ func handleTransactions(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetTransactions(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: response.MissingXTenantID})
 		return

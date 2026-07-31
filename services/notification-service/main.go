@@ -87,7 +87,7 @@ func handleSendNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		tenantID = "global"
 	}

@@ -20,7 +20,7 @@ const (
 )
 
 func getTenantID(r *http.Request) string {
-	return r.Header.Get("X-Tenant-ID")
+	return r.Header.Get(response.XTenantID)
 }
 
 type ClinicSettings struct {

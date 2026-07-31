@@ -8,6 +8,7 @@ import (
 
 	"core_project/shared/sdk/auth"
 	"log/slog"
+	"core_project/shared/sdk/response"
 )
 
 type ChatReq struct {
@@ -20,7 +21,7 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
 		return
 	}
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
 		return
@@ -64,7 +65,7 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 
 	aiReqHTTP, _ := http.NewRequestWithContext(ctx, "POST", AIGatewayURL, bytes.NewBuffer(jsonBody))
 	aiReqHTTP.Header.Set("Content-Type", "application/json")
-	aiReqHTTP.Header.Set("X-Tenant-ID", tenantID)
+	aiReqHTTP.Header.Set(response.XTenantID, tenantID)
 
 	aiClient := &http.Client{Timeout: 30 * time.Second}
 	aiRespHTTP, err := aiClient.Do(aiReqHTTP)

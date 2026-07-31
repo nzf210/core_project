@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"core_project/shared/sdk/response"
 )
 
 func handleLogoutRequest(w http.ResponseWriter, r *http.Request) {
@@ -12,7 +13,7 @@ func handleLogoutRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		tenantID = r.URL.Query().Get("tenant_id")
 	}

@@ -78,7 +78,7 @@ func handleChatbotConfigTest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
 		return
@@ -127,7 +127,7 @@ func handleChatbotConfigTest(w http.ResponseWriter, r *http.Request) {
 	})
 	aiReq, _ := http.NewRequestWithContext(r.Context(), "POST", AIGatewayURL, bytes.NewBuffer(aiReqBody))
 	aiReq.Header.Set("Content-Type", "application/json")
-	aiReq.Header.Set("X-Tenant-ID", tenantID)
+	aiReq.Header.Set(response.XTenantID, tenantID)
 	client := &http.Client{Timeout: 25 * time.Second}
 	aiResp, err := client.Do(aiReq)
 	if err != nil {

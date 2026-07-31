@@ -13,6 +13,7 @@ import (
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	waLog "go.mau.fi/whatsmeow/util/log"
+	"core_project/shared/sdk/response"
 )
 
 const (
@@ -91,7 +92,7 @@ func handlePairingCode(w http.ResponseWriter, client *whatsmeow.Client, tenantID
 }
 
 func extractTenantID(r *http.Request) string {
-	if tenantID := r.Header.Get("X-Tenant-ID"); tenantID != "" {
+	if tenantID := r.Header.Get(response.XTenantID); tenantID != "" {
 		return tenantID
 	}
 	return r.URL.Query().Get("tenant_id")

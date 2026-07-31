@@ -24,7 +24,7 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		response.Error(w, http.StatusBadRequest, "Missing X-Tenant-ID header", nil)
 		return

@@ -29,7 +29,7 @@ type cashCheckoutParams struct {
 }
 
 func handleCheckout(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		writeJSON(w, http.StatusUnauthorized, APIResponse{Message: "Missing tenant"})
 		return

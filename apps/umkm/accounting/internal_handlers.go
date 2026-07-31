@@ -119,7 +119,7 @@ func handleInternalReportsSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAutomations(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: response.MissingXTenantID})
 		return

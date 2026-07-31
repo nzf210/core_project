@@ -16,6 +16,7 @@ import (
 	"core_project/shared/sdk/config"
 	"github.com/redis/go-redis/v9"
 	openai "github.com/sashabaranov/go-openai"
+	"core_project/shared/sdk/response"
 )
 
 // =====================================================
@@ -157,7 +158,7 @@ func main() {
 // because auth.QuotaMiddlewareFeature reads tenant from context, not header.
 func tenantContextMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tenantID := r.Header.Get("X-Tenant-ID")
+		tenantID := r.Header.Get(response.XTenantID)
 		if tenantID != "" {
 			r = r.WithContext(context.WithValue(r.Context(), auth.TenantIDKey, tenantID))
 		}
@@ -181,7 +182,7 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		tenantID := r.Header.Get("X-Tenant-ID")
+		tenantID := r.Header.Get(response.XTenantID)
 		if tenantID == "" {
 			tenantID = "anonymous"
 		}

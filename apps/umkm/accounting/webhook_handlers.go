@@ -248,7 +248,7 @@ func sendPaymentWANotification(tenantID, reference string, totalAmount float64) 
 }
 
 func handleTransactionStatus(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	reference := r.URL.Query().Get("reference")
 	if reference == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing reference"})
@@ -269,7 +269,7 @@ func handleTransactionStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleForwarders(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	ctx := r.Context()
 
 	if r.Method == http.MethodGet {

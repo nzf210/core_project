@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jung-kurt/gofpdf"
+	"core_project/shared/sdk/response"
 )
 
 const (
@@ -92,7 +93,7 @@ func formatIDR(rupiah int64) string {
 }
 
 func handleIncomeStatementPDF(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
 	if tenantID == "" || from == "" || to == "" {
@@ -203,7 +204,7 @@ func renderIncomeStatementPDF(w http.ResponseWriter, d incomePDFData) {
 }
 
 func handleBalanceSheetPDF(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	date := r.URL.Query().Get("date")
 	if tenantID == "" || date == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingParamsBal})

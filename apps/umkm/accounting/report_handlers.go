@@ -206,7 +206,7 @@ func buildChartSeries(labels []string, rowMap map[string][]int64) ([]int64, []in
 }
 
 func handleTopProducts(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	if tenantID == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
 		return

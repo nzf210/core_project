@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jung-kurt/gofpdf"
+	"core_project/shared/sdk/response"
 )
 
 const (
@@ -22,7 +23,7 @@ const (
 )
 
 func handleCashFlowPDF(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get("X-Tenant-ID")
+	tenantID := r.Header.Get(response.XTenantID)
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
 	if tenantID == "" || from == "" || to == "" {

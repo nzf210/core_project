@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"core_project/shared/sdk/response"
 )
 
 const errMissingTenantID = "Missing X-Tenant-ID"
@@ -20,7 +21,7 @@ func WriteJSON(w http.ResponseWriter, status int, data interface{}) {
 }
 
 func ExtractTenantID(r *http.Request) string {
-	return r.Header.Get("X-Tenant-ID")
+	return r.Header.Get(response.XTenantID)
 }
 
 func ExtractUserID(r *http.Request) string {
