@@ -7,7 +7,94 @@ import (
 	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/cache"
 	"core_project/shared/sdk/response"
+	"github.com/jackc/pgx/v5"
 )
+
+// buildFeatureMatrix constructs the feature matrix structure from DB rows.
+func buildFeatureMatrix(ctx context.Context) (map[string]planRow, map[string]map[string]map[string]interface{}, []string, []string, error) {
+	type planRow struct {
+		PlanID   string `json:"plan_id"`
+		PlanName string `json:"plan_name"`
+	}
+
+	rows, err := DB.Query(ctx, `
+		SELECT pf.plan_id, pf.feature_key, pf.feature_name, pf.is_enabled,
+		       pf.feature_value, pf.min_tier,
+		       sp.name as plan_name, sp.sort_order
+		FROM plan_features pf
+		JOIN saas_plans sp ON sp.id = pf.plan_id
+		ORDER BY sp.sort_order, pf.feature_key
+	`)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	defer rows.Close()
+
+	planMap := map[string]planRow{}
+	matrix := map[string]map[string]map[string]interface{}{}
+	featureOrder := []string{}
+	seenFeature := map[string]bool{}
+
+	for rows.Next() {
+		var planID, key, name, value, minTier, planName string
+		var enabled bool
+		var sortOrder int
+		if rows.Scan(&planID, &key, &name, &enabled, &value, &minTier, &planName, &sortOrder) == nil {
+			if _, ok := matrix[planID]; !ok {
+				matrix[planID] = map[string]map[string]interface{}{}
+				planMap[planID] = planRow{PlanID: planID, PlanName: planName}
+			}
+			matrix[planID][key] = map[string]interface{}{
+				"feature_key":   key,
+				"feature_name":  name,
+				"is_enabled":    enabled,
+				"feature_value": value,
+				"min_tier":      minTier,
+			}
+			if !seenFeature[key] {
+				seenFeature[key] = true
+				featureOrder = append(featureOrder, key)
+			}
+		}
+	}
+
+	// Get plan IDs in order
+	planIDs := []string{}
+	rows2, _ := DB.Query(ctx, "SELECT id, name FROM saas_plans WHERE is_active=true ORDER BY sort_order")
+	if rows2 != nil {
+		defer rows2.Close()
+		for rows2.Next() {
+			var id, nm string
+			rows2.Scan(&id, &nm)
+			planIDs = append(planIDs, id)
+		}
+	}
+
+	return planMap, matrix, featureOrder, planIDs, nil
+}
+
+// buildAddonList constructs addon list from DB rows.
+func buildAddonList(rows pgx.Rows) []map[string]interface{} {
+	var items []map[string]interface{}
+	for rows.Next() {
+		var key, name, unit, minTier string
+		var isAddon bool
+		var defaultEnabled []string
+		var price int64
+		if rows.Scan(&key, &name, &isAddon, &defaultEnabled, &price, &unit, &minTier) == nil {
+			items = append(items, map[string]interface{}{
+				"feature_key":       key,
+				"feature_name":      name,
+				"is_addon":          isAddon,
+				"default_enabled":   defaultEnabled,
+				"addon_price_cents": price,
+				"addon_unit":        unit,
+				"min_tier":          minTier,
+			})
+		}
+	}
+	return items
+}
 
 func handleAdminFeatureMatrix(w http.ResponseWriter, r *http.Request) {
 	role := r.Header.Get(response.XUserRole)
@@ -17,62 +104,10 @@ func handleAdminFeatureMatrix(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
-		rows, err := DB.Query(r.Context(), `
-			SELECT pf.plan_id, pf.feature_key, pf.feature_name, pf.is_enabled,
-			       pf.feature_value, pf.min_tier,
-			       sp.name as plan_name, sp.sort_order
-			FROM plan_features pf
-			JOIN saas_plans sp ON sp.id = pf.plan_id
-			ORDER BY sp.sort_order, pf.feature_key
-		`)
+		planMap, matrix, featureOrder, planIDs, err := buildFeatureMatrix(r.Context())
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, "Failed to load matrix", err)
 			return
-		}
-		defer rows.Close()
-
-		type planRow struct {
-			PlanID   string `json:"plan_id"`
-			PlanName string `json:"plan_name"`
-		}
-		planMap := map[string]planRow{}
-		matrix := map[string]map[string]map[string]interface{}{}
-
-		featureOrder := []string{}
-		seenFeature := map[string]bool{}
-
-		for rows.Next() {
-			var planID, key, name, value, minTier, planName string
-			var enabled bool
-			var sortOrder int
-			if rows.Scan(&planID, &key, &name, &enabled, &value, &minTier, &planName, &sortOrder) == nil {
-				if _, ok := matrix[planID]; !ok {
-					matrix[planID] = map[string]map[string]interface{}{}
-					planMap[planID] = planRow{PlanID: planID, PlanName: planName}
-				}
-				matrix[planID][key] = map[string]interface{}{
-					"feature_key":   key,
-					"feature_name":  name,
-					"is_enabled":    enabled,
-					"feature_value": value,
-					"min_tier":      minTier,
-				}
-				if !seenFeature[key] {
-					seenFeature[key] = true
-					featureOrder = append(featureOrder, key)
-				}
-			}
-		}
-
-		planIDs := []string{}
-		rows2, _ := DB.Query(r.Context(), "SELECT id, name FROM saas_plans WHERE is_active=true ORDER BY sort_order")
-		if rows2 != nil {
-			defer rows2.Close()
-			for rows2.Next() {
-				var id, nm string
-				rows2.Scan(&id, &nm)
-				planIDs = append(planIDs, id)
-			}
 		}
 
 		response.JSON(w, http.StatusOK, "ok", map[string]interface{}{
@@ -139,24 +174,8 @@ func handleAdminAddonGating(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer rows.Close()
-		var items []map[string]interface{}
-		for rows.Next() {
-			var key, name, unit, minTier string
-			var isAddon bool
-			var defaultEnabled []string
-			var price int64
-			if rows.Scan(&key, &name, &isAddon, &defaultEnabled, &price, &unit, &minTier) == nil {
-				items = append(items, map[string]interface{}{
-					"feature_key":       key,
-					"feature_name":      name,
-					"is_addon":          isAddon,
-					"default_enabled":   defaultEnabled,
-					"addon_price_cents": price,
-					"addon_unit":        unit,
-					"min_tier":          minTier,
-				})
-			}
-		}
+
+		items := buildAddonList(rows)
 		response.JSON(w, http.StatusOK, "ok", items)
 		return
 	}
