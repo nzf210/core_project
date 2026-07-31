@@ -7,11 +7,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"core_project/shared/sdk/response"
 )
 
 const (
 	headerTenantIDImport = "X-Tenant-ID"
-	errMissingXTenantID  = "Missing X-Tenant-ID"
+	errMissingXTenantID  = response.MissingXTenantID
 )
 
 func handleImportProducts(w http.ResponseWriter, r *http.Request) {

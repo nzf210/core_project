@@ -10,11 +10,12 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"core_project/shared/sdk/response"
 )
 
 const (
 	headerTenantProd     = "X-Tenant-ID"
-	errMissingTenantProd = "Missing X-Tenant-ID"
+	errMissingTenantProd = response.MissingXTenantID
 	errDBProd            = "DB error"
 )
 

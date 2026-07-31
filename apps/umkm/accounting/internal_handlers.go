@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"core_project/shared/sdk/response"
 )
 
 const (
@@ -120,7 +121,7 @@ func handleInternalReportsSummary(w http.ResponseWriter, r *http.Request) {
 func handleAutomations(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: response.MissingXTenantID})
 		return
 	}
 	if DB == nil {

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+
+	"core_project/shared/sdk/response"
 )
 
 func handleSeed(w http.ResponseWriter, r *http.Request) {
@@ -14,7 +16,7 @@ func handleSeed(w http.ResponseWriter, r *http.Request) {
 	}
 	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: response.MissingXTenantID})
 		return
 	}
 
@@ -47,7 +49,7 @@ func handleSeed(w http.ResponseWriter, r *http.Request) {
 func handleAccounts(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: response.MissingXTenantID})
 		return
 	}
 

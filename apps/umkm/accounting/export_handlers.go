@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/xuri/excelize/v2"
+	"core_project/shared/sdk/response"
 )
 
 
@@ -117,7 +118,7 @@ func writeFileResponse(w http.ResponseWriter, filename, format string, headers [
 func handleExportProducts(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: response.MissingXTenantID})
 		return
 	}
 	format := r.URL.Query().Get("format")
@@ -149,7 +150,7 @@ func handleExportProducts(w http.ResponseWriter, r *http.Request) {
 func handleExportContacts(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
-		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Missing X-Tenant-ID"})
+		writeJSON(w, http.StatusBadRequest, APIResponse{Message: response.MissingXTenantID})
 		return
 	}
 	format := r.URL.Query().Get("format")
