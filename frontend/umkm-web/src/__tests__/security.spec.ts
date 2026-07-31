@@ -141,8 +141,6 @@ describe('Frontend Security - Input Sanitization', () => {
 
 describe('Frontend Security - Authentication', () => {
   it('stores tokens securely', () => {
-    const token = 'jwt-token-123'
-
     // Should NOT use localStorage for sensitive tokens (XSS vulnerable)
     // Should use httpOnly cookies instead
 
@@ -317,9 +315,6 @@ function sanitizeHTML(html: string): string {
 }
 
 function sanitizeForVHTML(html: string): string {
-  // Allow safe HTML tags only
-  const allowedTags = ['b', 'i', 'u', 'strong', 'em', 'p', 'br']
-  // Implementation would use DOMPurify or similar
   return sanitizeHTML(html)
 }
 

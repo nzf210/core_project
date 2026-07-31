@@ -47,7 +47,7 @@ describe('Settings.vue', () => {
 
     await businessNameInput.setValue('AB')
 
-    const isValid = businessNameInput.element.value.length >= 3
+    const isValid = (businessNameInput.element as HTMLInputElement).value.length >= 3
     expect(isValid).toBe(false)
   })
 
@@ -57,7 +57,7 @@ describe('Settings.vue', () => {
 
     await waNumberInput.setValue('628123456789')
 
-    expect(waNumberInput.element.value).toMatch(/^62/)
+    expect((waNumberInput.element as HTMLInputElement).value).toMatch(/^62/)
   })
 
   it('updates profile successfully', async () => {
@@ -127,7 +127,7 @@ describe('Settings.vue', () => {
     await oldPasswordInput.setValue('oldpass123')
     await newPasswordInput.setValue('newpass')
 
-    const isValid = newPasswordInput.element.value.length >= 6
+    const isValid = (newPasswordInput.element as HTMLInputElement).value.length >= 6
     expect(isValid).toBe(false)
   })
 })

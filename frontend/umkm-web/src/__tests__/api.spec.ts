@@ -34,7 +34,7 @@ describe('API Utilities', () => {
     })
 
     it('handles missing token gracefully', () => {
-      const headers = {
+      const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       }
 

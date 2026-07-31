@@ -98,7 +98,7 @@ describe('Dashboard.vue', () => {
   })
 
   it('formats currency correctly', () => {
-    const wrapper = mount(Dashboard)
+    mount(Dashboard)
     const formatCurrency = (amount: number) => {
       return new Intl.NumberFormat('id-ID', {
         style: 'currency',

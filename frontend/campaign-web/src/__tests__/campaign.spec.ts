@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
 
 describe('Campaign Web - Login Flow', () => {
   beforeEach(() => {
