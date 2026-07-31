@@ -17,6 +17,7 @@ const (
 	headerTenantID    = "X-Tenant-ID"
 	systemTenantID    = "00000000-0000-0000-0000-000000000000"
 	headerContentType = "Content-Type"
+	contentTypeJSON   = "application/json"
 )
 
 // resolveTenantID extracts tenant ID from request body or header.
@@ -337,7 +338,7 @@ func handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set(headerContentType, "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
 }

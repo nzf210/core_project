@@ -13,7 +13,12 @@ import (
 	"core_project/shared/sdk/config"
 )
 
-const healthEndpoint = "/health"
+const (
+	healthEndpoint      = "/health"
+	headerContentType   = "Content-Type"
+	contentTypeJSON     = "application/json"
+	contentTypeTextPlain = "text/plain; version=0.0.4"
+)
 
 func handleReferralLinkRedirect(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/r/")
@@ -70,7 +75,7 @@ func handleAggregatedHealthz(getTarget func(string, string) string, cfg *config.
 			status = http.StatusServiceUnavailable
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(headerContentType, contentTypeJSON)
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"status":     map[bool]string{true: "healthy", false: "degraded"}[allHealthy],
@@ -136,7 +141,7 @@ func handleAggregatedMetrics(getTarget func(string, string) string, cfg *config.
 		sb.WriteString("# TYPE wch_services_up_total gauge\n")
 		sb.WriteString(fmt.Sprintf("wch_services_up_total %d\n", upCount))
 
-		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		w.Header().Set(headerContentType, contentTypeTextPlain)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(sb.String()))
 	}

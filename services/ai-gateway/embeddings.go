@@ -17,7 +17,7 @@ func callOpenAIEmbeddings(ctx context.Context, apiKey, input, model string) ([]f
 	reqHTTP, _ := http.NewRequestWithContext(ctx, http.MethodPost,
 		"https://api.openai.com/v1/embeddings", bytes.NewBuffer(body))
 	reqHTTP.Header.Set("Authorization", "Bearer "+apiKey)
-	reqHTTP.Header.Set("Content-Type", "application/json")
+	reqHTTP.Header.Set(headerContentType, contentTypeJSON)
 
 	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(reqHTTP)
 	if err != nil {
@@ -48,7 +48,7 @@ func callMiniMaxEmbeddings(ctx context.Context, apiKey, input string) ([]float64
 	reqHTTP, _ := http.NewRequestWithContext(ctx, http.MethodPost,
 		"https://api.Anthropic.io/v1/embeddings", bytes.NewBuffer(body))
 	reqHTTP.Header.Set("Authorization", "Bearer "+apiKey)
-	reqHTTP.Header.Set("Content-Type", "application/json")
+	reqHTTP.Header.Set(headerContentType, contentTypeJSON)
 
 	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(reqHTTP)
 	if err != nil {
