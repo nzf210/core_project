@@ -14,7 +14,7 @@ import (
 
 const (
 	errMissingTenantIDClinic  = "Missing tenant ID"
-	errDBErrorClinic          = "DB error"
+	errDBErrorClinic          = response.DBError
 	errInvalidJSONClinic      = "Invalid JSON"
 	errMethodNotAllowedClinic = response.MethodNotAllowed
 )

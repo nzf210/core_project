@@ -38,7 +38,7 @@ func settingsGet(w http.ResponseWriter, r *http.Request, tenantID string) {
 		 qris_enabled, report_enabled, report_time FROM tenants WHERE id = $1`,
 		tenantID).Scan(&waNumber, &xenditApiKey, &xenditWebhookToken, &xenditMerchantID, &qrisEnabled, &reportEnabled, &reportTime)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
 	}
 

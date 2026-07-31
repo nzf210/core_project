@@ -161,7 +161,7 @@ func handleCheckoutXendit(w http.ResponseWriter, ctx context.Context, xenditApiK
 func handleCheckoutCash(w http.ResponseWriter, ctx context.Context, params cashCheckoutParams) {
 	tx, err := DB.Begin(ctx)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
 	}
 	defer tx.Rollback(ctx)

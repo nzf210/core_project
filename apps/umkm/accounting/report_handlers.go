@@ -6,12 +6,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"core_project/shared/sdk/response"
 )
 
 const (
 	headerTenantRep    = "X-Tenant-ID"
 	errMissingTenantRep = "Missing X-Tenant-ID"
-	errDBRep           = "DB error"
+	errDBRep           = response.DBError
 	labelDateRep       = "02 Jan"
 )
 

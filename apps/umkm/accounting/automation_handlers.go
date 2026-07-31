@@ -25,7 +25,7 @@ func handleInternalAutomationsDue(w http.ResponseWriter, r *http.Request) {
 		WHERE a.enabled = true
 	`)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
 	}
 	defer rows.Close()

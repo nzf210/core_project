@@ -19,7 +19,7 @@ const (
 	errMethodNotAllowedRAG = response.MethodNotAllowed
 	errMsgTenantRequired = "tenant_id required"
 	errMsgFailedCreateSession = "Failed to create session"
-	errMsgDBError        = "DB error"
+	errMsgDBError        = response.DBError
 )
 
 func handleInternalRAGSearch(w http.ResponseWriter, r *http.Request) {

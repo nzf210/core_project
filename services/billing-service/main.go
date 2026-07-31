@@ -9,6 +9,7 @@ import (
 	"core_project/shared/observability"
 	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/config"
+	"core_project/shared/sdk/response"
 )
 
 const (
@@ -19,7 +20,7 @@ const (
 	errNotAffiliate        = "Not an affiliate"
 	keyWalletTopup         = "-wallet-topup-"
 	timeFormatWIB          = "02 Jan 2006, 15:04 WIB"
-	errDB                  = "DB error"
+	errDB                  = response.DBError
 )
 
 var (

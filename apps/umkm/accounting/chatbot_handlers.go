@@ -26,7 +26,7 @@ func handleInternalChatbotConfig(w http.ResponseWriter, r *http.Request) {
 			channels_enabled, is_active, enable_vision, enable_voice_reply, voice_model, wa_provider_preference
 		 FROM tenant_chatbot_configs WHERE tenant_id = $1`, tenantID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
 	}
 	defer rows.Close()

@@ -16,7 +16,7 @@ import (
 const (
 	headerTenantProd     = "X-Tenant-ID"
 	errMissingTenantProd = response.MissingXTenantID
-	errDBProd            = "DB error"
+	errDBProd            = response.DBError
 )
 
 // ---- handleProducts (complexity ≤ 10) ----

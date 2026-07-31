@@ -122,7 +122,7 @@ func listAdminTenants(w http.ResponseWriter, r *http.Request) {
 		ORDER BY t.created_at DESC
 	`)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
 	}
 	defer rows.Close()

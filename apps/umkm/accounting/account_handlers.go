@@ -68,7 +68,7 @@ func handleAccounts(w http.ResponseWriter, r *http.Request) {
 func listAccounts(w http.ResponseWriter, r *http.Request, tenantID string) {
 	rows, err := DB.Query(r.Context(), "SELECT id, code, name, type FROM chart_of_accounts WHERE tenant_id = $1", tenantID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
 	}
 	defer rows.Close()

@@ -13,7 +13,7 @@ import (
 
 const (
 	errDBNotInitInternal = "DB not initialized"
-	errDBInternal        = "DB error"
+	errDBInternal        = response.DBError
 )
 
 

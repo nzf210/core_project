@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	errDBErrorBal  = "DB error"
+	errDBErrorBal  = response.DBError
 	dateFormatBal  = "2006-01-02"
 )
 

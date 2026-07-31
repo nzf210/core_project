@@ -36,7 +36,7 @@ func handleFaqs(w http.ResponseWriter, r *http.Request) {
 func listFaqs(w http.ResponseWriter, ctx context.Context, tenantID string) {
 	rows, err := DB.Query(ctx, "SELECT id, question, answer FROM tenant_faqs WHERE tenant_id = $1 ORDER BY created_at ASC", tenantID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
 	}
 	defer rows.Close()

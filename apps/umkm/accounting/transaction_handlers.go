@@ -56,7 +56,7 @@ func handleTransactions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tx, err := DB.Begin(ctx)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -108,7 +108,7 @@ func handleGetTransactions(w http.ResponseWriter, r *http.Request) {
 	`
 	rows, err := DB.Query(r.Context(), query, tenantID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
 	}
 	defer rows.Close()

@@ -275,7 +275,7 @@ func handleForwarders(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		rows, err := DB.Query(ctx, "SELECT id, phone_number FROM tenant_forwarders WHERE tenant_id = $1", tenantID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 			return
 		}
 		defer rows.Close()

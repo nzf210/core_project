@@ -46,7 +46,7 @@ func HandleLogistics(w http.ResponseWriter, r *http.Request) {
 			tenantID,
 		)
 		if err != nil {
-			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 			return
 		}
 		defer rows.Close()
@@ -192,7 +192,7 @@ func HandleStalledDistributions(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := repository.DB.Query(ctx, query, tenantID, sinceDays)
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
 	}
 	defer rows.Close()

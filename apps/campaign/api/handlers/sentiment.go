@@ -52,7 +52,7 @@ func getSentimentStats(w http.ResponseWriter, r *http.Request, tenantID string) 
 	`
 	rows, err := repository.DB.Query(context.Background(), query, tenantID, campaignID)
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "DB error"})
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
 	}
 	defer rows.Close()

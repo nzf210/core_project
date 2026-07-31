@@ -27,7 +27,7 @@ func handleClinicMedicalRecords(w http.ResponseWriter, r *http.Request) {
 			ORDER BY created_at DESC
 			LIMIT 100`, tenantID)
 		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "DB error", nil)
+			response.Error(w, http.StatusInternalServerError, response.DBError, nil)
 			return
 		}
 		defer rows.Close()
@@ -87,7 +87,7 @@ func handleClinicDoctors(w http.ResponseWriter, r *http.Request) {
 			WHERE tenant_id = $1 AND is_active = true
 			ORDER BY day_of_week, time_start`, tenantID)
 		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "DB error", nil)
+			response.Error(w, http.StatusInternalServerError, response.DBError, nil)
 			return
 		}
 		defer rows.Close()
