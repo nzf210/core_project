@@ -49,7 +49,10 @@ func extractPhoneFromJID(jid string) string {
 	}
 	return user
 }
-	if redisShared == nil {
+
+// invalidatePlatformWAProviderCache clears the cached WA provider preference for all tenants
+// so that the next request re-reads from DB (e.g. after a connect/disconnect event).
+func invalidatePlatformWAProviderCache() {
 		return
 	}
 	ctx := context.Background()

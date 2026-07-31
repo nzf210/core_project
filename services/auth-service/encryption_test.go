@@ -402,11 +402,7 @@ func TestRefreshToken_SHA256Hashing(t *testing.T) {
 	// Refresh tokens should be hashed with SHA-256 before storage
 	// as per CLAUDE.md specs
 
-	token := "refresh-token-abc123xyz789"
-
-	// In real implementation, use crypto/sha256
-	// hash := sha256.Sum256([]byte(token))
-	// stored := hex.EncodeToString(hash[:])
+	_ = "refresh-token-abc123xyz789" // token placeholder — real impl uses sha256
 
 	// Verify token is not stored in plaintext
 	// Verify hash is deterministic (same token → same hash)
