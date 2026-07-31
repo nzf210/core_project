@@ -42,7 +42,7 @@ docker exec -t wch-postgres pg_dump -U ${N8N_DB_USER:-wch_n8n} -d ${N8N_DB_NAME:
 
 echo "[2/3] Copying N8N Workflows & Configs..."
 mkdir -p "$STAGING_DIR/n8n_workflows"
-if [ -d "infra/n8n/workflows" ]; then
+if [[ -d "infra/n8n/workflows" ]]; then
     cp -r infra/n8n/workflows/* "$STAGING_DIR/n8n_workflows/" 2>/dev/null || true
 fi
 # Copy .env safely (strip secrets later if you want, but backup usually needs them)

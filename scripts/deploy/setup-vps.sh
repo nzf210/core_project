@@ -29,7 +29,7 @@ sudo ufw --force enable
 
 # 4. Clone Repository (Requires SSH Key setup on GitHub)
 INSTALL_DIR="/opt/wch-platform"
-if [ ! -d "$INSTALL_DIR" ]; then
+if [[ ! -d "$INSTALL_DIR" ]]; then
     sudo mkdir -p $INSTALL_DIR
     sudo chown $USER:$USER $INSTALL_DIR
     # git clone git@github.com:your-repo/wch-platform.git $INSTALL_DIR

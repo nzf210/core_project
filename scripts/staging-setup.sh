@@ -9,7 +9,7 @@ echo " WCH Platform Staging VPS Setup"
 echo "============================================="
 
 # Check if running as root
-if [ "$EUID" -ne 0 ]; then
+if [[ "$EUID" -ne 0 ]]; then
    echo "Please run as root (sudo bash staging-setup.sh)"
    exit 1
 fi
@@ -58,7 +58,7 @@ read -p "  Press Enter after you've cloned the repo..."
 
 # 6. Setup environment file
 echo "[6/8] Setting up .env file..."
-if [ ! -f /opt/wch-platform/.env ]; then
+if [[ ! -f /opt/wch-platform/.env ]]; then
     cp /opt/wch-platform/.env.example /opt/wch-platform/.env
     echo "  ⚠️  IMPORTANT: Edit /opt/wch-platform/.env and set:"
     echo "     - JWT_SECRET (generate: openssl rand -base64 32)"
