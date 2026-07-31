@@ -24,55 +24,60 @@ func HandleNotifications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method == http.MethodGet {
-		rows, err := repository.DB.Query(context.Background(),
-			"SELECT id, title, message, type, status FROM notifications WHERE tenant_id = $1 ORDER BY created_at DESC", tenantID)
-		if err != nil {
-			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Database error"})
-			return
-		}
-		defer rows.Close()
+	switch r.Method {
+	case http.MethodGet:
+		listNotifications(w, tenantID)
+	case http.MethodPost:
+		createNotification(w, r, tenantID)
+	default:
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
+	}
+}
 
-		var notifications []Notification
-		for rows.Next() {
-			var n Notification
-			if err := rows.Scan(&n.ID, &n.Title, &n.Message, &n.Type, &n.Status); err == nil {
-				notifications = append(notifications, n)
-			}
-		}
+func listNotifications(w http.ResponseWriter, tenantID string) {
+	rows, err := repository.DB.Query(context.Background(),
+		"SELECT id, title, message, type, status FROM notifications WHERE tenant_id = $1 ORDER BY created_at DESC", tenantID)
+	if err != nil {
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Database error"})
+		return
+	}
+	defer rows.Close()
 
-		if notifications == nil {
-			notifications = []Notification{}
+	var notifications []Notification
+	for rows.Next() {
+		var n Notification
+		if err := rows.Scan(&n.ID, &n.Title, &n.Message, &n.Type, &n.Status); err == nil {
+			notifications = append(notifications, n)
 		}
+	}
 
-		WriteJSON(w, http.StatusOK, APIResponse{Success: true, Data: notifications})
+	if notifications == nil {
+		notifications = []Notification{}
+	}
+
+	WriteJSON(w, http.StatusOK, APIResponse{Success: true, Data: notifications})
+}
+
+func createNotification(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var req struct {
+		Title   string `json:"title"`
+		Message string `json:"message"`
+		Type    string `json:"type"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request payload"})
 		return
 	}
 
-	if r.Method == http.MethodPost {
-		var req struct {
-			Title   string `json:"title"`
-			Message string `json:"message"`
-			Type    string `json:"type"` // in_app, email, broadcast
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			WriteJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid request payload"})
-			return
-		}
+	var id string
+	err := repository.DB.QueryRow(context.Background(),
+		"INSERT INTO notifications (tenant_id, title, message, type) VALUES ($1, $2, $3, $4) RETURNING id",
+		tenantID, req.Title, req.Message, req.Type).Scan(&id)
 
-		var id string
-		err := repository.DB.QueryRow(context.Background(),
-			"INSERT INTO notifications (tenant_id, title, message, type) VALUES ($1, $2, $3, $4) RETURNING id",
-			tenantID, req.Title, req.Message, req.Type).Scan(&id)
-		
-		if err != nil {
-			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create notification"})
-			return
-		}
-
-		WriteJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Notification sent", Data: map[string]string{"id": id}})
+	if err != nil {
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create notification"})
 		return
 	}
 
-	WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
+	WriteJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Notification sent", Data: map[string]string{"id": id}})
 }

@@ -81,31 +81,98 @@ func simulateAllDapils(w http.ResponseWriter, ctx context.Context, tenantID stri
 }
 
 func simulateSingleDapil(w http.ResponseWriter, ctx context.Context, tenantID, dapilID string) {
-	// 1. Get dapil info
+	dapilName, totalSeats, err := getDapilInfo(ctx, tenantID, dapilID)
+	if err != nil {
+		WriteJSON(w, http.StatusNotFound, APIResponse{Message: "Dapil not found"})
+		return
+	}
+
+	parties := loadParties(ctx, tenantID, dapilID)
+	totalVotes := sumVotes(parties)
+
+	if totalVotes == 0 {
+		WriteJSON(w, http.StatusOK, APIResponse{
+			Success: true,
+			Data: map[string]interface{}{
+				"mode":        "single_dapil",
+				"dapil_id":    dapilID,
+				"name":        dapilName,
+				"total_seats": totalSeats,
+				"message":     "No votes recorded yet",
+			},
+		})
+		return
+	}
+
+	eligible := filterEligibleParties(parties, totalVotes)
+	allocations := allocateSeats(eligible, totalSeats)
+	standings := buildStandings(parties, totalVotes)
+
+	sort.Slice(standings, func(i, j int) bool {
+		if standings[i].Seats != standings[j].Seats {
+			return standings[i].Seats > standings[j].Seats
+		}
+		return standings[i].Votes > standings[j].Votes
+	})
+
+	allocatedSeats := sumSeats(parties)
+
+	WriteJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"mode":              "single_dapil",
+			"dapil_id":          dapilID,
+			"name":              dapilName,
+			"total_seats":       totalSeats,
+			"allocated_seats":   allocatedSeats,
+			"remaining_seats":   totalSeats - allocatedSeats,
+			"total_votes":       totalVotes,
+			"threshold_percent": parliamentaryThreshold * 100,
+			"seat_allocations":  allocations,
+			"party_standings":   standings,
+			"algorithm":         fmt.Sprintf("Sainte-Laguë (divisor: 1, 3, 5, 7, ... ; threshold: %.0f%%)", parliamentaryThreshold*100),
+		},
+	})
+}
+
+type Party struct {
+	Name  string
+	Votes int
+	Seats int
+}
+
+type SeatAllocation struct {
+	SeatNumber int    `json:"seat_number"`
+	PartyName  string `json:"party_name"`
+	Divisor    int    `json:"divisor"`
+	Score      int    `json:"score"`
+}
+
+type PartyStanding struct {
+	Name           string  `json:"name"`
+	Votes          int     `json:"votes"`
+	Seats          int     `json:"seats"`
+	VoteShare      float64 `json:"vote_share"`
+	AboveThreshold bool    `json:"above_threshold"`
+}
+
+func getDapilInfo(ctx context.Context, tenantID, dapilID string) (string, int, error) {
 	var dapilName string
 	var totalSeats int
 	err := repository.DB.QueryRow(ctx,
 		"SELECT name, total_seats FROM dapils WHERE id = $1 AND tenant_id = $2",
 		dapilID, tenantID,
 	).Scan(&dapilName, &totalSeats)
-	if err != nil {
-		WriteJSON(w, http.StatusNotFound, APIResponse{Message: "Dapil not found"})
-		return
-	}
+	return dapilName, totalSeats, err
+}
 
-	// 2. Get our party's real votes from endorsements (excluding anomalies)
+func loadParties(ctx context.Context, tenantID, dapilID string) []Party {
 	var ourRealVotes int
 	_ = repository.DB.QueryRow(ctx, `
 		SELECT count(id) FROM endorsements
 		WHERE tenant_id = $1 AND is_anomaly = FALSE
 	`, tenantID).Scan(&ourRealVotes)
 
-	// 3. Get competitor parties' estimated votes
-	type Party struct {
-		Name  string
-		Votes int
-		Seats int
-	}
 	parties := []Party{
 		{Name: "Partai Kita (App)", Votes: ourRealVotes, Seats: 0},
 	}
@@ -123,43 +190,36 @@ func simulateSingleDapil(w http.ResponseWriter, ctx context.Context, tenantID, d
 			}
 		}
 	}
+	return parties
+}
 
-	// 4. Compute total valid votes & apply parliamentary threshold (4%)
-	totalVotes := 0
+func sumVotes(parties []Party) int {
+	total := 0
 	for _, p := range parties {
-		totalVotes += p.Votes
+		total += p.Votes
 	}
+	return total
+}
 
-	if totalVotes == 0 {
-		WriteJSON(w, http.StatusOK, APIResponse{
-			Success: true,
-			Data: map[string]interface{}{
-				"mode":     "single_dapil",
-				"dapil_id": dapilID,
-				"name":     dapilName,
-				"total_seats": totalSeats,
-				"message":  "No votes recorded yet",
-			},
-		})
-		return
+func sumSeats(parties []Party) int {
+	total := 0
+	for _, p := range parties {
+		total += p.Seats
 	}
+	return total
+}
 
-	// Filter parties below 4% threshold (mark with -1 seats to exclude from allocation)
+func filterEligibleParties(parties []Party, totalVotes int) []Party {
 	eligible := []Party{}
 	for _, p := range parties {
 		if float64(p.Votes)/float64(totalVotes) >= parliamentaryThreshold {
 			eligible = append(eligible, p)
 		}
 	}
+	return eligible
+}
 
-	// 5. Sainte-Laguë allocation: each round, give seat to party with highest (votes / divisor)
-	//    First divisor = 1, then 3, 5, 7, 9...
-	type SeatAllocation struct {
-		SeatNumber int    `json:"seat_number"`
-		PartyName  string `json:"party_name"`
-		Divisor    int    `json:"divisor"`
-		Score      int    `json:"score"`
-	}
+func allocateSeats(eligible []Party, totalSeats int) []SeatAllocation {
 	allocations := []SeatAllocation{}
 
 	for i := 1; i <= totalSeats; i++ {
@@ -168,7 +228,7 @@ func simulateSingleDapil(w http.ResponseWriter, ctx context.Context, tenantID, d
 		bestDivisor := 1
 
 		for j := range eligible {
-			divisor := (eligible[j].Seats * 2) + 1 // 1, 3, 5, 7, ...
+			divisor := (eligible[j].Seats * 2) + 1
 			score := eligible[j].Votes / divisor
 			if score > bestScore {
 				bestScore = score
@@ -178,7 +238,7 @@ func simulateSingleDapil(w http.ResponseWriter, ctx context.Context, tenantID, d
 		}
 
 		if bestIdx == -1 {
-			break // no eligible parties, stop allocation
+			break
 		}
 
 		allocations = append(allocations, SeatAllocation{
@@ -189,16 +249,10 @@ func simulateSingleDapil(w http.ResponseWriter, ctx context.Context, tenantID, d
 		})
 		eligible[bestIdx].Seats++
 	}
+	return allocations
+}
 
-	// 6. Build final standings with vote share % and parliamentary threshold check
-	type PartyStanding struct {
-		Name             string  `json:"name"`
-		Votes            int     `json:"votes"`
-		Seats            int     `json:"seats"`
-		VoteShare        float64 `json:"vote_share"`
-		AboveThreshold   bool    `json:"above_threshold"`
-	}
-
+func buildStandings(parties []Party, totalVotes int) []PartyStanding {
 	standings := []PartyStanding{}
 	for _, p := range parties {
 		share := 0.0
@@ -213,34 +267,5 @@ func simulateSingleDapil(w http.ResponseWriter, ctx context.Context, tenantID, d
 			AboveThreshold: share/100 >= parliamentaryThreshold,
 		})
 	}
-
-	// Sort by seats desc, then votes desc
-	sort.Slice(standings, func(i, j int) bool {
-		if standings[i].Seats != standings[j].Seats {
-			return standings[i].Seats > standings[j].Seats
-		}
-		return standings[i].Votes > standings[j].Votes
-	})
-
-	allocatedSeats := 0
-	for _, p := range parties {
-		allocatedSeats += p.Seats
-	}
-
-	WriteJSON(w, http.StatusOK, APIResponse{
-		Success: true,
-		Data: map[string]interface{}{
-			"mode":                "single_dapil",
-			"dapil_id":            dapilID,
-			"name":                dapilName,
-			"total_seats":         totalSeats,
-			"allocated_seats":     allocatedSeats,
-			"remaining_seats":     totalSeats - allocatedSeats,
-			"total_votes":         totalVotes,
-			"threshold_percent":   parliamentaryThreshold * 100,
-			"seat_allocations":    allocations,
-			"party_standings":     standings,
-			"algorithm":           fmt.Sprintf("Sainte-Laguë (divisor: 1, 3, 5, 7, ... ; threshold: %.0f%%)", parliamentaryThreshold*100),
-		},
-	})
+	return standings
 }

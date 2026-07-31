@@ -37,65 +37,68 @@ func HandleLogistics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	switch r.Method {
+	case http.MethodGet:
+		listLogisticItems(w, r, tenantID)
+	case http.MethodPost:
+		createLogisticItem(w, r, tenantID)
+	default:
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
+	}
+}
+
+func listLogisticItems(w http.ResponseWriter, r *http.Request, tenantID string) {
 	ctx := context.Background()
+	rows, err := repository.DB.Query(ctx,
+		"SELECT id, name, total_quantity, unit, campaign_id FROM logistic_items WHERE tenant_id = $1",
+		tenantID,
+	)
+	if err != nil {
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
+		return
+	}
+	defer rows.Close()
 
-	if r.Method == http.MethodGet {
-		// List logistic items
-		rows, err := repository.DB.Query(ctx, 
-			"SELECT id, name, total_quantity, unit, campaign_id FROM logistic_items WHERE tenant_id = $1", 
-			tenantID,
-		)
-		if err != nil {
-			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
-			return
+	var items []map[string]interface{}
+	for rows.Next() {
+		var id, name, unit, campaignID string
+		var qty int
+		if err := rows.Scan(&id, &name, &qty, &unit, &campaignID); err == nil {
+			items = append(items, map[string]interface{}{
+				"id":             id,
+				"name":           name,
+				"total_quantity": qty,
+				"unit":           unit,
+				"campaign_id":    campaignID,
+			})
 		}
-		defer rows.Close()
+	}
+	if items == nil {
+		items = []map[string]interface{}{}
+	}
+	WriteJSON(w, http.StatusOK, APIResponse{Success: true, Data: items})
+}
 
-		var items []map[string]interface{}
-		for rows.Next() {
-			var id, name, unit, campaignID string
-			var qty int
-			if err := rows.Scan(&id, &name, &qty, &unit, &campaignID); err == nil {
-				items = append(items, map[string]interface{}{
-					"id":             id,
-					"name":           name,
-					"total_quantity": qty,
-					"unit":           unit,
-					"campaign_id":    campaignID,
-				})
-			}
-		}
-		if items == nil {
-			items = []map[string]interface{}{}
-		}
-		WriteJSON(w, http.StatusOK, APIResponse{Success: true, Data: items})
+func createLogisticItem(w http.ResponseWriter, r *http.Request, tenantID string) {
+	var req LogisticItemPayload
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: response.InvalidRequest})
 		return
 	}
 
-	if r.Method == http.MethodPost {
-		// Create logistic item
-		var req LogisticItemPayload
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			WriteJSON(w, http.StatusBadRequest, APIResponse{Message: response.InvalidRequest})
-			return
-		}
-
-		query := `
-			INSERT INTO logistic_items (tenant_id, campaign_id, name, total_quantity, unit)
-			VALUES ($1, $2, $3, $4, $5) RETURNING id
-		`
-		var newID string
-		err := repository.DB.QueryRow(ctx, query, tenantID, req.CampaignID, req.Name, req.TotalQuantity, req.Unit).Scan(&newID)
-		if err != nil {
-			WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create item"})
-			return
-		}
-
-		WriteJSON(w, http.StatusCreated, APIResponse{Success: true, Data: map[string]string{"id": newID}})
+	ctx := context.Background()
+	query := `
+		INSERT INTO logistic_items (tenant_id, campaign_id, name, total_quantity, unit)
+		VALUES ($1, $2, $3, $4, $5) RETURNING id
+	`
+	var newID string
+	err := repository.DB.QueryRow(ctx, query, tenantID, req.CampaignID, req.Name, req.TotalQuantity, req.Unit).Scan(&newID)
+	if err != nil {
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to create item"})
 		return
 	}
 
-	WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
+	WriteJSON(w, http.StatusCreated, APIResponse{Success: true, Data: map[string]string{"id": newID}})
 }
 
 func HandleDistributeLogistics(w http.ResponseWriter, r *http.Request) {
