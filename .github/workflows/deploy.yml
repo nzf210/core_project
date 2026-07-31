@@ -98,7 +98,7 @@ jobs:
           fi
 
   # ============================================================================
-  # JOB: Test & Build Go Backend (only runs on *-be-v* tags)
+  # JOB: Test Go Backend (only runs on *-be-v* tags)
   # ============================================================================
   test-backend:
     name: Test & Build Backend
@@ -124,15 +124,74 @@ jobs:
           go build -o /dev/null ./apps/...
 
   # ============================================================================
+  # JOB: Build Docker Image & Push to GHCR (only runs on *-be-v* tags)
+  # ============================================================================
+  build-and-push:
+    name: Build & Push Image → GHCR
+    needs: [set-env, test-backend]
+    if: needs.set-env.outputs.deploy_be == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/nzf210/core_project
+          tags: |
+            type=ref,event=tag
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================================
   # JOB: Deploy Backend to VPS (only runs on *-be-v* tags)
   # ============================================================================
   deploy-backend:
     name: Deploy Backend → VPS (${{ needs.set-env.outputs.environment }})
-    needs: [set-env, test-backend]
+    needs: [set-env, build-and-push]
     if: needs.set-env.outputs.deploy_be == 'true'
     runs-on: ubuntu-latest
     environment: ${{ needs.set-env.outputs.environment }}
     steps:
+      - name: Checkout Code (for compose files)
+        uses: actions/checkout@v4
+
+      - name: Copy compose files to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "docker-compose.yml,${{ needs.set-env.outputs.compose_override }}"
+          target: ${{ needs.set-env.outputs.environment == 'production' && '/opt/wch-production' || '/opt/wch-staging' }}
+          overwrite: true
+
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -141,22 +200,31 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -e
-            cd /opt/wch-platform
 
-            echo "=== Fetching latest tags ==="
-            git fetch --tags origin
+            DEPLOY_DIR=${{ needs.set-env.outputs.environment == 'production' && '/opt/wch-production' || '/opt/wch-staging' }}
+            IMAGE_TAG="${{ needs.build-and-push.outputs.image_tag }}"
+            COMPOSE_FILE="$DEPLOY_DIR/docker-compose.yml"
+            OVERRIDE_FILE="$DEPLOY_DIR/${{ needs.set-env.outputs.compose_override }}"
 
-            echo "=== Checking out ${{ github.ref_name }} ==="
-            git checkout "${{ github.ref_name }}"
+            cd "$DEPLOY_DIR"
 
-            echo "=== Rebuilding and restarting services ==="
-            COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
-            docker compose -f docker-compose.yml -f ${{ needs.set-env.outputs.compose_override }} up -d --build \
+            echo "=== Logging in to GHCR ==="
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.VPS_USERNAME }} --password-stdin
+
+            echo "=== Pulling image ghcr.io/nzf210/core_project:${IMAGE_TAG} ==="
+            IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull \
               api-gateway auth-service ai-gateway billing-service \
               notification-service subscription-worker \
               umkm-accounting umkm-business umkm-chatbot umkm-automation \
-              wa-gateway wa-cloud-api campaign-api \
-              postgres redis pgbouncer n8n-main n8n-worker
+              wa-gateway wa-cloud-api campaign-api
+
+            echo "=== Restarting Go services ==="
+            COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
+            IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d \
+              api-gateway auth-service ai-gateway billing-service \
+              notification-service subscription-worker \
+              umkm-accounting umkm-business umkm-chatbot umkm-automation \
+              wa-gateway wa-cloud-api campaign-api
 
             echo "=== Cleaning up old images ==="
             docker image prune -f
@@ -171,10 +239,13 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            DEPLOY_DIR=${{ needs.set-env.outputs.environment == 'production' && '/opt/wch-production' || '/opt/wch-staging' }}
+
             echo "=== Service Status ==="
             COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
-            docker compose -f /opt/wch-platform/docker-compose.yml \
-              -f /opt/wch-platform/${{ needs.set-env.outputs.compose_override }} ps
+            IMAGE_TAG="${{ needs.build-and-push.outputs.image_tag }}" \
+            docker compose -f "$DEPLOY_DIR/docker-compose.yml" \
+              -f "$DEPLOY_DIR/${{ needs.set-env.outputs.compose_override }}" ps
 
             echo "=== API Gateway Health ==="
             curl -f http://localhost:${{ needs.set-env.outputs.api_gateway_port }}/healthz || exit 1
@@ -192,9 +263,11 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /opt/wch-platform
+            DEPLOY_DIR=${{ needs.set-env.outputs.environment == 'production' && '/opt/wch-production' || '/opt/wch-staging' }}
             COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
-            docker compose -f docker-compose.yml -f ${{ needs.set-env.outputs.compose_override }} logs --tail=100
+            IMAGE_TAG="${{ needs.build-and-push.outputs.image_tag }}" \
+            docker compose -f "$DEPLOY_DIR/docker-compose.yml" \
+              -f "$DEPLOY_DIR/${{ needs.set-env.outputs.compose_override }}" logs --tail=100
 
   # ============================================================================
   # JOB: Deploy umkm-web to Cloudflare Pages (only runs on *-umkm-v* tags)
@@ -215,7 +288,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: frontend/umkm-web/package-lock.json
 
@@ -228,7 +301,7 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
@@ -253,7 +326,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: frontend/superadmin-web/package-lock.json
 
@@ -267,7 +340,7 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
@@ -292,7 +365,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: frontend/campaign-web/package-lock.json
 
@@ -305,7 +378,7 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}

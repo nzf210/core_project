@@ -59,9 +59,7 @@ services:
       retries: 5
     restart: unless-stopped
   api-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     container_name: wch-api-gateway
     volumes:
       - ./uploads:/app/uploads
@@ -91,9 +89,7 @@ services:
         condition: service_started
     restart: unless-stopped
   auth-service:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     container_name: wch-auth-service
     volumes:
       - ./uploads:/app/uploads
@@ -119,9 +115,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
   ai-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     container_name: wch-ai-gateway
     command:
       - ai-gateway
@@ -147,9 +141,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
   umkm-accounting:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     container_name: wch-umkm-accounting
     command:
       - umkm-accounting
@@ -165,9 +157,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
   umkm-business:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     container_name: wch-umkm-business
     command:
       - umkm-business
@@ -290,9 +280,7 @@ services:
       redis:
         condition: service_healthy
   umkm-chatbot:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     command:
       - umkm-chatbot
     environment:
@@ -317,9 +305,7 @@ services:
         condition: service_started
     restart: unless-stopped
   campaign-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     container_name: wch-campaign-api
     command:
       - campaign-api
@@ -335,9 +321,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
   wa-cloud-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     container_name: wch-wa-cloud-api
     command:
       - wa-cloud-api
@@ -356,9 +340,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
   wa-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     command:
       - wa-gateway
     environment:
@@ -379,9 +361,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
   billing-service:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     container_name: wch-billing-service
     command:
       - billing-service
@@ -401,9 +381,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
   notification-service:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     container_name: wch-notification-service
     command:
       - notification-service
@@ -415,9 +393,7 @@ services:
         condition: service_started
     restart: unless-stopped
   subscription-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     container_name: wch-subscription-worker
     command:
       - subscription-worker
@@ -476,9 +452,7 @@ services:
         condition: service_started
     restart: unless-stopped
   umkm-automation:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     container_name: wch-umkm-automation
     command:
       - umkm-automation
