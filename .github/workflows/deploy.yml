@@ -307,7 +307,8 @@ jobs:
             "name": "${{ needs.set-env.outputs.cf_project_umkm }}",
             "compatibility_date": "$(date -u +%Y-%m-%d)",
             "assets": {
-              "directory": "./dist"
+              "directory": "./dist",
+              "not_found_handling": "single-page-application"
             }
           }
           EOF
@@ -359,7 +360,8 @@ jobs:
             "name": "${{ needs.set-env.outputs.cf_project_admin }}",
             "compatibility_date": "$(date -u +%Y-%m-%d)",
             "assets": {
-              "directory": "./dist"
+              "directory": "./dist",
+              "not_found_handling": "single-page-application"
             }
           }
           EOF
@@ -410,7 +412,8 @@ jobs:
             "name": "${{ needs.set-env.outputs.cf_project_campaign }}",
             "compatibility_date": "$(date -u +%Y-%m-%d)",
             "assets": {
-              "directory": "./dist"
+              "directory": "./dist",
+              "not_found_handling": "single-page-application"
             }
           }
           EOF
