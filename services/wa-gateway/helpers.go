@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"strings"
 
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
@@ -53,10 +54,10 @@ func extractPhoneFromJID(jid string) string {
 // invalidatePlatformWAProviderCache clears the cached WA provider preference for all tenants
 // so that the next request re-reads from DB (e.g. after a connect/disconnect event).
 func invalidatePlatformWAProviderCache() {
+	if redisShared == nil {
 		return
 	}
 	ctx := context.Background()
-	// Delete all keys matching the provider preference cache pattern
 	keys, err := redisShared.Keys(ctx, "wa:provider:*").Result()
 	if err != nil || len(keys) == 0 {
 		return
