@@ -2,10 +2,10 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -148,15 +148,15 @@ func forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText string) {
 }
 
 func getN8NWebhookURL() string {
-	if cfg != nil && cfg.N8N.WebhookURL != "" {
-		return cfg.N8N.WebhookURL
+	if url := os.Getenv("N8N_WEBHOOK_URL"); url != "" {
+		return url
 	}
 	return "http://n8n-main:5678"
 }
 
 func getAuthServiceURL() string {
-	if cfg != nil && cfg.AuthService.URL != "" {
-		return cfg.AuthService.URL
+	if url := os.Getenv("AUTH_SERVICE_URL"); url != "" {
+		return url
 	}
 	return "http://auth-service:8001"
 }

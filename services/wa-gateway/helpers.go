@@ -31,9 +31,24 @@ func sendWAMessage(tenantID, jid, text string) {
 	}
 }
 
-// invalidatePlatformWAProviderCache clears the cached WA provider preference for all tenants
-// so that the next request re-reads from DB (e.g. after a connect/disconnect event).
-func invalidatePlatformWAProviderCache() {
+// extractPhoneFromJID extracts the phone number from a WhatsApp JID.
+// "62812123456789@s.whatsapp.net" → "0812123456789"
+func extractPhoneFromJID(jid string) string {
+	if jid == "" {
+		return ""
+	}
+	at := strings.Index(jid, "@")
+	var user string
+	if at >= 0 {
+		user = jid[:at]
+	} else {
+		user = jid
+	}
+	if strings.HasPrefix(user, "62") {
+		return "0" + user[2:]
+	}
+	return user
+}
 	if redisShared == nil {
 		return
 	}

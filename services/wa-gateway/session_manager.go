@@ -4,10 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"strings"
-	"time"
 
 	"go.mau.fi/whatsmeow"
-	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
