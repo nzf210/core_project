@@ -65,6 +65,7 @@ func Middleware(next http.Handler) http.Handler {
 					Path:     "/",
 					MaxAge:   3600,
 					HttpOnly: true,
+					Secure:   true,
 					SameSite: http.SameSiteLaxMode,
 				})
 			}

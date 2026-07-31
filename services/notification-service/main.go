@@ -166,7 +166,11 @@ func sendTelegramMedia(chatID, message, mediaURL, mediaName string) error {
 	}
 
 	// Media Document Upload via Telegram sendDocument API
-	resp, err := http.Get(mediaURL)
+	parsedMediaURL, parseErr := url.Parse(mediaURL)
+	if parseErr != nil || (parsedMediaURL.Scheme != "https" && parsedMediaURL.Scheme != "http") {
+		return fmt.Errorf("invalid media URL")
+	}
+	resp, err := http.Get(parsedMediaURL.String())
 	if err != nil {
 		return fmt.Errorf("failed to download media: %w", err)
 	}

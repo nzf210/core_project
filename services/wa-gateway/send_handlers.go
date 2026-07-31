@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
@@ -185,7 +186,13 @@ func buildWhatsAppMessage(client *whatsmeow.Client, tenantID, message, mediaURL,
 		}, nil
 	}
 
-	resp, err := http.Get(mediaURL)
+	// Validate URL scheme before fetch to prevent SSRF
+	parsedURL, parseErr := url.Parse(mediaURL)
+	if parseErr != nil || (parsedURL.Scheme != "https" && parsedURL.Scheme != "http") {
+		return nil, fmt.Errorf("invalid media URL scheme")
+	}
+
+	resp, err := http.Get(parsedURL.String())
 	if err != nil {
 		slog.Error("Failed to download media", "tenant_id", tenantID, "media_url", mediaURL, "error", err)
 		return nil, fmt.Errorf("failed to download media") //nolint:staticcheck

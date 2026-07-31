@@ -3,7 +3,7 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm ci --ignore-scripts
 
 COPY . .
 # VITE_API_URL must be passed at build time so Vite embeds it into the bundle

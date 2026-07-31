@@ -16,7 +16,7 @@ async function test() {
   let data = await res.json();
   
   if (!data.success) {
-    console.log("Login failed, registering...");
+    process.stdout.write("Login failed, registering...\n");
     // 2. Register
     res = await fetch(`${API_GATEWAY_URL}/auth/register`, {
       method: 'POST',
@@ -24,8 +24,8 @@ async function test() {
       body: JSON.stringify(credentials)
     });
     data = await res.json();
-    console.log("Register response:", data);
-    
+    process.stdout.write("Register response: " + JSON.stringify(data) + "\n");
+
     // 3. Login again
     res = await fetch(`${API_GATEWAY_URL}/auth/login`, {
       method: 'POST',
@@ -34,16 +34,16 @@ async function test() {
     });
     data = await res.json();
   }
-  
-  console.log("Login response:", data);
+
+  process.stdout.write("Login response: " + JSON.stringify(data) + "\n");
   if (!data.data || !data.data.accessToken) {
-    console.error("Failed to get access token");
+    process.stderr.write("Failed to get access token\n");
     return;
   }
-  
+
   const token = data.data.accessToken;
-  console.log("Got token");
-  
+  process.stdout.write("Got token\n");
+
   // Fetch campaigns to get a valid campaign ID
   const campRes = await fetch(`${API_GATEWAY_URL}/api/campaign/campaigns`, {
     headers: { 'Authorization': `Bearer ${token}` }
@@ -53,9 +53,9 @@ async function test() {
   if (campData.success && campData.data && campData.data.length > 0) {
     campaignId = campData.data[0].id;
   }
-  
-  console.log("Using campaignId:", campaignId);
-  
+
+  process.stdout.write("Using campaignId: " + campaignId + "\n");
+
   // 4. Create Task
   const taskRes = await fetch(`${API_GATEWAY_URL}/api/campaign/tasks`, {
     method: 'POST',
@@ -65,9 +65,9 @@ async function test() {
     },
     body: JSON.stringify({ title: 'Test Task', description: 'Testing task creation', campaign_id: campaignId })
   });
-  
+
   const taskData = await taskRes.json();
-  console.log("Task creation response:", taskData, "Status:", taskRes.status);
+  process.stdout.write("Task creation response: " + JSON.stringify(taskData) + " Status: " + taskRes.status + "\n");
 }
 
 test();

@@ -8,11 +8,12 @@ import (
 
 	"core_project/shared/sdk/config"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
-	if len(os.Args) < 5 {
-		fmt.Println("Usage: go run register_tenant.go <tenant_name> <username> <email> <phone_number>")
+	if len(os.Args) < 6 {
+		fmt.Println("Usage: go run register_tenant.go <tenant_name> <username> <email> <phone_number> <password>")
 		os.Exit(1)
 	}
 
@@ -43,8 +44,18 @@ func main() {
 	}
 
 	// 2. Create User
-	// Mock password hash for now
-	passwordHash := "bcrypt_hash_placeholder"
+	// Require password as 5th argument
+	if len(os.Args) < 6 {
+		fmt.Println("Usage: go run register_tenant.go <tenant_name> <username> <email> <phone_number> <password>")
+		os.Exit(1)
+	}
+	rawPassword := os.Args[5]
+	hashed, err := bcrypt.GenerateFromPassword([]byte(rawPassword), 12)
+	if err != nil {
+		fmt.Printf("Failed to hash password: %v\n", err)
+		os.Exit(1)
+	}
+	passwordHash := string(hashed)
 	var userID string
 	err = db.QueryRow(ctx, "INSERT INTO users (tenant_id, username, email, password_hash, phone_number) VALUES ($1, $2, $3, $4, $5) RETURNING id",
 		tenantID, username, email, passwordHash, phone).Scan(&userID)

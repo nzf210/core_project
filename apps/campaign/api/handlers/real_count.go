@@ -138,7 +138,7 @@ func recordRealCount(w http.ResponseWriter, r *http.Request, tenantID string) {
 		aiCandVotes = req.ReportedVotes1
 		aiOppVotes = req.ReportedVotes2
 		aiInvVotes = req.ReportedInvalid
-		fmt.Printf("[real_count] AI Vision failed for TPS %s, using reported values\n", req.TpsID)
+		slog.Warn("AI Vision failed, using reported values", "tps_id_length", len(req.TpsID))
 	}
 
 	status, notes := "pending_review", ""
