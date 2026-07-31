@@ -192,7 +192,7 @@ func TestWebhookStatus_PaidSettled(t *testing.T) {
 }
 
 func TestTopupDeduplication_Logic(t *testing.T) {
-	externalID := "uuid-123-wallet-topup-tenant-456"
+	_ = "uuid-123-wallet-topup-tenant-456" // externalID — used in real dedup check
 
 	existing := 0
 

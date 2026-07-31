@@ -44,8 +44,8 @@ func TestRateLimit_PublicEndpoints(t *testing.T) {
 			// Simulate multiple requests in short time window
 			var lastStatus int
 			for i := 0; i < tt.requestCount; i++ {
-				req := httptest.NewRequest("POST", tt.endpoint, nil)
-				w := httptest.NewRecorder()
+				_ = httptest.NewRequest("POST", tt.endpoint, nil)
+				_ = httptest.NewRecorder()
 
 				// Simulated handler would check rate limit here
 				// In real implementation, this would call rateLimitMiddleware
@@ -82,9 +82,9 @@ func TestRateLimit_TenantIsolation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Tenant A makes many requests
 			for i := 0; i < tt.requests; i++ {
-				req := httptest.NewRequest("GET", "/api/umkm/dashboard", nil)
-				req.Header.Set("X-Tenant-ID", tt.tenantA)
-				// Should succeed
+				r := httptest.NewRequest("GET", "/api/umkm/dashboard", nil)
+				r.Header.Set("X-Tenant-ID", tt.tenantA)
+				_ = r
 			}
 
 			// Tenant B should still have full quota
@@ -136,7 +136,7 @@ func TestRateLimit_WAGateway(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tenantID := "test-tenant-wa"
+			_ = "test-tenant-wa" // tenantID — used by rate limiter in real implementation
 			startTime := time.Now()
 
 			for i := 0; i < tt.messagesCount; i++ {
@@ -199,10 +199,8 @@ func TestCORS_AllowedOrigins(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("OPTIONS", "/api/umkm/dashboard", nil)
 			req.Header.Set("Origin", tt.origin)
-			w := httptest.NewRecorder()
-
-			// In real implementation, CORS middleware would validate here
-			// For now, just verify the test structure
+			_ = req
+			_ = httptest.NewRecorder()
 
 			if tt.shouldAllow {
 				// Response should include Access-Control-Allow-Origin
@@ -224,7 +222,7 @@ func TestSecurityHeaders_Presence(t *testing.T) {
 		"X-XSS-Protection":       "1; mode=block",
 	}
 
-	req := httptest.NewRequest("GET", "/api/umkm/dashboard", nil)
+	_ = httptest.NewRequest("GET", "/api/umkm/dashboard", nil)
 	w := httptest.NewRecorder()
 
 	// After response
@@ -282,7 +280,8 @@ func TestContentType_JSONOnly(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("POST", "/api/umkm/transactions", nil)
 			req.Header.Set("Content-Type", tt.contentType)
-			w := httptest.NewRecorder()
+			_ = req
+			_ = httptest.NewRecorder()
 
 			// API should only accept application/json
 			// Other content types should be rejected with 415 Unsupported Media Type
@@ -331,6 +330,7 @@ func TestRequestSize_Limits(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Simulate large request body
 			body := make([]byte, tt.bodySize)
+			_ = body
 
 			// API Gateway should enforce max request size
 			// to prevent memory exhaustion attacks
@@ -427,11 +427,12 @@ func TestIdempotency_DuplicateRequests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for i := 0; i < tt.requestCount; i++ {
-				req := httptest.NewRequest("POST", "/api/billing/topup", nil)
+				r := httptest.NewRequest("POST", "/api/billing/topup", nil)
 				if tt.idempotencyKey != "" {
-					req.Header.Set("Idempotency-Key", tt.idempotencyKey)
+					r.Header.Set("Idempotency-Key", tt.idempotencyKey)
 				}
-				w := httptest.NewRecorder()
+				_ = r
+				_ = httptest.NewRecorder()
 
 				// Second request with same key should return cached response
 				// without executing the operation again
@@ -460,6 +461,7 @@ func TestSensitiveData_NotInLogs(t *testing.T) {
 
 	// Verify that sensitive fields are masked in logs
 	for _, field := range sensitiveFields {
+		_ = field
 		// Logs should never contain raw values of these fields
 		// They should be masked as "***" or "[REDACTED]"
 	}
