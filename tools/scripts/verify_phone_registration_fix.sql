@@ -1,6 +1,7 @@
 -- =============================================================================
 -- VERIFICATION SCRIPT: Phone Registration Fix Audit
--- Run against PostgreSQL database to check current state
+-- Run against PostgreSQL database to verify registration data integrity
+-- All NULL checks use IS NULL / IS NOT NULL (SQL standard)
 -- =============================================================================
 
 -- 1. Users dengan phone_number kosong atau NULL (HASIL BUG)
