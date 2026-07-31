@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-const apiBase = import.meta.env.VITE_API_BASE || ''
+const apiBase = import.meta.env.VITE_API_URL || ''
 
 defineProps<{
   editTarget: any

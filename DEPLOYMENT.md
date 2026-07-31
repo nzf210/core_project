@@ -98,7 +98,7 @@ N8N_DB_PASSWORD=<strong-password>
 N8N_ADMIN_PASSWORD=<strong-password>
 
 # Monitoring
-GRAFANA_ADMIN_PASSWORD=<strong-password>
+GRAFANA_ADMIN_PASS=<strong-password>
 
 # API Keys
 MINIMAX_API_KEY=<anthropic-api-key>
@@ -136,28 +136,70 @@ sudo certbot renew --dry-run
 
 ## 5. Deploy via CI/CD (Recommended)
 
-### Setup GitHub Secrets
+### Tag Convention
 
-Di GitHub repo → Settings → Secrets and variables → Actions:
+Workflow otomatis trigger berdasarkan prefix tag. Setiap tag hanya men-deploy komponen yang relevan.
 
-```
-VPS_HOST=your-vps-ip-or-domain
-VPS_USERNAME=root
-VPS_SSH_KEY=<your-private-ssh-key>
-```
+| Tag Pattern | Target | Action |
+|:------------|:-------|:-------|
+| `stg-be-v*` | VPS Staging | Test + deploy semua Go backend services |
+| `prod-be-v*` | VPS Production | Test + deploy semua Go backend services |
+| `stg-umkm-v*` | Cloudflare Pages | Build + deploy `umkm-web` (branch: staging) |
+| `prod-umkm-v*` | Cloudflare Pages | Build + deploy `umkm-web` (branch: main) |
+| `stg-admin-v*` | Cloudflare Pages | Build + deploy `superadmin-web` (branch: staging) |
+| `prod-admin-v*` | Cloudflare Pages | Build + deploy `superadmin-web` (branch: main) |
+| `stg-campaign-v*` | Cloudflare Pages | Build + deploy `campaign-web` (branch: staging) |
+| `prod-campaign-v*` | Cloudflare Pages | Build + deploy `campaign-web` (branch: main) |
 
-### Trigger Deploy
+**Contoh penggunaan:**
 
 ```bash
-# Push ke main branch akan auto-deploy
-git push origin main
+# Deploy backend ke staging
+git tag stg-be-v1.2.0 && git push origin stg-be-v1.2.0
+
+# Deploy umkm-web ke staging
+git tag stg-umkm-v1.2.0 && git push origin stg-umkm-v1.2.0
+
+# Deploy superadmin ke production
+git tag prod-admin-v1.2.0 && git push origin prod-admin-v1.2.0
+
+# Deploy campaign ke production
+git tag prod-campaign-v1.2.0 && git push origin prod-campaign-v1.2.0
 ```
 
-Workflow akan:
-1. Run tests
-2. Build services
-3. Deploy ke VPS
-4. Verify health checks
+### Setup GitHub Environments
+
+Buat dua environment di GitHub repo → Settings → Environments:
+
+**`staging`** dan **`production`** — masing-masing dengan secrets berikut:
+
+| Secret | Keterangan |
+|:-------|:-----------|
+| `VPS_HOST` | IP atau domain VPS |
+| `VPS_USERNAME` | User SSH (biasanya `root`) |
+| `VPS_SSH_KEY` | Private key SSH |
+| `CF_API_TOKEN` | Cloudflare API token (izin Pages:Edit) |
+| `CF_ACCOUNT_ID` | Account ID dari Cloudflare dashboard |
+| `VITE_API_URL` | URL backend, misal `https://api.yourdomain.com` |
+| `VITE_GRAFANA_URL` | URL Grafana (dipakai `superadmin-web`) |
+
+> Tip: environment `production` bisa diberi protection rules (required reviewer) agar setiap deploy production wajib approve manual.
+
+### Workflow Jobs
+
+Setiap tag hanya menjalankan job yang relevan — job lain di-skip otomatis:
+
+```
+push tag
+    │
+    ▼
+set-env (deteksi komponen + environment dari prefix tag)
+    │
+    ├── *-be-v*     → test-backend → deploy-backend (VPS)
+    ├── *-umkm-v*   → deploy-umkm-web (CF Pages)
+    ├── *-admin-v*  → deploy-superadmin-web (CF Pages)
+    └── *-campaign-v* → deploy-campaign-web (CF Pages)
+```
 
 ---
 
@@ -219,7 +261,7 @@ docker-compose logs -f
 ssh -L 3001:localhost:3001 root@your-vps
 
 # Then open browser: http://localhost:3001
-# Login: admin / <GRAFANA_ADMIN_PASSWORD>
+# Login: admin / <GRAFANA_ADMIN_PASS>
 ```
 
 ### Verify Database

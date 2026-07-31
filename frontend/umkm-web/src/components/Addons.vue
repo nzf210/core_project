@@ -239,7 +239,7 @@ const loadMarketplace = async () => {
   loading.value = true
   loadError.value = ''
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:8010'}/api/umkm/addon-marketplace`, {
+    const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/umkm/addon-marketplace`, {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('access_token')}`,
         'X-Tenant-ID': localStorage.getItem('tenant_id') || '',

@@ -62,80 +62,111 @@ Pastikan mesin lokal Anda telah terinstal:
 2.  **Konfigurasi Environment Variable**:
     Salin file contoh konfigurasi dan sesuaikan isinya:
     ```bash
-    cp infra/deploy/.env.example .env
+    # Development lokal:
+    cp .env.example .env
+    nano .env
+
+    # Staging / Production di VPS:
+    cp .env.staging.example .env.staging
+    nano .env.staging
     ```
 
 3.  **Jalankan Infrastruktur Dasar (DB & Redis) via Docker Compose**:
     ```bash
-    docker compose -f infra/docker/docker-compose.yml up -d
-    ```
-    *Perintah ini akan menjalankan PostgreSQL, Redis, dan n8n.*
+    # Development lokal:
+    docker compose up -d postgres redis pgbouncer
 
-4.  **Inisialisasi Database (Migrasi Skema)**:
-    ```bash
-    npm run db:migrate
+    # Staging di VPS:
+    docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d postgres redis pgbouncer
     ```
+    *Migrasi database dijalankan otomatis saat service start — tidak perlu perintah migrate manual.*
 
-5.  **Jalankan Aplikasi dalam Mode Development**:
+4.  **Jalankan Semua Service**:
     ```bash
-    npm run dev
+    # Development lokal (native hot-reload):
+    make dev-all
+
+    # Development lokal (Docker):
+    make start-all
+
+    # Staging di VPS:
+    docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
     ```
-    *Ini akan memicu dev server untuk semua microservices dan frontends secara paralel menggunakan Turbo/pnpm workspaces.*
 
 ---
 
 ## 🔒 3. Matriks Konfigurasi Environment Variables (`.env`)
 
-Berikut adalah parameter konfigurasi wajib yang harus diatur dalam file `.env` sistem:
+Berikut adalah parameter konfigurasi wajib yang harus diatur dalam file `.env` (dev) atau `.env.staging` (staging/production):
 
 ### 🌐 Core & Shared Configuration
 ```ini
-NODE_ENV=development
-JWT_SECRET=super_secret_key_minimum_32_characters_long
-ENCRYPTION_KEY=aes_256_key_for_encrypting_sensitive_data
-PLATFORM_DOMAIN=wchplatform.com
+APP_ENV=development                  # development | production
+JWT_SECRET=32_char_random_secret     # TEPAT 32 karakter
+ENCRYPTION_KEY=32_char_random_key    # TEPAT 32 karakter
+SUPERADMIN_PASSWORD=ganti_di_prod
 ```
 
 ### 🗄️ Database & Cache Settings
 ```ini
-POSTGRES_HOST=postgres
-POSTGRES_PORT=5432
-POSTGRES_USER=wch_admin
-POSTGRES_PASSWORD=secure_postgres_password_123
-POSTGRES_DB=wch_platform
+# Development lokal (via docker-compose expose):
+DB_HOST=127.0.0.1
+DB_PORT=5433
+DB_USER=wch_admin
+DB_PASSWORD=secure_postgres_password
+DB_NAME=wch_platform
+DB_SSLMODE=disable
 
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_PASSWORD=secure_redis_password_123
+# Staging/Production (docker internal network via PgBouncer):
+# DB_HOST=pgbouncer
+# DB_PORT=6432
+
+REDIS_HOST=127.0.0.1   # staging: redis
+REDIS_PORT=6381         # staging: 6379
+REDIS_PASSWORD=
 ```
 
-### 🤖 AI API Configurations
+### 🤖 AI / LLM Gateway
 ```ini
-# API Keys untuk AI Gateway
-OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-GEMINI_API_KEY=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-CLAUDE_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# Primary LLM (MINIMAX_* = provider utama, apapun providernya)
+MINIMAX_API_KEY=sk-xxxx
+MINIMAX_BASE_URL=https://api.anthropic.com/v1
+MINIMAX_MODELS=claude-sonnet-4-5
+MINIMAX_FALLBACK_1=gemini:gemini-1.5-flash
+MINIMAX_FALLBACK_2=openai:gpt-4o-mini
+
+# Fallback LLM
+GEMINI_API_KEY=AIzaSyxxxx
+OPENAI_API_KEY=sk-proj-xxxx
 ```
 
 ### 💳 Payment & Billing Settings
 ```ini
-# Integrasi Payment Gateway (Xendit untuk IDR, Stripe untuk USD)
-XENDIT_API_KEY=xnd_development_xxxxxxxxxxxxxxxxxxxxxxxx
-STRIPE_API_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+XENDIT_API_KEY=xnd_development_xxxx
+XENDIT_WEBHOOK_TOKEN=xxxx
 ```
 
 ### 🔔 Notification & Automation
 ```ini
-# WhatsApp Business API / Provider Webhook
-WHATSAPP_API_TOKEN=eaagxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-WHATSAPP_PHONE_NUMBER_ID=1234567890
+# WhatsApp
+WA_GATEWAY_URL=http://localhost:8202
+WA_CLOUD_API_URL=https://graph.facebook.com
+WA_CLOUD_API_VERSION=v22.0
+WA_CLOUD_API_TOKEN=
 
-# SMTP Config untuk Email
+# Telegram Bot
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_BOT_TOKEN_GATEWAY=
+
+# SMTP
 SMTP_HOST=smtp.mailgun.org
 SMTP_PORT=587
 SMTP_USER=postmaster@wchplatform.com
-SMTP_PASS=smtp_secure_password_abc
+SMTP_PASS=
+
+# Observability
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASS=admin123    # WAJIB ganti di production!
 ```
 
 ---
@@ -156,30 +187,23 @@ flowchart TD
     H --> I[Kirim Notifikasi Rilis Sukses ke Tim Developer]
 ```
 
-### Script Deployment Produksi Sederhana (`infra/deploy/deploy.sh`):
+### Script Deployment Produksi Sederhana (`scripts/deploy.sh`):
 ```bash
 #!/bin/bash
 set -e
 
-echo "🚀 Memulai proses deployment WCH Platform..."
+echo "Memulai proses deployment WCH Platform..."
 
 # 1. Tarik pembaruan kode terbaru dari Git
 git pull origin main
 
-# 2. Login ke Registry Kontainer
-echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+# 2. Build dan jalankan semua service (migrations otomatis saat startup)
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build --remove-orphans
 
-# 3. Ambil Docker Image versi terbaru
-docker compose -f infra/docker/docker-compose.prod.yml pull
-
-# 4. Jalankan migrasi database
-docker compose -f infra/docker/docker-compose.prod.yml run --rm services-gateway npm run db:migrate
-
-# 5. Jalankan kontainer baru dengan metode rolling-restart (Nginx redirect)
-docker compose -f infra/docker/docker-compose.prod.yml up -d --remove-orphans
-
-# 6. Bersihkan docker image usang untuk menghemat penyimpanan disk
+# 3. Bersihkan docker image usang untuk menghemat penyimpanan disk
 docker image prune -f
+
+echo "Deployment selesai!"
 
 echo "🎉 Platform WCH berhasil diperbarui!"
 ```

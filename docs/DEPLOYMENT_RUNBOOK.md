@@ -44,21 +44,26 @@ git checkout tags/v1.0.0  # ganti dengan versi stable terbaru
 ### 2. Environment Configuration
 
 ```bash
-# Copy template
-cp .env.example .env
+# Copy template staging (untuk production/VPS)
+cp .env.staging.example .env.staging
 
 # Edit dengan nilai production
-nano .env
+nano .env.staging
 ```
 
 **Critical Environment Variables:**
 
 ```bash
-# Database
-DATABASE_URL=postgres://wch_admin:STRONG_PASSWORD@postgres:5432/wch_platform
+# Database (nama key sesuai .env.staging.example)
+DB_HOST=postgres
+DB_PORT=5432
+DB_USER=wch_admin
+DB_PASSWORD=STRONG_PASSWORD
+DB_NAME=wch_platform
 
 # Redis
-REDIS_ADDR=redis:6379
+REDIS_HOST=redis
+REDIS_PORT=6379
 REDIS_PASSWORD=STRONG_REDIS_PASSWORD
 
 # JWT Secret (WAJIB 32+ karakter)
@@ -74,10 +79,10 @@ XENDIT_WEBHOOK_TOKEN=$(openssl rand -hex 32)
 # N8N Encryption Key
 N8N_ENCRYPTION_KEY=$(openssl rand -base64 32)
 
-# Environment
-ENV=production
+# App Environment
+APP_ENV=production
 
-# Domain
+# Domain (untuk Nginx/SSL config)
 DOMAIN=app.wch-platform.com
 ```
 

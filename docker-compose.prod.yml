@@ -1,13 +1,144 @@
-# Production override: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Production override: COMPOSE_PROJECT_NAME=wch-prod docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Port schema: production = port as-is (no offset)
+#   api-gateway  8000:8000  (public)
+#   auth-service 127.0.0.1:8001:8001
+#   ai-gateway   127.0.0.1:8002:8002
+#   ... dst
+
 version: '3.8'
+
+# Isolated network agar container prod tidak bercampur dengan staging
+networks:
+  default:
+    name: wch-prod-network
+
 services:
+  # ============================================================================
+  # Infrastructure
+  # ============================================================================
+  postgres:
+    container_name: wch-prod-postgres
+    env_file: .env.prod
+
+  pgbouncer:
+    container_name: wch-prod-pgbouncer
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:6432:6432"
+
+  redis:
+    container_name: wch-prod-redis
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:6381:6379"
+
+  # ============================================================================
+  # API Gateway (public facing)
+  # ============================================================================
+  api-gateway:
+    container_name: wch-prod-api-gateway
+    env_file: .env.prod
+    ports:
+      - "8000:8000"
+
+  # ============================================================================
+  # Backend Services
+  # ============================================================================
+  auth-service:
+    container_name: wch-prod-auth-service
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:8001:8001"
+
+  ai-gateway:
+    container_name: wch-prod-ai-gateway
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:8002:8002"
+
+  billing-service:
+    container_name: wch-prod-billing-service
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:8003:8003"
+
+  notification-service:
+    container_name: wch-prod-notification-service
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:8005:8005"
+
+  subscription-worker:
+    container_name: wch-prod-subscription-worker
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:8006:8006"
+
+  umkm-accounting:
+    container_name: wch-prod-umkm-accounting
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:8201:8201"
+
+  wa-gateway:
+    container_name: wch-prod-wa-gateway
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:8202:8202"
+
+  umkm-chatbot:
+    container_name: wch-prod-umkm-chatbot
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:8203:8203"
+
+  umkm-automation:
+    container_name: wch-prod-umkm-automation
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:8204:8204"
+
+  umkm-business:
+    container_name: wch-prod-umkm-business
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:9001:9001"
+
+  campaign-api:
+    container_name: wch-prod-campaign-api
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:9002:9002"
+
+  wa-cloud-api:
+    container_name: wch-prod-wa-cloud-api
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:8210:8210"
+
+  n8n-main:
+    container_name: wch-prod-n8n-main
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:5678:5678"
+
+  n8n-worker:
+    container_name: wch-prod-n8n-worker
+    env_file: .env.prod
+
+  # ============================================================================
+  # Observability Stack
+  # ============================================================================
   prometheus:
+    container_name: wch-prod-prometheus
     ports: []
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-90d}
 
   grafana:
+    container_name: wch-prod-grafana
     ports: []
     environment:
       - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN}
@@ -17,7 +148,15 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
 
   postgres-exporter:
+    container_name: wch-prod-postgres-exporter
     ports: []
 
   redis-exporter:
+    container_name: wch-prod-redis-exporter
     ports: []
+
+  loki:
+    container_name: wch-prod-loki
+
+  promtail:
+    container_name: wch-prod-promtail

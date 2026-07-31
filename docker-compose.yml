@@ -32,8 +32,6 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
       - N8N_DB_NAME=${N8N_DB_NAME:-wch_n8n_db}
-    ports:
-      - 127.0.0.1:6432:6432
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,8 +47,6 @@ services:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
     container_name: wch-redis
-    ports:
-      - 127.0.0.1:6381:6379
     volumes:
       - redisdata:/data
     healthcheck:
@@ -82,8 +78,6 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
-    ports:
-      - "8010:8000"
     depends_on:
       auth-service:
         condition: service_started
@@ -241,8 +235,6 @@ services:
     entrypoint:
       - /bin/sh
       - /infra/n8n/init.sh
-    ports:
-      - 127.0.0.1:5678:5678
     volumes:
       - n8n_data:/home/node/.n8n
       - ./infra/n8n/workflows:/workflows
@@ -359,8 +351,6 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
       - DB_SSLMODE=disable
-    ports:
-      - "8210:8210"
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -406,8 +396,6 @@ services:
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
       - XENDIT_API_KEY=${XENDIT_API_KEY}
       - XENDIT_WEBHOOK_TOKEN=${XENDIT_WEBHOOK_TOKEN}
-    ports:
-      - "8013:8003"
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -422,8 +410,6 @@ services:
     environment:
       - APP_ENV=production
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-    ports:
-      - "8015:8005"
     depends_on:
       wa-gateway:
         condition: service_started
@@ -444,8 +430,6 @@ services:
       - DB_SSLMODE=disable
       - FREEZE_CHECK_INTERVAL=${FREEZE_CHECK_INTERVAL:-1h}
       - GRACE_PERIOD_HOURS=${GRACE_PERIOD_HOURS:-0}
-    ports:
-      - "8016:8006"
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -508,8 +492,6 @@ services:
       - REDIS_HOST=redis
       - WA_GATEWAY_URL=http://wa-gateway:8202/api/wa/send
       - AI_GATEWAY_URL=http://ai-gateway:8002/v1/chat
-    ports:
-      - "8213:8203"
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -576,8 +558,6 @@ services:
   grafana:
     image: grafana/grafana:10.2.2
     container_name: wch-grafana
-    ports:
-      - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASS:-admin123}
       - GF_USERS_ALLOW_SIGN_UP=false
@@ -592,8 +572,6 @@ services:
   prometheus:
     image: prom/prometheus:v2.51.0
     container_name: wch-prometheus
-    ports:
-      - "127.0.0.1:9091:9090"
     volumes:
       - ./infra/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus

@@ -1,79 +1,312 @@
-name: Deploy to Staging
+name: Deploy WCH Platform
+
+# =============================================================================
+# TAG CONVENTION:
+#   stg-be-v*       → Deploy all Go backend services to VPS staging
+#   prod-be-v*      → Deploy all Go backend services to VPS production
+#   stg-umkm-v*     → Deploy umkm-web to Cloudflare Pages (staging)
+#   prod-umkm-v*    → Deploy umkm-web to Cloudflare Pages (production)
+#   stg-admin-v*    → Deploy superadmin-web to Cloudflare Pages (staging)
+#   prod-admin-v*   → Deploy superadmin-web to Cloudflare Pages (production)
+#   stg-campaign-v* → Deploy campaign-web to Cloudflare Pages (staging)
+#   prod-campaign-v* → Deploy campaign-web to Cloudflare Pages (production)
+# =============================================================================
 
 on:
   push:
     tags:
-      - 'stg-v*'
+      - 'stg-be-v*'
+      - 'prod-be-v*'
+      - 'stg-umkm-v*'
+      - 'prod-umkm-v*'
+      - 'stg-admin-v*'
+      - 'prod-admin-v*'
+      - 'stg-campaign-v*'
+      - 'prod-campaign-v*'
 
 jobs:
-  build-and-deploy:
+  # ============================================================================
+  # Detect which component and environment from tag prefix
+  # ============================================================================
+  set-env:
+    name: Detect Target
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.detect.outputs.environment }}
+      cf_branch: ${{ steps.detect.outputs.cf_branch }}
+      compose_override: ${{ steps.detect.outputs.compose_override }}
+      compose_project: ${{ steps.detect.outputs.compose_project }}
+      api_gateway_port: ${{ steps.detect.outputs.api_gateway_port }}
+      auth_service_port: ${{ steps.detect.outputs.auth_service_port }}
+      deploy_be: ${{ steps.detect.outputs.deploy_be }}
+      deploy_umkm: ${{ steps.detect.outputs.deploy_umkm }}
+      deploy_admin: ${{ steps.detect.outputs.deploy_admin }}
+      deploy_campaign: ${{ steps.detect.outputs.deploy_campaign }}
+      cf_project_umkm: ${{ steps.detect.outputs.cf_project_umkm }}
+      cf_project_admin: ${{ steps.detect.outputs.cf_project_admin }}
+      cf_project_campaign: ${{ steps.detect.outputs.cf_project_campaign }}
+    steps:
+      - name: Detect from tag
+        id: detect
+        run: |
+          TAG="${{ github.ref_name }}"
+
+          # Environment
+          if [[ "$TAG" == prod-* ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "cf_branch=main" >> $GITHUB_OUTPUT
+            echo "compose_override=docker-compose.prod.yml" >> $GITHUB_OUTPUT
+            echo "compose_project=wch-prod" >> $GITHUB_OUTPUT
+            echo "api_gateway_port=8000" >> $GITHUB_OUTPUT
+            echo "auth_service_port=8001" >> $GITHUB_OUTPUT
+            echo "cf_project_umkm=wch-umkm-web" >> $GITHUB_OUTPUT
+            echo "cf_project_admin=wch-superadmin-web" >> $GITHUB_OUTPUT
+            echo "cf_project_campaign=wch-campaign-web" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "cf_branch=main" >> $GITHUB_OUTPUT
+            echo "compose_override=docker-compose.staging.yml" >> $GITHUB_OUTPUT
+            echo "compose_project=wch-stg" >> $GITHUB_OUTPUT
+            echo "api_gateway_port=18000" >> $GITHUB_OUTPUT
+            echo "auth_service_port=18001" >> $GITHUB_OUTPUT
+            echo "cf_project_umkm=wch-umkm-web-stg" >> $GITHUB_OUTPUT
+            echo "cf_project_admin=wch-superadmin-web-stg" >> $GITHUB_OUTPUT
+            echo "cf_project_campaign=wch-campaign-web-stg" >> $GITHUB_OUTPUT
+          fi
+
+          # Which component to deploy
+          if [[ "$TAG" == *-be-v* ]]; then
+            echo "deploy_be=true"       >> $GITHUB_OUTPUT
+            echo "deploy_umkm=false"    >> $GITHUB_OUTPUT
+            echo "deploy_admin=false"   >> $GITHUB_OUTPUT
+            echo "deploy_campaign=false" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" == *-umkm-v* ]]; then
+            echo "deploy_be=false"       >> $GITHUB_OUTPUT
+            echo "deploy_umkm=true"      >> $GITHUB_OUTPUT
+            echo "deploy_admin=false"    >> $GITHUB_OUTPUT
+            echo "deploy_campaign=false" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" == *-admin-v* ]]; then
+            echo "deploy_be=false"       >> $GITHUB_OUTPUT
+            echo "deploy_umkm=false"     >> $GITHUB_OUTPUT
+            echo "deploy_admin=true"     >> $GITHUB_OUTPUT
+            echo "deploy_campaign=false" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" == *-campaign-v* ]]; then
+            echo "deploy_be=false"       >> $GITHUB_OUTPUT
+            echo "deploy_umkm=false"     >> $GITHUB_OUTPUT
+            echo "deploy_admin=false"    >> $GITHUB_OUTPUT
+            echo "deploy_campaign=true"  >> $GITHUB_OUTPUT
+          fi
+
+  # ============================================================================
+  # JOB: Test & Build Go Backend (only runs on *-be-v* tags)
+  # ============================================================================
+  test-backend:
+    name: Test & Build Backend
+    needs: set-env
+    if: needs.set-env.outputs.deploy_be == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.23'
+          cache: true
 
       - name: Run Tests
-        run: |
-          go test ./... -short -v
-        continue-on-error: false
+        run: go test ./... -short -v
 
-      - name: Build Go Services
+      - name: Build Go Services (compile check)
         run: |
           go build -o /dev/null ./services/...
           go build -o /dev/null ./apps/...
 
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v0.1.10
+  # ============================================================================
+  # JOB: Deploy Backend to VPS (only runs on *-be-v* tags)
+  # ============================================================================
+  deploy-backend:
+    name: Deploy Backend → VPS (${{ needs.set-env.outputs.environment }})
+    needs: [set-env, test-backend]
+    if: needs.set-env.outputs.deploy_be == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.set-env.outputs.environment }}
+    steps:
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -e
             cd /opt/wch-platform
+
+            echo "=== Fetching latest tags ==="
             git fetch --tags origin
+
+            echo "=== Checking out ${{ github.ref_name }} ==="
             git checkout "${{ github.ref_name }}"
-            docker-compose -f docker-compose.yml -f docker-compose.staging.yml down
-            docker-compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+
+            echo "=== Rebuilding and restarting services ==="
+            COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
+            docker compose -f docker-compose.yml -f ${{ needs.set-env.outputs.compose_override }} up -d --build \
+              api-gateway auth-service ai-gateway billing-service \
+              notification-service subscription-worker \
+              umkm-accounting umkm-business umkm-chatbot umkm-automation \
+              wa-gateway wa-cloud-api campaign-api \
+              postgres redis pgbouncer n8n-main n8n-worker
+
+            echo "=== Cleaning up old images ==="
+            docker image prune -f
 
       - name: Wait for Services to Start
-        uses: appleboy/ssh-action@v0.1.10
+        run: sleep 30
+
+      - name: Health Check
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            echo "Waiting 30s for services to start..."
-            sleep 30
+            echo "=== Service Status ==="
+            COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
+            docker compose -f /opt/wch-platform/docker-compose.yml \
+              -f /opt/wch-platform/${{ needs.set-env.outputs.compose_override }} ps
 
-      - name: Verify Deployment
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            cd /opt/wch-platform
-            echo "=== Docker Compose Status ==="
-            docker-compose ps
-            echo ""
-            echo "=== Health Check ==="
-            curl -f http://localhost:8010/health || exit 1
-            echo ""
-            echo "✅ Deployment successful!"
+            echo "=== API Gateway Health ==="
+            curl -f http://localhost:${{ needs.set-env.outputs.api_gateway_port }}/healthz || exit 1
 
-      - name: Notify on Failure
+            echo "=== Auth Service Health ==="
+            curl -f http://localhost:${{ needs.set-env.outputs.auth_service_port }}/health || exit 1
+
+            echo "=== Deployed: ${{ github.ref_name }} → ${{ needs.set-env.outputs.environment }} ==="
+
+      - name: Print Logs on Failure
         if: failure()
-        uses: appleboy/ssh-action@v0.1.10
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd /opt/wch-platform
-            echo "❌ Deployment failed. Rolling back..."
-            docker-compose -f docker-compose.yml -f docker-compose.staging.yml logs --tail=50
+            COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
+            docker compose -f docker-compose.yml -f ${{ needs.set-env.outputs.compose_override }} logs --tail=100
+
+  # ============================================================================
+  # JOB: Deploy umkm-web to Cloudflare Pages (only runs on *-umkm-v* tags)
+  # ============================================================================
+  deploy-umkm-web:
+    name: Deploy umkm-web → CF Pages (${{ needs.set-env.outputs.environment }})
+    needs: set-env
+    if: needs.set-env.outputs.deploy_umkm == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.set-env.outputs.environment }}
+    defaults:
+      run:
+        working-directory: frontend/umkm-web
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/umkm-web/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ needs.set-env.outputs.cf_project_umkm }} --branch=main
+
+  # ============================================================================
+  # JOB: Deploy superadmin-web to Cloudflare Pages (only runs on *-admin-v* tags)
+  # ============================================================================
+  deploy-superadmin-web:
+    name: Deploy superadmin-web → CF Pages (${{ needs.set-env.outputs.environment }})
+    needs: set-env
+    if: needs.set-env.outputs.deploy_admin == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.set-env.outputs.environment }}
+    defaults:
+      run:
+        working-directory: frontend/superadmin-web
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/superadmin-web/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_GRAFANA_URL: ${{ secrets.VITE_GRAFANA_URL }}
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ needs.set-env.outputs.cf_project_admin }} --branch=main
+
+  # ============================================================================
+  # JOB: Deploy campaign-web to Cloudflare Pages (only runs on *-campaign-v* tags)
+  # ============================================================================
+  deploy-campaign-web:
+    name: Deploy campaign-web → CF Pages (${{ needs.set-env.outputs.environment }})
+    needs: set-env
+    if: needs.set-env.outputs.deploy_campaign == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.set-env.outputs.environment }}
+    defaults:
+      run:
+        working-directory: frontend/campaign-web
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/campaign-web/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ needs.set-env.outputs.cf_project_campaign }} --branch=main
