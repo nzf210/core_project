@@ -10,10 +10,25 @@ export async function initDomain() {
     if (res.ok) {
       const data = await res.json()
       if (data.success && data.data) {
-        const sanitize = (v: unknown) => String(v ?? '').replace(/[<>"'`]/g, '')
-        localStorage.setItem('active_domain_tenant_id', sanitize(data.data.tenant_id))
-        localStorage.setItem('active_domain_business_name', sanitize(data.data.business_name))
-        localStorage.setItem('active_domain_logo_url', sanitize(data.data.logo_url))
+        const sanitizeTenantID = (v: unknown): string => {
+          const str = String(v ?? '')
+          return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str) ? str : ''
+        }
+        const sanitizeText = (v: unknown, maxLen = 200): string => {
+          return String(v ?? '').replace(/[<>"'`&]/g, '').substring(0, maxLen)
+        }
+        const sanitizeURL = (v: unknown): string => {
+          const str = String(v ?? '')
+          try {
+            const url = new URL(str)
+            return ['http:', 'https:'].includes(url.protocol) ? str.substring(0, 500) : ''
+          } catch {
+            return ''
+          }
+        }
+        localStorage.setItem('active_domain_tenant_id', sanitizeTenantID(data.data.tenant_id))
+        localStorage.setItem('active_domain_business_name', sanitizeText(data.data.business_name))
+        localStorage.setItem('active_domain_logo_url', sanitizeURL(data.data.logo_url))
         return
       }
     }
