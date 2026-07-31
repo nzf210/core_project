@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -55,7 +54,7 @@ func TestConnect_InvalidDSN(t *testing.T) {
 	}
 }
 
-func TestConnect_ContextTimeout(t *testing.T) {
+func TestConnect_InvalidHost(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -63,7 +62,7 @@ func TestConnect_ContextTimeout(t *testing.T) {
 	cfg := &config.Config{
 		DB: config.DatabaseConfig{
 			Host:     "127.0.0.1",
-			Port:     5433, // Assume PostgreSQL running
+			Port:     9999, // Nothing listening here
 			User:     "test_user",
 			Password: "test_pass",
 			Name:     "test_db",
@@ -71,19 +70,9 @@ func TestConnect_ContextTimeout(t *testing.T) {
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	dsn := "postgres://test_user:test_pass@127.0.0.1:9999/test_db?sslmode=disable"
-	poolCfg, err := parseDSN(dsn)
+	pool, err := ConnectWithDefaults(cfg)
 	if err == nil {
-		pool, _ := poolCfg.NewWithContext(ctx)
-		if pool != nil {
-			pool.Close()
-		}
+		pool.Close()
+		t.Error("Expected error for unreachable host, got nil")
 	}
-}
-
-func parseDSN(dsn string) (*config.Config, error) {
-	return nil, nil // Placeholder for test helper
 }
