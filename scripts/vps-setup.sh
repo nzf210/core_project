@@ -23,7 +23,7 @@ if [[ "$ENV" == "staging" ]]; then
   COMPOSE_OVERRIDE="docker-compose.staging.yml"
 else
   DEPLOY_DIR="/opt/wch-production"
-  ENV_FILE=".env"
+  ENV_FILE=".env.prod"
   COMPOSE_OVERRIDE="docker-compose.prod.yml"
 fi
 
