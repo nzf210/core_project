@@ -107,36 +107,82 @@ async function fetchAndSyncMe(): Promise<any | null> {
   return res && res.success ? res.data : null
 }
 
-router.beforeEach(async (to, _from, next) => {
-  // F058: Impersonate auto-login via query param
+// Helper: handle impersonate auto-login via query param
+async function handleImpersonateLogin(to: any, next: any): Promise<boolean> {
   const impersonateToken = to.query.impersonate_token as string | undefined
-  if (impersonateToken) {
-    try {
-      const res = await fetch('/api/auth/validate', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${impersonateToken}` }
-      })
-      const data = await res.json()
-      if (res.ok && data.success) {
-        localStorage.setItem('access_token', impersonateToken)
-        localStorage.setItem('tenant_id', data.data.tenant_id)
-        localStorage.setItem('user_id', data.data.user_id)
-        localStorage.setItem('role', data.data.role)
-        if (data.data.impersonated_by) {
-          sessionStorage.setItem('impersonated_by', data.data.impersonated_by)
-        }
-        // Sync onboarding/plan/frozen state
-        await fetchAndSyncMe()
-        // Redirect to dashboard, strip query param
-        next({ path: '/dashboard', replace: true })
-        return
+  if (!impersonateToken) return false
+
+  try {
+    const res = await fetch('/api/auth/validate', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${impersonateToken}` }
+    })
+    const data = await res.json()
+    if (res.ok && data.success) {
+      localStorage.setItem('access_token', impersonateToken)
+      localStorage.setItem('tenant_id', data.data.tenant_id)
+      localStorage.setItem('user_id', data.data.user_id)
+      localStorage.setItem('role', data.data.role)
+      if (data.data.impersonated_by) {
+        sessionStorage.setItem('impersonated_by', data.data.impersonated_by)
       }
-    } catch (err) {
-      console.error('Impersonate auto-login failed:', err)
+      await fetchAndSyncMe()
+      next({ path: '/dashboard', replace: true })
+      return true
+    }
+  } catch (err) {
+    console.error('Impersonate auto-login failed:', err)
+  }
+  return false
+}
+
+// Helper: handle guest routes (login/register)
+function handleGuestRoute(to: any, next: any, isLoggedIn: boolean, isSuperadmin: boolean): boolean {
+  if (!to.meta.requiresGuest) return false
+
+  if (isLoggedIn || isSuperadmin) {
+    next({ path: '/dashboard' })
+  } else {
+    next()
+  }
+  return true
+}
+
+// Helper: handle authenticated routes with onboarding/frozen checks
+async function handleAuthenticatedRoute(to: any, next: any, isSuperadmin: boolean): Promise<void> {
+  // Re-sync if onboarding flag missing (fixes redirect loop on new device)
+  const onboardingDone = localStorage.getItem('onboarding_completed')
+  if (!onboardingDone && !isSuperadmin) {
+    try {
+      await fetchAndSyncMe()
+    } catch (e) {
+      // Fall through to existing behavior (redirect to onboarding)
     }
   }
 
-  // Public routes — no auth required
+  if (to.path !== '/onboarding' && to.path !== '/login' && to.path !== '/register') {
+    const onboardingDone2 = localStorage.getItem('onboarding_completed')
+    if (!onboardingDone2 && !isSuperadmin) {
+      next({ path: '/onboarding' })
+      return
+    }
+
+    const subscriptionStatus = sessionStorage.getItem('subscription_status')
+    if (subscriptionStatus === 'frozen' && !isSuperadmin) {
+      if (to.path !== '/onboarding' && to.path !== '/settings') {
+        next({ path: '/onboarding' })
+        return
+      }
+    }
+  }
+  next()
+}
+
+router.beforeEach(async (to, _from, next) => {
+  // F058: Impersonate auto-login
+  if (await handleImpersonateLogin(to, next)) return
+
+  // Public routes bypass
   if (to.meta.public) {
     next()
     return
@@ -148,44 +194,14 @@ router.beforeEach(async (to, _from, next) => {
   const isSuperadmin = role === 'superadmin'
   const isLoggedIn = !!(token && tenantId)
 
-  if (to.meta.requiresGuest) {
-    if (isLoggedIn || isSuperadmin) {
-      next({ path: '/dashboard' })
-    } else {
-      next()
-    }
+  // Guest routes (login/register)
+  if (handleGuestRoute(to, next, isLoggedIn, isSuperadmin)) return
+
+  // Authenticated routes
+  if (isLoggedIn || isSuperadmin) {
+    await handleAuthenticatedRoute(to, next, isSuperadmin)
   } else {
-    if (isLoggedIn || isSuperadmin) {
-      // Re-sync server state if onboarding flag is missing — fixes the
-      // redirect loop when localStorage is empty (new device, cleared cache).
-      const onboardingDone = localStorage.getItem('onboarding_completed')
-      if (!onboardingDone && !isSuperadmin) {
-        try {
-          await fetchAndSyncMe()
-        } catch (e) {
-          // If /me fails, fall through to existing behaviour (redirect to onboarding)
-        }
-      }
-
-      if (to.path !== '/onboarding' && to.path !== '/login' && to.path !== '/register') {
-        const onboardingDone2 = localStorage.getItem('onboarding_completed')
-        if (!onboardingDone2 && !isSuperadmin) {
-          next({ path: '/onboarding' })
-          return
-        }
-
-        const subscriptionStatus = sessionStorage.getItem('subscription_status')
-        if (subscriptionStatus === 'frozen' && !isSuperadmin) {
-          if (to.path !== '/onboarding' && to.path !== '/settings') {
-            next({ path: '/onboarding' })
-            return
-          }
-        }
-      }
-      next()
-    } else {
-      next({ path: '/login' })
-    }
+    next({ path: '/login' })
   }
 })
 
