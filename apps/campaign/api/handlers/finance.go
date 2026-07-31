@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"core_project/apps/campaign/api/repository"
+	"core_project/shared/sdk/response"
 )
 
 type ExpensePayload struct {
@@ -110,7 +111,7 @@ func HandleCampaignFinance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+	WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 }
 
 // syncExpenseToAccounting pushes expense record to UMKM Accounting engine via HTTP.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"core_project/shared/sdk/response"
 )
 
 func handleChatbotConfig(w http.ResponseWriter, r *http.Request) {
@@ -19,7 +20,7 @@ func handleChatbotConfig(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		updateChatbotConfig(w, r, tenantID)
 	default:
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 	}
 }
 
@@ -167,7 +168,7 @@ func cleanupWAProviderData(ctx context.Context, tenantID, preference string) {
 
 func handleChatbotPermissions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 	tenantID := r.Header.Get("X-Tenant-ID")

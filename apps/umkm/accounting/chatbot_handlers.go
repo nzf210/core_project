@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"core_project/shared/sdk/response"
 )
 
 
@@ -74,7 +75,7 @@ func handleInternalChatbotConfig(w http.ResponseWriter, r *http.Request) {
 
 func handleChatbotConfigTest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 	tenantID := r.Header.Get("X-Tenant-ID")

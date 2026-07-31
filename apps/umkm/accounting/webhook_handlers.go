@@ -10,10 +10,11 @@ import (
 	"time"
 
 	"core_project/shared/sdk/webhook"
+	"core_project/shared/sdk/response"
 )
 
 const (
-	errMethodNotAllowed    = "Method not allowed"
+	errMethodNotAllowed    = response.MethodNotAllowed
 	errTransactionNotFound = "Transaction not found"
 )
 

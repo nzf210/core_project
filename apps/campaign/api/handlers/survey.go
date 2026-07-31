@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"core_project/apps/campaign/api/repository"
+	"core_project/shared/sdk/response"
 )
 
 type Survey struct {
@@ -27,7 +28,7 @@ func HandleSurveys(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		createSurvey(w, r, tenantID)
 	default:
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 	}
 }
 

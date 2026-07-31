@@ -11,7 +11,7 @@ import (
 
 func handleSeed(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 	tenantID := r.Header.Get("X-Tenant-ID")
@@ -61,7 +61,7 @@ func handleAccounts(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		deleteAccount(w, r, tenantID)
 	default:
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 	}
 }
 

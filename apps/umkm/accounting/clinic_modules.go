@@ -67,7 +67,7 @@ func handleClinicMedicalRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 }
 
 // handleClinicDoctors - F047 Doctor Schedules
@@ -125,7 +125,7 @@ func handleClinicDoctors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 }
 
 type MedicalRecord struct {

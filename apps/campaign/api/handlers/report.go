@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"core_project/apps/campaign/api/repository"
+	"core_project/shared/sdk/response"
 )
 
 func HandleReports(w http.ResponseWriter, r *http.Request) {
@@ -38,5 +39,5 @@ func HandleReports(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+	WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 }

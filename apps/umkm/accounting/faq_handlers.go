@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+	"core_project/shared/sdk/response"
 )
 
 const (
 	headerTenantIDFaq = "X-Tenant-ID"
-	errMethodNotAllowedFaq = "Method not allowed"
+	errMethodNotAllowedFaq = response.MethodNotAllowed
 )
 
 func handleFaqs(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +99,7 @@ func deleteFaq(w http.ResponseWriter, r *http.Request, ctx context.Context, tena
 
 func handleFaqsGenerate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 	tenantID := r.Header.Get(headerTenantIDFaq)

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"core_project/apps/campaign/api/repository"
+	"core_project/shared/sdk/response"
 )
 
 // /endorsements/conflicts
@@ -17,7 +18,7 @@ func HandleEndorsementConflicts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodGet {
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 
@@ -88,7 +89,7 @@ func HandleCrossLevelEndorsements(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodGet {
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 

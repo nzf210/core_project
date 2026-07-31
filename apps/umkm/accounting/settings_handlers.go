@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"core_project/shared/sdk/response"
 )
 
 const (
@@ -25,7 +26,7 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		settingsPut(w, r, tenantID)
 	default:
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"core_project/shared/sdk/response"
 )
 
 const (
@@ -239,7 +240,7 @@ func handleExpenses(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		recordExpense(w, r, tenantID)
 	default:
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 	}
 }
 

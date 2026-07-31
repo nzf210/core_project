@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"core_project/apps/campaign/api/repository"
+	"core_project/shared/sdk/response"
 )
 
 type Event struct {
@@ -30,7 +31,7 @@ func HandleEvents(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		createEvent(w, r, tenantID)
 	default:
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 	}
 }
 

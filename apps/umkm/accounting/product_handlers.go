@@ -41,7 +41,7 @@ func handleProducts(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		productsUpdate(w, r, tenantID)
 	default:
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 	}
 }
 

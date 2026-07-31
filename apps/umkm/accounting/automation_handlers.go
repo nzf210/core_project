@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"core_project/shared/sdk/response"
 )
 
 const dateLayout = "2006-01-02"
@@ -56,7 +57,7 @@ func handleInternalAutomationsDue(w http.ResponseWriter, r *http.Request) {
 
 func handleInternalAutomationExecute(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 	if DB == nil {

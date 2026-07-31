@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"core_project/apps/campaign/api/repository"
+	"core_project/shared/sdk/response"
 )
 
 type Role struct {
@@ -74,7 +75,7 @@ func HandleRoles(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Role created", Data: map[string]string{"id": id}})
 
 	default:
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 	}
 }
 
@@ -110,5 +111,5 @@ func HandleAuditLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+	WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 }

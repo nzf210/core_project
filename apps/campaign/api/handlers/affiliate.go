@@ -8,12 +8,13 @@ import (
 	"strings"
 
 	"core_project/apps/campaign/api/repository"
+	"core_project/shared/sdk/response"
 )
 
 // HandleCampaignAffiliateRedeemReferral links a campaign tenant to an affiliate agent.
 func HandleCampaignAffiliateRedeemReferral(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 
@@ -62,7 +63,7 @@ func HandleCampaignAffiliateRedeemReferral(w http.ResponseWriter, r *http.Reques
 // HandleCampaignAffiliateLeaderboard returns public leaderboard (same as billing service).
 func HandleCampaignAffiliateLeaderboard(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 

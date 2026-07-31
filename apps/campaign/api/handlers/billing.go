@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	xendit "github.com/xendit/xendit-go/v6"
 	invoice "github.com/xendit/xendit-go/v6/invoice"
+	"core_project/shared/sdk/response"
 )
 
 const (
@@ -88,7 +89,7 @@ type checkoutResult struct {
 
 func HandleBillingCheckout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 
@@ -265,7 +266,7 @@ func saveReferralDiscount(ctx context.Context, invoiceID string, affiliateID int
 // HandleBillingWebhook processes Xendit callback — with X-Callback-Token validation.
 func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"core_project/apps/campaign/api/repository"
+	"core_project/shared/sdk/response"
 )
 
 var visionGatewayURL = "http://ai-gateway:8002/v1/vision"
@@ -66,7 +67,7 @@ func HandleRealCount(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		recordRealCount(w, r, tenantID)
 	default:
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 	}
 }
 

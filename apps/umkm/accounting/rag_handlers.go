@@ -10,12 +10,13 @@ import (
 	"os"
 	"strings"
 	"time"
+	"core_project/shared/sdk/response"
 )
 
 const (
 	errMissingTenantRAG  = "Missing tenant_id"
 	errInvalidBodyRAG    = "Invalid body"
-	errMethodNotAllowedRAG = "Method not allowed"
+	errMethodNotAllowedRAG = response.MethodNotAllowed
 	errMsgTenantRequired = "tenant_id required"
 	errMsgFailedCreateSession = "Failed to create session"
 	errMsgDBError        = "DB error"

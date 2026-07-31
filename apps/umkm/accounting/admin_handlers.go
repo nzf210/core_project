@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
+	"core_project/shared/sdk/response"
 )
 
 const errDBTx = "DB tx error"
@@ -24,7 +25,7 @@ func handleAdminTenants(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		listAdminTenants(w, r)
 	default:
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 	}
 }
 

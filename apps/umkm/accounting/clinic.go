@@ -16,7 +16,7 @@ const (
 	errMissingTenantIDClinic  = "Missing tenant ID"
 	errDBErrorClinic          = "DB error"
 	errInvalidJSONClinic      = "Invalid JSON"
-	errMethodNotAllowedClinic = "Method not allowed"
+	errMethodNotAllowedClinic = response.MethodNotAllowed
 )
 
 func getTenantID(r *http.Request) string {

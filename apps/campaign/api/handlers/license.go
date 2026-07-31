@@ -9,12 +9,13 @@ import (
 	"strings"
 
 	"core_project/apps/campaign/api/repository"
+	"core_project/shared/sdk/response"
 )
 
 // HandleSuperadminGenerateLicense generates a manual B2B license key.
 func HandleSuperadminGenerateLicense(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 
@@ -61,7 +62,7 @@ func HandleSuperadminGenerateLicense(w http.ResponseWriter, r *http.Request) {
 // GET /superadmin/licenses?used=false&limit=50
 func HandleListLicenses(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 
@@ -138,7 +139,7 @@ func HandleTenantActiveAddons(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodGet {
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 
@@ -184,7 +185,7 @@ func HandleRedeemLicense(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodPost {
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 

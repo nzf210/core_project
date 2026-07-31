@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"core_project/apps/campaign/api/repository"
+	"core_project/shared/sdk/response"
 )
 
 type User struct {
@@ -31,7 +32,7 @@ func HandleUsers(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		createUser(w, r, tenantID)
 	default:
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 	}
 }
 

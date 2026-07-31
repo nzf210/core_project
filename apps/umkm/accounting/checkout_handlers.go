@@ -9,6 +9,7 @@ import (
 
 	xendit "github.com/xendit/xendit-go/v6"
 	invoice "github.com/xendit/xendit-go/v6/invoice"
+	"core_project/shared/sdk/response"
 )
 
 type CheckoutItem struct {
@@ -52,7 +53,7 @@ func handleCheckout(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		handleCheckoutPostRequest(w, ctx, tenantID, req.PaymentMethod, req.Items)
 	} else {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 	}
 }
 

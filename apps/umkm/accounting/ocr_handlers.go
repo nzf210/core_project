@@ -3,12 +3,13 @@ package main
 import (
 	"net/http"
 	"time"
+	"core_project/shared/sdk/response"
 )
 
 
 func handleOCR(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 

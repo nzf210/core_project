@@ -10,6 +10,7 @@ import (
 	"core_project/apps/campaign/api/repository"
 
 	"github.com/jackc/pgx/v5"
+	"core_project/shared/sdk/response"
 )
 
 var nikRegex = regexp.MustCompile(`^\d{16}$`)
@@ -50,7 +51,7 @@ func HandleEndorsements(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodPost {
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 
