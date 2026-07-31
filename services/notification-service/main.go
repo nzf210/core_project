@@ -18,6 +18,16 @@ import (
 )
 
 // ─────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────
+
+const (
+	serviceName     = "notification-service"
+	contentTypeJSON = "application/json"
+	headerContentType = "Content-Type"
+)
+
+// ─────────────────────────────────────────────
 // Business Metrics
 // ─────────────────────────────────────────────
 
@@ -61,7 +71,7 @@ func main() {
 
 	port := "8005"
 	slog.Info("Notification Service listening", "port", port)
-	if err := http.ListenAndServe(":"+port, observability.Middleware("notification-service")(mux)); err != nil {
+	if err := http.ListenAndServe(":"+port, observability.Middleware(serviceName)(mux)); err != nil {
 		slog.Error("Failed to start server", "error", err)
 	}
 }
@@ -112,7 +122,7 @@ func handleSendNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"type":    req.Type,
@@ -121,7 +131,7 @@ func handleSendNotification(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"service": "notification-service",
 		"status":  "ok",

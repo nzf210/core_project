@@ -9,6 +9,16 @@ import (
 	"core_project/shared/sdk/response"
 )
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const (
+	headerContentType = "Content-Type"
+	contentTypeJSON   = "application/json"
+	headerXCache      = "X-Cache"
+	cacheHit          = "HIT"
+	cacheMiss         = "MISS"
+)
+
 // ─── In-Memory Cache ──────────────────────────────────────────────────────────
 
 type cacheEntry struct {
@@ -69,8 +79,8 @@ func handleGetLandingConfig(w http.ResponseWriter, r *http.Request) {
 
 	// Check cache first
 	if cached, ok := getCachedConfig(id); ok {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Cache", "HIT")
+		w.Header().Set(headerContentType, contentTypeJSON)
+		w.Header().Set(headerXCache, cacheHit)
 		w.Write(cached)
 		return
 	}
@@ -88,8 +98,8 @@ func handleGetLandingConfig(w http.ResponseWriter, r *http.Request) {
 	// Cache it
 	setCachedConfig(id, content)
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Cache", "MISS")
+	w.Header().Set(headerContentType, contentTypeJSON)
+	w.Header().Set(headerXCache, cacheMiss)
 	w.Write(content)
 }
 
@@ -104,8 +114,8 @@ func handleGetAllLandingConfigs(w http.ResponseWriter, r *http.Request) {
 	// Check cache first
 	cacheKey := "__all__"
 	if cached, ok := getCachedConfig(cacheKey); ok {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Cache", "HIT")
+		w.Header().Set(headerContentType, contentTypeJSON)
+		w.Header().Set(headerXCache, cacheHit)
 		w.Write(cached)
 		return
 	}
@@ -141,8 +151,8 @@ func handleGetAllLandingConfigs(w http.ResponseWriter, r *http.Request) {
 	// Cache it
 	setCachedConfig(cacheKey, resp)
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Cache", "MISS")
+	w.Header().Set(headerContentType, contentTypeJSON)
+	w.Header().Set(headerXCache, cacheMiss)
 	w.Write(resp)
 }
 
