@@ -29,6 +29,11 @@ func handleUploadTenantLogo(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Parameter id tenant diperlukan"})
 		return
 	}
+	// Validate UUID format to prevent path traversal
+	if !uuidRE.MatchString(tenantID) {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Parameter id tidak valid"})
+		return
+	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
 	if err := r.ParseMultipartForm(2 << 20); err != nil {

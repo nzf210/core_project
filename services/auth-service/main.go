@@ -21,6 +21,7 @@ var (
 	usernameRE = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 	emailRE    = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 	phoneRE    = regexp.MustCompile(`^62[0-9]{6,15}$`)
+	uuidRE     = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 	// Business metrics
 	authLoginsTotal = observability.NewCounter(
