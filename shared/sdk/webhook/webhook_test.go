@@ -25,11 +25,11 @@ func TestEventPayload_Fields(t *testing.T) {
 }
 
 func TestDispatchEvent_NoURL(t *testing.T) {
-	orig := os.Getenv("N8N_WEBHOOK_URL")
-	os.Unsetenv("N8N_WEBHOOK_URL")
-	defer os.Setenv("N8N_WEBHOOK_URL", orig)
+	// Set to localhost invalid port to avoid DNS lookup to non-existent hostname in CI
+	os.Setenv("N8N_WEBHOOK_URL", "http://127.0.0.1:65535/webhook")
+	defer os.Unsetenv("N8N_WEBHOOK_URL")
 
-	// Should not panic even without URL (just log error in goroutine)
+	// Should not panic even with unreachable URL (just log error in goroutine)
 	DispatchEvent("test.event", "tenant-1", map[string]string{"key": "val"})
 	// Give goroutine time to run (it will fail to connect but should not panic)
 	time.Sleep(100 * time.Millisecond)

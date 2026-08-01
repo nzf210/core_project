@@ -208,10 +208,7 @@ apps/umkm/accounting/tmp/main
 apps/umkm/accounting/tmp/main
 services/wa-gateway/tmp/main
 SONARQUBE_PROGRESS.md
-.gitignore
-.gitignore
 SONARQUBE_FINAL_STATUS.md
-.gitignore
 SONARQUBE_FINAL_REPORT.md
-.gitignore
 SONARQUBE_COMPLETE.md
+SONARQUBE_FIXES.md

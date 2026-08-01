@@ -1,7 +1,7 @@
 # SonarQube Critical Violations Fixed (2026-08-01)
 
 ## Summary
-Fixed 12+ Critical code smells by reducing cognitive complexity and extracting duplicate string literals into constants.
+Fixed 12+ Critical code smells by reducing cognitive complexity and extracting duplicate string literals into constants
 
 ## Completed Fixes
 
