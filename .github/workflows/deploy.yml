@@ -252,9 +252,6 @@ jobs:
             echo "=== Cleaning up old images ==="
             docker image prune -f
 
-      - name: Wait for Services to Start
-        run: sleep 30
-
       - name: Health Check
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
@@ -271,10 +268,26 @@ jobs:
             docker compose -f "$DEPLOY_DIR/docker-compose.yml" \
               -f "$DEPLOY_DIR/${{ needs.set-env.outputs.compose_override }}" ps
 
-            echo "=== API Gateway Health ==="
+            echo "=== Waiting for API Gateway ==="
+            for i in $(seq 1 12); do
+              if curl -sf http://localhost:${{ needs.set-env.outputs.api_gateway_port }}/healthz; then
+                echo "API Gateway healthy"
+                break
+              fi
+              echo "Attempt $i/12 failed, retrying in 10s..."
+              sleep 10
+            done
             curl -f http://localhost:${{ needs.set-env.outputs.api_gateway_port }}/healthz || exit 1
 
-            echo "=== Auth Service Health ==="
+            echo "=== Waiting for Auth Service ==="
+            for i in $(seq 1 12); do
+              if curl -sf http://localhost:${{ needs.set-env.outputs.auth_service_port }}/health; then
+                echo "Auth Service healthy"
+                break
+              fi
+              echo "Attempt $i/12 failed, retrying in 10s..."
+              sleep 10
+            done
             curl -f http://localhost:${{ needs.set-env.outputs.auth_service_port }}/health || exit 1
 
             echo "=== Deployed: ${{ github.ref_name }} → ${{ needs.set-env.outputs.environment }} ==="
