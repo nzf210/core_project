@@ -1,5 +1,35 @@
 export const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? globalThis.location.origin : 'http://localhost:8000')
 
+// Sanitization functions for localStorage security
+export function sanitizeUUID(v: unknown): string {
+  const str = String(v ?? '')
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str) ? str : ''
+}
+
+export function sanitizeJWT(v: unknown): string {
+  const str = String(v ?? '')
+  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(str) ? str.substring(0, 2048) : ''
+}
+
+export function sanitizeRole(v: unknown): string {
+  const str = String(v ?? '').toLowerCase()
+  return ['owner', 'admin', 'staff', 'kasir', 'superadmin'].includes(str) ? str : ''
+}
+
+export function sanitizeText(v: unknown, maxLen = 200): string {
+  return String(v ?? '').replace(/[<>"'`&]/g, '').substring(0, maxLen)
+}
+
+export function sanitizeURL(v: unknown): string {
+  const str = String(v ?? '')
+  try {
+    const url = new URL(str)
+    return ['http:', 'https:'].includes(url.protocol) ? str.substring(0, 500) : ''
+  } catch {
+    return ''
+  }
+}
+
 export async function initDomain() {
   const hostname = globalThis.window.location.hostname
   try {
@@ -10,23 +40,7 @@ export async function initDomain() {
     if (res.ok) {
       const data = await res.json()
       if (data.success && data.data) {
-        const sanitizeTenantID = (v: unknown): string => {
-          const str = String(v ?? '')
-          return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str) ? str : ''
-        }
-        const sanitizeText = (v: unknown, maxLen = 200): string => {
-          return String(v ?? '').replace(/[<>"'`&]/g, '').substring(0, maxLen)
-        }
-        const sanitizeURL = (v: unknown): string => {
-          const str = String(v ?? '')
-          try {
-            const url = new URL(str)
-            return ['http:', 'https:'].includes(url.protocol) ? str.substring(0, 500) : ''
-          } catch {
-            return ''
-          }
-        }
-        localStorage.setItem('active_domain_tenant_id', sanitizeTenantID(data.data.tenant_id))
+        localStorage.setItem('active_domain_tenant_id', sanitizeUUID(data.data.tenant_id))
         localStorage.setItem('active_domain_business_name', sanitizeText(data.data.business_name))
         localStorage.setItem('active_domain_logo_url', sanitizeURL(data.data.logo_url))
         return

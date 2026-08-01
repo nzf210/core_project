@@ -1,3 +1,5 @@
+import { sanitizeJWT } from './api'
+
 const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? globalThis.location.origin : 'http://localhost:8000')
 
 function getToken(): string {
@@ -9,8 +11,8 @@ function getRefreshToken(): string {
 }
 
 function setTokens(data: { accessToken: string; refreshToken: string }) {
-  localStorage.setItem('access_token', data.accessToken)
-  localStorage.setItem('refresh_token', data.refreshToken)
+  localStorage.setItem('access_token', sanitizeJWT(data.accessToken))
+  localStorage.setItem('refresh_token', sanitizeJWT(data.refreshToken))
 }
 
 let isRefreshing = false

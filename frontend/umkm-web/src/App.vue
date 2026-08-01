@@ -78,11 +78,13 @@ const plan = ref('lite')
 const isFrozen = ref(false)
 const isImpersonated = ref(false)
 
+import { sanitizeJWT, sanitizeRole } from './api'
+
 const restoreSuperadmin = () => {
   const superadminToken = sessionStorage.getItem('superadmin_token')
   if (superadminToken) {
-    localStorage.setItem('access_token', superadminToken)
-    localStorage.setItem('role', 'superadmin')
+    localStorage.setItem('access_token', sanitizeJWT(superadminToken))
+    localStorage.setItem('role', sanitizeRole('superadmin'))
     localStorage.removeItem('tenant_id')
     sessionStorage.removeItem('impersonated_by')
     sessionStorage.removeItem('superadmin_token')
@@ -96,15 +98,15 @@ const syncProfile = async () => {
     if (data.success && data.data) {
       if (data.data.business_name) {
         businessName.value = data.data.business_name
-        localStorage.setItem('business_name', data.data.business_name)
+        localStorage.setItem('business_name', sanitizeText(data.data.business_name))
       }
       if (data.data.plan) {
         plan.value = data.data.plan
-        localStorage.setItem('plan', data.data.plan)
+        localStorage.setItem('plan', sanitizeText(data.data.plan, 50))
       }
       if (data.data.business_type) {
         businessType.value = data.data.business_type
-        localStorage.setItem('business_type', data.data.business_type)
+        localStorage.setItem('business_type', sanitizeText(data.data.business_type, 50))
       }
     }
     if (data.data && typeof data.data.is_frozen === 'boolean') {

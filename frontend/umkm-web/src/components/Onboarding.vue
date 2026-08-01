@@ -176,7 +176,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { api } from '../api'
+import { api, sanitizeText } from '../api'
 import { useRouter } from 'vue-router'
 import { formatRupiah } from '../composables/useCurrency'
 
@@ -295,8 +295,8 @@ const submitBusinessDetails = async () => {
     // non-fatal: continue anyway
   }
   localStorage.setItem('onboarding_completed', 'true')
-  localStorage.setItem('business_type', selectedType.value)
-  localStorage.setItem('business_name', businessName.value)
+  localStorage.setItem('business_type', sanitizeText(selectedType.value, 50))
+  localStorage.setItem('business_name', sanitizeText(businessName.value))
   currentStep.value = 3
   await checkActivation()
 }

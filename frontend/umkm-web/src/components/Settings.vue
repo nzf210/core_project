@@ -370,7 +370,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { api, API_BASE, getQuotaUsage, type QuotaUsage } from '../api'
+import { api, API_BASE, getQuotaUsage, type QuotaUsage, sanitizeText } from '../api'
 import { authApi } from '../api'
 
 const qrisEnabled = ref(false)
@@ -470,7 +470,7 @@ const saveStore = async () => {
     const data = await api.put('/api/profile', payload)
     if (data.success) {
       if (payload.business_name) {
-        localStorage.setItem('business_name', payload.business_name)
+        localStorage.setItem('business_name', sanitizeText(payload.business_name))
       }
       showToast('Profil toko berhasil disimpan')
     } else {

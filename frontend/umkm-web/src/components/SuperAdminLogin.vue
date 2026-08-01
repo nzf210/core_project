@@ -62,6 +62,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { superadminApi } from '../superadminApi'
+import { sanitizeJWT, sanitizeUUID, sanitizeRole } from '../api'
 
 const router = useRouter()
 
@@ -79,10 +80,10 @@ const handleLogin = async () => {
     const data = await superadminApi.login(username.value, password.value)
 
     if (data.success && data.data) {
-      localStorage.setItem('access_token', data.data.accessToken)
-      localStorage.setItem('refresh_token', data.data.refreshToken)
-      localStorage.setItem('tenant_id', data.data.tenantId)
-      localStorage.setItem('role', data.data.role)
+      localStorage.setItem('access_token', sanitizeJWT(data.data.accessToken))
+      localStorage.setItem('refresh_token', sanitizeJWT(data.data.refreshToken))
+      localStorage.setItem('tenant_id', sanitizeUUID(data.data.tenantId))
+      localStorage.setItem('role', sanitizeRole(data.data.role))
 
       router.push('/superadmin')
     } else {

@@ -185,7 +185,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api } from '../api'
+import { api, sanitizeText } from '../api'
 
 const router = useRouter()
 
@@ -276,7 +276,7 @@ const handleVerifyOTP = async () => {
     if (data.success) {
       // Save pending referral code if provided
       if (referralCode.value.trim()) {
-        localStorage.setItem('pending_referral_code', referralCode.value.trim().toUpperCase())
+        localStorage.setItem('pending_referral_code', sanitizeText(referralCode.value.trim().toUpperCase(), 20))
       }
       router.push('/login')
     } else {

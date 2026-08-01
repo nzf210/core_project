@@ -154,7 +154,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js'
-import { api, reportsApi } from '../api'
+import { api, reportsApi, sanitizeText } from '../api'
 import type { TopProduct, RecentTransaction } from '../api'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
@@ -357,10 +357,14 @@ const syncData = async () => {
   waWarning.value = await checkWAWarning()
 }
 
+import { sanitizeText } from '../api'
+
+// ... existing imports
+
 const upgradePlan = (targetPlan: string) => {
   plan.value = targetPlan
   showUpgrade.value = false
-  localStorage.setItem('plan', targetPlan)
+  localStorage.setItem('plan', sanitizeText(targetPlan, 50))
 }
 
 // F060: Sales Chart

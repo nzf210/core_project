@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import { api } from '../api'
+import { api, sanitizeJWT, sanitizeUUID, sanitizeRole, sanitizeText } from '../api'
 import Dashboard from '../components/Dashboard.vue'
 import DynamicDashboard from '../components/DynamicDashboard.vue'
 import Onboarding from '../components/Onboarding.vue'
@@ -77,10 +77,10 @@ function syncUserDataToStorage(data: any) {
     localStorage.setItem('onboarding_completed', data.onboarding_completed ? 'true' : 'false')
   }
   if (data.plan !== undefined) {
-    localStorage.setItem('plan', data.plan || '')
+    localStorage.setItem('plan', sanitizeText(data.plan || '', 50))
   }
   if (data.role !== undefined) {
-    localStorage.setItem('role', data.role || '')
+    localStorage.setItem('role', sanitizeRole(data.role || ''))
   }
   if (data.is_frozen !== undefined) {
     sessionStorage.setItem('subscription_status', data.is_frozen ? 'frozen' : 'active')
@@ -122,10 +122,10 @@ async function handleImpersonateLogin(to: any, next: any): Promise<boolean> {
     })
     const data = await res.json()
     if (res.ok && data.success) {
-      localStorage.setItem('access_token', impersonateToken)
-      localStorage.setItem('tenant_id', data.data.tenant_id)
-      localStorage.setItem('user_id', data.data.user_id)
-      localStorage.setItem('role', data.data.role)
+      localStorage.setItem('access_token', sanitizeJWT(impersonateToken))
+      localStorage.setItem('tenant_id', sanitizeUUID(data.data.tenant_id))
+      localStorage.setItem('user_id', sanitizeUUID(data.data.user_id))
+      localStorage.setItem('role', sanitizeRole(data.data.role))
       if (data.data.impersonated_by) {
         sessionStorage.setItem('impersonated_by', data.data.impersonated_by)
       }
