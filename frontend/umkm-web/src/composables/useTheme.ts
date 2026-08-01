@@ -1,6 +1,9 @@
 import { ref, onMounted, watch } from 'vue'
+import { sanitizeTheme } from '../api'
 
 type Theme = 'dark' | 'light' | 'system'
+
+const ALLOWED_THEMES: readonly Theme[] = ['dark', 'light', 'system'] as const
 
 export function useTheme() {
   const theme = ref<Theme>('system')
@@ -15,8 +18,9 @@ export function useTheme() {
   }
 
   onMounted(() => {
-    const saved = localStorage.getItem('theme-preference') as Theme
-    if (saved) theme.value = saved
+    const saved = localStorage.getItem('theme-preference')
+    const sanitized = sanitizeTheme(saved) as Theme
+    if (ALLOWED_THEMES.includes(sanitized)) theme.value = sanitized
     applyTheme(theme.value)
 
     globalThis.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -25,7 +29,7 @@ export function useTheme() {
   })
 
   watch(theme, (newTheme) => {
-    localStorage.setItem('theme-preference', newTheme)
+    localStorage.setItem('theme-preference', sanitizeTheme(newTheme))
     applyTheme(newTheme)
   })
 

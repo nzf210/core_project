@@ -162,7 +162,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { api, API_BASE, sanitizeJWT, sanitizeUUID, sanitizeRole, sanitizeText } from '../api'
+import { api, API_BASE, sanitizeJWT, sanitizeUUID, sanitizeRole, sanitizeText, sanitizeBoolean } from '../api'
 
 const router = useRouter()
 
@@ -201,7 +201,7 @@ async function applyLoginSuccess(d: any) {
     if (profileRes.success && profileRes.data) {
       localStorage.setItem('plan', sanitizeText(profileRes.data.plan || 'lite', 50))
       if (profileRes.data.business_name || d.role !== 'owner') {
-        localStorage.setItem('onboarding_completed', 'true')
+        localStorage.setItem('onboarding_completed', sanitizeBoolean('true'))
       }
       let subStatus = 'active'
       if (typeof profileRes.data.is_frozen === 'boolean') {

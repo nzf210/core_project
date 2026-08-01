@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import { api, sanitizeJWT, sanitizeUUID, sanitizeRole, sanitizeText } from '../api'
+import { api, sanitizeJWT, sanitizeUUID, sanitizeRole, sanitizeText, sanitizeBoolean } from '../api'
 import Dashboard from '../components/Dashboard.vue'
 import DynamicDashboard from '../components/DynamicDashboard.vue'
 import Onboarding from '../components/Onboarding.vue'
@@ -74,7 +74,7 @@ const ME_CACHE_TTL_MS = 30_000 // 30s
 
 function syncUserDataToStorage(data: any) {
   if (data.onboarding_completed !== undefined) {
-    localStorage.setItem('onboarding_completed', data.onboarding_completed ? 'true' : 'false')
+    localStorage.setItem('onboarding_completed', sanitizeBoolean(data.onboarding_completed ? 'true' : 'false'))
   }
   if (data.plan !== undefined) {
     localStorage.setItem('plan', sanitizeText(data.plan || '', 50))
@@ -83,13 +83,18 @@ function syncUserDataToStorage(data: any) {
     localStorage.setItem('role', sanitizeRole(data.role || ''))
   }
   if (data.is_frozen !== undefined) {
-    sessionStorage.setItem('subscription_status', data.is_frozen ? 'frozen' : 'active')
+    const status = data.is_frozen ? 'frozen' : 'active'
+    sessionStorage.setItem('subscription_status', sanitizeText(status, 20))
   }
-  if (data.addons !== undefined) {
-    localStorage.setItem('tenant_addons', JSON.stringify(data.addons))
+  if (data.addons !== undefined && Array.isArray(data.addons)) {
+    const sanitized = data.addons.map((a: any) => ({
+      id: sanitizeUUID(a.id),
+      name: sanitizeText(a.name || '', 100)
+    }))
+    localStorage.setItem('tenant_addons', JSON.stringify(sanitized))
   }
   if (data.must_change_password !== undefined) {
-    localStorage.setItem('must_change_password', data.must_change_password ? 'true' : 'false')
+    localStorage.setItem('must_change_password', sanitizeBoolean(data.must_change_password ? 'true' : 'false'))
   }
 }
 

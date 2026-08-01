@@ -11,9 +11,23 @@ export function sanitizeJWT(v: unknown): string {
   return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(str) ? str.substring(0, 2048) : ''
 }
 
+const ALLOWED_ROLES = ['owner', 'admin', 'staff', 'kasir', 'superadmin'] as const
+const ALLOWED_THEMES = ['dark', 'light', 'system'] as const
+const ALLOWED_BOOLEAN_STRINGS = ['true', 'false'] as const
+
 export function sanitizeRole(v: unknown): string {
   const str = String(v ?? '').toLowerCase()
-  return ['owner', 'admin', 'staff', 'kasir', 'superadmin'].includes(str) ? str : ''
+  return ALLOWED_ROLES.includes(str as any) ? str : ''
+}
+
+export function sanitizeTheme(v: unknown): string {
+  const str = String(v ?? '').toLowerCase()
+  return ALLOWED_THEMES.includes(str as any) ? str : 'system'
+}
+
+export function sanitizeBoolean(v: unknown): string {
+  const str = String(v ?? '').toLowerCase()
+  return ALLOWED_BOOLEAN_STRINGS.includes(str as any) ? str : 'false'
 }
 
 export function sanitizeText(v: unknown, maxLen = 200): string {
