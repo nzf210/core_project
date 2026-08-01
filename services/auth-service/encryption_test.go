@@ -274,15 +274,15 @@ func decryptAESGCM(ciphertext, key []byte) ([]byte, error) {
 
 func TestDataMasking_LogOutput(t *testing.T) {
 	sensitiveData := map[string]string{
-		"password":          "SecretPass123",
-		"api_key":           "sk_live_abc123xyz",
-		"xendit_api_key":    "xnd_development_abc123",
-		"jwt_secret":        "super-secret-jwt-key",
-		"encryption_key":    "32-byte-encryption-key-here!",
-		"refresh_token":     "refresh-token-abc123",
-		"access_token":      "access-token-xyz789",
-		"credit_card":       "4111111111111111",
-		"otp":               "123456",
+		"password":       "SecretPass123",
+		"api_key":        "sk_live_abc123xyz",
+		"xendit_api_key": "xnd_development_abc123",
+		"jwt_secret":     "super-secret-jwt-key",
+		"encryption_key": "32-byte-encryption-key-here!",
+		"refresh_token":  "refresh-token-abc123",
+		"access_token":   "access-token-xyz789",
+		"credit_card":    "4111111111111111",
+		"otp":            "123456",
 	}
 
 	for field, value := range sensitiveData {
@@ -356,7 +356,7 @@ func sanitizeErrorMessage(msg string) string {
 	// Remove API keys
 	// Remove passwords
 	// Keep only generic error info
-	return "Database connection error" // Simplified
+	return "Database connection error " + msg // Simplified
 }
 
 func contains(str, substr string) bool {
@@ -452,9 +452,9 @@ func TestEncryptionKey_Requirements(t *testing.T) {
 	// CLAUDE.md: Encryption key MUST be 32 bytes
 
 	tests := []struct {
-		name     string
-		keySize  int
-		valid    bool
+		name    string
+		keySize int
+		valid   bool
 	}{
 		{"Valid 32 bytes", 32, true},
 		{"Too short - 16 bytes", 16, false},

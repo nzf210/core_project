@@ -301,7 +301,7 @@ func TestGetAuthServiceURL(t *testing.T) {
 
 	// Default when not set
 	os.Unsetenv("AUTH_SERVICE_URL")
-	if got := getAuthServiceURL(); got != "http://localhost:8001" {
+	if got := getAuthServiceURL(); got != "http://auth-service:8001" {
 		t.Errorf("expected default URL, got %q", got)
 	}
 

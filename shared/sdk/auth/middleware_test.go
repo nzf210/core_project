@@ -290,22 +290,30 @@ func TestMiddleware_TenantIsolation(t *testing.T) {
 	req1.Header.Set("Authorization", "Bearer "+tenant1TokenString)
 	w1 := httptest.NewRecorder()
 
-	handler := Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler1 := Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tenantID := r.Context().Value(TenantIDKey).(string)
 		if tenantID != "tenant-1" {
-			t.Errorf("Expected tenant-1, got %s", tenantID)
+			t.Errorf("Request 1: Expected tenant-1, got %s", tenantID)
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	handler.ServeHTTP(w1, req1)
+	handler1.ServeHTTP(w1, req1)
 
 	// Request from tenant-2 should only access tenant-2 data
 	req2 := httptest.NewRequest("GET", "/test", nil)
 	req2.Header.Set("Authorization", "Bearer "+tenant2TokenString)
 	w2 := httptest.NewRecorder()
 
-	handler.ServeHTTP(w2, req2)
+	handler2 := Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tenantID := r.Context().Value(TenantIDKey).(string)
+		if tenantID != "tenant-2" {
+			t.Errorf("Request 2: Expected tenant-2, got %s", tenantID)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	handler2.ServeHTTP(w2, req2)
 }
 
 // ========================================

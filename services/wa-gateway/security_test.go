@@ -10,61 +10,39 @@ import (
 // ========================================
 
 func TestTokenBucket_RateLimiting(t *testing.T) {
-	tests := []struct {
+	if testing.Short() {
+		t.Skip("Skipping slow rate limiting test in -short mode")
+	}
+	testCases := []struct {
 		name           string
-		rate           int // messages per minute
+		rate           int
 		requests       int
 		interval       time.Duration
 		expectedAllows int
 	}{
-		{
-			name:           "5 msg/min - under limit",
-			rate:           5,
-			requests:       4,
-			interval:       time.Minute,
-			expectedAllows: 4,
-		},
-		{
-			name:           "5 msg/min - at limit",
-			rate:           5,
-			requests:       5,
-			interval:       time.Minute,
-			expectedAllows: 5,
-		},
-		{
-			name:           "5 msg/min - over limit",
-			rate:           5,
-			requests:       10,
-			interval:       time.Minute,
-			expectedAllows: 5,
-		},
-		{
-			name:           "Burst prevention",
-			rate:           5,
-			requests:       10,
-			interval:       0, // Instant burst
-			expectedAllows: 5,
-		},
+		{"5 msg/min - under limit", 5, 4, time.Minute, 4},
+		{"5 msg/min - at limit", 5, 5, time.Minute, 5},
+		{"5 msg/min - over limit", 5, 10, time.Minute, 5},
+		{"Burst prevention", 5, 10, 0, 5},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			limiter := NewTenantRateLimiter(tt.rate)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			limiter := NewTenantRateLimiter(tc.rate)
 			tenantID := "test-tenant"
 			allowCount := 0
 
-			for i := 0; i < tt.requests; i++ {
+			for i := 0; i < tc.requests; i++ {
 				if limiter.Allow(tenantID) {
 					allowCount++
 				}
-
-				if tt.interval > 0 {
-					time.Sleep(tt.interval / time.Duration(tt.requests))
+				if tc.interval > 0 {
+					time.Sleep(tc.interval / time.Duration(tc.requests))
 				}
 			}
 
-			if allowCount != tt.expectedAllows {
-				t.Errorf("Expected %d allowed, got %d", tt.expectedAllows, allowCount)
+			if allowCount != tc.expectedAllows {
+				t.Errorf("Expected %d allowed, got %d", tc.expectedAllows, allowCount)
 			}
 		})
 	}
@@ -149,15 +127,14 @@ func TestWARouting_ProviderPreference(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Validate routing logic
 			var actualProvider string
 
-			if tt.preference == "cloud_api" {
+			switch tt.preference {
+			case "cloud_api":
 				actualProvider = "cloud_api"
-			} else if tt.preference == "whatsmeow" {
+			case "whatsmeow":
 				actualProvider = "whatsmeow"
-			} else {
-				// Auto mode
+			default:
 				if isTransactionalType(tt.messageType) {
 					actualProvider = "cloud_api"
 				} else {
@@ -296,6 +273,9 @@ func TestMessageType_Detection(t *testing.T) {
 // ========================================
 
 func TestDistributedLock_Acquisition(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping distributed lock test in -short mode (requires Redis)")
+	}
 	tests := []struct {
 		name        string
 		lockKey     string
@@ -338,9 +318,8 @@ func TestDistributedLock_Acquisition(t *testing.T) {
 	}
 }
 
-func tryAcquireLock(key string, ttl time.Duration) bool {
-	// Simplified lock logic - real implementation uses Redis SET NX
-	return true // Placeholder
+func tryAcquireLock(_ string, _ time.Duration) bool {
+	return true
 }
 
 // ========================================

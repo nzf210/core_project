@@ -235,9 +235,6 @@ func boolToReason(ok bool, name, tier string) string {
 	return fmt.Sprintf("Fitur %s tidak tersedia di paket %s.", name, tier)
 }
 
-// isEnabledViaPlan checks the dynamic Features map and falls back to default_enabled.
-// Not called from within this package anymore, but kept exported in case
-// external consumers reference it directly.
 func isEnabledViaPlan(pf PlanFeaturesRow, featureKey string) bool {
 	if pf.Features[featureKey] {
 		return true
