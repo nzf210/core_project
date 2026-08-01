@@ -45,6 +45,7 @@ jobs:
       cf_project_umkm: ${{ steps.detect.outputs.cf_project_umkm }}
       cf_project_admin: ${{ steps.detect.outputs.cf_project_admin }}
       cf_project_campaign: ${{ steps.detect.outputs.cf_project_campaign }}
+      vps_ssh_port: ${{ steps.detect.outputs.vps_ssh_port }}
     steps:
       - name: Detect from tag
         id: detect
@@ -73,6 +74,9 @@ jobs:
             echo "cf_project_admin=wch-superadmin-web-stg" >> $GITHUB_OUTPUT
             echo "cf_project_campaign=wch-campaign-web-stg" >> $GITHUB_OUTPUT
           fi
+
+          # VPS SSH port (default 3209, override via vars.VPS_SSH_PORT)
+          echo "vps_ssh_port=${{ vars.VPS_SSH_PORT || '3209' }}" >> $GITHUB_OUTPUT
 
           # Which component to deploy
           if [[ "$TAG" == *-be-v* ]]; then
@@ -186,6 +190,7 @@ jobs:
         uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
+          port: ${{ needs.set-env.outputs.vps_ssh_port }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "docker-compose.yml,${{ needs.set-env.outputs.compose_override }}"
@@ -196,6 +201,7 @@ jobs:
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
+          port: ${{ needs.set-env.outputs.vps_ssh_port }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
@@ -236,6 +242,7 @@ jobs:
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
+          port: ${{ needs.set-env.outputs.vps_ssh_port }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
@@ -260,6 +267,7 @@ jobs:
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
+          port: ${{ needs.set-env.outputs.vps_ssh_port }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
