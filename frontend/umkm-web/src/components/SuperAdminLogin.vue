@@ -83,7 +83,13 @@ const handleLogin = async () => {
       localStorage.setItem('access_token', sanitizeJWT(data.data.accessToken))
       localStorage.setItem('refresh_token', sanitizeJWT(data.data.refreshToken))
       localStorage.setItem('tenant_id', sanitizeUUID(data.data.tenantId))
-      localStorage.setItem('role', sanitizeRole(data.data.role))
+
+      const role = sanitizeRole(data.data.role)
+      if (!role) {
+        errorMsg.value = 'Invalid role data'
+        return
+      }
+      localStorage.setItem('role', role)
 
       router.push('/superadmin')
     } else {

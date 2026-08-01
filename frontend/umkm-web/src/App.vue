@@ -59,7 +59,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { api } from './api'
+import { sanitizeJWT, sanitizeRole, sanitizeText, api } from './api'
 import Chatbot from './components/Chatbot.vue'
 import AppSidebar from './components/AppSidebar.vue'
 import { useTheme } from './composables/useTheme'
@@ -78,13 +78,15 @@ const plan = ref('lite')
 const isFrozen = ref(false)
 const isImpersonated = ref(false)
 
-import { sanitizeJWT, sanitizeRole } from './api'
-
 const restoreSuperadmin = () => {
   const superadminToken = sessionStorage.getItem('superadmin_token')
   if (superadminToken) {
     localStorage.setItem('access_token', sanitizeJWT(superadminToken))
-    localStorage.setItem('role', sanitizeRole('superadmin'))
+
+    const role = sanitizeRole('superadmin')
+    if (!role) return
+    localStorage.setItem('role', role)
+
     localStorage.removeItem('tenant_id')
     sessionStorage.removeItem('impersonated_by')
     sessionStorage.removeItem('superadmin_token')
@@ -159,7 +161,7 @@ onMounted(() => {
 }
 
 .impersonate-banner {
-  background: linear-gradient(90deg, #8b5cf6, #6366f1);
+  background: linear-gradient(90deg, #6d28d9, #4338ca);
   color: white;
   padding: 10px 20px;
   display: flex;
@@ -181,13 +183,13 @@ onMounted(() => {
   font-weight: 600;
   margin-left: 8px;
   padding: 4px 10px;
-  background: rgba(255,255,255,0.2);
+  background: rgba(0,0,0,0.3);
   border-radius: 4px;
 }
-.restore-link:hover { background: rgba(255,255,255,0.3); }
+.restore-link:hover { background: rgba(0,0,0,0.4); }
 
 .frozen-banner {
-  background: linear-gradient(90deg, #f59e0b, #ef4444);
+  background: linear-gradient(90deg, #b45309, #b91c1c);
   color: white;
   padding: 10px 20px;
   display: flex;
@@ -210,10 +212,10 @@ onMounted(() => {
   font-weight: 600;
   margin-left: 8px;
   padding: 4px 10px;
-  background: rgba(255,255,255,0.2);
+  background: rgba(0,0,0,0.3);
   border-radius: 4px;
 }
-.redeem-link:hover { background: rgba(255,255,255,0.3); }
+.redeem-link:hover { background: rgba(0,0,0,0.4); }
 
 .mobile-menu-btn {
   display: none;

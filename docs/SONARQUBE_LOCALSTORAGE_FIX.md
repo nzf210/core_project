@@ -5,51 +5,77 @@ Fixed all localStorage security vulnerabilities flagged by SonarQube related to 
 
 ## Changes Made
 
-### 1. Added Sanitization Functions (`frontend/umkm-web/src/api.ts`)
-Created allowlist-based validation functions following SonarQube's compliant pattern:
+### 1. Updated Sanitization Functions (`frontend/umkm-web/src/api.ts`)
+Modified allowlist-based functions to return `null` for invalid input (instead of fallback values):
 
 ```typescript
 const ALLOWED_ROLES = ['owner', 'admin', 'staff', 'kasir', 'superadmin'] as const
 const ALLOWED_THEMES = ['dark', 'light', 'system'] as const
 const ALLOWED_BOOLEAN_STRINGS = ['true', 'false'] as const
 
+// Returns null if invalid - forces caller to handle the invalid case
+export function sanitizeRole(v: unknown): string | null
+export function sanitizeTheme(v: unknown): string | null
+export function sanitizeBoolean(v: unknown): string | null
+
+// Existing functions (return empty string if invalid)
 export function sanitizeUUID(v: unknown): string
 export function sanitizeJWT(v: unknown): string
-export function sanitizeRole(v: unknown): string
-export function sanitizeTheme(v: unknown): string
-export function sanitizeBoolean(v: unknown): string
 export function sanitizeText(v: unknown, maxLen = 200): string
 export function sanitizeURL(v: unknown): string
 ```
 
-### 2. Applied Sanitization Across Codebase
+**Key change:** Functions now return `null` instead of fallback values, forcing call sites to add explicit guard checks.
 
-**Files Updated:**
-- `frontend/umkm-web/src/router/index.ts` — syncUserDataToStorage with full validation
-- `frontend/umkm-web/src/composables/useTheme.ts` — theme preference validation
-- `frontend/umkm-web/src/components/Login.vue` — boolean flag sanitization
-- `frontend/umkm-web/src/components/Onboarding.vue` — boolean flag sanitization
-- `frontend/umkm-web/src/components/Settings.vue` — already using sanitization
-- `frontend/umkm-web/src/components/Register.vue` — already using sanitization
-- `frontend/umkm-web/src/components/DynamicDashboard.vue` — already using sanitization
+### 2. Applied Guard Checks Across Codebase
 
-### 3. Key Pattern: Named Constants for Allowlists
-
-SonarQube requires **explicit named constants** for allowlist validation instead of inline arrays:
+All call sites now validate before storing. Pattern used:
 
 ```typescript
-// ❌ Noncompliant (inline array)
-const theme = params.get('theme');
-localStorage.setItem('theme', theme);
+// Before: direct storage (potentially tainted)
+localStorage.setItem('role', sanitizeRole(data.role))
 
-// ✅ Compliant (named constant + validation)
+// After: guard check prevents storage if invalid
+const role = sanitizeRole(data.role)
+if (!role) {
+  // Handle invalid case (return, error, fallback)
+  return
+}
+localStorage.setItem('role', role) // Only validated values reach storage
+```
+
+**Files Updated:**
+- `frontend/umkm-web/src/App.vue` — guard check for superadmin role
+- `frontend/umkm-web/src/router/index.ts` — guard checks in syncUserDataToStorage + impersonate login
+- `frontend/umkm-web/src/composables/useTheme.ts` — guard check for theme preference
+- `frontend/umkm-web/src/components/Login.vue` — guard checks for role + onboarding flag
+- `frontend/umkm-web/src/components/Onboarding.vue` — guard check for onboarding flag
+- `frontend/umkm-web/src/components/SuperAdminLogin.vue` — guard check for role
+- `frontend/umkm-web/src/__tests__/security.spec.ts` — added null checks for test assertions
+
+### 3. Key Pattern: Named Constants + Early Return Guard
+
+SonarQube requires two things for compliant localStorage usage:
+
+1. **Named constants** for allowlist validation (not inline arrays)
+2. **Early return guard** that prevents storage if validation fails
+
+```typescript
+// ❌ Noncompliant (inline validation + always stores something)
+const theme = params.get('theme');
+const sanitized = ['light', 'dark'].includes(theme) ? theme : 'light';
+localStorage.setItem('theme', sanitized); // SonarQube can't prove this is safe
+
+// ✅ Compliant (named constant + guard check prevents storage)
 const ALLOWED_THEMES = ['light', 'dark', 'high-contrast'];
 const theme = params.get('theme');
 if (!ALLOWED_THEMES.includes(theme)) {
-  return;
+  return; // Early return - localStorage.setItem never called with tainted data
 }
 localStorage.setItem('theme', theme);
 ```
+
+**Why the guard pattern matters:** SonarQube's static analysis can't trace that a sanitize function returning a fallback value is safe. The guard pattern makes it **statically provable** that localStorage.setItem only receives validated values.
 
 ### 4. Test Files (Excluded from Scan)
 
@@ -63,12 +89,15 @@ frontend/umkm-web/src/components/__tests__/**
 ## Verification
 
 ```bash
-# Check for unsanitized localStorage in production code
-grep -rn "localStorage.setItem" frontend/umkm-web/src \
-  --include="*.vue" --include="*.ts" | \
-  grep -v "__tests__" | \
-  grep -v "sanitize"
-# Result: (no output) — all production code uses sanitization
+# Build succeeds with no TypeScript errors
+cd frontend/umkm-web && npm run build
+# Result: ✓ built in 504ms
+
+# All localStorage.setItem calls use validated variables
+grep -rn "localStorage.setItem" src --include="*.vue" --include="*.ts" | \
+  grep -v "__tests__" | grep -v "sanitize"
+# Result: 9 matches — all using validated variables (role, onboardingFlag, mustChangeFlag)
+#         that passed guard checks before reaching localStorage.setItem
 ```
 
 ## False Positives Identified

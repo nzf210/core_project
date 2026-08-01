@@ -30,7 +30,7 @@ fi
 # 2. Install Docker Compose
 echo "[2/8] Installing Docker Compose..."
 if ! command -v docker-compose &> /dev/null; then
-    curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    curl --proto "=https" --tlsv1.2 -sSfL "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
 else
     echo "  ✅ Docker Compose already installed"

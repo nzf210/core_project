@@ -19,8 +19,10 @@ export function useTheme() {
 
   onMounted(() => {
     const saved = localStorage.getItem('theme-preference')
-    const sanitized = sanitizeTheme(saved) as Theme
-    if (ALLOWED_THEMES.includes(sanitized)) theme.value = sanitized
+    const sanitized = sanitizeTheme(saved)
+    if (sanitized && ALLOWED_THEMES.includes(sanitized as Theme)) {
+      theme.value = sanitized as Theme
+    }
     applyTheme(theme.value)
 
     globalThis.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -29,7 +31,9 @@ export function useTheme() {
   })
 
   watch(theme, (newTheme) => {
-    localStorage.setItem('theme-preference', sanitizeTheme(newTheme))
+    const sanitized = sanitizeTheme(newTheme)
+    if (!sanitized) return
+    localStorage.setItem('theme-preference', sanitized)
     applyTheme(newTheme)
   })
 

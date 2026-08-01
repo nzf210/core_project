@@ -195,13 +195,23 @@ async function applyLoginSuccess(d: any) {
   localStorage.setItem('access_token', sanitizeJWT(d.accessToken))
   localStorage.setItem('refresh_token', sanitizeJWT(d.refreshToken))
   localStorage.setItem('tenant_id', sanitizeUUID(d.tenantId))
-  localStorage.setItem('role', sanitizeRole(d.role))
+
+  const role = sanitizeRole(d.role)
+  if (!role) {
+    errorMsg.value = 'Invalid role data'
+    return
+  }
+  localStorage.setItem('role', role)
+
   try {
     const profileRes = await api.get('/api/profile')
     if (profileRes.success && profileRes.data) {
       localStorage.setItem('plan', sanitizeText(profileRes.data.plan || 'lite', 50))
       if (profileRes.data.business_name || d.role !== 'owner') {
-        localStorage.setItem('onboarding_completed', sanitizeBoolean('true'))
+        const onboardingFlag = sanitizeBoolean('true')
+        if (onboardingFlag) {
+          localStorage.setItem('onboarding_completed', onboardingFlag)
+        }
       }
       let subStatus = 'active'
       if (typeof profileRes.data.is_frozen === 'boolean') {

@@ -74,13 +74,19 @@ const ME_CACHE_TTL_MS = 30_000 // 30s
 
 function syncUserDataToStorage(data: any) {
   if (data.onboarding_completed !== undefined) {
-    localStorage.setItem('onboarding_completed', sanitizeBoolean(data.onboarding_completed ? 'true' : 'false'))
+    const onboardingFlag = sanitizeBoolean(data.onboarding_completed ? 'true' : 'false')
+    if (onboardingFlag) {
+      localStorage.setItem('onboarding_completed', onboardingFlag)
+    }
   }
   if (data.plan !== undefined) {
     localStorage.setItem('plan', sanitizeText(data.plan || '', 50))
   }
   if (data.role !== undefined) {
-    localStorage.setItem('role', sanitizeRole(data.role || ''))
+    const role = sanitizeRole(data.role || '')
+    if (role) {
+      localStorage.setItem('role', role)
+    }
   }
   if (data.is_frozen !== undefined) {
     const status = data.is_frozen ? 'frozen' : 'active'
@@ -94,7 +100,10 @@ function syncUserDataToStorage(data: any) {
     localStorage.setItem('tenant_addons', JSON.stringify(sanitized))
   }
   if (data.must_change_password !== undefined) {
-    localStorage.setItem('must_change_password', sanitizeBoolean(data.must_change_password ? 'true' : 'false'))
+    const mustChangeFlag = sanitizeBoolean(data.must_change_password ? 'true' : 'false')
+    if (mustChangeFlag) {
+      localStorage.setItem('must_change_password', mustChangeFlag)
+    }
   }
 }
 
@@ -130,7 +139,11 @@ async function handleImpersonateLogin(to: any, next: any): Promise<boolean> {
       localStorage.setItem('access_token', sanitizeJWT(impersonateToken))
       localStorage.setItem('tenant_id', sanitizeUUID(data.data.tenant_id))
       localStorage.setItem('user_id', sanitizeUUID(data.data.user_id))
-      localStorage.setItem('role', sanitizeRole(data.data.role))
+
+      const role = sanitizeRole(data.data.role)
+      if (!role) return false
+      localStorage.setItem('role', role)
+
       if (data.data.impersonated_by) {
         sessionStorage.setItem('impersonated_by', data.data.impersonated_by)
       }

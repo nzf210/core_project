@@ -255,8 +255,9 @@ describe('Frontend Security - API Response Validation', () => {
 
     const sanitized = sanitizeAPIResponse(response)
 
-    expect(sanitized.data.name).not.toContain('<script>')
-    expect(sanitized.data.bio).not.toContain('onerror=')
+    expect(sanitized.data).toBeDefined()
+    expect(sanitized.data!.name).not.toContain('<script>')
+    expect(sanitized.data!.bio).not.toContain('onerror=')
   })
 })
 

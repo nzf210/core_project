@@ -294,7 +294,11 @@ const submitBusinessDetails = async () => {
   } catch {
     // non-fatal: continue anyway
   }
-  localStorage.setItem('onboarding_completed', sanitizeBoolean('true'))
+
+  const onboardingFlag = sanitizeBoolean('true')
+  if (!onboardingFlag) return
+
+  localStorage.setItem('onboarding_completed', onboardingFlag)
   localStorage.setItem('business_type', sanitizeText(selectedType.value, 50))
   localStorage.setItem('business_name', sanitizeText(businessName.value))
   currentStep.value = 3

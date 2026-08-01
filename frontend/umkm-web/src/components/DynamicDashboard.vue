@@ -357,10 +357,6 @@ const syncData = async () => {
   waWarning.value = await checkWAWarning()
 }
 
-import { sanitizeText } from '../api'
-
-// ... existing imports
-
 const upgradePlan = (targetPlan: string) => {
   plan.value = targetPlan
   showUpgrade.value = false
