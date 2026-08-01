@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"os"
-	"strings"
 )
 
 func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +55,7 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	var currentStatus string
 	var planID, voucherCode string
 	var invoiceAmount int64
-	err := DB.QueryRow(ctx, `
+	err = DB.QueryRow(ctx, `
 		SELECT status, COALESCE(plan_id,''), COALESCE(voucher_code,''), amount
 		FROM invoices WHERE id = $1
 		FOR UPDATE
@@ -143,7 +141,7 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	// ─────────────────────────────────────────────
 	// F054: AFFILIATE COMMISSION LOGIC (lifetime)
 	// ─────────────────────────────────────────────
-	processAffiliateCommission(ctx, tenantID, externalID, invoiceAmount)
+	processWebhookAffiliateCommission(ctx, tenantID, externalID, invoiceAmount)
 
 	// Activate subscription
 	finalizeSubscriptionActivation(ctx, tenantID, planID, planName, voucherCode)

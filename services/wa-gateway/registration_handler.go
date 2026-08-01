@@ -54,66 +54,86 @@ func startWARegistration(tenantID, senderJID, senderPhone string) {
 	sendWAMessage(tenantID, senderJID, "Halo! Selamat datang di WCH Platform.\n\nUntuk mendaftar, silakan jawab pertanyaan berikut:\n\n1️⃣ Nama bisnis Anda叫什么? (ketik nama toko/usaha Anda)")
 }
 
+func handleBusinessNameStep(tenantID string, session *waRegistrationSession, rawText string) bool {
+	session.BusinessName = strings.TrimSpace(rawText)
+	session.Step = 2
+	sendWAMessage(tenantID, session.SenderJID, "✅ Nama bisnis: "+session.BusinessName+"\n\n2️⃣ Tipe bisnis Anda?\n1. Umum\n2. Warung/Kedai\n3. Klinik\n\nKetik nomor (1-3):")
+	return true
+}
+
+func handleBusinessTypeStep(tenantID string, session *waRegistrationSession, upperText string) bool {
+	bt := map[string]string{"1": "umum", "2": "warung", "3": "clinic"}
+	btDesc := map[string]string{"1": "Umum", "2": "Warung/Kedai", "3": "Klinik"}
+	btVal, ok := bt[upperText]
+	if !ok {
+		sendWAMessage(tenantID, session.SenderJID, "❌ Pilih angka 1, 2, atau 3 saja.")
+		return true
+	}
+	session.BusinessType = btVal
+	session.Step = 3
+	sendWAMessage(tenantID, session.SenderJID, "✅ Tipe bisnis: "+btDesc[upperText]+"\n\n3️⃣ Buat username untuk login (huruf, angka, underscore, min 3 karakter):")
+	return true
+}
+
+func handleUsernameStep(tenantID string, session *waRegistrationSession, rawText string) bool {
+	if len(rawText) < 3 || len(strings.Trim(rawText, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")) != 0 {
+		sendWAMessage(tenantID, session.SenderJID, "❌ Username minimal 3 karakter, hanya huruf, angka, dan underscore.")
+		return true
+	}
+	if db != nil {
+		var exists bool
+		if err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", rawText).Scan(&exists); err != nil {
+			slog.Error("Failed to check username", "username", rawText, "error", err)
+		}
+		if exists {
+			sendWAMessage(tenantID, session.SenderJID, "❌ Username sudah digunakan. Coba yang lain:")
+			return true
+		}
+	}
+	session.Username = rawText
+	session.Step = 4
+	sendWAMessage(tenantID, session.SenderJID, "✅ Username: "+session.Username+"\n\n4️⃣ Buat password (minimal 6 karakter):")
+	return true
+}
+
+func handlePasswordStep(tenantID string, session *waRegistrationSession, rawText string) bool {
+	if len(rawText) < 6 {
+		sendWAMessage(tenantID, session.SenderJID, "❌ Password minimal 6 karakter.")
+		return true
+	}
+	session.Password = rawText
+	session.Step = 5
+	sendWAMessage(tenantID, session.SenderJID, "✅ Password tersimpan.\n\n5️⃣ Konfirmasi nomor HP: "+session.PhoneNumber+"\n\nKetik YA jika benar, atau ketik ulang nomor Anda:")
+	return true
+}
+
+func handlePhoneConfirmationStep(tenantID string, session *waRegistrationSession, rawText, upperText string) bool {
+	if upperText != "YA" {
+		if strings.HasPrefix(rawText, "62") && len(rawText) >= 10 {
+			session.PhoneNumber = rawText
+			sendWAMessage(tenantID, session.SenderJID, "✅ Nomor HP diperbarui: "+session.PhoneNumber+"\n\nKetik YA untuk konfirmasi:")
+		} else {
+			sendWAMessage(tenantID, session.SenderJID, "Ketik YA untuk konfirmasi, atau ketik nomor HP baru (format: 62812xxx):")
+		}
+		return true
+	}
+	session.Step = 6
+	submitWARegistration(tenantID, session)
+	return true
+}
+
 func handleWARegistrationStep(tenantID string, session *waRegistrationSession, rawText, upperText string) bool {
 	switch session.Step {
 	case 1:
-		session.BusinessName = strings.TrimSpace(rawText)
-		session.Step = 2
-		sendWAMessage(tenantID, session.SenderJID, "✅ Nama bisnis: "+session.BusinessName+"\n\n2️⃣ Tipe bisnis Anda?\n1. Umum\n2. Warung/Kedai\n3. Klinik\n\nKetik nomor (1-3):")
-		return true
+		return handleBusinessNameStep(tenantID, session, rawText)
 	case 2:
-		bt := map[string]string{"1": "umum", "2": "warung", "3": "clinic"}
-		btDesc := map[string]string{"1": "Umum", "2": "Warung/Kedai", "3": "Klinik"}
-		btVal, ok := bt[upperText]
-		if !ok {
-			sendWAMessage(tenantID, session.SenderJID, "❌ Pilih angka 1, 2, atau 3 saja.")
-			return true
-		}
-		session.BusinessType = btVal
-		session.Step = 3
-		sendWAMessage(tenantID, session.SenderJID, "✅ Tipe bisnis: "+btDesc[upperText]+"\n\n3️⃣ Buat username untuk login (huruf, angka, underscore, min 3 karakter):")
-		return true
+		return handleBusinessTypeStep(tenantID, session, upperText)
 	case 3:
-		if len(rawText) < 3 || len(strings.Trim(rawText, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")) != 0 {
-			sendWAMessage(tenantID, session.SenderJID, "❌ Username minimal 3 karakter, hanya huruf, angka, dan underscore.")
-			return true
-		}
-		if db != nil {
-			var exists bool
-			if err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", rawText).Scan(&exists); err != nil {
-				slog.Error("Failed to check username", "username", rawText, "error", err)
-			}
-			if exists {
-				sendWAMessage(tenantID, session.SenderJID, "❌ Username sudah digunakan. Coba yang lain:")
-				return true
-			}
-		}
-		session.Username = rawText
-		session.Step = 4
-		sendWAMessage(tenantID, session.SenderJID, "✅ Username: "+session.Username+"\n\n4️⃣ Buat password (minimal 6 karakter):")
-		return true
+		return handleUsernameStep(tenantID, session, rawText)
 	case 4:
-		if len(rawText) < 6 {
-			sendWAMessage(tenantID, session.SenderJID, "❌ Password minimal 6 karakter.")
-			return true
-		}
-		session.Password = rawText
-		session.Step = 5
-		sendWAMessage(tenantID, session.SenderJID, "✅ Password tersimpan.\n\n5️⃣ Konfirmasi nomor HP: "+session.PhoneNumber+"\n\nKetik YA jika benar, atau ketik ulang nomor Anda:")
-		return true
+		return handlePasswordStep(tenantID, session, rawText)
 	case 5:
-		if upperText != "YA" {
-			if strings.HasPrefix(rawText, "62") && len(rawText) >= 10 {
-				session.PhoneNumber = rawText
-				sendWAMessage(tenantID, session.SenderJID, "✅ Nomor HP diperbarui: "+session.PhoneNumber+"\n\nKetik YA untuk konfirmasi:")
-			} else {
-				sendWAMessage(tenantID, session.SenderJID, "Ketik YA untuk konfirmasi, atau ketik nomor HP baru (format: 62812xxx):")
-			}
-			return true
-		}
-		session.Step = 6
-		submitWARegistration(tenantID, session)
-		return true
+		return handlePhoneConfirmationStep(tenantID, session, rawText, upperText)
 	}
 	return false
 }

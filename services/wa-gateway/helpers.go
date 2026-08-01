@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const contentTypeJSON = "application/json"
+const helperContentTypeJSON = "application/json"
 
 // sendWAMessage sends a plain text WhatsApp message to a JID via the tenant's whatsmeow client.
 func sendWAMessage(tenantID, jid, text string) {

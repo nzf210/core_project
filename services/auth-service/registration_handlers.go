@@ -14,6 +14,59 @@ import (
 	"core_project/shared/sdk/response"
 )
 
+func normalizeRegistrationPhone(phoneNumber string) string {
+	lookupPhone := phoneNumber
+	if strings.HasPrefix(lookupPhone, "0") {
+		lookupPhone = "62" + lookupPhone[1:]
+	}
+	return lookupPhone
+}
+
+func checkPhoneDuplicate(ctx context.Context, phoneNumber, lookupPhone string) error {
+	var exists bool
+	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1 OR phone_number = $2)", phoneNumber, lookupPhone).Scan(&exists); err == nil && exists {
+		return fmt.Errorf("Nomor HP sudah terdaftar")
+	}
+	return nil
+}
+
+func checkWAOTPInProgress(ctx context.Context, lookupPhone string) error {
+	if _, err := Redis.Get(ctx, "wa-otp:"+lookupPhone).Result(); err == nil {
+		return fmt.Errorf("Nomor HP sedang dalam proses pendaftaran via WhatsApp. Selesaikan atau tunggu 1 jam.")
+	}
+	return nil
+}
+
+func checkAndReuseExistingOTP(ctx context.Context, otpKey, phoneNumber string, waVerify bool) (bool, string, map[string]any) {
+	existingVal, err := Redis.Get(ctx, otpKey).Result()
+	if err != nil || existingVal == "" {
+		return false, "", nil
+	}
+
+	parts := strings.Split(existingVal, ":")
+	existingOTP := parts[len(parts)-1]
+	ttl, _ := Redis.TTL(ctx, otpKey).Result()
+	slog.Info("OTP still active, reusing existing", "phone", phoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
+
+	msg := "OTP already sent. Valid for 1 hour. Please check your WhatsApp."
+	data := map[string]any{}
+	if waVerify {
+		data["otp_code"] = existingOTP
+	}
+	return true, msg, data
+}
+
+func generateAndStoreRegistrationOTP(ctx context.Context, req RegisterRequest, otpKey string) (string, error) {
+	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	reqJSON, _ := json.Marshal(req)
+	err := Redis.Set(ctx, otpKey, string(reqJSON)+":"+otp, 1*time.Hour).Err()
+	if err != nil {
+		return "", err
+	}
+	Redis.Set(ctx, "wa-otp:"+otp, req.PhoneNumber, 1*time.Hour)
+	return otp, nil
+}
+
 func handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
@@ -31,20 +84,16 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lookupPhone := req.PhoneNumber
-	if strings.HasPrefix(lookupPhone, "0") {
-		lookupPhone = "62" + lookupPhone[1:]
-	}
-
+	lookupPhone := normalizeRegistrationPhone(req.PhoneNumber)
 	ctx := context.Background()
-	var exists bool
-	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1 OR phone_number = $2)", req.PhoneNumber, lookupPhone).Scan(&exists); err == nil && exists {
-		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Nomor HP sudah terdaftar"})
+
+	if err := checkPhoneDuplicate(ctx, req.PhoneNumber, lookupPhone); err != nil {
+		writeJSON(w, http.StatusConflict, Response{Success: false, Message: err.Error()})
 		return
 	}
 
-	if _, err := Redis.Get(ctx, "wa-otp:"+lookupPhone).Result(); err == nil {
-		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Nomor HP sedang dalam proses pendaftaran via WhatsApp. Selesaikan atau tunggu 1 jam."})
+	if err := checkWAOTPInProgress(ctx, lookupPhone); err != nil {
+		writeJSON(w, http.StatusConflict, Response{Success: false, Message: err.Error()})
 		return
 	}
 
@@ -53,32 +102,17 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	otpKey := "otp:" + req.PhoneNumber
 
 	if waProvider != "whatsmeow" {
-		if existingVal, err := Redis.Get(ctx, otpKey).Result(); err == nil && existingVal != "" {
-			parts := strings.Split(existingVal, ":")
-			existingOTP := parts[len(parts)-1]
-			ttl, _ := Redis.TTL(ctx, otpKey).Result()
-			slog.Info("OTP still active, reusing existing", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
-			resp := Response{
-				Success: true,
-				Message: "OTP already sent. Valid for 1 hour. Please check your WhatsApp.",
-			}
-			if waVerify {
-				resp.Data = map[string]any{"otp_code": existingOTP}
-			}
-			writeJSON(w, http.StatusOK, resp)
+		if exists, msg, data := checkAndReuseExistingOTP(ctx, otpKey, req.PhoneNumber, waVerify); exists {
+			writeJSON(w, http.StatusOK, Response{Success: true, Message: msg, Data: data})
 			return
 		}
 	}
 
-	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
-	reqJSON, _ := json.Marshal(req)
-	err := Redis.Set(ctx, otpKey, string(reqJSON)+":"+otp, 1*time.Hour).Err()
+	otp, err := generateAndStoreRegistrationOTP(ctx, req, otpKey)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process registration"})
 		return
 	}
-
-	Redis.Set(ctx, "wa-otp:"+otp, req.PhoneNumber, 1*time.Hour)
 
 	waProvider, _ = getPlatformWAProvider(ctx)
 	if waProvider == "whatsmeow" {

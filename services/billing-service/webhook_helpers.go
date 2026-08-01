@@ -120,8 +120,8 @@ func handleWalletTopupWebhook(ctx context.Context, externalID, status string, pa
 	return true, nil
 }
 
-// processAffiliateCommission calculates and records affiliate commission.
-func processAffiliateCommission(ctx context.Context, tenantID, externalID string, invoiceAmount int64) {
+// processWebhookAffiliateCommission calculates and records affiliate commission for webhook events.
+func processWebhookAffiliateCommission(ctx context.Context, tenantID, externalID string, invoiceAmount int64) {
 	var referredByID *int
 	DB.QueryRow(ctx, querySelectAffiliateID, tenantID).Scan(&referredByID)
 	if referredByID == nil {

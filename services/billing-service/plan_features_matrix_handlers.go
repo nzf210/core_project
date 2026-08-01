@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -12,10 +13,6 @@ import (
 
 // buildFeatureMatrix constructs the feature matrix structure from DB rows.
 func buildFeatureMatrix(ctx context.Context) (map[string]planRow, map[string]map[string]map[string]interface{}, []string, []string, error) {
-	type planRow struct {
-		PlanID   string `json:"plan_id"`
-		PlanName string `json:"plan_name"`
-	}
 
 	rows, err := DB.Query(ctx, `
 		SELECT pf.plan_id, pf.feature_key, pf.feature_name, pf.is_enabled,
@@ -42,7 +39,7 @@ func buildFeatureMatrix(ctx context.Context) (map[string]planRow, map[string]map
 		if rows.Scan(&planID, &key, &name, &enabled, &value, &minTier, &planName, &sortOrder) == nil {
 			if _, ok := matrix[planID]; !ok {
 				matrix[planID] = map[string]map[string]interface{}{}
-				planMap[planID] = planRow{PlanID: planID, PlanName: planName}
+				planMap[planID] = planRow{ID: planID, Name: planName}
 			}
 			matrix[planID][key] = map[string]interface{}{
 				"feature_key":   key,

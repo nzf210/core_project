@@ -147,6 +147,64 @@ func sendTelegram(chatID, message string) error {
 	return sendTelegramMedia(chatID, message, "", "")
 }
 
+func sendTextMessage(botToken, chatID, message string) error {
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
+	payload := map[string]interface{}{
+		"chat_id":    chatID,
+		"text":       message,
+		"parse_mode": "Markdown",
+	}
+	body, _ := json.Marshal(payload)
+
+	resp, err := http.Post(apiURL, contentTypeJSON, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("telegram returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func downloadMedia(mediaURL string) (*http.Response, error) {
+	parsedMediaURL, parseErr := url.Parse(mediaURL)
+	if parseErr != nil || (parsedMediaURL.Scheme != "https" && parsedMediaURL.Scheme != "http") {
+		return nil, fmt.Errorf("invalid media URL")
+	}
+	resp, err := http.Get(parsedMediaURL.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to download media: %w", err)
+	}
+	return resp, nil
+}
+
+func createMediaUploadBody(chatID, message, mediaName string, mediaResp *http.Response) (*bytes.Buffer, *multipart.Writer, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	_ = writer.WriteField("chat_id", chatID)
+	_ = writer.WriteField("caption", message)
+	_ = writer.WriteField("parse_mode", "Markdown")
+
+	part, err := writer.CreateFormFile("document", mediaName)
+	if err != nil {
+		return nil, nil, err
+	}
+	_, err = io.Copy(part, mediaResp.Body)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = writer.Close()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return body, writer, nil
+}
+
 func sendTelegramMedia(chatID, message, mediaURL, mediaName string) error {
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if botToken == "" {
@@ -155,61 +213,20 @@ func sendTelegramMedia(chatID, message, mediaURL, mediaName string) error {
 	}
 
 	if mediaURL == "" {
-		// Standard Text Message
-		apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
-		payload := map[string]interface{}{
-			"chat_id":    chatID,
-			"text":       message,
-			"parse_mode": "Markdown",
-		}
-		body, _ := json.Marshal(payload)
-	
-		resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-	
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("telegram returned %d", resp.StatusCode)
-		}
-		return nil
+		return sendTextMessage(botToken, chatID, message)
 	}
 
-	// Media Document Upload via Telegram sendDocument API
-	parsedMediaURL, parseErr := url.Parse(mediaURL)
-	if parseErr != nil || (parsedMediaURL.Scheme != "https" && parsedMediaURL.Scheme != "http") {
-		return fmt.Errorf("invalid media URL")
-	}
-	resp, err := http.Get(parsedMediaURL.String())
+	mediaResp, err := downloadMedia(mediaURL)
 	if err != nil {
-		return fmt.Errorf("failed to download media: %w", err)
+		return err
 	}
-	defer resp.Body.Close()
+	defer mediaResp.Body.Close()
 
 	if mediaName == "" {
 		mediaName = "document.file"
 	}
 
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	// Add chat_id and caption
-	_ = writer.WriteField("chat_id", chatID)
-	_ = writer.WriteField("caption", message)
-	_ = writer.WriteField("parse_mode", "Markdown")
-
-	// Add file
-	part, err := writer.CreateFormFile("document", mediaName)
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(part, resp.Body)
-	if err != nil {
-		return err
-	}
-
-	err = writer.Close()
+	body, writer, err := createMediaUploadBody(chatID, message, mediaName, mediaResp)
 	if err != nil {
 		return err
 	}

@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	headerTenantPrompt = "X-Tenant-ID"
-	layoutDatePrompt   = "2006-01-02"
-	headerContentType  = "Content-Type"
+	headerTenantPrompt     = "X-Tenant-ID"
+	layoutDatePrompt       = "2006-01-02"
+	headerContentTypeConst = "Content-Type"
 )
 
 func buildSystemPrompt(ctx context.Context, tenantID, tenantName, message, role string, cfg *chatConfigCache) string {
@@ -287,7 +287,7 @@ func sendForwardMessage(_ context.Context, tenantID, phone, sender, msg string) 
 	data.Set("message", fmt.Sprintf("⚠️ *ESKALASI OTOMATIS DARI BOT* ⚠️\nPelanggan dengan nomor %s memerlukan bantuan.\n\nKonteks: %s", sender, msg))
 	data.Set("tenant_id", tenantID)
 	req, _ := http.NewRequest("POST", waSendURL(), strings.NewReader(data.Encode()))
-	req.Header.Set(headerContentType, headerContentTypeForm)
+	req.Header.Set(headerContentTypeConst, headerContentTypeForm)
 	http.DefaultClient.Do(req)
 }
 
@@ -310,7 +310,7 @@ func processExpenseBlock(ctx context.Context, tenantID, answer string) string {
 
 	txReq, _ := http.NewRequestWithContext(ctx, "POST", AccountingURL+"/expenses", strings.NewReader(jsonStr))
 	txReq.Header.Set(headerTenantPrompt, tenantID)
-	txReq.Header.Set(headerContentType, "application/json")
+	txReq.Header.Set(headerContentTypeConst, "application/json")
 	txResp, err := http.DefaultClient.Do(txReq)
 
 	if err == nil && txResp.StatusCode == http.StatusOK {
@@ -334,7 +334,7 @@ func processTransactionBlock(ctx context.Context, tenantID, answer string) strin
 
 	txReq, _ := http.NewRequestWithContext(ctx, "POST", AccountingURL+"/transactions", strings.NewReader(jsonStr))
 	txReq.Header.Set(headerTenantPrompt, tenantID)
-	txReq.Header.Set(headerContentType, "application/json")
+	txReq.Header.Set(headerContentTypeConst, "application/json")
 	txResp, err := http.DefaultClient.Do(txReq)
 
 	if err == nil && txResp.StatusCode == http.StatusOK {

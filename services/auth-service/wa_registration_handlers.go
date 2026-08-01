@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -21,7 +22,88 @@ type WARegisterRequest struct {
 	WAJID        string `json:"wa_jid"`
 }
 
-// handleRegisterWA creates account from WA registration flow (no OTP needed)
+func validateWARegistrationRequest(req *WARegisterRequest) error {
+	if req.PhoneNumber == "" || req.Username == "" || req.Password == "" {
+		return fmt.Errorf("phoneNumber, username, password required")
+	}
+	if len(req.Password) < 6 {
+		return fmt.Errorf("Password minimal 6 karakter")
+	}
+	if !usernameRE.MatchString(req.Username) || len(req.Username) < 3 {
+		return fmt.Errorf("Username minimal 3 karakter, hanya huruf, angka, dan underscore")
+	}
+	return nil
+}
+
+func normalizeWAPhone(phoneNumber string) string {
+	phone := strings.TrimSpace(phoneNumber)
+	if strings.HasPrefix(phone, "0") {
+		return "62" + phone[1:]
+	} else if strings.HasPrefix(phone, "+") {
+		return phone[1:]
+	}
+	return phone
+}
+
+func checkDuplicateWAUser(ctx context.Context, phoneNumber, username string) error {
+	var exists bool
+	localPhone := "0" + phoneNumber[2:]
+	slog.Info("handleRegisterWA: checking duplicate", "normalized", phoneNumber, "local", localPhone)
+
+	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1 OR phone_number = $2)", phoneNumber, localPhone).Scan(&exists); err == nil && exists {
+		slog.Warn("handleRegisterWA: duplicate phone found", "normalized", phoneNumber, "local", localPhone)
+		return fmt.Errorf("Nomor HP sudah terdaftar")
+	}
+
+	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", username).Scan(&exists); err == nil && exists {
+		return fmt.Errorf("Username sudah digunakan")
+	}
+
+	return nil
+}
+
+func createWATenant(ctx context.Context, businessName, username, businessType string) (string, error) {
+	tenantName := businessName
+	if tenantName == "" {
+		tenantName = username + "'s Tenant"
+	}
+	if businessType == "" {
+		businessType = "umum"
+	}
+
+	var tenantID string
+	err := DB.QueryRow(ctx,
+		"INSERT INTO tenants (name, plan, is_frozen, business_type) VALUES ($1, 'inactive', true, $2) RETURNING id",
+		tenantName, businessType,
+	).Scan(&tenantID)
+
+	return tenantID, err
+}
+
+func insertWAUser(ctx context.Context, req *WARegisterRequest, tenantID string, hashedPassword []byte) (string, error) {
+	role := req.Role
+	if role == "" {
+		role = "owner"
+	}
+
+	var userID string
+	var err error
+
+	if req.WAJID != "" {
+		err = DB.QueryRow(ctx,
+			"INSERT INTO users (tenant_id, username, email, password_hash, role, phone_number, wa_jid, is_phone_verified) VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING id",
+			tenantID, req.Username, req.Username+"@wa.user", string(hashedPassword), role, req.PhoneNumber, req.WAJID,
+		).Scan(&userID)
+	} else {
+		err = DB.QueryRow(ctx,
+			"INSERT INTO users (tenant_id, username, email, password_hash, role, phone_number, is_phone_verified) VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING id",
+			tenantID, req.Username, req.Username+"@wa.user", string(hashedPassword), role, req.PhoneNumber,
+		).Scan(&userID)
+	}
+
+	return userID, err
+}
+
 func handleRegisterWA(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
@@ -34,25 +116,12 @@ func handleRegisterWA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.PhoneNumber == "" || req.Username == "" || req.Password == "" {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "phoneNumber, username, password required"})
-		return
-	}
-	if len(req.Password) < 6 {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Password minimal 6 karakter"})
-		return
-	}
-	if !usernameRE.MatchString(req.Username) || len(req.Username) < 3 {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Username minimal 3 karakter, hanya huruf, angka, dan underscore"})
+	if err := validateWARegistrationRequest(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: err.Error()})
 		return
 	}
 
-	req.PhoneNumber = strings.TrimSpace(req.PhoneNumber)
-	if strings.HasPrefix(req.PhoneNumber, "0") {
-		req.PhoneNumber = "62" + req.PhoneNumber[1:]
-	} else if strings.HasPrefix(req.PhoneNumber, "+") {
-		req.PhoneNumber = req.PhoneNumber[1:]
-	}
+	req.PhoneNumber = normalizeWAPhone(req.PhoneNumber)
 	if !phoneRE.MatchString(req.PhoneNumber) {
 		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Format nomor HP tidak valid"})
 		return
@@ -60,57 +129,22 @@ func handleRegisterWA(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	var exists bool
-	localPhone := "0" + req.PhoneNumber[2:]
-	slog.Info("handleRegisterWA: checking duplicate", "normalized", req.PhoneNumber, "local", localPhone)
-	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1 OR phone_number = $2)", req.PhoneNumber, localPhone).Scan(&exists); err == nil && exists {
-		slog.Warn("handleRegisterWA: duplicate phone found", "normalized", req.PhoneNumber, "local", localPhone)
-		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Nomor HP sudah terdaftar"})
-		return
-	}
-	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", req.Username).Scan(&exists); err == nil && exists {
-		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Username sudah digunakan"})
+	if err := checkDuplicateWAUser(ctx, req.PhoneNumber, req.Username); err != nil {
+		writeJSON(w, http.StatusConflict, Response{Success: false, Message: err.Error()})
 		return
 	}
 
-	tenantName := req.BusinessName
-	if tenantName == "" {
-		tenantName = req.Username + "'s Tenant"
-	}
-	businessType := req.BusinessType
-	if businessType == "" {
-		businessType = "umum"
-	}
-	var tenantID string
-	if err := DB.QueryRow(ctx,
-		"INSERT INTO tenants (name, plan, is_frozen, business_type) VALUES ($1, 'inactive', true, $2) RETURNING id",
-		tenantName, businessType,
-	).Scan(&tenantID); err != nil {
+	tenantID, err := createWATenant(ctx, req.BusinessName, req.Username, req.BusinessType)
+	if err != nil {
 		slog.Error("Failed to create tenant for WA registration", "error", err)
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	role := req.Role
-	if role == "" {
-		role = "owner"
-	}
-	var userID string
-	var insertErr error
-	if req.WAJID != "" {
-		insertErr = DB.QueryRow(ctx,
-			"INSERT INTO users (tenant_id, username, email, password_hash, role, phone_number, wa_jid, is_phone_verified) VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING id",
-			tenantID, req.Username, req.Username+"@wa.user", string(hashedPassword), role, req.PhoneNumber, req.WAJID,
-		).Scan(&userID)
-	} else {
-		insertErr = DB.QueryRow(ctx,
-			"INSERT INTO users (tenant_id, username, email, password_hash, role, phone_number, is_phone_verified) VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING id",
-			tenantID, req.Username, req.Username+"@wa.user", string(hashedPassword), role, req.PhoneNumber,
-		).Scan(&userID)
-	}
-	if insertErr != nil {
-		slog.Error("Failed to insert WA user", "error", insertErr)
+	userID, err := insertWAUser(ctx, &req, tenantID, hashedPassword)
+	if err != nil {
+		slog.Error("Failed to insert WA user", "error", err)
 		writeJSON(w, http.StatusConflict, Response{Success: false, Message: "Username atau nomor HP sudah ada"})
 		return
 	}

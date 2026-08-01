@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 
 	"core_project/apps/campaign/api/repository"

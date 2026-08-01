@@ -11,56 +11,79 @@ import (
 	"time"
 )
 
-func handleWAOTPRequest(tenantID, senderJID, senderPhone string) {
-	ctx := context.Background()
-
-	toLocal := func(p string) string {
-		if strings.HasPrefix(p, "62") {
-			return "0" + p[2:]
-		}
-		return p
+func toLocalPhone(p string) string {
+	if strings.HasPrefix(p, "62") {
+		return "0" + p[2:]
 	}
+	return p
+}
 
-	localPhone := toLocal(senderPhone)
-
+func checkAuthPendingKeys(ctx context.Context, senderPhone, localPhone string) bool {
 	for _, key := range []string{
-		"auth:pending:" + senderPhone,
-		"auth:pending:" + localPhone,
+		redisKeyAuthPending + senderPhone,
+		redisKeyAuthPending + localPhone,
 	} {
 		v, e := redisShared.Get(ctx, key).Result()
 		if e == nil && v != "" {
-			generateAndSendOTP(ctx, tenantID, senderJID, senderPhone)
-			return
+			return true
 		}
 	}
+	return false
+}
 
-	keys, _ := redisShared.Keys(ctx, "auth:pending:*").Result()
+func scanAuthPendingByValue(ctx context.Context, senderPhone, localPhone string) bool {
+	keys, _ := redisShared.Keys(ctx, redisKeyAuthPending+"*").Result()
 	for _, key := range keys {
 		v, e := redisShared.Get(ctx, key).Result()
 		if e == nil && (v == senderPhone || v == localPhone) {
 			slog.Info("handleWAOTPRequest: found via value scan",
 				"senderPhone", senderPhone, "matchedKey", key)
-			generateAndSendOTP(ctx, tenantID, senderJID, senderPhone)
-			return
+			return true
 		}
 	}
+	return false
+}
 
-	if db != nil {
-		var registeredPhone string
-		err := db.QueryRow("SELECT phone_number FROM users WHERE wa_jid = $1", senderJID).Scan(&registeredPhone)
-		if err != nil {
-			shortJID := strings.Split(senderJID, ":")[0] + "@s.whatsapp.net"
-			err = db.QueryRow("SELECT phone_number FROM users WHERE wa_jid = $1", shortJID).Scan(&registeredPhone)
+func checkRegisteredPhoneByJID(ctx context.Context, senderJID string) (string, bool) {
+	if db == nil {
+		return "", false
+	}
+
+	var registeredPhone string
+	err := db.QueryRow("SELECT phone_number FROM users WHERE wa_jid = $1", senderJID).Scan(&registeredPhone)
+	if err != nil {
+		shortJID := strings.Split(senderJID, ":")[0] + "@s.whatsapp.net"
+		err = db.QueryRow("SELECT phone_number FROM users WHERE wa_jid = $1", shortJID).Scan(&registeredPhone)
+	}
+
+	if registeredPhone != "" {
+		key := redisKeyAuthPending + toLocalPhone(registeredPhone)
+		if v, e := redisShared.Get(ctx, key).Result(); e == nil && v != "" {
+			slog.Info("handleWAOTPRequest: found via wa_jid lookup",
+				"senderJID", senderJID, "registeredPhone", registeredPhone)
+			return registeredPhone, true
 		}
-		if registeredPhone != "" {
-			key := "auth:pending:" + toLocal(registeredPhone)
-			if v, e := redisShared.Get(ctx, key).Result(); e == nil && v != "" {
-				slog.Info("handleWAOTPRequest: found via wa_jid lookup",
-					"senderJID", senderJID, "registeredPhone", registeredPhone)
-				generateAndSendOTP(ctx, tenantID, senderJID, senderPhone)
-				return
-			}
-		}
+	}
+	return "", false
+}
+
+func handleWAOTPRequest(tenantID, senderJID, senderPhone string) {
+	ctx := context.Background()
+	localPhone := toLocalPhone(senderPhone)
+
+	if checkAuthPendingKeys(ctx, senderPhone, localPhone) {
+		generateAndSendOTP(ctx, tenantID, senderJID, senderPhone)
+		return
+	}
+
+	if scanAuthPendingByValue(ctx, senderPhone, localPhone) {
+		generateAndSendOTP(ctx, tenantID, senderJID, senderPhone)
+		return
+	}
+
+	if _, found := checkRegisteredPhoneByJID(ctx, senderJID); found {
+		generateAndSendOTP(ctx, tenantID, senderJID, senderPhone)
+		return
 	}
 
 	slog.Warn("OTP request without pending login", "phone", senderPhone)

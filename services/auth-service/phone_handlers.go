@@ -64,6 +64,51 @@ func sendLoginOTP(phoneNumber, authWAProvider, otp string) {
 	}
 }
 
+func lookupUserByPhone(ctx context.Context, phoneNumber string) (string, string, error) {
+	var userID string
+	err := DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", phoneNumber).Scan(&userID)
+	if err == pgx.ErrNoRows {
+		// Try alternate format
+		altPhone := phoneNumber
+		if strings.HasPrefix(altPhone, "62") {
+			altPhone = "0" + altPhone[2:]
+		} else if strings.HasPrefix(altPhone, "0") {
+			altPhone = "62" + altPhone[1:]
+		}
+		if altPhone != phoneNumber {
+			slog.Info("handlePhoneLogin: trying alternate format", "original", phoneNumber, "alternate", altPhone)
+			err = DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", altPhone).Scan(&userID)
+			if err == nil {
+				return userID, altPhone, nil
+			}
+		}
+	}
+	return userID, phoneNumber, err
+}
+
+func normalizePhoneForRedis(phoneNumber string) string {
+	redisPhone := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, phoneNumber)
+	if strings.HasPrefix(redisPhone, "62") {
+		redisPhone = "0" + redisPhone[2:]
+	}
+	return redisPhone
+}
+
+func checkExistingOTP(ctx context.Context, otpKey, phoneNumber string) (bool, string) {
+	existingOTP, err := Redis.Get(ctx, otpKey).Result()
+	if err == nil && existingOTP != "" {
+		ttl, _ := Redis.TTL(ctx, otpKey).Result()
+		slog.Info("Login OTP still active, reusing existing", "phone", phoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
+		return true, "OTP sudah dikirim sebelumnya. Masih berlaku selama 1 jam. Silakan cek WhatsApp Anda."
+	}
+	return false, ""
+}
+
 func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
@@ -84,82 +129,30 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	slog.Info("handlePhoneLogin: looking for phone", "phone", req.PhoneNumber)
 
-	// Normalize phone for DB lookup: try original first, then 62xx/08xx variants
-	lookupPhone := req.PhoneNumber
-	var userID string
-	var err error
-	err = DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", lookupPhone).Scan(&userID)
+	_, _, err := lookupUserByPhone(ctx, req.PhoneNumber)
 	if err == pgx.ErrNoRows {
-		// Try alternate formats: DB stores 08xx but request is 62xx, or vice versa
-		normPhone := req.PhoneNumber
-		if strings.HasPrefix(normPhone, "62") {
-			normPhone = "0" + normPhone[2:]
-		} else if strings.HasPrefix(normPhone, "0") {
-			normPhone = "62" + normPhone[1:]
-		}
-		if normPhone != lookupPhone {
-			slog.Info("handlePhoneLogin: not found, trying alternate format", "original", req.PhoneNumber, "alternate", normPhone)
-			err = DB.QueryRow(ctx, "SELECT id FROM users WHERE phone_number = $1", normPhone).Scan(&userID)
-			if err == nil {
-				lookupPhone = normPhone
-			}
-		}
-		if err == pgx.ErrNoRows {
-			slog.Warn("handlePhoneLogin: phone not found in DB", "tried_original", req.PhoneNumber, "tried_alternate", normPhone)
-			writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Phone number not registered"})
-			return
-		}
+		slog.Warn("handlePhoneLogin: phone not found in DB", "phone", req.PhoneNumber)
+		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Phone number not registered"})
+		return
 	}
-	if err != nil && err != pgx.ErrNoRows {
+	if err != nil {
 		slog.Error("DB query failed", "error", err)
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
 		return
 	}
 
-	var authWAProvider = "auto"
-	var tenantIDForPref string
-	if err := DB.QueryRow(ctx, "SELECT tenant_id FROM users WHERE phone_number = $1", lookupPhone).Scan(&tenantIDForPref); err == nil {
-		DB.QueryRow(ctx, "SELECT COALESCE(auth_wa_provider_preference::text, 'auto') FROM tenants WHERE id = $1", tenantIDForPref).Scan(&authWAProvider)
-	}
-
-	// Skip proactive OTP if platform uses whatsmeow (user must chat WA Center)
 	waProvider, _ := getPlatformWAProvider(ctx)
+	otpKey := redisKeyPhoneLoginOTP + req.PhoneNumber
 
-	otpKey := "phone-login-otp:" + req.PhoneNumber
-	// Skip reuse check when whatsmeow — OTP was never sent, always generate fresh code.
 	if waProvider != "whatsmeow" {
-		if existingOTP, otpErr := Redis.Get(ctx, otpKey).Result(); otpErr == nil && existingOTP != "" {
-			ttl, _ := Redis.TTL(ctx, otpKey).Result()
-			slog.Info("Login OTP still active, reusing existing", "phone", req.PhoneNumber, "otp", existingOTP, "ttl_remaining_sec", int(ttl.Seconds()))
-			writeJSON(w, http.StatusOK, Response{
-				Success: true,
-				Message: "OTP sudah dikirim sebelumnya. Masih berlaku selama 1 jam. Silakan cek WhatsApp Anda.",
-			})
+		if exists, msg := checkExistingOTP(ctx, otpKey, req.PhoneNumber); exists {
+			writeJSON(w, http.StatusOK, Response{Success: true, Message: msg})
 			return
 		}
 	}
 
-	// Normalize phone for auth:pending key.
-	// extractPhoneFromJID in wa-gateway returns 0xxx format (62xx→0xx),
-	// so auth:pending key must use 0xxx to match when user sends "OTP" via WA.
-	redisPhone := strings.Map(func(r rune) rune {
-		if r >= '0' && r <= '9' {
-			return r
-		}
-		return -1
-	}, req.PhoneNumber)
-	if strings.HasPrefix(redisPhone, "62") {
-		redisPhone = "0" + redisPhone[2:] // 62xxx → 0xxx
-	}
-
-	// Set pending login state - OTP will be generated when user sends "OTP" to WA Center
-	slog.Info("Setting auth:pending for OTP trigger",
-		"original_phone", req.PhoneNumber,
-		"normalized_phone", redisPhone,
-		"redis_key", "auth:pending:"+redisPhone)
-	// ponytail: 15 min TTL — user needs time to read message and switch to WA
-	// Value stores the login phone so wa-gateway can match via sender phone even when they differ
-	err = Redis.Set(ctx, "auth:pending:"+redisPhone, redisPhone, 15*time.Minute).Err()
+	redisPhone := normalizePhoneForRedis(req.PhoneNumber)
+	err = Redis.Set(ctx, redisKeyAuthPending+redisPhone, redisPhone, 15*time.Minute).Err()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to process login"})
 		return
@@ -170,6 +163,51 @@ func handlePhoneLogin(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Message: "Permintaan login diterima. Silakan kirim pesan 'OTP' ke WA Center untuk menerima kode.",
 	})
+}
+
+func normalizePhoneForOTP(phoneNumber string) string {
+	otpPhone := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, phoneNumber)
+	if strings.HasPrefix(otpPhone, "62") {
+		otpPhone = "0" + otpPhone[2:]
+	}
+	return otpPhone
+}
+
+func extractOTPCode(storedOTP string) string {
+	if idx := strings.Index(storedOTP, "|"); idx >= 0 {
+		return storedOTP[:idx]
+	}
+	return storedOTP
+}
+
+func lookupUserByPhoneForLogin(ctx context.Context, phoneNumber string) (string, string, string, bool, error) {
+	var userID, tenantID, role string
+	var isDataVerified bool
+
+	err := DB.QueryRow(ctx,
+		"SELECT id, tenant_id, role, is_phone_verified FROM users WHERE phone_number = $1",
+		phoneNumber,
+	).Scan(&userID, &tenantID, &role, &isDataVerified)
+
+	if err == pgx.ErrNoRows {
+		altPhone := phoneNumber
+		if strings.HasPrefix(altPhone, "0") {
+			altPhone = "62" + altPhone[1:]
+		} else if strings.HasPrefix(altPhone, "62") {
+			altPhone = "0" + altPhone[2:]
+		}
+		err = DB.QueryRow(ctx,
+			"SELECT id, tenant_id, role, is_phone_verified FROM users WHERE phone_number = $1",
+			altPhone,
+		).Scan(&userID, &tenantID, &role, &isDataVerified)
+	}
+
+	return userID, tenantID, role, isDataVerified, err
 }
 
 func handleVerifyPhoneLogin(w http.ResponseWriter, r *http.Request) {
@@ -185,21 +223,13 @@ func handleVerifyPhoneLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	otpPhone := strings.Map(func(r rune) rune {
-		if r >= '0' && r <= '9' {
-			return r
-		}
-		return -1
-	}, req.PhoneNumber)
-	if strings.HasPrefix(otpPhone, "62") {
-		otpPhone = "0" + otpPhone[2:]
-	}
+	otpPhone := normalizePhoneForOTP(req.PhoneNumber)
 
-	storedOTP, err := Redis.Get(ctx, "phone-login-otp:"+otpPhone).Result()
+	storedOTP, err := Redis.Get(ctx, redisKeyPhoneLoginOTP+otpPhone).Result()
 	slog.Info("handleVerifyPhoneLogin: OTP check",
 		"phone", req.PhoneNumber,
 		"normalizedPhone", otpPhone,
-		"key", "phone-login-otp:"+otpPhone,
+		"key", redisKeyPhoneLoginOTP+otpPhone,
 		"storedOTP", storedOTP,
 		"reqOTP", req.OTP,
 		"redisErr", err)
@@ -208,44 +238,19 @@ func handleVerifyPhoneLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// wa-gateway stores "otp|phone" format; extract just the OTP
-	storedCode := storedOTP
-	if idx := strings.Index(storedOTP, "|"); idx >= 0 {
-		storedCode = storedOTP[:idx]
-	}
-
+	storedCode := extractOTPCode(storedOTP)
 	if storedCode != req.OTP {
 		writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Incorrect OTP"})
 		return
 	}
 
-	var userID, tenantID, role string
-	var isDataVerified bool
-	// Try original format first, then normalized (08xx↔62xx)
-	lookupPhone := req.PhoneNumber
-	err = DB.QueryRow(ctx,
-		"SELECT id, tenant_id, role, is_phone_verified FROM users WHERE phone_number = $1",
-		lookupPhone,
-	).Scan(&userID, &tenantID, &role, &isDataVerified)
-	if err == pgx.ErrNoRows {
-		normPhone := req.PhoneNumber
-		if strings.HasPrefix(normPhone, "0") {
-			normPhone = "62" + normPhone[1:]
-		} else if strings.HasPrefix(normPhone, "62") {
-			normPhone = "0" + normPhone[2:]
-		}
-		err = DB.QueryRow(ctx,
-			"SELECT id, tenant_id, role, is_phone_verified FROM users WHERE phone_number = $1",
-			normPhone,
-		).Scan(&userID, &tenantID, &role, &isDataVerified)
-		if err != nil {
-			writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Nomor tidak terdaftar."})
-			return
-		}
-		lookupPhone = normPhone
-	}
+	userID, tenantID, role, isDataVerified, err := lookupUserByPhoneForLogin(ctx, req.PhoneNumber)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
+		if err == pgx.ErrNoRows {
+			writeJSON(w, http.StatusUnauthorized, Response{Success: false, Message: "Nomor tidak terdaftar."})
+		} else {
+			writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: msgInternalServerError})
+		}
 		return
 	}
 

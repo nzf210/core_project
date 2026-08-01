@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"core_project/shared/sdk/response"
+	"core_project/shared/sdk/config"
 )
 
 const (
@@ -133,8 +134,8 @@ func generateEmbedding(ctx context.Context, text string) ([]float64, error) {
 	if err != nil {
 		return nil, err
 	}
-	if Cfg.AI.OpenAIApiKey != "" {
-		reqHTTP.Header.Set("Authorization", "Bearer "+Cfg.AI.OpenAIApiKey)
+	if config.GlobalConfig.AI.OpenAIApiKey != "" {
+		reqHTTP.Header.Set("Authorization", "Bearer "+config.GlobalConfig.AI.OpenAIApiKey)
 	}
 	reqHTTP.Header.Set("Content-Type", "application/json")
 

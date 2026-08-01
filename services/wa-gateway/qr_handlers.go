@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	headerContentType    = "Content-Type"
-	mimeApplicationJSON   = "application/json"
+	qrHeaderContentType  = "Content-Type"
+	mimeApplicationJSON  = "application/json"
 )
 
 func setupQRHandler(container *sqlstore.Container) {
