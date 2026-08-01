@@ -49,7 +49,8 @@ async function requestQR() {
 async function disconnectWA() {
   if (!confirm('Disconnect WA Center? User tidak bisa register/login via WA sampai reconnect.')) return
   try {
-    const res = await fetch('/admin/wa/logout', {
+    const apiBase = import.meta.env.VITE_API_URL || ''
+    const res = await fetch(`${apiBase}/admin/wa/logout`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,

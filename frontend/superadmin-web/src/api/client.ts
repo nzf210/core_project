@@ -2,7 +2,7 @@
 // is reverse-proxied to api-gateway (port 8000) by vite dev server.
 // Api-gateway then injects X-User-Role and routes to billing-service.
 
-const API_BASE = ''  // relative, vite proxy handles it
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 function getToken(): string | null {
   return localStorage.getItem('access_token')

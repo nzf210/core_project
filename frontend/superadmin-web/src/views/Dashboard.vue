@@ -25,7 +25,8 @@ function formatRupiah(sen: number) {
 async function impersonateTenant(tenantId: string) {
   if (!confirm('Login sebagai tenant ini? Tab baru akan dibuka.')) return
   try {
-    const res = await fetch(`/api/superadmin/tenants/${tenantId}/impersonate`, {
+    const apiBase = import.meta.env.VITE_API_URL || ''
+    const res = await fetch(`${apiBase}/api/superadmin/tenants/${tenantId}/impersonate`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
     })

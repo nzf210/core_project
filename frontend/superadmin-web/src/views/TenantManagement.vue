@@ -24,7 +24,8 @@ onMounted(async () => {
 async function impersonateTenant(tenantId: string, name: string) {
   if (!confirm(`Login sebagai ${name}?`)) return
   try {
-    const res = await fetch(`/admin/tenants/${encodeURIComponent(tenantId)}/impersonate`, {
+    const apiBase = import.meta.env.VITE_API_URL || ''
+    const res = await fetch(`${apiBase}/admin/tenants/${encodeURIComponent(tenantId)}/impersonate`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
     })
