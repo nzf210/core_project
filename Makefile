@@ -473,3 +473,17 @@ migrate-new:
 	touch shared/migrations/$${PAD}_$(NAME).down.sql; \
 	echo "✓ Created: shared/migrations/$${PAD}_$(NAME).up.sql"; \
 	echo "✓ Created: shared/migrations/$${PAD}_$(NAME).down.sql"
+
+# =============================================================================
+# Release — Tag & Push
+# =============================================================================
+# Usage:
+#   make stg-v1.0.1           → tag stg-v1.0.1, push ke origin
+#   make prod-v1.0.1          → tag v1.0.1 (production), push ke origin
+#   make stg-umkm-v1.0.1      → tag stg-umkm-v1.0.1, push ke origin
+
+stg-%:
+	@bash scripts/release.sh "stg-$*"
+
+prod-%:
+	@bash scripts/release.sh "$*"
