@@ -68,8 +68,8 @@ jobs:
             echo "cf_branch=main" >> $GITHUB_OUTPUT
             echo "compose_override=docker-compose.staging.yml" >> $GITHUB_OUTPUT
             echo "compose_project=wch-stg" >> $GITHUB_OUTPUT
-            echo "api_gateway_port=18000" >> $GITHUB_OUTPUT
-            echo "auth_service_port=18001" >> $GITHUB_OUTPUT
+            echo "api_gateway_port=21000" >> $GITHUB_OUTPUT
+            echo "auth_service_port=8001" >> $GITHUB_OUTPUT
             echo "cf_project_umkm=wch-umkm-web-stg" >> $GITHUB_OUTPUT
             echo "cf_project_admin=wch-superadmin-web-stg" >> $GITHUB_OUTPUT
             echo "cf_project_campaign=wch-campaign-web-stg" >> $GITHUB_OUTPUT
@@ -231,18 +231,18 @@ jobs:
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.VPS_USERNAME }} --password-stdin
 
             echo "=== Pulling image ghcr.io/nzf210/core_project:${IMAGE_TAG} ==="
-            IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull \
+            IMAGE_TAG="$IMAGE_TAG" docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull \
               api-gateway auth-service ai-gateway billing-service \
               notification-service subscription-worker \
               umkm-accounting umkm-business umkm-chatbot umkm-automation \
               wa-gateway wa-cloud-api campaign-api
 
             echo "=== Pulling pgbouncer image ==="
-            docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull pgbouncer
+            docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull pgbouncer
 
             echo "=== Restarting Go services ==="
             COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
-            IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d \
+            IMAGE_TAG="$IMAGE_TAG" docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d \
               pgbouncer \
               api-gateway auth-service ai-gateway billing-service \
               notification-service subscription-worker \
@@ -280,15 +280,16 @@ jobs:
             curl -f http://localhost:${{ needs.set-env.outputs.api_gateway_port }}/livez || exit 1
 
             echo "=== Waiting for Auth Service ==="
+            AUTH_CONTAINER="${{ needs.set-env.outputs.compose_project }}-auth-service"
             for i in $(seq 1 12); do
-              if curl -sf http://localhost:${{ needs.set-env.outputs.auth_service_port }}/health; then
+              if docker exec "$AUTH_CONTAINER" wget -qO- http://localhost:8001/health > /dev/null 2>&1; then
                 echo "Auth Service healthy"
                 break
               fi
               echo "Attempt $i/12 failed, retrying in 10s..."
               sleep 10
             done
-            curl -f http://localhost:${{ needs.set-env.outputs.auth_service_port }}/health || exit 1
+            docker exec "$AUTH_CONTAINER" wget -qO- http://localhost:8001/health > /dev/null || exit 1
 
             echo "=== Deployed: ${{ github.ref_name }} → ${{ needs.set-env.outputs.environment }} ==="
 
