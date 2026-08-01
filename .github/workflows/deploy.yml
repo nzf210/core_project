@@ -302,10 +302,26 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             DEPLOY_DIR=${{ needs.set-env.outputs.environment == 'production' && '/opt/wch-production' || '/opt/wch-staging' }}
-            COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
-            IMAGE_TAG="${{ needs.build-and-push.outputs.image_tag }}" \
-            docker compose -f "$DEPLOY_DIR/docker-compose.yml" \
-              -f "$DEPLOY_DIR/${{ needs.set-env.outputs.compose_override }}" logs --tail=100
+            PROJECT=${{ needs.set-env.outputs.compose_project }}
+
+            echo "=== ENV KEYS SET (values hidden) ==="
+            grep -v '^\s*#' "$DEPLOY_DIR/.env.${{ needs.set-env.outputs.environment == 'production' && 'production' || 'staging' }}" | grep '=' | sed 's/=.*/=***/' || true
+
+            echo "=== CONTAINER STATUS ==="
+            docker ps -a --filter "name=${PROJECT}" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+
+            echo "=== LOGS: CRASHED/RESTARTING SERVICES ==="
+            for svc in auth-service campaign-api subscription-worker umkm-business umkm-automation; do
+              cname="${PROJECT}-${svc}"
+              status=$(docker inspect --format='{{.State.Status}}' "$cname" 2>/dev/null || echo "not found")
+              if [[ "$status" == "restarting" || "$status" == "exited" ]]; then
+                echo "--- $cname ($status) ---"
+                docker logs "$cname" --tail=30 2>&1
+              fi
+            done
+
+            echo "=== LOGS: API GATEWAY ==="
+            docker logs "${PROJECT}-api-gateway" --tail=30 2>&1 || true
 
   # ============================================================================
   # JOB: Deploy umkm-web to Cloudflare Workers (only runs on *-umkm-v* tags)
