@@ -15,6 +15,8 @@
 
 
 # Cleanup ALL processes on expected ports before start (prevents stale processes)
+# Native dev uses original internal ports (Go services listen on their native ports)
+# Docker infra ports: pgbouncer=10433, redis=10631 (5-digit DEV scheme)
 cleanup_ports() {
   echo "🧹 Cleaning stale processes..."
   for port in 8000 8001 8002 8003 8005 8006 8201 8202 8210 9001 9002 3201 3301 3401; do
@@ -89,6 +91,7 @@ start_all() {
   cleanup_ports
   echo "🚀 WCH Platform — native dev mode (hot-reload)"
   echo "   Postgres + Redis harus jalan dulu (Docker)."
+  echo "   pgbouncer: localhost:10433 | redis: localhost:10631"
   echo ""
 
   for pair in "${SERVICES[@]}"; do
@@ -100,10 +103,18 @@ start_all() {
   echo "🔄 Frontend (Vite hot-reload)..."
   for entry in "umkm-web:3201" "campaign-web:3301" "superadmin-web:3401"; do
     IFS=':' read -r name port <<< "$entry"
+    local fe_path="$ROOT_DIR/frontend/$name"
     local logfile="$LOG_DIR/dev-$name.log"
     local pidfile="$RUN_DIR/dev-$name.pid"
+
+    # Auto-install dependencies jika belum ada
+    if [[ ! -d "$fe_path/node_modules" ]]; then
+      echo "  📦 Installing $name dependencies..."
+      (cd "$fe_path" && npm install --ignore-scripts > "$logfile" 2>&1)
+    fi
+
     [[ -f "$pidfile" ]] && kill "$(cat "$pidfile")" 2>/dev/null || true
-    nohup sh -c "cd $ROOT_DIR/frontend/$name && npm run dev -- --port $port" > "$logfile" 2>&1 &
+    nohup sh -c "cd $fe_path && npm run dev" > "$logfile" 2>&1 &
     echo $! > "$pidfile"
     echo "  ✓ $name on :$port"
   done

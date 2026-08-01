@@ -274,8 +274,8 @@ docker ps | grep n8n-worker
 docker exec wch-n8n-main n8n export:workflow --all --output=/tmp/workflows.json
 docker cp wch-n8n-main:/tmp/workflows.json ./backup/
 
-# Backup database
-pg_dump -h localhost -p 5433 -U wch_admin wch_n8n > n8n_backup.sql
+# Backup database (pgbouncer host-mapped port 10433)
+pg_dump -h localhost -p 10433 -U wch_admin wch_n8n > n8n_backup.sql
 ```
 
 **Restore:**
@@ -285,7 +285,7 @@ docker cp ./backup/workflows.json wch-n8n-main:/tmp/
 docker exec wch-n8n-main n8n import:workflow --input=/tmp/workflows.json
 
 # Restore database
-psql -h localhost -p 5433 -U wch_admin -d wch_n8n < n8n_backup.sql
+psql -h localhost -p 10433 -U wch_admin -d wch_n8n < n8n_backup.sql
 ```
 
 ⚠️ **CRITICAL:** `N8N_ENCRYPTION_KEY` harus SAMA saat restore. Jika berbeda, credentials di DB tidak bisa didekripsi.
@@ -301,10 +301,10 @@ psql -h localhost -p 5433 -U wch_admin -d wch_n8n < n8n_backup.sql
 curl http://localhost:5678/healthz
 
 # Redis (queue)
-redis-cli -h localhost -p 6381 PING
+redis-cli -h localhost -p 10631 PING
 
 # PostgreSQL (persistence)
-psql -h localhost -p 5433 -U wch_admin -d wch_n8n -c "SELECT COUNT(*) FROM workflows;"
+psql -h localhost -p 10433 -U wch_admin -d wch_n8n -c "SELECT COUNT(*) FROM workflows;"
 ```
 
 ### Metrics (Future: Prometheus)
@@ -332,10 +332,10 @@ psql -h localhost -p 5433 -U wch_admin -d wch_n8n -c "SELECT COUNT(*) FROM workf
 **Fix:**
 ```bash
 # Verify DB exists
-psql -h localhost -p 5433 -U wch_admin -l | grep wch_n8n
+psql -h localhost -p 10433 -U wch_admin -l | grep wch_n8n
 
 # Create if missing
-psql -h localhost -p 5433 -U wch_admin -c "CREATE DATABASE wch_n8n;"
+psql -h localhost -p 10433 -U wch_admin -c "CREATE DATABASE wch_n8n;"
 
 # Restart n8n
 docker compose restart n8n-main n8n-worker
@@ -349,7 +349,7 @@ docker compose restart n8n-main n8n-worker
 docker logs wch-n8n-worker --tail 100
 
 # Check queue
-redis-cli -h localhost -p 6381 LLEN bull:n8n:jobs:waiting
+redis-cli -h localhost -p 10631 LLEN bull:n8n:jobs:waiting
 
 # Restart worker
 docker compose restart n8n-worker

@@ -60,10 +60,10 @@ $ psql -h pgbouncer -p 6432 -U wch_admin -d wch_platform -c "SELECT 'Success!' a
 Edit `.env`:
 ```bash
 # Change from:
-DB_PORT=5433
+DB_PORT=10433  # (old pre-pgbouncer host-mapped postgres port)
 
 # To:
-DB_PORT=6432   # Route via PgBouncer
+DB_PORT=10433  # pgbouncer host-mapped port (DEV native) — already correct if you followed setup
 ```
 
 ### 2. Restart Backend Services
@@ -136,7 +136,7 @@ Jika ada masalah setelah aktivasi:
 docker compose stop pgbouncer
 
 # 2. Revert .env
-DB_PORT=5433  # Direct PostgreSQL
+DB_PORT=10433  # pgbouncer DEV host-mapped (was direct postgres, no longer used)
 
 # 3. Restart services
 make stop-all && make dev-all

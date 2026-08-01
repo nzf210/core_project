@@ -1,347 +1,148 @@
-# docker-compose.staging.yml
-# Staging overrides — jalankan di VPS yang sama dengan production
-# Usage: COMPOSE_PROJECT_NAME=wch-stg docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+# =============================================================================
+# WCH Platform — Staging Port Override
 #
-# Port schema: staging = prod_port + 10000
-#   prod 8000 → stg 18000   (api-gateway, public)
-#   prod 8001 → stg 18001   (auth-service)
-#   prod 8002 → stg 18002   (ai-gateway)
-#   prod 8003 → stg 18003   (billing-service)
-#   prod 8005 → stg 18005   (notification-service)
-#   prod 8006 → stg 18006   (subscription-worker)
-#   prod 8201 → stg 18201   (umkm-accounting)
-#   prod 8202 → stg 18202   (wa-gateway)
-#   prod 8203 → stg 18203   (umkm-chatbot)
-#   prod 8204 → stg 18204   (umkm-automation)
-#   prod 8210 → stg 18210   (wa-cloud-api)
-#   prod 9001 → stg 19001   (umkm-business)
-#   prod 9002 → stg 19002   (campaign-api)
-#   prod 3001 → stg 13001   (grafana)
-#   prod 9090 → stg 19090   (prometheus)
-#   prod 5433 → stg 15433   (postgres)
-#   prod 6381 → stg 16381   (redis)
+# Gunakan bersama docker-compose.yml:
+#   COMPOSE_PROJECT_NAME=wch-stg docker compose \
+#     -f docker-compose.yml -f docker-compose.staging.yml up -d
+#
+# Skema port staging (prefix 2):
+#   X  Y  Z Z
+#   2  0  xx  = infra     (pgbouncer, redis)
+#   2  1  xx  = backend   (Go services)
+#   2  2  xx  = frontend  (Vue/Nginx)
+#   2  3  xx  = tools     (grafana, n8n, loki, prometheus, chatwoot)
+#
+# Ref lengkap: docs/PORT_REGISTRY.md
+# =============================================================================
 
-# Isolated network agar container staging tidak bercampur dengan prod
 networks:
   default:
-    name: wch-stg-network
+    name: wch-stg-network  # isolated — tidak bercampur dengan prod
 
 services:
-  # ============================================================================
-  # Infrastructure (isolated DB & Redis untuk staging)
-  # ============================================================================
+  # ── Infrastructure ──────────────────────────────────────────────────────────
   postgres:
     container_name: wch-stg-postgres
     env_file: .env.staging
-    ports:
-      - "127.0.0.1:15433:5432"
 
   pgbouncer:
     container_name: wch-stg-pgbouncer
     env_file: .env.staging
     ports:
-      - "127.0.0.1:16432:6432"
+      - "20433:6432"  # STG: 2=stg, 0=infra, 433=pgbouncer
 
   redis:
     container_name: wch-stg-redis
     env_file: .env.staging
     ports:
-      - "127.0.0.1:16381:6379"
+      - "20631:6379"  # STG: 2=stg, 0=infra, 631=redis
 
-  # ============================================================================
-  # API Gateway (public facing)
-  # ============================================================================
+  # ── Backend Go Services (internal only) ─────────────────────────────────────
   api-gateway:
     container_name: wch-stg-api-gateway
     env_file: .env.staging
     ports:
-      - "18000:8000"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8000/healthz"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
+      - "21000:8000"  # STG: 2=stg, 1=BE, 00=api-gateway (akses testing via Nginx)
 
-  # ============================================================================
-  # Backend Services (internal only, bound ke 127.0.0.1)
-  # ============================================================================
   auth-service:
     container_name: wch-stg-auth-service
     env_file: .env.staging
-    ports:
-      - "127.0.0.1:18001:8001"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
 
   ai-gateway:
     container_name: wch-stg-ai-gateway
     env_file: .env.staging
-    ports:
-      - "127.0.0.1:18002:8002"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8002/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
 
   billing-service:
     container_name: wch-stg-billing-service
     env_file: .env.staging
-    ports:
-      - "127.0.0.1:18003:8003"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8003/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
 
   notification-service:
     container_name: wch-stg-notification-service
     env_file: .env.staging
-    ports:
-      - "127.0.0.1:18005:8005"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8005/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-        reservations:
-          memory: 128M
 
   subscription-worker:
     container_name: wch-stg-subscription-worker
     env_file: .env.staging
-    ports:
-      - "127.0.0.1:18006:8006"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8006/healthz"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-        reservations:
-          memory: 128M
 
   umkm-accounting:
     container_name: wch-stg-umkm-accounting
     env_file: .env.staging
-    ports:
-      - "127.0.0.1:18201:8201"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8201/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-
-  wa-gateway:
-    container_name: wch-stg-wa-gateway
-    env_file: .env.staging
-    ports:
-      - "127.0.0.1:18202:8202"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8202/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-
-  umkm-chatbot:
-    container_name: wch-stg-umkm-chatbot
-    env_file: .env.staging
-    ports:
-      - "127.0.0.1:18203:8203"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8203/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-
-  umkm-automation:
-    container_name: wch-stg-umkm-automation
-    env_file: .env.staging
-    ports:
-      - "127.0.0.1:18204:8204"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8204/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-        reservations:
-          memory: 128M
 
   umkm-business:
     container_name: wch-stg-umkm-business
     env_file: .env.staging
-    ports:
-      - "127.0.0.1:19001:9001"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:9001/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
 
-  campaign-api:
-    container_name: wch-stg-campaign-api
+  umkm-chatbot:
+    container_name: wch-stg-umkm-chatbot
     env_file: .env.staging
-    ports:
-      - "127.0.0.1:19002:9002"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:9002/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
+
+  umkm-automation:
+    container_name: wch-stg-umkm-automation
+    env_file: .env.staging
+
+  wa-gateway:
+    container_name: wch-stg-wa-gateway
+    env_file: .env.staging
 
   wa-cloud-api:
     container_name: wch-stg-wa-cloud-api
     env_file: .env.staging
-    ports:
-      - "127.0.0.1:18210:8210"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8210/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-        reservations:
-          memory: 128M
 
-  # ============================================================================
-  # Observability Stack
-  # ============================================================================
+  campaign-api:
+    container_name: wch-stg-campaign-api
+    env_file: .env.staging
+
+  # ── Frontend ────────────────────────────────────────────────────────────────
+  umkm-frontend:
+    container_name: wch-stg-umkm-frontend
+    ports:
+      - "22001:80"    # STG: 2=stg, 2=FE, 01=umkm-web
+
+  superadmin-frontend:
+    container_name: wch-stg-superadmin-frontend
+    ports:
+      - "22002:80"    # STG: 2=stg, 2=FE, 02=superadmin-web
+
+  campaign-frontend:
+    container_name: wch-stg-campaign-frontend
+    ports:
+      - "22003:80"    # STG: 2=stg, 2=FE, 03=campaign-web
+
+  # ── Observability & Tools ───────────────────────────────────────────────────
   grafana:
     container_name: wch-stg-grafana
     ports:
-      - "127.0.0.1:13001:3000"
+      - "23001:3000"  # STG: 2=stg, 3=tools, 01=grafana
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASS:-changeme_staging}
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
+
+  loki:
+    container_name: wch-stg-loki
+    ports:
+      - "23100:3100"  # STG: 2=stg, 3=tools, 100=loki
 
   prometheus:
     container_name: wch-stg-prometheus
     ports:
-      - "127.0.0.1:19090:9090"
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
-        reservations:
-          memory: 512M
+      - "23090:9090"  # STG: 2=stg, 3=tools, 090=prometheus
 
   n8n-main:
     container_name: wch-stg-n8n-main
     env_file: .env.staging
     ports:
-      - "127.0.0.1:15678:5678"
+      - "23678:5678"  # STG: 2=stg, 3=tools, 678=n8n
 
-  loki:
-    container_name: wch-stg-loki
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
-        reservations:
-          memory: 512M
+  chatwoot:
+    container_name: wch-stg-chatwoot
+    ports:
+      - "23000:3000"  # STG: 2=stg, 3=tools, 00=chatwoot
+
+  postgres-exporter:
+    container_name: wch-stg-postgres-exporter
+    ports:
+      - "127.0.0.1:23187:9187"  # STG: 2=stg, 3=tools, 187=postgres-exporter
+
+  redis-exporter:
+    container_name: wch-stg-redis-exporter
+    ports:
+      - "127.0.0.1:23121:9121"  # STG: 2=stg, 3=tools, 121=redis-exporter

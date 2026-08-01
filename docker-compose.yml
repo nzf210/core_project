@@ -30,6 +30,8 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
       - N8N_DB_NAME=${N8N_DB_NAME:-wch_n8n_db}
+    ports:
+      - "10433:6432"  # DEV: 1=dev, 0=infra, 433=pgbouncer
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,6 +47,8 @@ services:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
     container_name: wch-redis
+    ports:
+      - "10631:6379"  # DEV: 1=dev, 0=infra, 631=redis
     volumes:
       - redisdata:/data
     healthcheck:
@@ -233,6 +237,8 @@ services:
       timeout: 10s
       retries: 5
       start_period: 180s
+    ports:
+      - "13678:5678"  # DEV: 1=dev, 3=tools, 678=n8n
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -428,7 +434,7 @@ services:
       - DEFAULT_LOCALE=id
     command: /bin/sh -c "rm -f /app/tmp/pids/server.pid && bundle exec rake db:chatwoot_prepare && bundle exec rails s -b 0.0.0.0 -p 3000"
     ports:
-      - "127.0.0.1:3000:3000"
+      - "13000:3000"  # DEV: 1=dev, 3=tools, 00=chatwoot
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -479,7 +485,7 @@ services:
     container_name: wch-umkm-frontend
     restart: unless-stopped
     ports:
-      - "3201:80"
+      - "12001:80"    # DEV: 1=dev, 2=FE, 01=umkm-web
     depends_on:
       - api-gateway
   superadmin-frontend:
@@ -489,7 +495,7 @@ services:
     container_name: wch-superadmin-frontend
     restart: unless-stopped
     ports:
-      - "3202:80"
+      - "12002:80"    # DEV: 1=dev, 2=FE, 02=superadmin-web
     depends_on:
       - api-gateway
 
@@ -500,7 +506,7 @@ services:
     container_name: wch-campaign-frontend
     restart: unless-stopped
     ports:
-      - "3203:80"
+      - "12003:80"    # DEV: 1=dev, 2=FE, 03=campaign-web
     depends_on:
       - api-gateway
 
@@ -508,7 +514,7 @@ services:
     image: grafana/loki:2.9.2
     container_name: wch-loki
     ports:
-      - "3100:3100"
+      - "13100:3100"  # DEV: 1=dev, 3=tools, 100=loki
     volumes:
       - ./infra/observability/loki/local-config.yaml:/etc/loki/local-config.yaml
       - loki_data:/loki
@@ -530,6 +536,8 @@ services:
   grafana:
     image: grafana/grafana:10.2.2
     container_name: wch-grafana
+    ports:
+      - "13001:3000"  # DEV: 1=dev, 3=tools, 01=grafana
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASS:-admin123}
       - GF_USERS_ALLOW_SIGN_UP=false
@@ -544,6 +552,8 @@ services:
   prometheus:
     image: prom/prometheus:v2.51.0
     container_name: wch-prometheus
+    ports:
+      - "13090:9090"  # DEV: 1=dev, 3=tools, 090=prometheus
     volumes:
       - ./infra/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -558,7 +568,7 @@ services:
     environment:
       - DATA_SOURCE_NAME=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-wch_core}?sslmode=disable
     ports:
-      - "127.0.0.1:9187:9187"
+      - "127.0.0.1:13187:9187"  # DEV: 1=dev, 3=tools, 187=postgres-exporter
     restart: unless-stopped
     depends_on:
       - postgres
@@ -570,7 +580,7 @@ services:
       - REDIS_ADDR=redis://redis:6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     ports:
-      - "127.0.0.1:9121:9121"
+      - "127.0.0.1:13121:9121"  # DEV: 1=dev, 3=tools, 121=redis-exporter
     restart: unless-stopped
     depends_on:
       - redis

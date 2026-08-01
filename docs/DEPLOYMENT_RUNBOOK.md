@@ -9,7 +9,7 @@ Panduan deployment production untuk WCH Platform.
 - **RAM:** Minimum 8GB (recommended 16GB untuk production)
 - **CPU:** 4 cores minimum
 - **Storage:** 100GB SSD
-- **Network:** Port 80, 443 (public), 5433, 6381, 8000-8210 (internal)
+- **Network:** Port 80, 443 (public), 8000-8210 (internal), 20433/20631 (STG infra)
 
 ### Software Requirements
 ```bash
@@ -55,8 +55,8 @@ nano .env.staging
 
 ```bash
 # Database (nama key sesuai .env.staging.example)
-DB_HOST=postgres
-DB_PORT=5432
+DB_HOST=pgbouncer
+DB_PORT=6432
 DB_USER=wch_admin
 DB_PASSWORD=STRONG_PASSWORD
 DB_NAME=wch_platform
@@ -142,7 +142,7 @@ docker compose exec postgres psql -U wch_admin -d wch_platform -c "SELECT versio
 
 # Migrations run automatically saat service start
 # Atau manual:
-# psql -h localhost -p 5433 -U wch_admin -d wch_platform < shared/migrations/000001_initial.up.sql
+# psql -h localhost -p 10433 -U wch_admin -d wch_platform < shared/migrations/000001_initial.up.sql
 ```
 
 ### 5. Redis Setup

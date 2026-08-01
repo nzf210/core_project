@@ -109,9 +109,9 @@ SUPERADMIN_PASSWORD=ganti_di_prod
 
 ### 🗄️ Database & Cache Settings
 ```ini
-# Development lokal (via docker-compose expose):
+# Development lokal (via docker-compose expose, via pgbouncer):
 DB_HOST=127.0.0.1
-DB_PORT=5433
+DB_PORT=10433
 DB_USER=wch_admin
 DB_PASSWORD=secure_postgres_password
 DB_NAME=wch_platform
@@ -122,7 +122,7 @@ DB_SSLMODE=disable
 # DB_PORT=6432
 
 REDIS_HOST=127.0.0.1   # staging: redis
-REDIS_PORT=6381         # staging: 6379
+REDIS_PORT=10631        # staging: 6379
 REDIS_PASSWORD=
 ```
 

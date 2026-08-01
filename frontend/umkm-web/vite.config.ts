@@ -5,6 +5,9 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   server: {
+    port: 3201,
+    strictPort: true,
+    host: '0.0.0.0',
     proxy: {
       // F060: Proxy /plans to API gateway (billing-service public endpoint)
       '/plans': {

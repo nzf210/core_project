@@ -8,7 +8,7 @@
 # Gunakan `make help` untuk melihat semua perintah yang tersedia.
 # Port service: lihat CLAUDE.md atau docs/FEATURE_MAP.md
 
-.PHONY: help start-all stop-all status \
+.PHONY: help dev stop start-all stop-all status \
         run-gateway run-auth run-ai run-billing run-notification run-wa-gateway \
         run-accounting run-chatbot run-business run-automation \
         run-campaign run-subscription-worker \
@@ -37,6 +37,11 @@ help:
 	@echo ""
 	@echo "  WCH Platform — Available Make Targets"
 	@echo "  ======================================"
+	@echo ""
+	@echo "  QUICK START:"
+	@echo "    make dev              — Start all services (BE + FE hot-reload)"
+	@echo "    make stop             — Stop all services"
+	@echo "    make status           — Show running services status"
 	@echo ""
 	@echo "  SERVICES:"
 	@echo "    make run-gateway      — API Gateway (port 8000)"
@@ -95,6 +100,17 @@ help:
 	@echo "    make clean-build      — Hapus binary di bin/"
 	@echo "    make clean            — clean-logs + clean-build"
 	@echo ""
+
+# =============================================================================
+# Quick Start — Alias untuk dev workflow
+# =============================================================================
+dev: _ensure_dirs
+	@echo "🚀 Starting all services (BE + FE hot-reload)..."
+	@./scripts/dev-native.sh
+
+stop:
+	@echo "🛑 Stopping all services..."
+	@./scripts/dev-native.sh --stop
 
 # =============================================================================
 # Helper: Pastikan direktori output ada

@@ -104,4 +104,4 @@ PostgreSQL (max_connections=50) — 60% reduction!
 4. Update backend pool configs (optional but recommended)
 5. Monitor with `SHOW POOLS;` and Grafana
 
-**Rollback:** Change `DB_PORT=5433` in .env untuk bypass PgBouncer.
+**Rollback:** pgbouncer selalu digunakan di semua environment — bypass tidak didukung. Jika pgbouncer bermasalah, debug dengan `docker compose logs pgbouncer`.

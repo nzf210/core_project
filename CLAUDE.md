@@ -121,7 +121,7 @@ core_project/                   ← Root monorepo (satu go.mod)
 │   └── migrations/             ← Database SQL migrations (000001 — 000063)
 │
 ├── frontend/
-│   ├── umkm-web/               ← Vue 3 + Vite (Port 3201, Docker scaled: 3201-3203)
+│   ├── umkm-web/               ← Vue 3 + Vite (Port 3201 native, Docker: 12001)
 │   ├── campaign-web/           ← Vue 3 + Vite (Port 3301)
 │   └── superadmin-web/         ← Vue 3 + Vite (Port 3401)
 │
@@ -153,8 +153,14 @@ core_project/                   ← Root monorepo (satu go.mod)
 
 ## 📡 Port Registry
 
-| Port | Service | Direktori |
-|:-----|:--------|:----------|
+**Skema port 5 digit:** `X Y ZZ` — X=env (1=dev,2=stg,3=prod), Y=kategori (0=infra,1=BE,2=FE,3=tools), ZZ=nomor service
+
+> Dokumentasi lengkap: **[docs/PORT_REGISTRY.md](docs/PORT_REGISTRY.md)**
+
+### Internal Port (konstan di semua env — komunikasi antar container)
+
+| Internal Port | Service | Direktori |
+|:-------------|:--------|:----------|
 | `8000` | API Gateway | `services/api-gateway` |
 | `8001` | Auth Service | `services/auth-service` |
 | `8002` | AI Gateway | `services/ai-gateway` |
@@ -162,19 +168,34 @@ core_project/                   ← Root monorepo (satu go.mod)
 | `8005` | Notification Service | `services/notification-service` |
 | `8006` | Subscription Worker | `services/subscription-worker` |
 | `8201` | UMKM Accounting | `apps/umkm/accounting` |
-| `8202` | WA Gateway / Chatbot (mutual exclusive) | `services/wa-gateway` / `apps/umkm/chatbot` |
+| `8202` | WA Gateway | `services/wa-gateway` |
 | `8210` | WA Cloud API | `services/wa-cloud-api` |
 | `9001` | UMKM Business | `apps/umkm/business` |
 | `9002` | Campaign API | `apps/campaign/api` |
-| `3000` | Chatwoot (Self-hosted) | docker-compose (`3000:3000`) |
-| `3001` | Grafana | docker-compose (`3001:3000`) |
-| `3100` | Loki (log aggregator) | docker-compose (`3100:3100`) |
-| `3201` | Frontend UMKM | `frontend/umkm-web` |
-| `3301` | Frontend Campaign | `frontend/campaign-web` |
-| `3401` | Frontend Superadmin | `frontend/superadmin-web` |
-| `5433` | PostgreSQL + pgvector | docker-compose (`5433:5432`) |
-| `5678` | N8N Main (Queue Mode) | docker-compose (`5678:5678`) |
-| `6381` | Redis | docker-compose (`6381:6379`) |
+
+### Host Port per Environment (expose ke luar Docker)
+
+| Service | DEV (`1xxxx`) | STG (`2xxxx`) | PROD |
+|:--------|:-------------|:-------------|:-----|
+| pgbouncer | `10433` | `20433` | internal |
+| Redis | `10631` | `20631` | internal |
+| API Gateway | internal | `21000` | `127.0.0.1:8000` |
+| UMKM Web | `12001` | `22001` | `127.0.0.1:8101` |
+| Superadmin Web | `12002` | `22002` | `127.0.0.1:8102` |
+| Campaign Web | `12003` | `22003` | `127.0.0.1:8103` |
+| Grafana | `13001` | `23001` | internal |
+| Loki | `13100` | `23100` | internal |
+| Prometheus | `13090` | `23090` | internal |
+| N8N Main | `13678` | `23678` | internal |
+| Chatwoot | `13000` | `23000` | internal |
+
+### Native Dev (make dev — Vite hot-reload, non-Docker)
+
+| Port | Service |
+|:-----|:--------|
+| `3201` | UMKM Web (Vite) |
+| `3301` | Campaign Web (Vite) |
+| `3401` | Superadmin Web (Vite) |
 
 > ⚠️ WA Gateway (8202) dan UMKM Chatbot (8202) **mutual exclusive** di native dev — jalan salah satu saja.
 

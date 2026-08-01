@@ -212,3 +212,11 @@ SONARQUBE_FINAL_STATUS.md
 SONARQUBE_FINAL_REPORT.md
 SONARQUBE_COMPLETE.md
 SONARQUBE_FIXES.md
+apps/campaign/api/tmp/main
+apps/umkm/chatbot/tmp/main
+services/ai-gateway/tmp/main
+services/auth-service/tmp/main
+services/billing-service/tmp/main
+apps/umkm/business/tmp/main
+services/api-gateway/tmp/main
+services/notification-service/tmp/main

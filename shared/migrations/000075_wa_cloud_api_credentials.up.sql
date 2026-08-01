@@ -4,7 +4,11 @@
 -- Includes: F048 — Verification tracking columns
 
 -- Enum type untuk verification_status
-CREATE TYPE IF NOT EXISTS verification_status_enum AS ENUM ('unverified', 'verified', 'rejected', 'expired', 'error');
+DO $$ BEGIN
+    CREATE TYPE verification_status_enum AS ENUM ('unverified', 'verified', 'rejected', 'expired', 'error');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 CREATE TABLE IF NOT EXISTS wa_cloud_api_credentials (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),

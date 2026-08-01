@@ -82,13 +82,13 @@ cd /home/syahril/dev/core_project
 Edit `.env`:
 
 ```bash
-# OLD (direct PostgreSQL connection)
+# OLD (direct PostgreSQL connection — no longer used)
 DB_HOST=127.0.0.1
-DB_PORT=5433
+DB_PORT=5432  # postgres internal, not exposed to host
 
-# NEW (via PgBouncer)
+# NEW (via PgBouncer — host-mapped to 10433 in DEV)
 DB_HOST=127.0.0.1
-DB_PORT=6432            # PgBouncer port
+DB_PORT=10433            # pgbouncer, host-mapped port (DEV native)
 
 # Keep PostgreSQL credentials same
 DB_USER=wch_admin
@@ -193,7 +193,7 @@ docker compose up -d
 watch -n 2 'psql -h 127.0.0.1 -p 6432 -U wch_admin -d pgbouncer -c "SHOW POOLS;"'
 
 # Monitor PostgreSQL connections
-watch -n 2 'psql -h 127.0.0.1 -p 5433 -U wch_admin -d wch_platform -c "SELECT count(*) FROM pg_stat_activity WHERE state = '\''active'\'';"'
+watch -n 2 'psql -h 127.0.0.1 -p 10433 -U wch_admin -d wch_platform -c "SELECT count(*) FROM pg_stat_activity WHERE state = '\''active'\'';"'
 
 # Check PgBouncer metrics (Prometheus exporter available)
 curl http://localhost:6432/metrics  # If metrics enabled
@@ -474,15 +474,15 @@ scrape_configs:
 **Production Issues:**
 - Monitor: `docker compose logs -f pgbouncer`
 - Admin console: `psql -h 127.0.0.1 -p 6432 -U wch_admin -d pgbouncer`
-- Emergency bypass: Change `DB_PORT=5433` to connect directly to PostgreSQL
+- Emergency bypass: pgbouncer is always in the path in DEV/STG/PROD — bypass is not supported
 
 **Rollback Plan:**
 ```bash
 # Stop PgBouncer
 docker compose stop pgbouncer
 
-# Revert .env
-DB_PORT=5433  # Direct PostgreSQL
+# Revert .env (DEV native: pgbouncer host-mapped port)
+DB_PORT=10433  # pgbouncer DEV host port (STG/PROD: 6432 internal)
 
 # Restart services
 make stop-all && make dev-all

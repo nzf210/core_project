@@ -1,146 +1,154 @@
-# Production override: COMPOSE_PROJECT_NAME=wch-prod docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# =============================================================================
+# WCH Platform — Production Port Override
 #
-# Port schema: production = port as-is (no offset)
-#   api-gateway  8000:8000  (public)
-#   auth-service 127.0.0.1:8001:8001
-#   ai-gateway   127.0.0.1:8002:8002
-#   ... dst
+# Gunakan bersama docker-compose.yml:
+#   COMPOSE_PROJECT_NAME=wch-prod docker compose \
+#     -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Skema port production:
+#   - Semua service BE/infra bound ke 127.0.0.1 (tidak expose ke internet)
+#   - Frontend bound ke 127.0.0.1 (Nginx yang handle SSL/public di port 80/443)
+#   - N8N dan Grafana bound ke 127.0.0.1 (akses via Nginx atau SSH tunnel)
+#   - Internal port TIDAK berubah — komunikasi antar container via Docker network
+#
+# Nginx di server bertindak sebagai reverse proxy:
+#   api.domain.com        → 127.0.0.1:8000  (api-gateway)
+#   umkm.domain.com       → 127.0.0.1:8101  (umkm-frontend)
+#   admin.domain.com      → 127.0.0.1:8102  (superadmin-frontend)
+#   campaign.domain.com   → 127.0.0.1:8103  (campaign-frontend)
+#   n8n.domain.com        → 127.0.0.1:5678  (n8n-main)
+#   grafana.domain.com    → 127.0.0.1:3001  (grafana)
+#
+# Ref lengkap: docs/PORT_REGISTRY.md
+# =============================================================================
 
-version: '3.8'
-
-# Isolated network agar container prod tidak bercampur dengan staging
 networks:
   default:
-    name: wch-prod-network
+    name: wch-prod-network  # isolated — tidak bercampur dengan staging
 
 services:
-  # ============================================================================
-  # Infrastructure
-  # ============================================================================
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+  # PostgreSQL tidak expose port — akses hanya via pgbouncer dalam Docker network
   postgres:
     container_name: wch-prod-postgres
     env_file: .env.prod
 
+  # pgbouncer bound ke 127.0.0.1 — hanya untuk debugging/maintenance via SSH
   pgbouncer:
     container_name: wch-prod-pgbouncer
     env_file: .env.prod
     ports:
       - "127.0.0.1:6432:6432"
 
+  # Redis bound ke 127.0.0.1 — hanya untuk debugging/maintenance via SSH
   redis:
     container_name: wch-prod-redis
     env_file: .env.prod
     ports:
-      - "127.0.0.1:6381:6379"
+      - "127.0.0.1:6379:6379"
 
-  # ============================================================================
-  # API Gateway (public facing)
-  # ============================================================================
+  # ── Backend Go Services ──────────────────────────────────────────────────────
+  # Semua service BE bound ke 127.0.0.1 — tidak boleh expose ke internet langsung
+  # Traffic publik masuk via Nginx → api-gateway → service internal
+
   api-gateway:
     container_name: wch-prod-api-gateway
     env_file: .env.prod
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # Nginx proxy: api.domain.com → 127.0.0.1:8000
 
-  # ============================================================================
-  # Backend Services
-  # ============================================================================
   auth-service:
     container_name: wch-prod-auth-service
     env_file: .env.prod
-    ports:
-      - "127.0.0.1:8001:8001"
 
   ai-gateway:
     container_name: wch-prod-ai-gateway
     env_file: .env.prod
-    ports:
-      - "127.0.0.1:8002:8002"
 
   billing-service:
     container_name: wch-prod-billing-service
     env_file: .env.prod
-    ports:
-      - "127.0.0.1:8003:8003"
 
   notification-service:
     container_name: wch-prod-notification-service
     env_file: .env.prod
-    ports:
-      - "127.0.0.1:8005:8005"
 
   subscription-worker:
     container_name: wch-prod-subscription-worker
     env_file: .env.prod
-    ports:
-      - "127.0.0.1:8006:8006"
 
   umkm-accounting:
     container_name: wch-prod-umkm-accounting
     env_file: .env.prod
-    ports:
-      - "127.0.0.1:8201:8201"
 
   wa-gateway:
     container_name: wch-prod-wa-gateway
     env_file: .env.prod
-    ports:
-      - "127.0.0.1:8202:8202"
-
-  umkm-chatbot:
-    container_name: wch-prod-umkm-chatbot
-    env_file: .env.prod
-    ports:
-      - "127.0.0.1:8203:8203"
-
-  umkm-automation:
-    container_name: wch-prod-umkm-automation
-    env_file: .env.prod
-    ports:
-      - "127.0.0.1:8204:8204"
-
-  umkm-business:
-    container_name: wch-prod-umkm-business
-    env_file: .env.prod
-    ports:
-      - "127.0.0.1:9001:9001"
-
-  campaign-api:
-    container_name: wch-prod-campaign-api
-    env_file: .env.prod
-    ports:
-      - "127.0.0.1:9002:9002"
 
   wa-cloud-api:
     container_name: wch-prod-wa-cloud-api
     env_file: .env.prod
+
+  umkm-chatbot:
+    container_name: wch-prod-umkm-chatbot
+    env_file: .env.prod
+
+  umkm-automation:
+    container_name: wch-prod-umkm-automation
+    env_file: .env.prod
+
+  umkm-business:
+    container_name: wch-prod-umkm-business
+    env_file: .env.prod
+
+  campaign-api:
+    container_name: wch-prod-campaign-api
+    env_file: .env.prod
+
+  # ── Frontend (Nginx static) ──────────────────────────────────────────────────
+  # Bound ke 127.0.0.1 — Nginx publik (SSL termination) yang forward ke sini
+
+  umkm-frontend:
+    container_name: wch-prod-umkm-frontend
     ports:
-      - "127.0.0.1:8210:8210"
+      - "127.0.0.1:8101:80"   # Nginx proxy: umkm.domain.com → 127.0.0.1:8101
+
+  superadmin-frontend:
+    container_name: wch-prod-superadmin-frontend
+    ports:
+      - "127.0.0.1:8102:80"   # Nginx proxy: admin.domain.com → 127.0.0.1:8102
+
+  campaign-frontend:
+    container_name: wch-prod-campaign-frontend
+    ports:
+      - "127.0.0.1:8103:80"   # Nginx proxy: campaign.domain.com → 127.0.0.1:8103
+
+  # ── Tools & Automation ───────────────────────────────────────────────────────
+  # Bound ke 127.0.0.1 — akses via Nginx dengan auth, atau SSH tunnel
 
   n8n-main:
     container_name: wch-prod-n8n-main
     env_file: .env.prod
     ports:
-      - "127.0.0.1:5678:5678"
+      - "127.0.0.1:5678:5678"  # Nginx proxy: n8n.domain.com → 127.0.0.1:5678
 
   n8n-worker:
     container_name: wch-prod-n8n-worker
     env_file: .env.prod
+    # Tidak perlu port — hanya consume jobs dari Redis Bull queue
 
-  # ============================================================================
-  # Observability Stack
-  # ============================================================================
-  prometheus:
-    container_name: wch-prod-prometheus
-    ports: []
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-90d}
+  chatwoot:
+    container_name: wch-prod-chatwoot
+    ports:
+      - "127.0.0.1:3000:3000"  # Nginx proxy: chat.domain.com → 127.0.0.1:3000
+
+  # ── Observability Stack ──────────────────────────────────────────────────────
+  # Tidak expose ke internet — akses via SSH tunnel atau Nginx dengan basic auth
 
   grafana:
     container_name: wch-prod-grafana
     ports:
-      - "127.0.0.1:3001:3000"
+      - "127.0.0.1:3001:3000"  # Nginx proxy: grafana.domain.com → 127.0.0.1:3001
     environment:
       - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN}
       - GF_SERVER_DOMAIN=grafana.${DOMAIN}
@@ -148,16 +156,25 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASS}
       - GF_USERS_ALLOW_SIGN_UP=false
 
-  postgres-exporter:
-    container_name: wch-prod-postgres-exporter
-    ports: []
-
-  redis-exporter:
-    container_name: wch-prod-redis-exporter
-    ports: []
-
   loki:
     container_name: wch-prod-loki
+    # Tidak expose port — hanya diakses oleh Grafana dalam Docker network
 
   promtail:
     container_name: wch-prod-promtail
+    # Tidak expose port — push logs ke loki dalam Docker network
+
+  prometheus:
+    container_name: wch-prod-prometheus
+    # Tidak expose port — hanya diakses oleh Grafana dalam Docker network
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-90d}
+
+  postgres-exporter:
+    container_name: wch-prod-postgres-exporter
+    # Tidak expose port — hanya diakses oleh Prometheus dalam Docker network
+
+  redis-exporter:
+    container_name: wch-prod-redis-exporter
+    # Tidak expose port — hanya diakses oleh Prometheus dalam Docker network
