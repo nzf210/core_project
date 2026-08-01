@@ -22,6 +22,7 @@
 
     <!-- Mobile Menu Button -->
     <button
+    type="button"
       v-if="isLoggedIn"
       class="mobile-menu-btn"
       @click="isMobileMenuOpen = true"

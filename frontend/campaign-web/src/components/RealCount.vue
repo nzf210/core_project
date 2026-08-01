@@ -7,7 +7,7 @@
         <p style="color: var(--text-secondary);">Pantau hasil suara dan kehadiran saksi secara Real-Time.</p>
       </div>
       <div>
-        <button class="btn btn-primary" @click="fetchDashboard" :disabled="loading">
+        <button type="button" class="btn btn-primary" @click="fetchDashboard" :disabled="loading">
           {{ loading ? 'Memuat...' : 'Refresh Data' }}
         </button>
       </div>
@@ -40,17 +40,17 @@
 
     <!-- Tabs Navigation -->
     <div class="tabs flex gap-4" style="margin-top: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
-      <button 
+      <button  type="button"
         :class="['tab-btn', activeTab === 'dashboard' ? 'active' : '']"
         @click="activeTab = 'dashboard'">
         📊 Dashboard Hasil
       </button>
-      <button 
+      <button  type="button"
         :class="['tab-btn', activeTab === 'saksi' ? 'active' : '']"
         @click="activeTab = 'saksi'">
         👥 Absensi Saksi
       </button>
-      <button 
+      <button type="button"
         :class="['tab-btn', activeTab === 'review' ? 'active' : '']"
         @click="activeTab = 'review'">
         ⚠️ Antrian Verifikasi C1 (AI Mismatch)
@@ -134,9 +134,9 @@
             </div>
           </div>
           <div class="actions flex gap-2" style="margin-top: auto;">
-            <button class="btn btn-success flex-1">Terima (Input Saksi)</button>
-            <button class="btn btn-primary flex-1">Terima (Bacaan AI)</button>
-            <button class="btn btn-danger flex-1">Tolak</button>
+            <button type="button" class="btn btn-success flex-1">Terima (Input Saksi)</button>
+            <button type="button" class="btn btn-primary flex-1">Terima (Bacaan AI)</button>
+            <button type="button" class="btn btn-danger flex-1">Tolak</button>
           </div>
         </div>
       </div>

@@ -38,10 +38,11 @@
                 v-if="!c.is_verified" 
                 class="btn-primary btn-sm" 
                 @click="verifyCandidate(c.id)"
+                type="button"
               >
                 Verifikasi Manual
               </button>
-              <button v-else class="btn-outline btn-sm" disabled>Sudah Diverifikasi</button>
+              <button type="button" v-else class="btn-outline btn-sm" disabled>Sudah Diverifikasi</button>
             </td>
           </tr>
         </tbody>

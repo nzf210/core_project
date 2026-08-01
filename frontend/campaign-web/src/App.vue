@@ -107,7 +107,7 @@ const getTitle = () => {
     <nav class="sidebar" :class="{ 'sidebar-open': isSidebarOpen }">
       <div class="logo-area flex items-center justify-between">
         <h1>Campaign<span class="text-gradient">Manager</span></h1>
-        <button class="mobile-close-btn" @click="isSidebarOpen = false">✕</button>
+        <button type="button" class="mobile-close-btn" @click="isSidebarOpen = false">✕</button>
       </div>
       <ul class="nav-menu">
         <li @click="setTab('dashboard')" :class="{ active: currentTab === 'dashboard' }">Dashboard Utama</li>
@@ -122,14 +122,14 @@ const getTitle = () => {
       </ul>
       
       <div style="margin-top: auto; padding: 1rem;">
-        <button @click="handleLogout" class="btn-logout">Logout</button>
+        <button type="button" @click="handleLogout" class="btn-logout">Logout</button>
       </div>
     </nav>
     
     <main class="content">
       <div class="top-nav">
         <div class="flex items-center gap-4">
-          <button class="mobile-menu-btn" @click="isSidebarOpen = true">☰</button>
+          <button type="button" class="mobile-menu-btn" @click="isSidebarOpen = true">☰</button>
           <h2>{{ getTitle() }}</h2>
         </div>
         <div class="flex items-center gap-4">

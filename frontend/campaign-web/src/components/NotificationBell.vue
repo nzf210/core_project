@@ -1,6 +1,6 @@
 <template>
   <div class="notification-container">
-    <button class="bell-btn" @click="isOpen = !isOpen">
+    <button type="button" class="bell-btn" @click="isOpen = !isOpen">
       🔔
       <span class="badge-count" v-if="unreadCount > 0">{{ unreadCount }}</span>
     </button>
@@ -14,7 +14,7 @@
         <li v-if="notifications.length === 0" class="empty">No notifications</li>
       </ul>
       <div class="dropdown-footer">
-        <button @click="sendBroadcast">Test Broadcast</button>
+        <button type="button" @click="sendBroadcast">Test Broadcast</button>
       </div>
     </div>
   </div>

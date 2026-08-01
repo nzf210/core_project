@@ -5,7 +5,7 @@
         <h2 style="font-size: 1.5rem; color: var(--accent-primary);">Manajemen Pengguna</h2>
         <p style="color: var(--text-secondary);">Kelola hierarki admin, koordinator, dan relawan.</p>
       </div>
-      <button class="btn-primary" @click="showModal = true">+ Tambah Pengguna</button>
+      <button type="button" class="btn-primary" @click="showModal = true">+ Tambah Pengguna</button>
     </div>
 
     <div class="table-container glass-card">

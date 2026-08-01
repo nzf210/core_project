@@ -2,8 +2,8 @@
   <div class="report-generator">
     <h3 style="margin-bottom: 1rem; color: var(--text-secondary)">Reporting & Analytics</h3>
     <div class="actions" style="margin-bottom: 2rem;">
-      <button class="btn-primary" @click="downloadExcel">⬇️ Export to Excel</button>
-      <button class="btn-secondary" @click="downloadPDF">⬇️ Export to PDF</button>
+      <button type="button" class="btn-primary" @click="downloadExcel">⬇️ Export to Excel</button>
+      <button type="button" class="btn-secondary" @click="downloadPDF">⬇️ Export to PDF</button>
     </div>
 
     <div v-if="reportData" class="report-preview">

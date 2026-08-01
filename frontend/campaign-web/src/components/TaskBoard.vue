@@ -44,7 +44,7 @@
           </div>
           
           <div v-if="status !== 'done'" style="margin-top: 10px;">
-            <button class="btn-secondary" @click="updateTaskStatus(t.id, 'done')">Mark Done</button>
+            <button type="button" class="btn-secondary" @click="updateTaskStatus(t.id, 'done')">Mark Done</button>
           </div>
         </div>
       </div>

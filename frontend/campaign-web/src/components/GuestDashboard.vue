@@ -6,7 +6,7 @@
         <h2 style="font-weight: 800; color: var(--text-primary)">Campaign<span class="text-gradient">Manager</span></h2>
       </div>
       <div>
-        <button class="btn-outline" @click="$emit('login')"
+        <button class="btn-outline" @click="$emit('login')" type="button"
           style="border-color: var(--accent-primary); color: var(--accent-primary);">
           Masuk (Login)
         </button>
@@ -90,13 +90,13 @@
         </div>
 
         <div class="action-buttons">
-          <button class="btn-primary" @click="$emit('register', 'relawan')">
+          <button type="button" class="btn-primary" @click="$emit('register', 'relawan')">
             <span class="icon">✋</span> Daftar Menjadi Relawan
           </button>
-          <button class="btn-secondary" @click="$emit('register', 'user_biasa')">
+          <button type="button" class="btn-secondary" @click="$emit('register', 'user_biasa')">
             <span class="icon">👤</span> Daftar Menjadi User Biasa
           </button>
-          <button class="btn-outline" @click="$emit('register', 'kandidat')">
+          <button type="button" class="btn-outline" @click="$emit('register', 'kandidat')">
             <span class="icon">👑</span> Daftar Menjadi Kandidat
           </button>
         </div>

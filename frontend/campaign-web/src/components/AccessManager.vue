@@ -15,7 +15,7 @@
           <h4>Telegram Bot API</h4>
           <label for="telegram-key-input" class="text-muted" style="margin-bottom: 0.25rem; font-size: 0.9rem; display: block;">Masukkan token dari BotFather untuk mengaktifkan OTP Telegram.</label>
           <input id="telegram-key-input" type="text" v-model="telegramKey" class="input-field" placeholder="123456789:ABCdefGHIjkl..." style="width:100%; margin-bottom: 1rem;" />
-          <button class="btn-primary" @click="saveTelegramKey">Simpan Token</button>
+          <button type="button" class="btn-primary" @click="saveTelegramKey">Simpan Token</button>
         </div>
 
         <div class="config-box">
@@ -27,7 +27,7 @@
           </div>
           
           <div v-else>
-            <button class="btn-outline" @click="generateWAQR" v-if="!waQRCode">Tampilkan QR Code WA</button>
+            <button type="button" class="btn-outline" @click="generateWAQR" v-if="!waQRCode">Tampilkan QR Code WA</button>
             <div v-if="waQRCode" style="margin-top: 1rem; text-align: center;">
               <img :src="waQRCode" alt="WA QR Code" style="border-radius: 8px; max-width: 200px;" />
               <p class="text-muted" style="margin-top: 0.5rem; font-size: 0.8rem;">Scan dengan WhatsApp Anda</p>
