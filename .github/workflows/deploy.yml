@@ -173,6 +173,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build and push pgbouncer image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./infra/pgbouncer
+          push: true
+          tags: ghcr.io/nzf210/core_project-pgbouncer:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # ============================================================================
   # JOB: Deploy Backend to VPS (only runs on *-be-v* tags)
   # ============================================================================

@@ -23,9 +23,7 @@ services:
     restart: unless-stopped
 
   pgbouncer:
-    build:
-      context: ./infra/pgbouncer
-      dockerfile: Dockerfile
+    image: ghcr.io/nzf210/core_project-pgbouncer:latest
     container_name: wch-pgbouncer
     environment:
       - DB_USER=${DB_USER:-postgres}
