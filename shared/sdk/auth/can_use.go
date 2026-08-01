@@ -69,64 +69,80 @@ func InvalidateFeatureDefCache(ctx context.Context, featureKey string) {
 	}
 }
 
+// checkFeatureInPlanMap checks if feature exists in plan_features map (handles aliases).
+func checkFeatureInPlanMap(pf PlanFeaturesRow, featureKey string) (bool, bool) {
+	keys := []string{featureKey}
+	if featureKey == "ai" {
+		keys = append(keys, "ai_requests", "ai_text")
+	}
+	for _, k := range keys {
+		if v, exists := pf.Features[k]; exists {
+			return v, true
+		}
+	}
+	return false, false
+}
+
+// checkDefaultEnabled checks if feature is enabled by default for tenant's plan.
+func checkDefaultEnabled(ctx context.Context, tenantID, featureKey string, feat *FeatureDef) bool {
+	tenantPlan := GetTenantPlan(ctx, tenantID)
+	if feat != nil {
+		for _, t := range feat.DefaultEnabled {
+			if t == tenantPlan {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// checkAliasDefaultEnabled checks alias feature definitions for default_enabled.
+func checkAliasDefaultEnabled(ctx context.Context, tenantID, featureKey string) bool {
+	if featureKey != "ai" {
+		return false
+	}
+	tenantPlan := GetTenantPlan(ctx, tenantID)
+	for _, alias := range []string{"ai_requests", "ai_text"} {
+		if aliasFeat, _ := GetFeatureDef(ctx, alias); aliasFeat != nil {
+			for _, t := range aliasFeat.DefaultEnabled {
+				if t == tenantPlan {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // CanUseFeature is the primary feature gate.
 // Returns (allowed, reason).
 func CanUseFeature(ctx context.Context, tenantID, featureKey string) (bool, string) {
-	// 1. Superadmin always allowed
 	if tier := GetTenantPlan(ctx, tenantID); tier == "superadmin" {
 		return true, ""
 	}
 
 	feat, _ := GetFeatureDef(ctx, featureKey)
 
-	// 2. If this is an addon-only feature, delegate to CanUseAddon
 	if feat != nil && feat.IsAddon {
 		ok, _ := CanUseAddon(ctx, tenantID, featureKey)
 		return ok, boolToReason(ok, feat.Name, GetTenantPlan(ctx, tenantID))
 	}
 
-	// 3. Bundled feature: check plan_features map
 	pf, _ := GetPlanFeatures(ctx, tenantID)
-
-	// Check primary key + known aliases ("ai" → "ai_requests"/"ai_text")
-	// If the key EXISTS in plan_features (even =false), that's authoritative.
-	// If key is ABSENT from plan_features, fall back to default_enabled below.
-	keys := []string{featureKey}
-	switch featureKey {
-	case "ai":
-		keys = append(keys, "ai_requests", "ai_text")
-	}
-	for _, k := range keys {
-		if v, exists := pf.Features[k]; exists {
-			return v, ""
-		}
+	if enabled, exists := checkFeatureInPlanMap(pf, featureKey); exists {
+		return enabled, ""
 	}
 
-	// 4. Key not in plan_features at all — check default_enabled from registry
-	if feat != nil {
-		for _, t := range feat.DefaultEnabled {
-			if t == GetTenantPlan(ctx, tenantID) {
-				return true, ""
-			}
-		}
-	}
-	// Also check alias feature defs for default_enabled (handles "ai" → "ai_text" etc.)
-	if featureKey == "ai" {
-		for _, alias := range []string{"ai_requests", "ai_text"} {
-			if aliasFeat, _ := GetFeatureDef(ctx, alias); aliasFeat != nil {
-				for _, t := range aliasFeat.DefaultEnabled {
-					if t == GetTenantPlan(ctx, tenantID) {
-						return true, ""
-					}
-				}
-			}
-		}
+	if checkDefaultEnabled(ctx, tenantID, featureKey, feat) {
+		return true, ""
 	}
 
-	// 5. Not enabled via plan — check if it's an addon the tenant purchased
+	if checkAliasDefaultEnabled(ctx, tenantID, featureKey) {
+		return true, ""
+	}
+
 	if feat != nil && feat.IsAddon {
-		ok, _ := CanUseAddon(ctx, tenantID, featureKey)
-		if ok {
+		if ok, _ := CanUseAddon(ctx, tenantID, featureKey); ok {
 			return true, ""
 		}
 	}

@@ -18,7 +18,7 @@ fi
 echo "[1/8] Installing Docker..."
 if ! command -v docker &> /dev/null; then
     # Download Docker install script to disk before executing (avoids piping from internet to shell)
-    curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+    curl --proto '=https' --tlsv1.2 -fsSL https://get.docker.com -o /tmp/get-docker.sh
     chmod +x /tmp/get-docker.sh
     /tmp/get-docker.sh
     usermod -aG docker $SUDO_USER

@@ -107,7 +107,7 @@ const getTitle = () => {
     <nav class="sidebar" :class="{ 'sidebar-open': isSidebarOpen }">
       <div class="logo-area flex items-center justify-between">
         <h1>Campaign<span class="text-gradient">Manager</span></h1>
-        <button type="button" class="mobile-close-btn" @click="isSidebarOpen = false">✕</button>
+        <button class="mobile-close-btn" @click="isSidebarOpen = false" type="button">✕</button>
       </div>
       <ul class="nav-menu">
         <li @click="setTab('dashboard')" :class="{ active: currentTab === 'dashboard' }">Dashboard Utama</li>
@@ -122,14 +122,14 @@ const getTitle = () => {
       </ul>
       
       <div style="margin-top: auto; padding: 1rem;">
-        <button type="button" @click="handleLogout" class="btn-logout">Logout</button>
+        <button @click="handleLogout" class="btn-logout" type="button" >Logout</button>
       </div>
     </nav>
     
     <main class="content">
       <div class="top-nav">
         <div class="flex items-center gap-4">
-          <button type="button" class="mobile-menu-btn" @click="isSidebarOpen = true">☰</button>
+          <button class="mobile-menu-btn" @click="isSidebarOpen = true" type="button">☰</button>
           <h2>{{ getTitle() }}</h2>
         </div>
         <div class="flex items-center gap-4">
@@ -166,20 +166,20 @@ const getTitle = () => {
 .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 40; }
 .logo-area { padding: 1.5rem; border-bottom: 1px solid var(--border-color); }
 .logo-area h1 { font-size: 1.5rem; font-weight: 800; margin: 0; color: var(--text-primary); }
-.mobile-close-btn { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); }
+.mobile-close-btn { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-primary); }
 .nav-menu { list-style: none; padding: 1rem 0; margin: 0; overflow-y: auto;}
-.nav-menu li { padding: 1rem 1.5rem; cursor: pointer; color: var(--text-secondary); font-weight: 500; transition: all 0.2s ease; border-left: 4px solid transparent; }
+.nav-menu li { padding: 1rem 1.5rem; cursor: pointer; color: rgba(255, 255, 255, 0.85); font-weight: 500; transition: all 0.2s ease; border-left: 4px solid transparent; }
 .nav-menu li:hover { background-color: var(--bg-primary); color: var(--text-primary); }
 .nav-menu li.active { background-color: rgba(220, 38, 38, 0.05); color: var(--accent-primary); border-left-color: var(--accent-primary); }
 .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; width: 100%; }
 .top-nav { height: 70px; background-color: var(--bg-secondary); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; flex-shrink: 0; }
 .mobile-menu-btn { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-primary); }
 .top-nav h2 { font-size: 1.25rem; font-weight: 600; margin: 0; }
-.user-profile { background-color: var(--bg-tertiary); padding: 0.5rem 1rem; border-radius: var(--radius-sm); font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem; }
+.user-profile { background-color: var(--bg-tertiary); padding: 0.5rem 1rem; border-radius: var(--radius-sm); font-weight: 600; color: rgba(255, 255, 255, 0.95); display: flex; align-items: center; gap: 0.5rem; }
 .role-badge { background: var(--accent-primary); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase; }
 .main-body { flex: 1; padding: 2rem; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.btn-logout { width: 100%; padding: 0.75rem; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; transition: all 0.2s; }
-.btn-logout:hover { background: #ef4444; color: white; }
+.btn-logout { width: 100%; padding: 0.75rem; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btn-logout:hover { background: #dc2626; color: white; }
 
 @media (max-width: 768px) {
   .sidebar { position: fixed; top: 0; bottom: 0; left: 0; transform: translateX(-100%); }

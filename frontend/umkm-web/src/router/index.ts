@@ -72,39 +72,46 @@ const router = createRouter({
 let _meCache: { key: string; ts: number; data: any } | null = null
 const ME_CACHE_TTL_MS = 30_000 // 30s
 
+function syncOnboardingFlag(value: any) {
+  const flag = sanitizeBoolean(value ? 'true' : 'false')
+  if (flag) localStorage.setItem('onboarding_completed', flag)
+}
+
+function syncPlan(value: any) {
+  localStorage.setItem('plan', sanitizeText(value || '', 50))
+}
+
+function syncRole(value: any) {
+  const role = sanitizeRole(value || '')
+  if (role) localStorage.setItem('role', role)
+}
+
+function syncFrozenStatus(isFrozen: any) {
+  const status = isFrozen ? 'frozen' : 'active'
+  sessionStorage.setItem('subscription_status', sanitizeText(status, 20))
+}
+
+function syncAddons(addons: any) {
+  if (!Array.isArray(addons)) return
+  const sanitized = addons.map((a: any) => ({
+    id: sanitizeUUID(a.id),
+    name: sanitizeText(a.name || '', 100)
+  }))
+  localStorage.setItem('tenant_addons', JSON.stringify(sanitized))
+}
+
+function syncPasswordFlag(value: any) {
+  const flag = sanitizeBoolean(value ? 'true' : 'false')
+  if (flag) localStorage.setItem('must_change_password', flag)
+}
+
 function syncUserDataToStorage(data: any) {
-  if (data.onboarding_completed !== undefined) {
-    const onboardingFlag = sanitizeBoolean(data.onboarding_completed ? 'true' : 'false')
-    if (onboardingFlag) {
-      localStorage.setItem('onboarding_completed', onboardingFlag)
-    }
-  }
-  if (data.plan !== undefined) {
-    localStorage.setItem('plan', sanitizeText(data.plan || '', 50))
-  }
-  if (data.role !== undefined) {
-    const role = sanitizeRole(data.role || '')
-    if (role) {
-      localStorage.setItem('role', role)
-    }
-  }
-  if (data.is_frozen !== undefined) {
-    const status = data.is_frozen ? 'frozen' : 'active'
-    sessionStorage.setItem('subscription_status', sanitizeText(status, 20))
-  }
-  if (data.addons !== undefined && Array.isArray(data.addons)) {
-    const sanitized = data.addons.map((a: any) => ({
-      id: sanitizeUUID(a.id),
-      name: sanitizeText(a.name || '', 100)
-    }))
-    localStorage.setItem('tenant_addons', JSON.stringify(sanitized))
-  }
-  if (data.must_change_password !== undefined) {
-    const mustChangeFlag = sanitizeBoolean(data.must_change_password ? 'true' : 'false')
-    if (mustChangeFlag) {
-      localStorage.setItem('must_change_password', mustChangeFlag)
-    }
-  }
+  if (data.onboarding_completed !== undefined) syncOnboardingFlag(data.onboarding_completed)
+  if (data.plan !== undefined) syncPlan(data.plan)
+  if (data.role !== undefined) syncRole(data.role)
+  if (data.is_frozen !== undefined) syncFrozenStatus(data.is_frozen)
+  if (data.addons !== undefined) syncAddons(data.addons)
+  if (data.must_change_password !== undefined) syncPasswordFlag(data.must_change_password)
 }
 
 async function fetchAndSyncMe(): Promise<any | null> {
@@ -169,33 +176,58 @@ function handleGuestRoute(to: any, next: any, isLoggedIn: boolean, isSuperadmin:
   return true
 }
 
+// Helper: paths that bypass onboarding/frozen checks
+function isAuthBypassPath(path: string): boolean {
+  return path === '/onboarding' || path === '/login' || path === '/register'
+}
+
+function isFrozenAllowedPath(path: string): boolean {
+  return path === '/onboarding' || path === '/settings'
+}
+
+async function syncOnboardingIfNeeded(isSuperadmin: boolean): Promise<void> {
+  if (isSuperadmin) return
+  const onboardingDone = localStorage.getItem('onboarding_completed')
+  if (onboardingDone) return
+
+  try {
+    await fetchAndSyncMe()
+  } catch {
+    // Intentionally silent: API failure handled by redirect to onboarding
+  }
+}
+
+function shouldRedirectToOnboarding(isSuperadmin: boolean): boolean {
+  if (isSuperadmin) return false
+  return !localStorage.getItem('onboarding_completed')
+}
+
+function shouldRedirectFrozenUser(to: any, isSuperadmin: boolean): boolean {
+  if (isSuperadmin) return false
+  const subscriptionStatus = sessionStorage.getItem('subscription_status')
+  if (subscriptionStatus !== 'frozen') return false
+  return !isFrozenAllowedPath(to.path)
+}
+
 // Helper: handle authenticated routes with onboarding/frozen checks
 async function handleAuthenticatedRoute(to: any, next: any, isSuperadmin: boolean): Promise<void> {
-  // Re-sync if onboarding flag missing (fixes redirect loop on new device)
-  const onboardingDone = localStorage.getItem('onboarding_completed')
-  if (!onboardingDone && !isSuperadmin) {
-    try {
-      await fetchAndSyncMe()
-    } catch (e) {
-      // Fall through to existing behavior (redirect to onboarding)
-    }
+  await syncOnboardingIfNeeded(isSuperadmin)
+
+  if (isAuthBypassPath(to.path)) {
+    next()
+    return
   }
 
-  if (to.path !== '/onboarding' && to.path !== '/login' && to.path !== '/register') {
-    const onboardingDone2 = localStorage.getItem('onboarding_completed')
-    if (!onboardingDone2 && !isSuperadmin) {
-      next({ path: '/onboarding' })
-      return
-    }
-
-    const subscriptionStatus = sessionStorage.getItem('subscription_status')
-    if (subscriptionStatus === 'frozen' && !isSuperadmin) {
-      if (to.path !== '/onboarding' && to.path !== '/settings') {
-        next({ path: '/onboarding' })
-        return
-      }
-    }
+  if (shouldRedirectToOnboarding(isSuperadmin)) {
+    next({ path: '/onboarding' })
+    return
   }
+
+  if (shouldRedirectFrozenUser(to, isSuperadmin)) {
+    next({ path: '/onboarding' })
+    return
+  }
+
   next()
 }
 

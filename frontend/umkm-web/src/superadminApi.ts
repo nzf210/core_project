@@ -50,7 +50,7 @@ async function authFetch(url: string, options: RequestInit = {}): Promise<Respon
   const res = await fetch(url, {
     ...options,
     headers: {
-      ...(options.headers || {}),
+      ...options.headers,
       'Authorization': `Bearer ${getToken()}`,
     },
   })
@@ -61,7 +61,7 @@ async function authFetch(url: string, options: RequestInit = {}): Promise<Respon
       return fetch(url, {
         ...options,
         headers: {
-          ...(options.headers || {}),
+          ...options.headers,
           'Authorization': `Bearer ${getToken()}`,
         },
       })

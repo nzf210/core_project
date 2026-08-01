@@ -14,12 +14,14 @@ import (
 )
 
 const (
-	svcAuth     = "auth-service"
-	svcCampaign = "campaign-api"
-	svcBilling  = "billing-service"
-	pathWebhook = "/webhooks"
-	pathSA      = "/api/superadmin"
-	pathAdmin   = "/admin"
+	svcAuth      = "auth-service"
+	svcCampaign  = "campaign-api"
+	svcBilling   = "billing-service"
+	svcWAGateway = "wa-gateway"
+	pathWebhook  = "/webhooks"
+	pathSA       = "/api/superadmin"
+	pathAdmin    = "/admin"
+	pathSATarget = "/superadmin"
 )
 
 func main() {
@@ -60,7 +62,7 @@ func main() {
 	// F054: Campaign webhook — must be BEFORE the catch-all /webhooks/xendit/ route
 	mux.Handle("/webhooks/xendit/campaign/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks/xendit/campaign", newProxy(getTarget(svcCampaign, "9002")+"/billing/webhook"))))
 	mux.Handle("/webhooks/xendit/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix(pathWebhook, newProxy(getTarget(svcBilling, "8003")))))
-	mux.Handle("/webhooks/wa/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix(pathWebhook, newProxy(getTarget("wa-gateway", "8202")))))
+	mux.Handle("/webhooks/wa/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix(pathWebhook, newProxy(getTarget(svcWAGateway, "8202")))))
 	mux.Handle("/webhooks/wa-cloud/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks/wa-cloud", newProxy(getTarget("wa-cloud-api", "8210")+"/webhook"))))
 	mux.Handle("/webhooks/n8n/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix(pathWebhook, newProxy(getTarget("n8n", "5678")))))
 
@@ -73,13 +75,13 @@ func main() {
 	mux.Handle(pathSA+"/landing-configs", auth.Middleware(http.StripPrefix(pathSA, newTenantProxy(getTarget(svcBilling, "8003")+pathAdmin))))
 	mux.Handle(pathSA+"/landing-configs/", auth.Middleware(http.StripPrefix(pathSA, newTenantProxy(getTarget(svcBilling, "8003")+pathAdmin))))
 	// Login endpoint — NO auth middleware (otherwise login itself requires auth!)
-	mux.Handle(pathSA+"/login", http.StripPrefix(pathSA, newTenantProxy(getTarget(svcAuth, "8001")+"/superadmin")))
+	mux.Handle(pathSA+"/login", http.StripPrefix(pathSA, newTenantProxy(getTarget(svcAuth, "8001")+pathSATarget)))
 	// F064: Platform WA provider — must come BEFORE /wa/ catch-all (Go 1.22 exact match wins)
-	mux.Handle(pathSA+"/wa/platform-provider", auth.Middleware(http.StripPrefix(pathSA, newTenantProxy(getTarget(svcAuth, "8001")+"/superadmin"))))
+	mux.Handle(pathSA+"/wa/platform-provider", auth.Middleware(http.StripPrefix(pathSA, newTenantProxy(getTarget(svcAuth, "8001")+pathSATarget))))
 	// F063: WA Center — superadmin manages platform-level WhatsApp for REG/OTP/VERIF
-	mux.Handle(pathSA+"/wa/", auth.Middleware(http.StripPrefix(pathSA, newProxy(getTarget("wa-gateway", "8202")))))
+	mux.Handle(pathSA+"/wa/", auth.Middleware(http.StripPrefix(pathSA, newProxy(getTarget(svcWAGateway, "8202")))))
 	// Catch-all superadmin routes — must be LAST
-	mux.Handle(pathSA+"/", auth.Middleware(http.StripPrefix(pathSA, newTenantProxy(getTarget(svcAuth, "8001")+"/superadmin"))))
+	mux.Handle(pathSA+"/", auth.Middleware(http.StripPrefix(pathSA, newTenantProxy(getTarget(svcAuth, "8001")+pathSATarget))))
 	mux.Handle(pathSA+"/n8n/", auth.Middleware(http.StripPrefix(pathSA+"/n8n", n8nProxy(getTarget("n8n", "5678")))))
 
 	// Profile routes — user can edit own profile
@@ -119,7 +121,7 @@ func main() {
 	mux.Handle("/affiliate/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/affiliate", newTenantProxy(getTarget(svcBilling, "8003"))))))
 	// F054: Referral link redirect — /r/{code} → frontend register with code pre-filled
 	mux.HandleFunc("/r/{code}", handleReferralLinkRedirect)
-	mux.Handle("/api/wa/", auth.Middleware(tenantRateLimitMiddleware(auth.RequireFeature("chatbot")(newTenantProxy(getTarget("wa-gateway", "8202"))))))
+	mux.Handle("/api/wa/", auth.Middleware(tenantRateLimitMiddleware(auth.RequireFeature("chatbot")(newTenantProxy(getTarget(svcWAGateway, "8202"))))))
 	// F048: Validate Meta Cloud API credential directly against wa-cloud-api
 	mux.Handle("/api/wa/validate", auth.Middleware(tenantRateLimitMiddleware(
 		http.StripPrefix("/api/wa/validate", newTenantProxy(getTarget("wa-cloud-api", "8210")+"/validate")),

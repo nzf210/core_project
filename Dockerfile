@@ -35,6 +35,10 @@ WORKDIR /app
 # wget for docker-compose healthchecks (test: ["CMD","wget",...]).
 RUN apk add --no-cache ca-certificates wget
 
+# Create non-root user for security
+RUN addgroup -g 10001 appuser && \
+    adduser -D -u 10001 -G appuser appuser
+
 # Copy binaries from builder
 COPY --from=builder /bin/auth-service /usr/local/bin/
 COPY --from=builder /bin/api-gateway /usr/local/bin/
@@ -50,6 +54,12 @@ COPY --from=builder /bin/campaign-api /usr/local/bin/
 COPY --from=builder /bin/wa-gateway /usr/local/bin/
 COPY --from=builder /bin/wa-cloud-api /usr/local/bin/
 
-# Default entrypoint (can be overridden by docker-compose)
+# Copy migrations and set ownership
 COPY --from=builder /app/shared/migrations /app/shared/migrations
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Default entrypoint (can be overridden by docker-compose)
 CMD ["sh"]

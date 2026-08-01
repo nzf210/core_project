@@ -11,7 +11,7 @@ sudo apt-get install -y git curl wget jq ufw nginx certbot python3-certbot-nginx
 
 # 2. Install Docker & Docker Compose
 if ! command -v docker &> /dev/null; then
-    curl -fsSL https://get.docker.com -o get-docker.sh
+    curl --proto '=https' --tlsv1.2 -fsSL https://get.docker.com -o get-docker.sh
     sudo sh get-docker.sh
     sudo usermod -aG docker $USER
     rm get-docker.sh
