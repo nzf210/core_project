@@ -223,6 +223,10 @@ jobs:
 
             cd "$DEPLOY_DIR"
 
+            # Ensure .env points to the correct environment file
+            ENV_FILE=".env.${{ needs.set-env.outputs.environment == 'production' && 'production' || 'staging' }}"
+            ln -sf "$ENV_FILE" .env
+
             echo "=== Logging in to GHCR ==="
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.VPS_USERNAME }} --password-stdin
 
@@ -233,9 +237,13 @@ jobs:
               umkm-accounting umkm-business umkm-chatbot umkm-automation \
               wa-gateway wa-cloud-api campaign-api
 
+            echo "=== Pulling pgbouncer image ==="
+            docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull pgbouncer
+
             echo "=== Restarting Go services ==="
             COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
             IMAGE_TAG="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d \
+              pgbouncer \
               api-gateway auth-service ai-gateway billing-service \
               notification-service subscription-worker \
               umkm-accounting umkm-business umkm-chatbot umkm-automation \

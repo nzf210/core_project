@@ -21,8 +21,6 @@
 #   prod 5433 → stg 15433   (postgres)
 #   prod 6381 → stg 16381   (redis)
 
-version: '3.8'
-
 # Isolated network agar container staging tidak bercampur dengan prod
 networks:
   default:
