@@ -207,6 +207,7 @@ func applyVoucher(ctx context.Context, code, planID, tenantID string) (bool, *st
 
 func sendTicketNotifications(tenantID string, payload TicketPayload) {
 	// Get tenant contact info
+	// Note: TEST_* env vars are intentional test overrides, not regular config
 	waNumber := os.Getenv("TEST_WA_NUMBER")
 	telegramChatID := os.Getenv("TEST_TELEGRAM_CHAT_ID")
 	email := os.Getenv("TEST_EMAIL")
@@ -282,7 +283,7 @@ func sendWANotification(tenantID, target, message string) {
 	}
 
 	waURL := "http://localhost:8202/api/wa/send"
-	if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+	if Cfg.Env == "production" || Cfg.DB.Host == "postgres" {
 		waURL = "http://wa-gateway:8202/api/wa/send"
 	}
 
@@ -317,7 +318,7 @@ func sendWANotification(tenantID, target, message string) {
 // ─────────────────────────────────────────────
 
 func sendTelegramNotification(chatID, message string) {
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	botToken := Cfg.Telegram.BotToken
 	if botToken == "" {
 		slog.Warn("TELEGRAM_BOT_TOKEN not set, skipping")
 		return
@@ -349,7 +350,7 @@ func sendTelegramNotification(chatID, message string) {
 func sendEmailNotification(email string, payload TicketPayload) {
 	// Simple SMTP email via notification-service
 	notifURL := "http://localhost:8005/api/notification/send"
-	if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+	if Cfg.Env == "production" || Cfg.DB.Host == "postgres" {
 		notifURL = "http://notification-service:8005/api/notification/send"
 	}
 

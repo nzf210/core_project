@@ -42,6 +42,8 @@ func verifyWebhookToken(ctx context.Context, callbackToken, tenantID string) err
 	}
 
 	// Priority 2: Global env token (backward compat)
+	// Note: This is kept as os.Getenv for runtime override capability
+	// Xendit webhook tokens may need emergency rotation without config rebuild
 	envToken := os.Getenv("XENDIT_WEBHOOK_TOKEN")
 	if envToken != "" {
 		if callbackToken != envToken {

@@ -37,6 +37,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	cfg := config.LoadConfig(".env")
+	Cfg = cfg // Store config globally
 	if err := initDB(cfg); err != nil {
 		slog.Error("Failed to init DB", "error", err)
 		os.Exit(1)

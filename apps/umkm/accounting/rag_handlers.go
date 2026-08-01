@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 	"core_project/shared/sdk/response"
@@ -134,9 +133,8 @@ func generateEmbedding(ctx context.Context, text string) ([]float64, error) {
 	if err != nil {
 		return nil, err
 	}
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	if apiKey != "" {
-		reqHTTP.Header.Set("Authorization", "Bearer "+apiKey)
+	if Cfg.AI.OpenAIApiKey != "" {
+		reqHTTP.Header.Set("Authorization", "Bearer "+Cfg.AI.OpenAIApiKey)
 	}
 	reqHTTP.Header.Set("Content-Type", "application/json")
 

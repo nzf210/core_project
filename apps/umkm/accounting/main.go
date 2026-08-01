@@ -85,13 +85,12 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	if os.Getenv("AI_GATEWAY_URL") != "" {
-		AIGatewayURL = os.Getenv("AI_GATEWAY_URL")
-	} else if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+	cfg := config.LoadConfig(".env")
+
+	// Set AI Gateway URL based on environment
+	if cfg.Env == "production" || cfg.DB.Host == "postgres" {
 		AIGatewayURL = "http://ai-gateway:8002/v1/chat"
 	}
-
-	cfg := config.LoadConfig(".env")
 	if err := initDB(cfg); err != nil {
 		slog.Error("Failed to init DB", "error", err)
 		os.Exit(1)

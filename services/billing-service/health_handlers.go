@@ -128,7 +128,7 @@ func handleHealthStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	getTargetURL := func(svcName, port, endpoint string) string {
-		if os.Getenv("APP_ENV") == "production" {
+		if Cfg.Env == "production" {
 			return fmt.Sprintf("http://%s:%s%s", svcName, port, endpoint)
 		}
 		return fmt.Sprintf("http://localhost:%s%s", port, endpoint)

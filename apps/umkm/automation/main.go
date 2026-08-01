@@ -32,6 +32,11 @@ func main() {
 
 	cfg := config.LoadConfig(".env")
 
+	// Set service URLs based on environment
+	if cfg.Env == "production" || cfg.DB.Host == "postgres" {
+		NotificationServiceURL = "http://notification-service:8005/api/notification/send"
+	}
+
 	var err error
 	DB, err = initDB(cfg)
 	if err != nil {
@@ -49,12 +54,6 @@ func main() {
 	if err := client.Ping(context.Background()).Err(); err != nil {
 		slog.Error("Failed to connect to Redis", "error", err)
 		os.Exit(1)
-	}
-
-	if os.Getenv("NOTIFICATION_URL") != "" {
-		NotificationServiceURL = os.Getenv("NOTIFICATION_URL")
-	} else if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
-		NotificationServiceURL = "http://notification-service:8005/api/notification/send"
 	}
 
 	pubsub := client.Subscribe(context.Background(), "tenant_events")

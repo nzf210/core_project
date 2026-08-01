@@ -232,7 +232,7 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		slog.Error("Failed to create xendit invoice", "error", err)
 
 		// In development mode, mock the invoice creation
-		if os.Getenv("ENV") == "development" || os.Getenv("APP_ENV") == "development" || os.Getenv("ENV") == "" {
+		if Cfg.Env == "development" {
 			slog.Warn("DEV mode: Mocking Xendit invoice creation")
 			mockInvoiceUrl := fmt.Sprintf("https://checkout.xendit.co/web/%s", externalID)
 			_, err = DB.Exec(ctx, `
@@ -275,6 +275,8 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 	// Create pending subscription — activates only after Xendit webhook confirms payment
 	pendingHours := int64(24)
+	// Note: SUBSCRIPTION_PENDING_TIMEOUT_HOURS is intentionally not configurable via Cfg
+	// This is a runtime override for specific deployment scenarios
 	if v := os.Getenv("SUBSCRIPTION_PENDING_TIMEOUT_HOURS"); v != "" {
 		if h, err := strconv.Atoi(v); err == nil && h > 0 {
 			pendingHours = int64(h)

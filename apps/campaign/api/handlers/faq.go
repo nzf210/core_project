@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 
 	"core_project/apps/campaign/api/repository"
 	"core_project/shared/sdk/response"
@@ -103,7 +102,7 @@ func HandleBotFAQ(w http.ResponseWriter, r *http.Request) {
 // embedQuestion calls AI Gateway /v1/embeddings.
 func embedQuestion(question string) ([]float64, error) {
 	aiGatewayURL := "http://localhost:8002/v1/embeddings"
-	if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+	if AppConfig.Env == "production" || AppConfig.DB.Host == "postgres" {
 		aiGatewayURL = "http://ai-gateway:8002/v1/embeddings"
 	}
 

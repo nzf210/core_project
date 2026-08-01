@@ -63,24 +63,20 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	if os.Getenv("AI_GATEWAY_URL") != "" {
-		AIGatewayURL = os.Getenv("AI_GATEWAY_URL")
-	}
-	if os.Getenv("ACCOUNTING_URL") != "" {
-		AccountingURL = os.Getenv("ACCOUNTING_URL")
-	} else if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+	cfg := config.LoadConfig(".env")
+
+	// Set service URLs based on environment
+	if cfg.Env == "production" || cfg.DB.Host == "postgres" {
 		AccountingURL = "http://umkm-accounting:8201"
 		AIGatewayURL = "http://ai-gateway:8002/v1/chat"
-	}
-
-	cfg := config.LoadConfig(".env")
-	if os.Getenv("WA_GATEWAY_URL") != "" {
-		WAGatewayURL = os.Getenv("WA_GATEWAY_URL")
-	} else if cfg.WhatsApp.GatewayURL != "" {
-		WAGatewayURL = cfg.WhatsApp.GatewayURL
-	} else if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
 		WAGatewayURL = "http://wa-gateway:8202"
 	}
+
+	// Override with config if available
+	if cfg.WhatsApp.GatewayURL != "" {
+		WAGatewayURL = cfg.WhatsApp.GatewayURL
+	}
+
 	if err := initDB(cfg); err != nil {
 		slog.Error("Failed to init DB", "error", err)
 		os.Exit(1)
@@ -109,7 +105,7 @@ func main() {
 	mux.HandleFunc("/webhook/wa", handleWAWebhook)
 	mux.Handle("/metrics", observability.PrometheusHandler())
 
-	port := os.Getenv("PORT")
+	port := cfg.Port
 	if port == "" {
 		port = "8203"
 	}

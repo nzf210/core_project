@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"core_project/apps/campaign/api/repository"
@@ -17,6 +16,8 @@ var visionGatewayURL = "http://ai-gateway:8002/v1/vision"
 var chatGatewayURL = "http://ai-gateway:8002/v1/chat"
 
 func init() {
+	// Note: AI_GATEWAY_URL kept as os.Getenv for runtime override capability
+	// Allows dynamic configuration without rebuilding
 	if url := os.Getenv("AI_GATEWAY_URL"); url != "" {
 		visionGatewayURL = strings.Replace(url, "/v1/chat", "/v1/vision", 1)
 		chatGatewayURL = url

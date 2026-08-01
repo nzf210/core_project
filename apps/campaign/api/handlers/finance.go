@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 
 	"core_project/apps/campaign/api/repository"
 	"core_project/shared/sdk/response"
@@ -117,7 +116,7 @@ func HandleCampaignFinance(w http.ResponseWriter, r *http.Request) {
 // syncExpenseToAccounting pushes expense record to UMKM Accounting engine via HTTP.
 func syncExpenseToAccounting(campaignID, tenantID, expenseID string, amount float64, category string) {
 	accountingURL := "http://localhost:8201/expenses"
-	if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+	if AppConfig.Env == "production" || AppConfig.DB.Host == "postgres" {
 		accountingURL = "http://umkm-accounting:8201/expenses"
 	}
 

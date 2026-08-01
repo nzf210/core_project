@@ -42,6 +42,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	cfg := config.LoadConfig(".env")
+	handlers.InitConfig(cfg)
 	if err := repository.InitDB(cfg); err != nil {
 		slog.Error("Failed to init DB", "error", err)
 		os.Exit(1)

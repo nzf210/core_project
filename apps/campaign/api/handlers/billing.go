@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -69,8 +68,7 @@ func splitExternalID(externalID string) []string {
 }
 
 func getFrontendURL() string {
-	env := os.Getenv("APP_ENV")
-	if env == "production" {
+	if AppConfig.Env == "production" {
 		return "https://wch.id"
 	}
 	return "http://localhost:3201"
@@ -208,7 +206,7 @@ func createXenditInvoice(ctx context.Context, params invoiceParams) (checkoutRes
 
 func createDevModeInvoice(ctx context.Context, params invoiceParams, xerr error) (checkoutResult, error) {
 	slog.Error("Failed to get xendit client for campaign", "tenant_id", params.tenantID, "error", xerr)
-	if os.Getenv("APP_ENV") == "development" || os.Getenv("ENV") == "development" || os.Getenv("ENV") == "" {
+	if AppConfig.Env == "development" {
 		slog.Warn("DEV mode: Mocking Xendit invoice for campaign checkout")
 		invoiceID := params.externalID
 		paymentURL := fmt.Sprintf("https://checkout.xendit.co/web/%s", params.externalID)
@@ -353,10 +351,15 @@ func validateWebhookToken(w http.ResponseWriter, r *http.Request, callbackToken 
 			WriteJSON(w, http.StatusUnauthorized, APIResponse{Message: "Unauthorized"})
 			return false
 		}
-	} else if envToken := os.Getenv("XENDIT_WEBHOOK_TOKEN"); envToken != "" && callbackToken != envToken {
-		slog.Warn("Unauthorized campaign webhook: env token mismatch")
-		WriteJSON(w, http.StatusUnauthorized, APIResponse{Message: "Unauthorized"})
-		return false
+	} else if callbackToken != "" {
+		// Note: XENDIT_WEBHOOK_TOKEN kept as os.Getenv for runtime override capability
+		// Xendit webhook tokens may need emergency rotation without config rebuild
+		envToken := os.Getenv("XENDIT_WEBHOOK_TOKEN")
+		if envToken != "" && callbackToken != envToken {
+			slog.Warn("Unauthorized campaign webhook: env token mismatch")
+			WriteJSON(w, http.StatusUnauthorized, APIResponse{Message: "Unauthorized"})
+			return false
+		}
 	}
 	return true
 }

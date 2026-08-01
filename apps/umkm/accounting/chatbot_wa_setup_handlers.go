@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
 	"strings"
 
 	"core_project/shared/sdk/config"
@@ -224,7 +223,7 @@ func handleWACloudAPICredentialPost(ctx context.Context, w http.ResponseWriter, 
 
 func validateCloudAPICredentialsAfterSave(ctx context.Context, w http.ResponseWriter, tenantID, phoneID, wabaID, token string) {
 	cloudAPIHost := "http://localhost:8210"
-	if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
+	if Cfg.Env == "production" || Cfg.DB.Host == "postgres" {
 		cloudAPIHost = "http://wa-cloud-api:8210"
 	}
 	vaURL := cloudAPIHost + "/validate"
