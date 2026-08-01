@@ -270,14 +270,14 @@ jobs:
 
             echo "=== Waiting for API Gateway ==="
             for i in $(seq 1 12); do
-              if curl -sf http://localhost:${{ needs.set-env.outputs.api_gateway_port }}/healthz; then
+              if curl -sf http://localhost:${{ needs.set-env.outputs.api_gateway_port }}/livez; then
                 echo "API Gateway healthy"
                 break
               fi
               echo "Attempt $i/12 failed, retrying in 10s..."
               sleep 10
             done
-            curl -f http://localhost:${{ needs.set-env.outputs.api_gateway_port }}/healthz || exit 1
+            curl -f http://localhost:${{ needs.set-env.outputs.api_gateway_port }}/livez || exit 1
 
             echo "=== Waiting for Auth Service ==="
             for i in $(seq 1 12); do

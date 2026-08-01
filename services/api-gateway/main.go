@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
@@ -127,6 +128,13 @@ func main() {
 		http.StripPrefix("/api/wa/validate", newTenantProxy(getTarget("wa-cloud-api", "8210")+"/validate")),
 	)))
 	mux.Handle("/api/notifications/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/notifications", newTenantProxy(getTarget("notification-service", "8005"))))))
+
+	// Liveness probe — hanya cek api-gateway sendiri, tidak ping upstream
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
 
 	// Aggregated health check — panggil semua service & return ringkas
 	mux.HandleFunc("/healthz", handleAggregatedHealthz(getTarget, cfg))
