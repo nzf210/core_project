@@ -310,18 +310,13 @@ jobs:
             echo "=== CONTAINER STATUS ==="
             docker ps -a --filter "name=${PROJECT}" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
 
-            echo "=== LOGS: CRASHED/RESTARTING SERVICES ==="
-            for svc in auth-service campaign-api subscription-worker umkm-business umkm-automation; do
+            echo "=== LOGS: ALL SERVICES ==="
+            for svc in api-gateway auth-service billing-service ai-gateway campaign-api subscription-worker umkm-accounting umkm-business umkm-automation wa-gateway wa-cloud-api; do
               cname="${PROJECT}-${svc}"
               status=$(docker inspect --format='{{.State.Status}}' "$cname" 2>/dev/null || echo "not found")
-              if [[ "$status" == "restarting" || "$status" == "exited" ]]; then
-                echo "--- $cname ($status) ---"
-                docker logs "$cname" --tail=30 2>&1
-              fi
+              echo "--- $cname ($status) ---"
+              docker logs "$cname" --tail=20 2>&1 || true
             done
-
-            echo "=== LOGS: API GATEWAY ==="
-            docker logs "${PROJECT}-api-gateway" --tail=30 2>&1 || true
 
   # ============================================================================
   # JOB: Deploy umkm-web to Cloudflare Workers (only runs on *-umkm-v* tags)
