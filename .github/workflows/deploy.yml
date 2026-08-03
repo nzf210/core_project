@@ -240,12 +240,30 @@ jobs:
             echo "=== Pulling pgbouncer image ==="
             docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull pgbouncer
 
-            echo "=== Restarting Go services ==="
+            echo "=== Restarting Go services (rolling — infra first, then BE) ==="
             COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
             IMAGE_TAG="$IMAGE_TAG" docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d \
-              pgbouncer \
-              api-gateway auth-service ai-gateway billing-service \
-              notification-service subscription-worker \
+              pgbouncer
+
+            # Wait for pgbouncer before restarting BE services
+            for i in $(seq 1 12); do
+              if docker exec ${{ needs.set-env.outputs.compose_project }}-pgbouncer nc -z 127.0.0.1 6432 > /dev/null 2>&1; then
+                echo "PgBouncer ready"
+                break
+              fi
+              sleep 5
+            done
+
+            # Restart critical auth/billing first, then the rest
+            COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
+            IMAGE_TAG="$IMAGE_TAG" docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d \
+              auth-service billing-service ai-gateway
+
+            sleep 5
+
+            COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
+            IMAGE_TAG="$IMAGE_TAG" docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d \
+              api-gateway notification-service subscription-worker \
               umkm-accounting umkm-business umkm-chatbot umkm-automation \
               wa-gateway wa-cloud-api campaign-api
 
@@ -290,6 +308,30 @@ jobs:
               sleep 10
             done
             docker exec "$AUTH_CONTAINER" wget -qO- http://localhost:8001/health > /dev/null || exit 1
+
+            echo "=== Waiting for Billing Service ==="
+            BILLING_CONTAINER="${{ needs.set-env.outputs.compose_project }}-billing-service"
+            for i in $(seq 1 12); do
+              if docker exec "$BILLING_CONTAINER" wget -qO- http://localhost:8003/health > /dev/null 2>&1; then
+                echo "Billing Service healthy"
+                break
+              fi
+              echo "Attempt $i/12 failed, retrying in 10s..."
+              sleep 10
+            done
+            docker exec "$BILLING_CONTAINER" wget -qO- http://localhost:8003/health > /dev/null || exit 1
+
+            echo "=== Waiting for WA Gateway ==="
+            WA_CONTAINER="${{ needs.set-env.outputs.compose_project }}-wa-gateway"
+            for i in $(seq 1 12); do
+              if docker exec "$WA_CONTAINER" wget -qO- http://localhost:8202/health > /dev/null 2>&1; then
+                echo "WA Gateway healthy"
+                break
+              fi
+              echo "Attempt $i/12 failed, retrying in 10s..."
+              sleep 10
+            done
+            docker exec "$WA_CONTAINER" wget -qO- http://localhost:8202/health > /dev/null || exit 1
 
             echo "=== Deployed: ${{ github.ref_name }} → ${{ needs.set-env.outputs.environment }} ==="
 

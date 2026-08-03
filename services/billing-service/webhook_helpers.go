@@ -53,7 +53,9 @@ func verifyWebhookToken(ctx context.Context, callbackToken, tenantID string) err
 		return nil
 	}
 
-	return nil
+	// Token provided but no token configured anywhere — reject to avoid silent bypass.
+	slog.Warn("Unauthorized webhook: token provided but none configured", "tenant_id", tenantID)
+	return fmt.Errorf("unauthorized")
 }
 
 // handleWalletTopupWebhook processes wallet topup invoice payment.

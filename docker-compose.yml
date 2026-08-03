@@ -246,12 +246,10 @@ services:
         condition: service_healthy
   n8n-worker:
     image: n8nio/n8n:latest
-    container_name: wch-n8n-worker
     restart: always
     command: worker
-    # Horizontal scaling: docker-compose up -d --scale n8n-worker=3
-    # deploy:
-    #   replicas: 3
+    deploy:
+      replicas: ${N8N_WORKER_REPLICAS:-1}
     environment:
       # ── Database Persistence ──────────────────────────────────────────
       - DB_TYPE=postgresdb

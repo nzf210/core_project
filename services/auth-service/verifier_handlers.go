@@ -15,7 +15,6 @@ import (
 const (
 	errSuperadminRequired = "Superadmin access required"
 	errMethodNotAllowed   = "Method not allowed"
-	defaultWAGatewayURL   = "http://wa-gateway:8202"
 )
 
 func requireSuperAdmin(r *http.Request) (*Claims, bool) {
@@ -38,7 +37,7 @@ func handleVerifierStatus(w http.ResponseWriter, r *http.Request) {
 
 	waURL := os.Getenv("WA_GATEWAY_URL")
 	if waURL == "" {
-		waURL = defaultWAGatewayURL
+		waURL = "http://wa-gateway:8202"
 	}
 	verifierTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
 	if verifierTenant == "" {
@@ -124,7 +123,7 @@ func handleVerifierQR(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	waURL := os.Getenv("WA_GATEWAY_URL")
 	if waURL == "" {
-		waURL = defaultWAGatewayURL
+		waURL = "http://wa-gateway:8202"
 	}
 	verifierTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
 	if verifierTenant == "" {
@@ -152,7 +151,7 @@ func handleVerifierDisconnect(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	waURL := os.Getenv("WA_GATEWAY_URL")
 	if waURL == "" {
-		waURL = defaultWAGatewayURL
+		waURL = "http://wa-gateway:8202"
 	}
 	verifierTenant := os.Getenv("WA_SYSTEM_TENANT_ID")
 	if verifierTenant == "" {

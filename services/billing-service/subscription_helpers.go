@@ -282,10 +282,11 @@ func sendWANotification(tenantID, target, message string) {
 		targetJID = targetJID + "@s.whatsapp.net"
 	}
 
-	waURL := "http://localhost:8202/api/wa/send"
-	if Cfg.Env == "production" || Cfg.DB.Host == "postgres" {
-		waURL = "http://wa-gateway:8202/api/wa/send"
+	waBase := Cfg.WhatsApp.GatewayURL
+	if waBase == "" {
+		waBase = "http://wa-gateway:8202"
 	}
+	waURL := waBase + "/api/wa/send"
 
 	data := url.Values{}
 	data.Set("tenant_id", tenantID)

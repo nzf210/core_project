@@ -36,8 +36,8 @@ export const menuConfig: MenuGroup[] = [
   {
     group: 'Keuangan',
     items: [
-      { label: 'Jurnal Keuangan', to: '/journal', icon: '📒' },
-      { label: 'Laporan Keuangan', to: '/reports', icon: '📊' },
+      { label: 'Jurnal Keuangan', to: '/journal', icon: '📒', roles: ['owner', 'admin', 'superadmin'] },
+      { label: 'Laporan Keuangan', to: '/reports', icon: '📊', roles: ['owner', 'admin', 'superadmin'] },
     ],
   },
   {
@@ -47,9 +47,9 @@ export const menuConfig: MenuGroup[] = [
       { label: 'Automasi', to: '/automations', icon: '⚡', roles: ['owner', 'admin', 'superadmin'] },
       { label: 'WhatsApp & AI CS', to: '/wa-setup', icon: '🤖', roles: ['owner', 'admin', 'superadmin'] },
       { label: 'Agen Afiliasi', to: '/affiliate', icon: '🤝' },
-      { label: 'Pengaturan', to: '/settings', icon: '⚙️' },
+      { label: 'Pengaturan', to: '/settings', icon: '⚙️', roles: ['owner', 'admin', 'superadmin'] },
       { label: 'Wallet', to: '/wallet', icon: '💳', roles: ['owner', 'admin', 'superadmin'] },
-      { label: 'Add-ons', to: '/addons', icon: '⚙️' },
+      { label: 'Add-ons', to: '/addons', icon: '⚙️', roles: ['owner', 'admin', 'superadmin'] },
     ],
   },
   {

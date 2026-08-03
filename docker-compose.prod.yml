@@ -133,8 +133,9 @@ services:
       - "127.0.0.1:5678:5678"  # Nginx proxy: n8n.domain.com → 127.0.0.1:5678
 
   n8n-worker:
-    container_name: wch-prod-n8n-worker
     env_file: .env.prod
+    deploy:
+      replicas: ${N8N_WORKER_REPLICAS:-2}
     # Tidak perlu port — hanya consume jobs dari Redis Bull queue
 
   chatwoot:

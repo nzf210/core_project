@@ -261,10 +261,11 @@ func sendWA(tenantID, target, message string) error {
 }
 
 func sendWAMedia(tenantID, target, message, mediaURL, mediaName string) error {
-	waGatewayURL := "http://localhost:8202/api/wa/send"
-	if os.Getenv("APP_ENV") == "production" || os.Getenv("DB_HOST") == "postgres" {
-		waGatewayURL = "http://wa-gateway:8202/api/wa/send"
+	waGatewayBase := os.Getenv("WA_GATEWAY_URL")
+	if waGatewayBase == "" {
+		waGatewayBase = "http://wa-gateway:8202"
 	}
+	waGatewayURL := waGatewayBase + "/api/wa/send"
 
 	targetJID := normalizeWAJID(target)
 
