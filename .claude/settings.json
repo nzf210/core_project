@@ -48,6 +48,24 @@
             "timeout": 60
           }
         ]
+      },
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/syahril/.local/bin/graphify hook-guard search"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/syahril/.local/bin/graphify hook-guard read"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

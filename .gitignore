@@ -221,3 +221,8 @@ services/billing-service/tmp/main
 apps/umkm/business/tmp/main
 services/api-gateway/tmp/main
 services/notification-service/tmp/main
+
+# Claude / Graphify
+.claude/settings.local.json
+*.graphify-bak
+graphify-out/
