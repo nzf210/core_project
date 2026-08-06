@@ -134,11 +134,9 @@ Format per feature:
 | F065 | Landing Page Content Management — Superadmin JSON Editor | ✅ Approved | ✅ Done | 2026-06-29 |
 | F066 | Dynamic Feature Gating — Zero-Hardcode Feature Toggle System | ✅ Approved | ✅ Done | 2026-06-30 |
 | F067 | Grafana Production-Ready Monitoring — Prometheus + 8 Dashboards | ✅ Approved | ✅ Done | 2026-07-01 |
+| F068 | Standardisasi Format Rupiah — `formatRupiah()` & `formatRupiahShort()` | ✅ Approved | ✅ Done | 2026-06-29 |
 
 ---
-
-**Spec:** [→ docs/specs/F058_superadmin_impersonate_grafana_monitoring.md](specs/F058_superadmin_impersonate_grafana_monitoring.md)
-
 
 ## F063: WA Keyword Registration (REG/OTP/VERIF)
 
@@ -323,7 +321,7 @@ Tanpa kondisi `AND min_tier IS NULL` — agar bisa raise maupun lower tier kapan
 
 ---
 
-**Spec:** [→ docs/specs/F058_superadmin_impersonate_grafana_monitoring.md](specs/F058_superadmin_impersonate_grafana_monitoring.md)
+**Spec:** [→ docs/specs/F059_wallet_payment.md](specs/F059_wallet_payment.md)
 
 
 ### 📌 Background — State Saat Ini
@@ -746,7 +744,7 @@ Tab "Transaksi":
 **Spec:** [→ docs/specs/F065_landing_page_content_management_superadmin_json_ed.md](specs/F065_landing_page_content_management_superadmin_json_ed.md)
 
 
-## F061: Standardisasi Format Rupiah
+## F068: Standardisasi Format Rupiah
 
 **Spec Status:** ✅ Approved
 **Implementation:** ✅ Done
@@ -2221,7 +2219,7 @@ Wajib update:
 - `CLAUDE.md`
 
 ### Notes:
-- ⚠️ **Migration conflict**: Claude agent membuat `shared/migrations/000034_billing_cycle.*.sql` dengan prefix yang sama dengan `000034_tenant_faqs_updated_at.*.sql` yang sudah ada. **Salah satu harus rename ke `000035_*` sebelum deploy** untuk menghindari collision saat migrate run.
+- Migration conflict `000034_billing_cycle` sudah resolved — file telah di-rename ke `000035_billing_cycle.*.sql`.
 
 ---
 
@@ -3201,9 +3199,9 @@ handleSubscribe (line 617-649)
              (sebelumnya bug: voucher override referral, sekarang stack: voucher → referral)
 ```
 
-#### G. Subscription via Wallet — Lihat F058
+#### G. Subscription via Wallet — Lihat F059
 
-Detail lengkap ada di **F058: Wallet Payment untuk Subscription & Topup**. Intinya:
+Detail lengkap ada di **F059: Wallet Payment untuk Subscription & Topup**. Intinya:
 - `handleSubscribe` dengan `pay_via_wallet=true` → deduct wallet → activateSubscription langsung (bypass Xendit)
 - Referral discount tetap di-apply sebelum wallet deduct
 - Auto-renew: cron akan auto-deduct wallet 3 hari sebelum expired
@@ -3294,7 +3292,7 @@ Tambah kolom:
 - [x] AC-4: Campaign webhook (HandleBillingWebhook) sudah hitung commission dari paid_amount. Discount WAJIB applied di checkout flow sebelumnya (AC-11 deferred).
 - [x] AC-5: Pembayaran sukses (subscription/addon/campaign) → upline dapat commission ✅ (semua sudah)
 - [x] AC-6: Voucher + referral stacking sudah fix — voucher discount applied di line 630-636, referral dihitung dari post-voucher price (line 647-649).
-- [x] AC-7: Subscription bisa bayar via wallet (bypass Xendit) jika balance cukup — **Lihat F058** ✅ (F058 done)
+- [x] AC-7: Subscription bisa bayar via wallet (bypass Xendit) jika balance cukup — **Lihat F059** ✅ (F059 done)
 - [x] AC-8: Affiliate lihat komisi per transaksi di dashboard ✅ (sudah ada handleAffiliateEarnings)
 - [x] AC-9: Superadmin ubah `discount_percent`/`commission_percent` → langsung生效 ✅ (handleAdminReferralConfig)
 - [x] AC-10: Referral link `https://wch.id/r/AGEN-XXXX` → redirect ke Register.vue dengan pre-fill ✅ (api-gateway handleReferralLinkRedirect + Register.vue pre-fill)

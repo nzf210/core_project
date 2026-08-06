@@ -1,42 +1,46 @@
 # Platform Roadmap & Milestones
 
-This roadmap outlines the phased development timeline for the WCH Multi-Product Platform. For a detailed architecture and product specification, please refer to the [Master Plan](file:///home/syahril/Desktop/dev/core_project/docs/master_plan.md).
+This roadmap outlines the phased development timeline for the WCH Multi-Product Platform. For a detailed architecture and product specification, please refer to the [Master Plan](docs/master_plan.md).
 
 ---
 
 ## 📅 Chronological Timeline
 
-### Phase 1: Foundational Infra & UMKM Bookkeeping MVP (Month 1-2)
+### Phase 1: Foundational Infra & UMKM Bookkeeping MVP ✅
 *   **Month 1**: Shared Infrastructure & Core Identity
-    *   Initialize monorepo, Docker environments, and central databases.
-    *   Deploy `services/auth-service` (JWT, SSO, RBAC) and `services/tenant-service`.
-    *   Initialize shared SDK (`shared/sdk`) and admin panel template (`frontend/admin-web`).
+    *   Monorepo, Docker environments, central databases.
+    *   `services/auth-service` (JWT, RBAC), shared SDK (`shared/sdk`), superadmin web.
 *   **Month 2**: UMKM MVP & Automated Bookkeeping
-    *   Build Double-Entry Bookkeeping core in `apps/umkm/accounting`.
-    *   Integrate WhatsApp API chatbot via n8n/webhooks.
-    *   Launch `frontend/umkm-web` dashboard.
+    *   Double-Entry Bookkeeping core (`apps/umkm/accounting`).
+    *   WhatsApp chatbot via n8n/webhooks.
+    *   `frontend/umkm-web` dashboard.
 
-### Phase 2: Monetization, AI Orchestration & Subscription Engine (Month 3-4)
+### Phase 2: Monetization, AI Orchestration & Subscription Engine ✅
 *   **Month 3**: AI Gateway & Billing/Monetization Engine
-    *   Build `services/billing-service` integrated with Stripe/Xendit.
-    *   Launch `services/ai-gateway` for LLM routing, semantic caching, and cost limiting.
-    *   Add AI OCR receipt scanner and conversational accounting voice/text in `apps/umkm`.
-*   **Month 4**: ~~SaaS Crypto Trading Bot~~ *(ARCHIVED)*
-    *   ~~Integrate `CCXT` multi-exchange trading library inside `apps/crypto`.~~
-    *   ~~Build the asynchronous high-frequency/scheduler bot execution worker (`apps/crypto/worker`).~~
-    *   ~~Launch `frontend/crypto-web` dashboard with TradingView charts and real-time PnL.~~
-    *   ~~Enforce billing plan restrictions on bot execution quotas.~~
+    *   `services/billing-service` (Xendit subscription, wallet, voucher — Lite/Pro/Ultimate tiers).
+    *   `services/ai-gateway` for LLM routing, semantic caching, and per-tenant billing.
+    *   AI OCR receipt scanner dan conversational accounting via WhatsApp.
+*   **Month 4**: Platform Expansion *(Crypto ARCHIVED — replaced with platform hardening)*
+    *   Hybrid WhatsApp architecture (whatsmeow + Meta Cloud API).
+    *   Referral & affiliate system (F036, F054).
+    *   Dynamic feature gating & zero-hardcode feature toggle (F066).
 
-### Phase 3: Campaign & Election Winning Platform (Month 5-6)
+### Phase 3: Campaign & Election Winning Platform ✅
 *   **Month 5**: Campaign Management MVP
-    *   Build `apps/campaign` API for volunteer onboarding, geofenced surveys, and voter mapping.
-    *   Integrate visual demographics map using Leaflet/Mapbox in `frontend/campaign-web`.
-    *   Implement Quick Count / Real Count system with C1 Plano OCR validation.
-*   **Month 6**: n8n Workflow Automation, Security Audits, & Production Deployment
-    *   Set up global automation flows in `services/workflow-service` using self-hosted n8n.
-    *   Conduct end-to-end data encryption verification and stress-testing of WebSocket tickers.
-    *   Configure Nginx reverse proxies, SSL certificates, and deploy multi-container ecosystem.
+    *   `apps/campaign` API: volunteer onboarding, geofenced surveys, voter mapping.
+    *   Quick Count / Real Count system with C1 Plano OCR validation.
+    *   GIS & map (Leaflet), Voter CRM, coordinator hierarchy.
+*   **Month 6**: Production-Ready Infrastructure
+    *   N8N Queue Mode dengan Redis worker scaling.
+    *   Prometheus + Grafana monitoring — 8 dashboards (F067).
+    *   Nginx reverse proxy, SSL, multi-container Docker orchestration.
+
+### Phase 4: Quality & Security Hardening (2026-07 — ongoing)
+*   Code quality compliance — SonarQube standards, file size limits, test coverage.
+*   Rate limiting semua critical endpoints (auth, OTP, billing).
+*   PgBouncer connection pooling untuk production scale.
+*   Superadmin impersonate, dynamic feature matrix, landing page CMS (F058, F065, F066).
 
 ---
 
-*For monetization strategies, please see [Monetization Plan](file:///home/syahril/Desktop/dev/core_project/docs/monetization.md).*
+*Tier langganan aktif: **Lite / Pro / Ultimate** (lihat `services/billing-service` untuk detail quota).*

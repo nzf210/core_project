@@ -1,7 +1,7 @@
 # Product Requirements Document (PRD) — WCH Platform
-**Versi:** 1.0.0
-**Tanggal Update Terakhir:** 2026-05-29
-**Ringkasan Perubahan:** Pembuatan PRD terpusat perdana yang menggabungkan seluruh ekosistem produk (UMKM, Crypto Trading Bot, Campaign Management) berdasarkan MVP yang ada dan roadmap mendatang.
+**Versi:** 1.1.0
+**Tanggal Update Terakhir:** 2026-08-06
+**Ringkasan Perubahan:** v1.1.0 — Hapus Crypto Trading Bot (ARCHIVED). Seragamkan nama tier ke Lite/Pro/Ultimate sesuai implementasi aktual. v1.0.0 — Pembuatan PRD terpusat perdana.
 
 ---
 
@@ -22,8 +22,8 @@ Jika ada penambahan/pengurangan fitur di masa depan, PRD ini akan diperbarui den
 4. **AI Conversational Accounting & WhatsApp Agent**: Chatbot ( Web), Redis Async Queue (100 workers), RAG prompt dinamis, input jurnal via chat (NLP), eskalasi manual ke admin
 5. **Automation & Background Insights**: Analisis data berkala, laporan bulanan AI via email, whatsapps dan telegram.
 
-### B. SaaS Crypto Trading Bot
-1. **Dashboard & Analytics**: Tampilan harga kripto real-time, indikator teknikal, manajemen API key exchange (CRUD), registrasi/login pengguna.
+### B. ~~SaaS Crypto Trading Bot~~ *(ARCHIVED)*
+*(Produk ini telah diarsipkan dan tidak aktif dikembangkan. Kode tersedia di `apps/crypto/` untuk referensi.)*
 
 ### C. Campaign & Political Management (Aplikasi Pemenangan)
 1. **Dashboard & Campaign**: Statistik kampanye, progress dukungan, timeline, multi-kandidat/periode.
@@ -185,7 +185,7 @@ Jika ada penambahan/pengurangan fitur di masa depan, PRD ini akan diperbarui den
 *(Fitur yang melayani ketiga produk di atas)*
 
 - **Auth & Tenant Service**: SSO terpusat, RBAC, Isolasi data (UMKM A tidak bisa lihat data UMKM B).
-- **Billing Service**: SaaS tiering (Lite, Pro, Enterprise), Kuota Usage, Integrasi Gateway, Buatkan Kupon untuk bonus 3 bulan untuk Lite. jaadi untuk promosi di berikan kupon 
+- **Billing Service**: SaaS tiering (Lite, Pro, Ultimate), Kuota Usage, Integrasi Gateway (Xendit), Wallet, Voucher/Kupon.
 - **AI Gateway**: Proksi sentral untuk LLM (MiniMax M2.7), Semantic Cache (Redis), Rate limiting agar biaya token terkontrol.
 - **Workflow & Notifications**: Email transaksional, Blast WA, Telegram notification, n8n automation engine.
 

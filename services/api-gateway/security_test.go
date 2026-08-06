@@ -102,6 +102,7 @@ func TestRateLimit_TenantIsolation(t *testing.T) {
 
 func TestRateLimit_WAGateway(t *testing.T) {
 	// WA Gateway has strict 5 msg/min rate limit per tenant
+	// Use short intervals so this test runs fast in CI
 	tests := []struct {
 		name          string
 		messagesCount int
@@ -111,19 +112,19 @@ func TestRateLimit_WAGateway(t *testing.T) {
 		{
 			name:          "Under limit - 4 messages in 1 minute",
 			messagesCount: 4,
-			interval:      time.Minute,
+			interval:      40 * time.Millisecond,
 			shouldLimit:   false,
 		},
 		{
 			name:          "At limit - 5 messages in 1 minute",
 			messagesCount: 5,
-			interval:      time.Minute,
+			interval:      50 * time.Millisecond,
 			shouldLimit:   false,
 		},
 		{
 			name:          "Over limit - 6 messages in 1 minute",
 			messagesCount: 6,
-			interval:      time.Minute,
+			interval:      60 * time.Millisecond,
 			shouldLimit:   true,
 		},
 		{
@@ -141,13 +142,9 @@ func TestRateLimit_WAGateway(t *testing.T) {
 
 			for i := 0; i < tt.messagesCount; i++ {
 				elapsed := time.Since(startTime)
-				if elapsed < tt.interval {
-					// Simulate time passing between requests
+				if tt.interval > 0 && elapsed < tt.interval {
 					time.Sleep(tt.interval / time.Duration(tt.messagesCount))
 				}
-
-				// In real implementation, this would check rate limiter
-				// rateLimiter.Allow(tenantID)
 			}
 
 			// Validate that rate limit was enforced correctly

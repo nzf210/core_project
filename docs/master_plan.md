@@ -17,58 +17,49 @@ Alih-alih membangun tiga aplikasi terpisah dari nol, kita mengadopsi pola **Shar
 ```mermaid
 graph TD
     %% Frontend Layer
-    subgraph Frontend ["Frontend Web Applications (Next.js / React)"]
-        FE_Crypto["Crypto Bot Web<br/>(crypto-web)"]
+    subgraph Frontend ["Frontend Web Applications (Vue 3 + Vite)"]
         FE_UMKM["UMKM & Accounting Web<br/>(umkm-web)"]
         FE_Campaign["Campaign Management Web<br/>(campaign-web)"]
-        FE_Admin["Global Admin Dashboard<br/>(admin-web)"]
+        FE_Admin["Superadmin Dashboard<br/>(superadmin-web)"]
     end
 
     %% API Gateway Layer
-    Gateway["Nginx / API Gateway"]
+    Gateway["API Gateway (Port 8000)"]
 
     %% Services / Backend apps
     subgraph CoreApps ["Core Business Apps"]
-        App_Crypto["Crypto Bot App<br/>(apps/crypto)"]
-        App_UMKM["UMKM & Accounting App<br/>(apps/umkm)"]
+        App_UMKM["UMKM App<br/>(apps/umkm)"]
         App_Campaign["Campaign Management App<br/>(apps/campaign)"]
     end
 
     subgraph SharedServices ["Shared Platform Services"]
-        S_Auth["Auth Service<br/>(JWT, OAuth2, RBAC)"]
-        S_Tenant["Tenant Service<br/>(Multi-Tenant Hub)"]
-        S_Billing["Billing Service<br/>(Stripe/Xendit Subscription)"]
-        S_AI["AI Gateway<br/>(LLM Orchestration, Cache)"]
-        S_Notify["Notification Service<br/>(WA, Email, Push)"]
-        S_Workflow["Workflow Service<br/>(n8n Integration)"]
+        S_Auth["Auth Service<br/>(JWT, RBAC)"]
+        S_Billing["Billing Service<br/>(Xendit, Wallet, Voucher)"]
+        S_AI["AI Gateway<br/>(LLM Proxy, Semantic Cache)"]
+        S_Notify["Notification Service<br/>(WA, Email, Telegram)"]
+        S_WA["WA Gateway<br/>(whatsmeow + Meta Cloud API)"]
     end
 
     %% Database Layer
     subgraph Databases ["Database & Cache Layer"]
-        DB_Postgres[("PostgreSQL<br/>(Schemas per App/Tenant)")]
-        DB_Redis[("Redis<br/>(Cache & WebSocket Session)")]
-        DB_Timescale[("TimescaleDB<br/>(Market Ticker & Bot logs)")]
+        DB_Postgres[("PostgreSQL<br/>(Shared Schema, tenant_id isolation)")]
+        DB_Redis[("Redis<br/>(Cache, Pub/Sub, Rate Limit)")]
     end
 
     %% Connections
-    FE_Crypto --> Gateway
     FE_UMKM --> Gateway
     FE_Campaign --> Gateway
     FE_Admin --> Gateway
 
     Gateway --> S_Auth
-    Gateway --> App_Crypto
     Gateway --> App_UMKM
     Gateway --> App_Campaign
 
-    App_Crypto --> SharedServices
     App_UMKM --> SharedServices
     App_Campaign --> SharedServices
 
     SharedServices --> DB_Postgres
     SharedServices --> DB_Redis
-    App_Crypto --> DB_Timescale
-    App_Crypto --> DB_Redis
     App_UMKM --> DB_Postgres
     App_Campaign --> DB_Postgres
 ```
@@ -77,22 +68,9 @@ graph TD
 
 ## 2. Analisis Mendalam & Fitur Utama Produk
 
-### 🚀 Produk 1: SaaS Crypto Trading Bot (`apps/crypto`)
-Platform otomatisasi perdagangan kripto berbasis web yang dapat disewa oleh pengguna retail (SaaS).
+### 🚀 ~~Produk 1: SaaS Crypto Trading Bot (`apps/crypto`)~~ *(ARCHIVED)*
 
-*   **Fitur Utama**:
-    1.  **Exchange Integration (API/Secret Key Management)**: Integrasi aman menggunakan enkripsi AES-256 untuk Binance, Tokocrypto, Indodax, dan Bybit (menggunakan library `CCXT` atau wrapper native).
-    2.  **Strategy Builder & Pre-set Bots**:
-        *   *Grid Bot*: Beli rendah, jual tinggi dalam range harga tertentu.
-        *   *DCA (Dollar-Cost Averaging) Bot*: Pembelian berkala otomatis berdasarkan indikator teknis (RSI, MACD).
-        *   *Signal Bot*: Eksekusi trading otomatis berdasarkan webhook eksternal (misal: TradingView alerts).
-    3.  **Backtesting Engine**: Pengujian strategi bot menggunakan data historis pasar sebelum dijalankan secara live.
-    4.  **Portfolio Analytics & Dashboard**: Visualisasi PnL (Profit and Loss), Win Rate, alokasi aset, dan riwayat transaksi secara real-time.
-    5.  **Multi-Tier SaaS Model**: Limitasi jumlah bot aktif, volume trading, dan jenis bot berdasarkan tier paket langganan (Basic, Pro, Advanced).
-*   **Komponen Teknis**:
-    *   `api/`: Handler HTTP untuk manajemen bot, koneksi API exchange, dan konfigurasi strategi.
-    *   `domain/`: Logika bisnis kalkulasi trading, eksekusi order, dan kalkulasi PnL.
-    *   `worker/`: Background worker berkinerja tinggi untuk memonitor ticker harga pasar, mengevaluasi kondisi trading, dan mengeksekusi order secara asinkron.
+> Produk ini telah diarsipkan. Kode tersedia di `apps/crypto/` untuk referensi historis namun tidak aktif dikembangkan.
 
 ---
 
@@ -142,7 +120,7 @@ Untuk mempercepat pengembangan, kita menggunakan **Shared Microservices** (`serv
 
 ### 💳 3. Billing Service (`services/billing-service`)
 *   **Fungsi**: Modul monetisasi global.
-*   **Fitur**: Integrasi payment gateway (Xendit untuk pasar lokal, Stripe untuk pasar global), penanganan siklus langganan (subscription cycle), invoicing otomatis, promo/kupon, denda keterlambatan, dan webhook pembayaran.
+*   **Fitur**: Integrasi payment gateway (Xendit untuk pasar lokal), penanganan siklus langganan (subscription cycle), invoicing otomatis, promo/kupon/voucher, wallet balance, dan webhook pembayaran. Tier aktif: **Lite, Pro, Ultimate**.
 
 ### 🤖 4. AI Gateway (`services/ai-gateway`)
 *   **Fungsi**: Proksi tunggal untuk konsumsi LLM (OpenAI, Gemini, Claude, Llama).
@@ -172,10 +150,10 @@ Kami merekomendasikan pembagian jadwal pengerjaan selama **6 Bulan** dengan pend
 |  * Setup monorepo shared sdk, Docker infra, DB, Auth & Tenant Service                              |
 |  * UMKM MVP: Pencatatan keuangan manual, Laporan Keuangan, WA Chatbot dasar                        |
 +---------------------------------------------------------------------------------------------------+
-| Bulan 3-4: MONETISASI, AI GATEWAY, & SAAS CRYPTO TRADING BOT                                       |
+| Bulan 3-4: MONETISASI & AI GATEWAY                                                                 |
 | [=======================================>]                                                         |
-|  * Implementasi AI Gateway & Billing Service (Xendit/Stripe)                                      |
-|  * Crypto Bot MVP: Integrasi API Exchange, Grid & DCA Bot Engine, Dashboard PnL                    |
+|  * Implementasi AI Gateway & Billing Service (Xendit, tier: Lite/Pro/Ultimate)                    |
+|  * Hybrid WA (whatsmeow + Meta Cloud API), Referral & Affiliate System                             |
 +---------------------------------------------------------------------------------------------------+
 | Bulan 5-6: APLIKASI PEMENANGAN PEMILU & HARDENING SYSTEM                                           |
 | [=======================================>]                                                         |
@@ -206,19 +184,18 @@ Kami merekomendasikan pembagian jadwal pengerjaan selama **6 Bulan** dengan pend
 #### **Bulan 3: Monetisasi (Billing) & Integrasi AI Gateway Cerdas**
 *   **Tujuan**: Menghubungkan gateway pembayaran dan membangun pusat pengelolaan kecerdasan buatan.
 *   **Tugas**:
-    1.  Membangun `services/billing-service` terintegrasi dengan Payment Gateway (misal: Xendit/Stripe).
-    2.  Membangun `services/ai-gateway` untuk orkestrasi LLM (OpenAI GPT-4o / Gemini 1.5 Pro) dengan semantic cache Redis.
+    1.  Membangun `services/billing-service` terintegrasi dengan Xendit (payment gateway lokal).
+    2.  Membangun `services/ai-gateway` untuk orkestrasi LLM (MiniMax M2.7, fallback Gemini) dengan semantic cache Redis.
     3.  Implementasi AI OCR Receipt Scanner di aplikasi UMKM (unggah foto nota langsung tercatat otomatis di pembukuan).
     4.  Implementasi Asisten Akuntansi Suara/Teks cerdas di Telegram/WhatsApp.
 
-#### **Bulan 4: Peluncuran MVP SaaS Crypto Bot**
-*   **Tujuan**: Meluncurkan platform perdagangan kripto otomatis untuk pengguna berbayar.
+#### **Bulan 4: Platform Hardening & Hybrid WA** *(Crypto ARCHIVED — diganti dengan)*
+*   **Tujuan**: Memperkuat platform dengan hybrid WhatsApp, referral system, dan feature gating.
 *   **Tugas**:
-    1.  Integrasi library trading `CCXT` di `apps/crypto`.
-    2.  Membangun sistem enkripsi aman AES-256 untuk menyimpan API key exchange pengguna.
-    3.  Membuat execution engine asinkron (`apps/crypto/worker`) untuk Grid Bot dan DCA Bot.
-    4.  Membangun UI dashboard trading `frontend/crypto-web/` dengan integrasi Chart (TradingView lightweight charts) dan dasbor PnL real-time.
-    5.  Menghubungkan limitasi bot berdasarkan langganan pengguna di `billing-service`.
+    1.  Implementasi hybrid WA architecture: whatsmeow (unofficial) + Meta Cloud API (official).
+    2.  Referral & affiliate system dengan commission tracking.
+    3.  Dynamic feature gating — zero-hardcode feature toggle per tenant.
+    4.  Wallet system untuk subscription payment bypass Xendit.
 
 #### **Bulan 5: Peluncuran MVP Aplikasi Pemenangan Pemilu**
 *   **Tujuan**: Menyediakan platform pemetaan suara kampanye politik tingkat lokal/nasional.
@@ -246,10 +223,8 @@ Mengingat platform ini melayani tiga vertikal bisnis yang sangat berbeda dengan 
 1.  **Shared Database (PostgreSQL)**:
     *   Satu database server hosting dengan skema terpisah untuk masing-masing modul (`public`, `auth`, `tenant`, `umkm`, `campaign`).
     *   Data UMKM menerapkan pendekatan *Shared Database, Isolated Schemas* atau *Shared Database, Shared Schema with Tenant ID*. Kami menyarankan *Shared Database, Shared Schema with Tenant ID* di mana setiap tabel penting memiliki kolom `tenant_id` terindeks untuk efisiensi resource.
-2.  **TimescaleDB/InfluxDB (Optional - Untuk Crypto)**:
-    *   Digunakan khusus untuk menyimpan data historis harga kripto (*historical OHLCV data*) dan catatan pergerakan bot yang berukuran sangat besar (*time-series data*) agar database utama PostgreSQL tidak kepenuhan.
-3.  **Redis Cache & Pub/Sub**:
-    *   Digunakan untuk menyimpan sesi aktif pengguna, caching model kecerdasan buatan, rate-limiting API, dan sebagai message broker broker pub/sub real-time untuk order execution bot kripto.
+2.  **Redis Cache & Pub/Sub**:
+    *   Digunakan untuk menyimpan sesi aktif pengguna, caching AI responses, rate-limiting API, dan sebagai message broker pub/sub real-time untuk automation worker.
 
 ---
 
