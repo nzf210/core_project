@@ -486,4 +486,4 @@ stg-%:
 	@bash scripts/release.sh "stg-$*"
 
 prod-%:
-	@bash scripts/release.sh "$*"
+	@bash scripts/release.sh "prod-$*"
