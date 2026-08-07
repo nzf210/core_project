@@ -283,6 +283,7 @@ services:
         condition: service_healthy
   umkm-chatbot:
     image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
+    container_name: wch-umkm-chatbot
     command:
       - umkm-chatbot
     environment:
@@ -343,6 +344,7 @@ services:
     restart: unless-stopped
   wa-gateway:
     image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
+    container_name: wch-wa-gateway
     command:
       - wa-gateway
     environment:

@@ -228,7 +228,7 @@ jobs:
             ln -sf "$ENV_FILE" .env
 
             echo "=== Logging in to GHCR ==="
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.VPS_USERNAME }} --password-stdin
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} --password-stdin
 
             echo "=== Pulling image ghcr.io/nzf210/core_project:${IMAGE_TAG} ==="
             IMAGE_TAG="$IMAGE_TAG" docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull \
