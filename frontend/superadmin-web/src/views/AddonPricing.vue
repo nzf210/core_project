@@ -38,7 +38,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const res = await request('/admin/available-features')
+    const res = await request('/api/superadmin/billing/available-features')
     addons.value = (res.data || []).filter((f: AddonFeature) => f.is_addon)
   } catch (e: any) {
     error.value = e.message
@@ -51,7 +51,7 @@ async function saveAddon(addon: AddonFeature) {
   saving.value[addon.feature_key] = true
   successMsg.value = ''
   try {
-    await request(`/admin/available-features/${addon.feature_key}`, {
+    await request(`/api/superadmin/billing/available-features/${addon.feature_key}`, {
       method: 'PATCH',
       body: JSON.stringify({
         addon_price_rupiah: addon.addon_price_rupiah,

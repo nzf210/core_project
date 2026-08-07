@@ -61,93 +61,93 @@ async function request(path: string, options: RequestInit = {}) {
 
 export const api = {
   // Dashboard
-  getDashboard: () => request('/admin/dashboard'),
+  getDashboard: () => request('/api/superadmin/dashboard'),
 
   // Voucher programs
-  listVoucherPrograms: () => request('/admin/voucher-programs'),
+  listVoucherPrograms: () => request('/api/superadmin/billing/voucher-programs'),
   createVoucherProgram: (body: any) =>
-    request('/admin/voucher-programs', { method: 'POST', body: JSON.stringify(body) }),
+    request('/api/superadmin/billing/voucher-programs', { method: 'POST', body: JSON.stringify(body) }),
   updateVoucherProgram: (id: string, body: any) =>
-    request(`/admin/voucher-programs/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+    request(`/api/superadmin/billing/voucher-programs/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteVoucherProgram: (id: string) =>
-    request(`/admin/voucher-programs/${id}`, { method: 'DELETE' }),
+    request(`/api/superadmin/billing/voucher-programs/${id}`, { method: 'DELETE' }),
   bulkUploadVoucherPrograms: (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
     const headers: Record<string, string> = {}
     const tok = getToken()
     if (tok) headers['Authorization'] = `Bearer ${tok}`
-    return fetch(`${API_BASE}/admin/voucher-programs/bulk-upload`, {
+    return fetch(`${API_BASE}/api/superadmin/billing/voucher-programs/bulk-upload`, {
       method: 'POST',
       headers,
       body: formData,
     }).then(r => r.json())
   },
   getVoucherAnalytics: (programId?: string) =>
-    request(`/admin/voucher-analytics${programId ? `?program_id=${programId}` : ''}`),
+    request(`/api/superadmin/billing/voucher-analytics${programId ? `?program_id=${programId}` : ''}`),
 
   // Voucher link generation
   generateVoucherLinks: (body: any) =>
-    request('/admin/voucher-links/generate', { method: 'POST', body: JSON.stringify(body) }),
+    request('/api/superadmin/billing/voucher-links/generate', { method: 'POST', body: JSON.stringify(body) }),
   listVoucherLinks: (params: { program_id?: string; redeemed?: boolean } = {}) => {
     const qs = new URLSearchParams()
     if (params.program_id) qs.set('program_id', params.program_id)
     if (params.redeemed) qs.set('redeemed', 'true')
-    return request(`/admin/voucher-links?${qs.toString()}`)
+    return request(`/api/superadmin/billing/voucher-links?${qs.toString()}`)
   },
 
   // Plans & features
-  listPlans: () => request('/admin/plans'),
+  listPlans: () => request('/api/superadmin/billing/plans'),
 
   // Tenant management
-  getTenants: () => request('/admin/tenants'),
+  getTenants: () => request('/api/superadmin/tenants'),
   createTenant: (body: any) =>
-    request('/admin/tenants', { method: 'POST', body: JSON.stringify(body) }),
+    request('/api/superadmin/tenants', { method: 'POST', body: JSON.stringify(body) }),
   getTenantProfile: (tenantId: string) =>
-    request(`/admin/tenants/profile?id=${encodeURIComponent(tenantId)}`),
+    request(`/api/superadmin/tenants/profile?id=${encodeURIComponent(tenantId)}`),
   updateTenantProfile: (data: any) =>
-    request('/admin/tenants/profile', { method: 'PUT', body: JSON.stringify(data) }),
+    request('/api/superadmin/tenants/profile', { method: 'PUT', body: JSON.stringify(data) }),
   uploadTenantLogo: (tenantId: string, file: File) => {
     const formData = new FormData()
     formData.append('logo', file)
     const tok = getToken()
-    return fetch(`${API_BASE}/admin/tenants/profile/logo?id=${encodeURIComponent(tenantId)}`, {
+    return fetch(`${API_BASE}/api/superadmin/tenants/profile/logo?id=${encodeURIComponent(tenantId)}`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${tok}` },
       body: formData,
     }).then(r => r.json())
   },
   deleteTenant: (tenantId: string) =>
-    request(`/admin/tenants?id=${encodeURIComponent(tenantId)}`, { method: 'DELETE' }),
+    request(`/api/superadmin/tenants?id=${encodeURIComponent(tenantId)}`, { method: 'DELETE' }),
   impersonateTenant: (tenantId: string) =>
-    request(`/admin/tenants/${encodeURIComponent(tenantId)}/impersonate`, { method: 'POST' }),
+    request(`/api/superadmin/tenants/${encodeURIComponent(tenantId)}/impersonate`, { method: 'POST' }),
   listPlanFeatures: (planId?: string) =>
-    request(`/admin/plan-features${planId ? `?plan_id=${planId}` : ''}`),
+    request(`/api/superadmin/billing/plan-features${planId ? `?plan_id=${planId}` : ''}`),
   fetchPlanFeatureMatrix: (planId: string) =>
-    request(`/admin/plan-features-matrix/${planId}`),
+    request(`/api/superadmin/billing/plan-features-matrix/${planId}`),
   updatePlanFeatureNumeric: (planId: string, features: Record<string, number>) =>
-    request(`/admin/plan-features-matrix/${planId}`, {
+    request(`/api/superadmin/billing/plan-features-matrix/${planId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(features),
     }),
 
   // Frozen accounts
-  getFrozenAccounts: () => request('/admin/dashboard').then((d: any) => d.data?.recent_frozen || []),
+  getFrozenAccounts: () => request('/api/superadmin/dashboard').then((d: any) => d.data?.recent_frozen || []),
 
   // Monitoring / HA status
-  getHealthStatus: () => request('/admin/health-status'),
+  getHealthStatus: () => request('/api/superadmin/billing/health-status'),
 
   // F063: WA Center — platform-level WhatsApp for REG/OTP/VERIF
-  getWAStatus: () => request('/admin/wa/status', {
+  getWAStatus: () => request('/api/superadmin/wa/status', {
     headers: { 'X-Tenant-ID': 'system' }
   }),
-  getWAQR: () => request('/admin/wa/qr', {
+  getWAQR: () => request('/api/superadmin/wa/qr', {
     headers: { 'X-Tenant-ID': 'system' }
   }),
   // F064: Platform WA provider selector
-  getPlatformProvider: () => request('/admin/wa/platform-provider'),
-  setPlatformProvider: (wa_provider: string) => request('/admin/wa/platform-provider', {
+  getPlatformProvider: () => request('/api/superadmin/wa/platform-provider'),
+  setPlatformProvider: (wa_provider: string) => request('/api/superadmin/wa/platform-provider', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ wa_provider }),

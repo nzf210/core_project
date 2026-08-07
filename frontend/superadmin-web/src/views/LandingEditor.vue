@@ -24,7 +24,7 @@ const sectionLabel = (id: string) => ({
 const loadConfigs = async () => {
   loading.value = true
   try {
-    const res = await request('/admin/landing-configs')
+    const res = await request('/api/superadmin/billing/landing-configs')
     if (res?.data && Array.isArray(res.data)) {
       configs.value = res.data.sort((a: any, b: any) => a.id.localeCompare(b.id))
     }

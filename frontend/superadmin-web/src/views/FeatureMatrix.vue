@@ -37,9 +37,9 @@ async function load() {
   error.value = ''
   try {
     const [plansRes, matrixRes, gatingRes] = await Promise.all([
-      request('/admin/plans'),
-      request('/admin/plan-features'),
-      request('/admin/addon-gating'),
+      request('/api/superadmin/billing/plans'),
+      request('/api/superadmin/billing/plan-features'),
+      request('/api/superadmin/billing/addon-gating'),
     ])
 
     plans.value = plansRes.data || []
@@ -79,7 +79,7 @@ async function toggleFeature(planId: string, featureKey: string) {
   matrix.value[planId][featureKey] = newVal
 
   try {
-    await request('/admin/feature-matrix', {
+    await request('/api/superadmin/billing/feature-matrix', {
       method: 'PATCH',
       body: JSON.stringify({ plan_id: planId, feature_key: featureKey, is_enabled: newVal }),
     })
@@ -96,7 +96,7 @@ async function toggleFeature(planId: string, featureKey: string) {
 async function saveGating(addon: AddonGating) {
   savingGating.value[addon.feature_key] = true
   try {
-    await request('/admin/addon-gating', {
+    await request('/api/superadmin/billing/addon-gating', {
       method: 'PATCH',
       body: JSON.stringify({ feature_key: addon.feature_key, min_tier: addon.min_tier }),
     })

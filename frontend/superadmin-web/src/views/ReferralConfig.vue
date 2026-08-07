@@ -150,7 +150,7 @@ async function loadConfig() {
   loading.value = true
   errorMsg.value = ''
   try {
-    const data = await request('/admin/referral-config')
+    const data = await request('/api/superadmin/billing/referral-config')
     if (data.data) {
       config.value = {
         discount_percent: data.data.discount_percent ?? 10,
@@ -174,7 +174,7 @@ async function handleSave() {
   errorMsg.value = ''
   successMsg.value = ''
   try {
-    const data = await request('/admin/referral-config', {
+    const data = await request('/api/superadmin/billing/referral-config', {
       method: 'PUT',
       body: JSON.stringify({
         discount_percent: config.value.discount_percent,
