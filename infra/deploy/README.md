@@ -136,6 +136,72 @@ Set di **GitHub repo → Settings → Secrets → Environments**.
 
 ---
 
+## Cloudflare Tunnel (Pengganti Port 80/443)
+
+VPS rumahan biasanya blokir port 80/443 di level ISP/router. Solusinya pakai Cloudflare Tunnel — koneksi keluar dari VPS ke Cloudflare, tidak butuh port terbuka.
+
+### Setup Tunnel (Lakukan Sekali)
+
+```bash
+# 1. SSH ke VPS
+ssh -i ~/.ssh/github_actions_wch -p 3209 deploy@<VPS_IP>
+
+# 2. Install cloudflared
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
+sudo dpkg -i /tmp/cloudflared.deb
+
+# 3. Login ke Cloudflare (buka URL di browser, pilih domain umkmai.id)
+cloudflared tunnel login
+
+# 4. Buat tunnel
+cloudflared tunnel create wch-staging   # untuk staging
+cloudflared tunnel create wch-prod      # untuk production (jika di VPS yang sama)
+
+# 5. Buat config (ganti TUNNEL_ID dengan ID dari step 4)
+sudo mkdir -p /etc/cloudflared
+sudo cp ~/.cloudflared/config.yml /etc/cloudflared/
+sudo cp ~/.cloudflared/<TUNNEL_ID>.json /etc/cloudflared/
+sudo cp ~/.cloudflared/cert.pem /etc/cloudflared/
+sudo sed -i 's|/home/deploy/.cloudflared/|/etc/cloudflared/|g' /etc/cloudflared/config.yml
+
+# 6. Route DNS (otomatis update Cloudflare DNS)
+cloudflared tunnel route dns wch-staging stg-api.umkmai.id
+cloudflared tunnel route dns wch-staging stg-grf.umkmai.id
+cloudflared tunnel route dns wch-staging stg-n8n.umkmai.id
+
+# 7. Install sebagai service
+sudo cloudflared service install
+sudo systemctl start cloudflared
+sudo systemctl enable cloudflared
+```
+
+### Config Template
+
+Template config ada di `infra/deploy/cloudflared-staging.yml`. Ingress mapping:
+
+| Hostname | Port | Service |
+|:---------|:-----|:--------|
+| `stg-api.umkmai.id` | `21000` | API Gateway |
+| `stg-grf.umkmai.id` | `23001` | Grafana |
+| `stg-n8n.umkmai.id` | `23678` | N8N |
+
+### Migrasi ke VPS Baru
+
+```bash
+# Di VPS baru: install cloudflared dan copy credential
+scp deploy@old-vps:/etc/cloudflared/<TUNNEL_ID>.json /tmp/
+scp deploy@old-vps:/etc/cloudflared/cert.pem /tmp/
+
+# Setup config seperti langkah 5-7 di atas
+# DNS tidak perlu diubah — tunnel ID tetap sama
+```
+
+### FE (stg.umkmai.id, stg-spadmin.umkmai.id)
+
+Domain FE di-host langsung di Cloudflare Pages, bukan di VPS. Tidak perlu entry di nginx atau tunnel config.
+
+---
+
 ## Manual Deploy (Tanpa GitHub Actions)
 
 Jika perlu deploy manual langsung dari VPS:

@@ -1,0 +1,11 @@
+tunnel: 810694f9-cd2e-4732-8aac-5e16d7e9d379
+credentials-file: /etc/cloudflared/810694f9-cd2e-4732-8aac-5e16d7e9d379.json
+
+ingress:
+  - hostname: stg-api.umkmai.id
+    service: http://localhost:21000
+  - hostname: stg-grf.umkmai.id
+    service: http://localhost:23001
+  - hostname: stg-n8n.umkmai.id
+    service: http://localhost:23678
+  - service: http_status:404
