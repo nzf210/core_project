@@ -40,9 +40,10 @@ func handleAdminLicenses(w http.ResponseWriter, r *http.Request) {
 		WHERE 1=1
 	`
 
-	if usedFilter == "true" {
+	switch usedFilter {
+	case "true":
 		query += " AND is_used = true"
-	} else if usedFilter == "false" {
+	case "false":
 		query += " AND is_used = false"
 	}
 

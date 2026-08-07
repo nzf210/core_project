@@ -67,7 +67,7 @@ const saveContent = async () => {
 
   saving.value = true
   try {
-    const res = await request(`/admin/landing-configs/?id=${encodeURIComponent(activeSection.value)}`, {
+    const res = await request(`/api/superadmin/billing/landing-configs/?id=${encodeURIComponent(activeSection.value)}`, {
       method: 'PUT',
       body: JSON.stringify({ content }),
     })

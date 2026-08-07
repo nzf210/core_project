@@ -81,6 +81,8 @@ func main() {
 	mux.Handle(pathSA+"/wa/platform-provider", auth.Middleware(http.StripPrefix(pathSA, newTenantProxy(getTarget(svcAuth, "8001")+pathSATarget))))
 	// F063: WA Center — superadmin manages platform-level WhatsApp for REG/OTP/VERIF
 	mux.Handle(pathSA+"/wa/", auth.Middleware(http.StripPrefix(pathSA, newProxy(getTarget(svcWAGateway, "8202")))))
+	// Dashboard route — must come BEFORE catch-all
+	mux.Handle(pathSA+"/dashboard", auth.Middleware(http.StripPrefix(pathSA, newTenantProxy(getTarget(svcBilling, "8003")+pathAdmin))))
 	// Catch-all superadmin routes — must be LAST
 	mux.Handle(pathSA+"/", auth.Middleware(http.StripPrefix(pathSA, newTenantProxy(getTarget(svcAuth, "8001")+pathSATarget))))
 	mux.Handle(pathSA+"/n8n/", auth.Middleware(http.StripPrefix(pathSA+"/n8n", n8nProxy(getTarget("n8n", "5678")))))

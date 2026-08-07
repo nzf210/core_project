@@ -202,7 +202,7 @@ jobs:
           port: ${{ needs.set-env.outputs.vps_ssh_port }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "docker-compose.yml,${{ needs.set-env.outputs.compose_override }}"
+          source: "docker-compose.yml,${{ needs.set-env.outputs.compose_override }},infra/"
           target: ${{ needs.set-env.outputs.environment == 'production' && '/opt/wch-production' || '/opt/wch-staging' }}
           overwrite: true
 
@@ -271,6 +271,13 @@ jobs:
 
             echo "=== Cleaning up old images ==="
             docker image prune -f
+
+            echo "=== Deploying Observability Stack ==="
+            docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull \
+              grafana loki prometheus n8n-main 2>/dev/null || echo "Observability images already up to date"
+
+            docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d \
+              grafana loki prometheus n8n-main || echo "Some observability services may not be configured"
 
       - name: Health Check
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3

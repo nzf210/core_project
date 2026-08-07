@@ -15,6 +15,10 @@ import (
 	"core_project/shared/sdk/response"
 )
 
+const (
+	minWithdrawCents = 10000000 // Rp 100.000
+)
+
 func handleAffiliateLeaderboard(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
@@ -48,16 +52,18 @@ func handleAffiliateLeaderboard(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var l leader
 		var rawName string
-		if err := rows.Scan(&rawName, &l.TotalClosing, &l.TotalRevenue); err == nil {
-			// Masking name (e.g. "Budi Santoso" -> "Budi S.")
-			parts := strings.Split(rawName, " ")
-			if len(parts) > 1 {
-				l.Name = parts[0] + " " + string(parts[1][0]) + "."
-			} else {
-				l.Name = parts[0]
-			}
-			leaders = append(leaders, l)
+		if err := rows.Scan(&rawName, &l.TotalClosing, &l.TotalRevenue); err != nil {
+			slog.Warn("Failed to scan leaderboard row", "error", err)
+			continue
 		}
+		// Masking name (e.g. "Budi Santoso" -> "Budi S.")
+		parts := strings.Split(rawName, " ")
+		if len(parts) > 1 && len(parts[1]) > 0 {
+			l.Name = parts[0] + " " + string(parts[1][0]) + "."
+		} else {
+			l.Name = parts[0]
+		}
+		leaders = append(leaders, l)
 	}
 
 	response.JSON(w, http.StatusOK, "Leaderboard retrieved", leaders)
@@ -115,10 +121,12 @@ func handleAffiliateProfile(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var e earning
 		var eid int
-		if err2 := rows.Scan(&eid, &e.TenantID, &e.InvoiceID, &e.AmountCents, &e.CommissionRate, &e.TransactionType, &e.CreatedAt, &e.TenantName); err2 == nil {
-			e.ID = strconv.Itoa(eid)
-			earningsList = append(earningsList, e)
+		if err2 := rows.Scan(&eid, &e.TenantID, &e.InvoiceID, &e.AmountCents, &e.CommissionRate, &e.TransactionType, &e.CreatedAt, &e.TenantName); err2 != nil {
+			slog.Warn("Failed to scan earning row", "error", err2)
+			continue
 		}
+		e.ID = strconv.Itoa(eid)
+		earningsList = append(earningsList, e)
 	}
 
 	response.JSON(w, http.StatusOK, "Affiliate profile retrieved", map[string]interface{}{
@@ -140,8 +148,7 @@ func handleAffiliateRegister(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get(response.XUserID)
 
 	var existing int
-	DB.QueryRow(context.Background(), queryAffiliateUserID, userID).Scan(&existing)
-	if existing > 0 {
+	if err := DB.QueryRow(context.Background(), queryAffiliateUserID, userID).Scan(&existing); err == nil && existing > 0 {
 		response.Error(w, http.StatusBadRequest, "Already registered", nil)
 		return
 	}
@@ -166,7 +173,7 @@ func handleAffiliateWithdraw(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		AmountCents int64 `json:"amount_cents"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.AmountCents < 10000000 { // min Rp 100.000
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.AmountCents < minWithdrawCents {
 		response.Error(w, http.StatusBadRequest, "Minimum withdraw Rp 100.000", nil)
 		return
 	}
@@ -192,7 +199,10 @@ func handleAffiliateWithdraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to commit transaction", err)
+		return
+	}
 	response.JSON(w, http.StatusOK, "Withdrawal requested", nil)
 }
 
@@ -231,7 +241,6 @@ func handleAffiliateRedeemReferral(w http.ResponseWriter, r *http.Request) {
 
 	_, err = tx.Exec(r.Context(), "UPDATE tenants SET referred_by_affiliate_id = $1 WHERE id = $2 AND referred_by_affiliate_id IS NULL", affID, tenantID)
 	if err != nil {
-		tx.Rollback(r.Context())
 		response.Error(w, http.StatusInternalServerError, "Failed to apply referral", err)
 		return
 	}
@@ -240,12 +249,14 @@ func handleAffiliateRedeemReferral(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO affiliate_referrals (affiliate_id, tenant_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
 		affID, tenantID)
 	if err != nil {
-		tx.Rollback(r.Context())
 		response.Error(w, http.StatusInternalServerError, "Failed to record referral", err)
 		return
 	}
 
-	tx.Commit(r.Context())
+	if err := tx.Commit(r.Context()); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to commit transaction", err)
+		return
+	}
 	response.JSON(w, http.StatusOK, "Referral applied successfully", nil)
 }
 
@@ -287,10 +298,12 @@ func handleAffiliateReferrals(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var r referral
 		var tid string
-		if err := rows.Scan(&r.ID, &tid, &r.ReferredAt, &r.FirstPurchase, &r.TenantName); err == nil {
-			r.TenantID = tid
-			referrals = append(referrals, r)
+		if err := rows.Scan(&r.ID, &tid, &r.ReferredAt, &r.FirstPurchase, &r.TenantName); err != nil {
+			slog.Warn("Failed to scan referral row", "error", err)
+			continue
 		}
+		r.TenantID = tid
+		referrals = append(referrals, r)
 	}
 	response.JSON(w, http.StatusOK, "Referrals retrieved", referrals)
 }
@@ -338,10 +351,12 @@ func handleAffiliateEarnings(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var e earning
 		var eid int
-		if err := rows.Scan(&eid, &e.TenantID, &e.InvoiceID, &e.AmountCents, &e.CommissionRate, &e.TransactionType, &e.Description, &e.CreatedAt, &e.TenantName); err == nil {
-			e.ID = strconv.Itoa(eid)
-			earningsList = append(earningsList, e)
+		if err := rows.Scan(&eid, &e.TenantID, &e.InvoiceID, &e.AmountCents, &e.CommissionRate, &e.TransactionType, &e.Description, &e.CreatedAt, &e.TenantName); err != nil {
+			slog.Warn("Failed to scan earnings row", "error", err)
+			continue
 		}
+		e.ID = strconv.Itoa(eid)
+		earningsList = append(earningsList, e)
 	}
 	response.JSON(w, http.StatusOK, "Earnings retrieved", earningsList)
 }
@@ -362,7 +377,7 @@ func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
 		var linkBase string
 		err := DB.QueryRow(ctx, `
 			SELECT COALESCE(discount_percent,10), COALESCE(commission_percent,10),
-			       COALESCE(min_purchase_cents,0), COALESCE(max_commission_cents,0),
+			       COALESCE(min_purchase_rupiah,0), COALESCE(max_commission_rupiah,0),
 			       COALESCE(is_active,true), COALESCE(referral_link_base,'wch.id/r')
 			FROM referral_config WHERE id = 1
 		`).Scan(&discountPct, &commissionPct, &minPurchase, &maxCommission, &isActive, &linkBase)
@@ -371,22 +386,22 @@ func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		response.JSON(w, http.StatusOK, "Referral config loaded", map[string]interface{}{
-			"discount_percent":     discountPct,
-			"commission_percent":   commissionPct,
-			"min_purchase_cents":   minPurchase,
-			"max_commission_cents": maxCommission,
-			"is_active":            isActive,
-			"referral_link_base":   linkBase,
+			"discount_percent":       discountPct,
+			"commission_percent":     commissionPct,
+			"min_purchase_rupiah":    minPurchase,
+			"max_commission_rupiah":  maxCommission,
+			"is_active":              isActive,
+			"referral_link_base":     linkBase,
 		})
 
 	case http.MethodPut, http.MethodPost:
 		var req struct {
-			DiscountPercent    float64 `json:"discount_percent"`
-			CommissionPercent  float64 `json:"commission_percent"`
-			MinPurchaseCents   int64   `json:"min_purchase_cents"`
-			MaxCommissionCents int64   `json:"max_commission_cents"`
-			IsActive           bool    `json:"is_active"`
-			ReferralLinkBase   string  `json:"referral_link_base"`
+			DiscountPercent      float64 `json:"discount_percent"`
+			CommissionPercent    float64 `json:"commission_percent"`
+			MinPurchaseRupiah    int64   `json:"min_purchase_rupiah"`
+			MaxCommissionRupiah  int64   `json:"max_commission_rupiah"`
+			IsActive             bool    `json:"is_active"`
+			ReferralLinkBase     string  `json:"referral_link_base"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			response.Error(w, http.StatusBadRequest, "Invalid body", err)
@@ -398,28 +413,28 @@ func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
 		}
 
 		_, err := DB.Exec(ctx, `
-			INSERT INTO referral_config (id, discount_percent, commission_percent, min_purchase_cents, max_commission_cents, is_active, referral_link_base, updated_at)
+			INSERT INTO referral_config (id, discount_percent, commission_percent, min_purchase_rupiah, max_commission_rupiah, is_active, referral_link_base, updated_at)
 			VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
 			ON CONFLICT (id)
 			DO UPDATE SET discount_percent = EXCLUDED.discount_percent,
 			              commission_percent = EXCLUDED.commission_percent,
-			              min_purchase_cents = EXCLUDED.min_purchase_cents,
-			              max_commission_cents = EXCLUDED.max_commission_cents,
+			              min_purchase_rupiah = EXCLUDED.min_purchase_rupiah,
+			              max_commission_rupiah = EXCLUDED.max_commission_rupiah,
 			              is_active = EXCLUDED.is_active,
 			              referral_link_base = EXCLUDED.referral_link_base,
 			              updated_at = NOW()
-		`, req.DiscountPercent, req.CommissionPercent, req.MinPurchaseCents, req.MaxCommissionCents, req.IsActive, req.ReferralLinkBase)
+		`, req.DiscountPercent, req.CommissionPercent, req.MinPurchaseRupiah, req.MaxCommissionRupiah, req.IsActive, req.ReferralLinkBase)
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, "Failed to update config", err)
 			return
 		}
 		slog.Info("Referral config updated", "discount", req.DiscountPercent, "commission", req.CommissionPercent)
 		response.JSON(w, http.StatusOK, "Referral config updated", map[string]interface{}{
-			"discount_percent":     req.DiscountPercent,
-			"commission_percent":   req.CommissionPercent,
-			"min_purchase_cents":   req.MinPurchaseCents,
-			"max_commission_cents": req.MaxCommissionCents,
-			"is_active":            req.IsActive,
+			"discount_percent":       req.DiscountPercent,
+			"commission_percent":     req.CommissionPercent,
+			"min_purchase_rupiah":    req.MinPurchaseRupiah,
+			"max_commission_rupiah":  req.MaxCommissionRupiah,
+			"is_active":              req.IsActive,
 			"referral_link_base":   req.ReferralLinkBase,
 		})
 

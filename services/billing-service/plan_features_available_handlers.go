@@ -19,7 +19,7 @@ func handleAdminAvailableFeaturesCollection(w http.ResponseWriter, r *http.Reque
 	if r.Method == http.MethodGet {
 		rows, err := DB.Query(r.Context(), `
 			SELECT feature_key, feature_name, description, category,
-			       is_addon, default_enabled, addon_price_cents, addon_unit
+			       is_addon, default_enabled, addon_price_rupiah, addon_unit
 			FROM available_features ORDER BY is_addon, feature_key
 		`)
 		if err != nil {
@@ -35,14 +35,14 @@ func handleAdminAvailableFeaturesCollection(w http.ResponseWriter, r *http.Reque
 			var price int64
 			if rows.Scan(&key, &name, &desc, &cat, &isAddon, &defaultEnabled, &price, &unit) == nil {
 				items = append(items, map[string]interface{}{
-					"feature_key":       key,
-					"feature_name":      name,
-					"description":       desc,
-					"category":          cat,
-					"is_addon":          isAddon,
-					"default_enabled":   defaultEnabled,
-					"addon_price_cents": price,
-					"addon_unit":        unit,
+					"feature_key":         key,
+					"feature_name":        name,
+					"description":         desc,
+					"category":            cat,
+					"is_addon":            isAddon,
+					"default_enabled":     defaultEnabled,
+					"addon_price_rupiah":  price,
+					"addon_unit":          unit,
 				})
 			}
 		}
@@ -57,7 +57,7 @@ func handleAdminAvailableFeaturesCollection(w http.ResponseWriter, r *http.Reque
 			Category        string   `json:"category"`
 			IsAddon         bool     `json:"is_addon"`
 			DefaultEnabled  []string `json:"default_enabled"`
-			AddonPriceCents int64    `json:"addon_price_cents"`
+			AddonPriceCents int64    `json:"addon_price_rupiah"`
 			AddonUnit       string   `json:"addon_unit"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -69,13 +69,13 @@ func handleAdminAvailableFeaturesCollection(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		_, err := DB.Exec(r.Context(), `
-			INSERT INTO available_features (feature_key, feature_name, description, category, is_addon, default_enabled, addon_price_cents, addon_unit)
+			INSERT INTO available_features (feature_key, feature_name, description, category, is_addon, default_enabled, addon_price_rupiah, addon_unit)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 			ON CONFLICT (feature_key) DO UPDATE SET
 				feature_name=EXCLUDED.feature_name, description=EXCLUDED.description,
 				category=EXCLUDED.category, is_addon=EXCLUDED.is_addon,
 				default_enabled=EXCLUDED.default_enabled,
-				addon_price_cents=EXCLUDED.addon_price_cents, addon_unit=EXCLUDED.addon_unit
+				addon_price_rupiah=EXCLUDED.addon_price_rupiah, addon_unit=EXCLUDED.addon_unit
 		`, req.FeatureKey, req.FeatureName, req.Description, req.Category,
 			req.IsAddon, req.DefaultEnabled, req.AddonPriceCents, req.AddonUnit)
 		if err != nil {
@@ -107,7 +107,7 @@ func handleAdminAvailableFeaturesItem(w http.ResponseWriter, r *http.Request) {
 			Category        *string  `json:"category,omitempty"`
 			IsAddon         *bool    `json:"is_addon,omitempty"`
 			DefaultEnabled  []string `json:"default_enabled"`
-			AddonPriceCents *int64   `json:"addon_price_cents,omitempty"`
+			AddonPriceCents *int64   `json:"addon_price_rupiah,omitempty"`
 			AddonUnit       *string  `json:"addon_unit,omitempty"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -141,7 +141,7 @@ func handleAdminAvailableFeaturesItem(w http.ResponseWriter, r *http.Request) {
 			idx++
 		}
 		if req.AddonPriceCents != nil {
-			updates = append(updates, fmt.Sprintf("addon_price_cents=$%d", idx))
+			updates = append(updates, fmt.Sprintf("addon_price_rupiah=$%d", idx))
 			args = append(args, *req.AddonPriceCents)
 			idx++
 		}

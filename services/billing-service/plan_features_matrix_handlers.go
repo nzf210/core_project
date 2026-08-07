@@ -80,13 +80,13 @@ func buildAddonList(rows pgx.Rows) []map[string]interface{} {
 		var price int64
 		if rows.Scan(&key, &name, &isAddon, &defaultEnabled, &price, &unit, &minTier) == nil {
 			items = append(items, map[string]interface{}{
-				"feature_key":       key,
-				"feature_name":      name,
-				"is_addon":          isAddon,
-				"default_enabled":   defaultEnabled,
-				"addon_price_cents": price,
-				"addon_unit":        unit,
-				"min_tier":          minTier,
+				"feature_key":         key,
+				"feature_name":        name,
+				"is_addon":            isAddon,
+				"default_enabled":     defaultEnabled,
+				"addon_price_rupiah":  price,
+				"addon_unit":          unit,
+				"min_tier":            minTier,
 			})
 		}
 	}
@@ -159,7 +159,7 @@ func handleAdminAddonGating(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		rows, err := DB.Query(r.Context(), `
 			SELECT af.feature_key, af.feature_name, af.is_addon,
-			       af.default_enabled, af.addon_price_cents, af.addon_unit,
+			       af.default_enabled, af.addon_price_rupiah, af.addon_unit,
 			       pf.min_tier
 			FROM available_features af
 			LEFT JOIN plan_features pf ON pf.plan_id = 'lite' AND pf.feature_key = af.feature_key
