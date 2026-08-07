@@ -257,12 +257,14 @@ jobs:
             # Restart critical auth/billing first, then the rest
             COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
             IMAGE_TAG="$IMAGE_TAG" docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d \
+              --remove-orphans --force-recreate \
               auth-service billing-service ai-gateway
 
             sleep 5
 
             COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
             IMAGE_TAG="$IMAGE_TAG" docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d \
+              --remove-orphans --force-recreate \
               api-gateway notification-service subscription-worker \
               umkm-accounting umkm-business umkm-chatbot umkm-automation \
               wa-gateway wa-cloud-api campaign-api
