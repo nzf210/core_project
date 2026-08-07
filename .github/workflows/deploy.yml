@@ -204,7 +204,9 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             DEPLOY_DIR=${{ needs.set-env.outputs.environment == 'production' && '/opt/wch-production' || '/opt/wch-staging' }}
-            sudo mkdir -p "$DEPLOY_DIR/infra"
+            sudo mkdir -p "$DEPLOY_DIR"
+            # Clean infra/ directory to avoid file vs directory conflicts
+            sudo rm -rf "$DEPLOY_DIR/infra"
             sudo chown -R deploy:deploy "$DEPLOY_DIR"
 
       - name: Copy compose files to VPS
