@@ -54,7 +54,16 @@ fi
 # 2. Setup passwordless sudo untuk docker
 # -----------------------------------------------------------------------------
 echo "--- [2/5] Setup passwordless sudo untuk docker ---"
-$SSH "echo '$VPS_USER ALL=(ALL) NOPASSWD: /usr/bin/docker, /usr/local/bin/docker-compose, /usr/bin/docker-compose, /bin/mkdir, /bin/chown, /usr/bin/apt-get, /usr/bin/apt, /usr/sbin/nginx, /usr/bin/nginx, /bin/systemctl, /usr/bin/certbot, /bin/cp, /bin/mv, /bin/rm, /bin/ln' | sudo tee /etc/sudoers.d/deploy-nopasswd > /dev/null && sudo chmod 440 /etc/sudoers.d/deploy-nopasswd && echo 'sudoers: OK'"
+# Cek apakah sudo sudah passwordless — kalau sudah, skip (jangan overwrite diri sendiri)
+if $SSH "sudo -n true 2>/dev/null"; then
+    echo "sudoers: already configured (skipped)"
+else
+    echo "ERROR: sudo masih butuh password di VPS."
+    echo "Jalankan ini dulu dari VPS secara interaktif:"
+    echo "  echo -e 'Defaults !requiretty\\ndeploy ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/deploy-nopasswd"
+    echo "  sudo chmod 440 /etc/sudoers.d/deploy-nopasswd"
+    exit 1
+fi
 
 # -----------------------------------------------------------------------------
 # 3. Install Nginx + Certbot
