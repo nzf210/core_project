@@ -3,6 +3,8 @@ import { ref, onMounted } from 'vue'
 import { api } from '../api/client'
 import WACenter from '../components/WACenter.vue'
 
+const grafanaUrl = import.meta.env.VITE_GRAFANA_URL || 'http://localhost:3001'
+
 const data = ref<any>(null)
 const loading = ref(true)
 const error = ref('')
@@ -53,7 +55,7 @@ async function impersonateTenant(tenantId: string) {
         <h1>Overview Dashboard</h1>
         <p class="subtitle">Snapshot seluruh WCH Platform: UMKM, Campaign, voucher & revenue</p>
       </div>
-      <a href="http://localhost:3001" target="_blank" class="grafana-link">
+      <a :href="grafanaUrl" target="_blank" class="grafana-link">
         📊 Grafana Monitoring
       </a>
     </div>
