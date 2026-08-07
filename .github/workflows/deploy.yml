@@ -466,6 +466,7 @@ jobs:
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_GRAFANA_URL: ${{ secrets.VITE_GRAFANA_URL }}
+          VITE_N8N_URL: ${{ secrets.VITE_N8N_URL }}
         run: npm run build
 
       - name: Generate wrangler.jsonc
