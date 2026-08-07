@@ -8,6 +8,7 @@ const route = useRoute()
 const authed = ref(isAuthed())
 const role = ref(getRole())
 const grafanaUrl = import.meta.env.VITE_GRAFANA_URL || 'http://localhost:3001'
+const n8nUrl = import.meta.env.VITE_N8N_URL || 'http://localhost:5678'
 
 watch(
   () => route.path,
@@ -48,6 +49,7 @@ function doLogout() {
         <RouterLink to="/campaign-licenses">Licenses</RouterLink>
         <RouterLink to="/">📱 WA Center</RouterLink>
         <a :href="grafanaUrl" target="_blank" rel="noopener noreferrer" class="grafana-link">📊 Grafana</a>
+        <a :href="n8nUrl" target="_blank" rel="noopener noreferrer" class="grafana-link">⚡ N8N</a>
         <RouterLink to="/landing-editor">🌐 Landing Editor</RouterLink>
       </nav>
       <div class="user-info">
