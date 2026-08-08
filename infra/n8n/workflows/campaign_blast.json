@@ -1,4 +1,5 @@
 {
+  "id": "9c8f8848-34e9-5145-9ff8-daf0fed7ce73",
   "name": "Campaign WA Blast Micro-targeting",
   "nodes": [
     {
@@ -11,7 +12,10 @@
       "name": "Blast Trigger Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [100, 250],
+      "position": [
+        100,
+        250
+      ],
       "webhookId": "campaign-blast-trigger"
     },
     {
@@ -45,7 +49,10 @@
       "name": "Fetch Target Phones",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [300, 250]
+      "position": [
+        300,
+        250
+      ]
     },
     {
       "parameters": {
@@ -56,7 +63,10 @@
       "name": "Split Phone List",
       "type": "n8n-nodes-base.itemLists",
       "typeVersion": 3,
-      "position": [500, 250]
+      "position": [
+        500,
+        250
+      ]
     },
     {
       "parameters": {
@@ -67,7 +77,10 @@
       "name": "Wait (Anti-Ban Delay)",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
-      "position": [700, 250]
+      "position": [
+        700,
+        250
+      ]
     },
     {
       "parameters": {
@@ -92,7 +105,10 @@
       "name": "Send WA to Each Target",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [900, 250]
+      "position": [
+        900,
+        250
+      ]
     },
     {
       "parameters": {
@@ -117,7 +133,10 @@
       "name": "Send Completion Report",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1100, 250]
+      "position": [
+        1100,
+        250
+      ]
     }
   ],
   "connections": {

@@ -1,4 +1,5 @@
 {
+  "id": "ea562a03-1d0c-5484-a709-635bb5231952",
   "name": "UMKM Daily Invoice Reminder",
   "nodes": [
     {
@@ -16,7 +17,10 @@
       "name": "Daily Trigger (8 AM)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [100, 300]
+      "position": [
+        100,
+        300
+      ]
     },
     {
       "parameters": {
@@ -28,7 +32,10 @@
       "name": "Get Overdue Invoices",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [300, 300]
+      "position": [
+        300,
+        300
+      ]
     },
     {
       "parameters": {
@@ -39,7 +46,10 @@
       "name": "Split Data Array",
       "type": "n8n-nodes-base.itemLists",
       "typeVersion": 3,
-      "position": [500, 300]
+      "position": [
+        500,
+        300
+      ]
     },
     {
       "parameters": {
@@ -64,7 +74,10 @@
       "name": "Send WA Reminder",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [700, 300]
+      "position": [
+        700,
+        300
+      ]
     }
   ],
   "connections": {

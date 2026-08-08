@@ -1,4 +1,5 @@
 {
+  "id": "59a16481-5b47-5871-b307-2100172f0d43",
   "name": "UMKM Clinic Queue - WA Booking Bot",
   "nodes": [
     {
@@ -11,7 +12,10 @@
       "name": "WA Booking Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [100, 250],
+      "position": [
+        100,
+        250
+      ],
       "webhookId": "umkm-clinic-booking"
     },
     {
@@ -22,7 +26,10 @@
       "name": "Parse Booking Intent",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [320, 250]
+      "position": [
+        320,
+        250
+      ]
     },
     {
       "parameters": {
@@ -56,7 +63,10 @@
       "name": "Book Appointment via API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [540, 250]
+      "position": [
+        540,
+        250
+      ]
     },
     {
       "parameters": {
@@ -81,7 +91,10 @@
       "name": "Confirm Booking via WA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [760, 250]
+      "position": [
+        760,
+        250
+      ]
     }
   ],
   "connections": {

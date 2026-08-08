@@ -1,4 +1,5 @@
 {
+  "id": "202feef5-5162-5694-ba60-aea2afb0c397",
   "name": "UMKM Clinic Queue - Appointment Reminders",
   "nodes": [
     {
@@ -16,7 +17,10 @@
       "name": "Check Every 30 Minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [100, 250]
+      "position": [
+        100,
+        250
+      ]
     },
     {
       "parameters": {
@@ -37,7 +41,10 @@
       "name": "Fetch Active Queue",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [320, 250]
+      "position": [
+        320,
+        250
+      ]
     },
     {
       "parameters": {
@@ -48,7 +55,10 @@
       "name": "Split Queue Items",
       "type": "n8n-nodes-base.itemLists",
       "typeVersion": 3,
-      "position": [540, 250]
+      "position": [
+        540,
+        250
+      ]
     },
     {
       "parameters": {
@@ -73,7 +83,10 @@
       "name": "Send WA Reminder",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [760, 250]
+      "position": [
+        760,
+        250
+      ]
     },
     {
       "parameters": {
@@ -84,7 +97,10 @@
       "name": "Wait (Anti-Ban Delay)",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
-      "position": [980, 250]
+      "position": [
+        980,
+        250
+      ]
     }
   ],
   "connections": {

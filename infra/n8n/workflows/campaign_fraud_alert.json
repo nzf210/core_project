@@ -1,4 +1,5 @@
 {
+  "id": "655e02c1-96ba-5f88-8571-6e4f8146c184",
   "name": "Campaign Fraud Alert (Peta Kerawanan)",
   "nodes": [
     {
@@ -11,7 +12,10 @@
       "name": "Fraud Report Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [250, 200],
+      "position": [
+        250,
+        200
+      ],
       "webhookId": "campaign-fraud-report"
     },
     {
@@ -22,7 +26,10 @@
       "name": "Format Alert Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [450, 200]
+      "position": [
+        450,
+        200
+      ]
     },
     {
       "parameters": {
@@ -47,7 +54,10 @@
       "name": "Send to Tim Hukum WA Group",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [650, 200]
+      "position": [
+        650,
+        200
+      ]
     },
     {
       "parameters": {
@@ -88,7 +98,10 @@
       "name": "Save to Campaign DB",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [450, 400]
+      "position": [
+        450,
+        400
+      ]
     }
   ],
   "connections": {
