@@ -138,9 +138,12 @@ func forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText string) {
 
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
-		if reply, ok := result["reply"].(string); ok && reply != "" {
-			sendWAMessage(tenantID, senderJID, reply)
-			return
+		// N8N universal_chatbot workflow returns "response" field
+		for _, key := range []string{"response", "reply"} {
+			if msg, ok := result[key].(string); ok && msg != "" {
+				sendWAMessage(tenantID, senderJID, msg)
+				return
+			}
 		}
 	}
 
@@ -148,10 +151,11 @@ func forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText string) {
 }
 
 func getN8NWebhookURL() string {
-	if url := os.Getenv("N8N_WEBHOOK_URL"); url != "" {
-		return url
+	u := os.Getenv("N8N_WEBHOOK_URL")
+	if u == "" {
+		u = "http://n8n-main:5678"
 	}
-	return "http://n8n-main:5678"
+	return strings.TrimRight(u, "/")
 }
 
 func getAuthServiceURL() string {
