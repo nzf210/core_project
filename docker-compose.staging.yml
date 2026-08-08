@@ -129,6 +129,13 @@ services:
   n8n-main:
     container_name: wch-stg-n8n-main
     env_file: .env.staging
+    entrypoint:
+      - /bin/sh
+      - /infra/n8n/init.sh
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./infra/n8n/workflows:/workflows
+      - ./infra/n8n/init.sh:/infra/n8n/init.sh
     ports:
       - "23678:5678"  # STG: 2=stg, 3=tools, 678=n8n
 
