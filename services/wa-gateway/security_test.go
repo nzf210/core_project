@@ -66,6 +66,10 @@ func TestTokenBucket_TenantIsolation(t *testing.T) {
 }
 
 func TestTokenBucket_Refill(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping time-based refill test in short mode")
+	}
+
 	limiter := NewTenantRateLimiter(5)
 	tenantID := "test-tenant"
 
