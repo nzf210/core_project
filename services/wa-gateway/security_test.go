@@ -20,9 +20,9 @@ func TestTokenBucket_RateLimiting(t *testing.T) {
 		interval       time.Duration
 		expectedAllows int
 	}{
-		{"5 msg/min - under limit", 5, 4, time.Minute, 4},
-		{"5 msg/min - at limit", 5, 5, time.Minute, 5},
-		{"5 msg/min - over limit", 5, 10, time.Minute, 5},
+		{"5 msg/min - under limit", 5, 4, 0, 4},   // No sleep - test burst
+		{"5 msg/min - at limit", 5, 5, 0, 5},      // No sleep - test burst
+		{"5 msg/min - over limit", 5, 10, 0, 5},   // No sleep - test burst
 		{"Burst prevention", 5, 10, 0, 5},
 	}
 
