@@ -69,10 +69,9 @@ func main() {
 	if cfg.Env == "production" || cfg.DB.Host == "postgres" {
 		AccountingURL = "http://umkm-accounting:8201"
 		AIGatewayURL = "http://ai-gateway:8002/v1/chat"
-		WAGatewayURL = "http://wa-gateway:8202"
 	}
 
-	// Override with config if available
+	// Use config for WA Gateway URL (env var WA_GATEWAY_URL or default)
 	if cfg.WhatsApp.GatewayURL != "" {
 		WAGatewayURL = cfg.WhatsApp.GatewayURL
 	}

@@ -73,7 +73,8 @@ const ME_CACHE_TTL_MS = 30_000 // 30s
 
 function syncOnboardingFlag(value: any) {
   const flag = sanitizeBoolean(value ? 'true' : 'false')
-  if (flag) localStorage.setItem('onboarding_completed', flag)
+  // Always write flag to localStorage, even when false — prevents redirect loop on reload
+  localStorage.setItem('onboarding_completed', flag)
 }
 
 function syncPlan(value: any) {
