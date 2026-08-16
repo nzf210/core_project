@@ -1,6 +1,14 @@
 <template>
   <div class="voters">
     <h3 style="margin-bottom: 1rem; color: var(--text-secondary)">Pendaftaran Pemilih Baru</h3>
+
+    <ErrorBoundary
+      :error="votersApi.state.value.error"
+      title="Failed to load voters"
+      :on-retry="fetchVoters"
+      @dismiss="votersApi.reset()"
+    />
+
     <form @submit.prevent="addVoter" class="flex flex-col gap-4" style="max-width: 500px; margin-bottom: 2rem;">
       <div>
         <label for="voter-nik" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">NIK</label>
@@ -74,22 +82,21 @@
 <script setup lang="ts">
 import { apiClient } from '../api'
 import { ref, onMounted } from 'vue'
+import { useApiWithRetry } from '../composables/useApiWithRetry'
+import ErrorBoundary from './ErrorBoundary.vue'
 
 const voters = ref<any[]>([])
 const form = ref({ nik: '', name: '', address: '', phone: '', status: '', potential_level: '', competitor_support: '' })
 
+const votersApi = useApiWithRetry<any[]>()
+
 const fetchVoters = async () => {
-  try {
-    const res = await apiClient('/voters', {
-      headers: { 'X-Tenant-ID': 'default' }
-    })
-    const data = await res.json()
-    if (data.success) {
-      voters.value = data.data
-    }
-  } catch (err) {
-    console.error(err)
-  }
+  await votersApi.execute(() => apiClient('/voters', {
+    headers: { 'X-Tenant-ID': 'default' }
+  }), {
+    onSuccess: (data) => { voters.value = data },
+    silent: false
+  })
 }
 
 const addVoter = async () => {

@@ -11,27 +11,59 @@ async function ensureAuthenticated() {
   return token;
 }
 
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 300
+): Promise<T> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+
+      if (attempt === maxRetries) break;
+
+      const delay = baseDelay * Math.pow(2, attempt);
+      const jitter = Math.random() * 100;
+      await new Promise(resolve => setTimeout(resolve, delay + jitter));
+    }
+  }
+
+  throw lastError;
+}
+
 export async function apiClient(endpoint: string, options: RequestInit = {}) {
   const token = await ensureAuthenticated();
-  
+
   const headers = new Headers(options.headers || {});
   headers.set('Content-Type', 'application/json');
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
-  
-  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const response = await fetch(`${CAMPAIGN_API_BASE}${path}`, { ...options, headers });
 
-  if (response.status === 401 || response.status === 403) {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('tenantId');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('userRole');
-    window.dispatchEvent(new Event('auth-required'));
-  }
-  return response;
+  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+
+  return retryWithBackoff(async () => {
+    const response = await fetch(`${CAMPAIGN_API_BASE}${path}`, { ...options, headers });
+
+    if (response.status === 401 || response.status === 403) {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('tenantId');
+      localStorage.removeItem('userName');
+      localStorage.removeItem('userRole');
+      window.dispatchEvent(new Event('auth-required'));
+    }
+
+    if (!response.ok && response.status >= 500) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    return response;
+  });
 }
 
 export const authApi = {

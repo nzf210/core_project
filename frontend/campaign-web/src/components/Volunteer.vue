@@ -1,6 +1,14 @@
 <template>
   <div class="volunteers">
     <h3 style="margin-bottom: 1rem; color: var(--text-secondary)">Manajemen Relawan</h3>
+
+    <ErrorBoundary
+      :error="volunteersApi.state.value.error"
+      title="Failed to load volunteers"
+      :on-retry="fetchVolunteers"
+      @dismiss="volunteersApi.reset()"
+    />
+
     <form @submit.prevent="addVolunteer" class="volunteer-form">
       <div>
         <label for="vol-name" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Nama Relawan</label>
@@ -33,24 +41,22 @@
 
 <script setup lang="ts">
 import { apiClient } from '../api'
-
 import { ref, onMounted } from 'vue'
+import { useApiWithRetry } from '../composables/useApiWithRetry'
+import ErrorBoundary from './ErrorBoundary.vue'
 
 const volunteers = ref<any[]>([])
 const form = ref({ name: '', phone: '' })
 
+const volunteersApi = useApiWithRetry<any[]>()
+
 const fetchVolunteers = async () => {
-  try {
-    const res = await apiClient('/volunteers', {
-      headers: { 'X-Tenant-ID': 'default' }
-    })
-    const data = await res.json()
-    if (data.success) {
-      volunteers.value = data.data
-    }
-  } catch (err) {
-    console.error(err)
-  }
+  await volunteersApi.execute(() => apiClient('/volunteers', {
+    headers: { 'X-Tenant-ID': 'default' }
+  }), {
+    onSuccess: (data) => { volunteers.value = data },
+    silent: false
+  })
 }
 
 const addVolunteer = async () => {

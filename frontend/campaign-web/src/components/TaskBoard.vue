@@ -1,6 +1,14 @@
 <template>
   <div class="task-board">
     <h3 style="margin-bottom: 1rem; color: var(--text-secondary)">Task & Operations</h3>
+
+    <ErrorBoundary
+      :error="tasksApi.state.value.error"
+      title="Failed to load tasks"
+      :on-retry="fetchTasks"
+      @dismiss="tasksApi.reset()"
+    />
+
     <form @submit.prevent="addTask" class="flex flex-col gap-4" style="max-width: 500px; margin-bottom: 2rem;">
       <div>
         <label for="task-title" style="display:block;font-size:.85rem;margin-bottom:.25rem;color:var(--text-secondary)">Task Title</label>
@@ -55,17 +63,20 @@
 <script setup lang="ts">
 import { apiClient } from '../api'
 import { ref, onMounted } from 'vue'
+import { useApiWithRetry } from '../composables/useApiWithRetry'
+import ErrorBoundary from './ErrorBoundary.vue'
 
 const tasks = ref<any[]>([])
 const users = ref<any[]>([])
 const form = ref({ title: '', description: '', campaign_id: '', assigned_to: '', verification_type: 'auto' })
 
+const tasksApi = useApiWithRetry<any[]>()
+
 const fetchTasks = async () => {
-  try {
-    const res = await apiClient('/tasks')
-    const data = await res.json()
-    if (data.success) { tasks.value = data.data }
-  } catch { /* ignore fetch errors */ }
+  await tasksApi.execute(() => apiClient('/tasks'), {
+    onSuccess: (data) => { tasks.value = data },
+    silent: false
+  })
 }
 
 const fetchUsers = async () => {
