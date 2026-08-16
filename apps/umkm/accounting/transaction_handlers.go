@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 	"core_project/shared/sdk/response"
 )
@@ -71,10 +73,20 @@ func handleTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, l := range req.Lines {
-		_, err = tx.Exec(ctx,
-			"INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, $3, $4)",
-			entryID, l.AccountID, l.Debit, l.Credit)
+	if len(req.Lines) > 0 {
+		// Batch insert all lines in a single query
+		valueStrings := make([]string, 0, len(req.Lines))
+		valueArgs := make([]interface{}, 0, len(req.Lines)*4)
+
+		for i, l := range req.Lines {
+			valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d)", i*4+1, i*4+2, i*4+3, i*4+4))
+			valueArgs = append(valueArgs, entryID, l.AccountID, l.Debit, l.Credit)
+		}
+
+		query := fmt.Sprintf("INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES %s",
+			strings.Join(valueStrings, ","))
+
+		_, err = tx.Exec(ctx, query, valueArgs...)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Insert lines failed"})
 			return

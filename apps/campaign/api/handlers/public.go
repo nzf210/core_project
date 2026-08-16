@@ -17,10 +17,16 @@ type CandidateStat struct {
 
 // HandlePublicDashboard provides aggregated public data for the Guest Dashboard
 func HandlePublicDashboard(w http.ResponseWriter, r *http.Request) {
+	tenantID := ExtractTenantID(r)
+	if tenantID == "" {
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "Missing X-Tenant-ID"})
+		return
+	}
+
 	regionType := r.URL.Query().Get("region_type")
 	regionID := r.URL.Query().Get("region_id")
 
-	query, params := buildCandidateQuery(regionType, regionID)
+	query, params := buildCandidateQuery(tenantID, regionType, regionID)
 	topCandidates := fetchTopCandidates(query, params)
 
 	if len(topCandidates) == 0 {
@@ -38,7 +44,7 @@ func HandlePublicDashboard(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, APIResponse{Success: true, Data: data})
 }
 
-func buildCandidateQuery(regionType, regionID string) (string, []interface{}) {
+func buildCandidateQuery(tenantID, regionType, regionID string) (string, []interface{}) {
 	query := `
 		SELECT c.id, c.name, COUNT(e.id) as support_count
 		FROM candidates c
@@ -46,18 +52,19 @@ func buildCandidateQuery(regionType, regionID string) (string, []interface{}) {
 		LEFT JOIN endorsements e ON e.tenant_id = c.tenant_id AND e.status = 'valid'
 		LEFT JOIN citizens cit ON e.citizen_id = cit.id
 		LEFT JOIN dpt_records dpt ON cit.nik = dpt.nik
-		WHERE 1=1
+		WHERE c.tenant_id = $1 AND camp.tenant_id = $1
 	`
 	var params []interface{}
+	params = append(params, tenantID)
 
 	if regionType != "" && regionID != "" {
 		switch regionType {
 		case "province":
-			query += " AND dpt.province_id = $1"
+			query += " AND dpt.province_id = $2"
 		case "regency":
-			query += " AND dpt.regency_id = $1"
+			query += " AND dpt.regency_id = $2"
 		case "district":
-			query += " AND dpt.district_id = $1"
+			query += " AND dpt.district_id = $2"
 		}
 		if regionType == "province" || regionType == "regency" || regionType == "district" {
 			params = append(params, regionID)

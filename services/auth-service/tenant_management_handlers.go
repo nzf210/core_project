@@ -40,10 +40,15 @@ func superadminListTenants(w http.ResponseWriter, ctx context.Context) {
 		SELECT t.id, t.name, t.plan, t.created_at,
 			COALESCE(u.username, '') as owner_username,
 			COALESCE(u.phone_number, '') as owner_phone,
-			(SELECT COUNT(*) FROM users WHERE tenant_id = t.id) as user_count,
+			COALESCE(uc.user_count, 0) as user_count,
 			t.xendit_merchant_id
 		FROM tenants t
 		LEFT JOIN users u ON u.tenant_id = t.id AND u.role = 'owner'
+		LEFT JOIN (
+			SELECT tenant_id, COUNT(*) as user_count
+			FROM users
+			GROUP BY tenant_id
+		) uc ON uc.tenant_id = t.id
 		ORDER BY t.created_at DESC
 	`)
 	if err != nil {

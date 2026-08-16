@@ -132,14 +132,6 @@ func shouldReconnect(tenantID string) bool {
 	reconnectMu.Lock()
 	defer reconnectMu.Unlock()
 
-	if lastAttempt, ok := reconnectBackoff[tenantID]; ok {
-		if time.Since(lastAttempt) < 5*time.Minute {
-			if attempts := reconnectAttempts[tenantID]; attempts > 0 {
-				return false
-			}
-		}
-	}
-
 	attempts := reconnectAttempts[tenantID]
 	if attempts > 5 {
 		attempts = 5
