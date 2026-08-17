@@ -45,10 +45,17 @@ import { ref, onMounted } from 'vue'
 import { useApiWithRetry } from '../composables/useApiWithRetry'
 import ErrorBoundary from './ErrorBoundary.vue'
 
-const volunteers = ref<any[]>([])
+interface Volunteer {
+  id: string
+  name: string
+  phone: string
+  rank: number
+}
+
+const volunteers = ref<Volunteer[]>([])
 const form = ref({ name: '', phone: '' })
 
-const volunteersApi = useApiWithRetry<any[]>()
+const volunteersApi = useApiWithRetry<Volunteer[]>()
 
 const fetchVolunteers = async () => {
   await volunteersApi.execute(() => apiClient('/volunteers', {
