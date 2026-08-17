@@ -19,12 +19,7 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 
 	senderJID := v.Info.Sender.String()
 	senderPhone := v.Info.Sender.User
-	var messageText string
-	if v.Message.Conversation != nil {
-		messageText = *v.Message.Conversation
-	} else if v.Message.ExtendedTextMessage != nil && v.Message.ExtendedTextMessage.Text != nil {
-		messageText = *v.Message.ExtendedTextMessage.Text
-	}
+	messageText := extractMessageText(v)
 
 	slog.Info("Message received", "tenant_id", tenantID, "sender", senderJID, "text", messageText)
 
@@ -35,50 +30,82 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 	rawText := strings.TrimSpace(messageText)
 	upperText := strings.ToUpper(rawText)
 
-	if session, exists := loadRegSession(senderJID); exists {
-		if handleWARegistrationStep(tenantID, session, rawText, upperText) {
-			return
-		}
-	}
-
-	if session, exists := loadPWResetSession(senderJID); exists {
-		if handleWAPasswordResetStep(tenantID, session, rawText, upperText) {
-			return
-		}
-	}
-
-	if strings.HasPrefix(upperText, "VERIF ") {
-		code := strings.TrimSpace(upperText[6:])
-		handleWAVerifyOTP(tenantID, senderJID, code)
+	if handleActiveSession(tenantID, senderJID, rawText, upperText) {
 		return
 	}
 
-	if upperText == "OTP" {
-		handleWAOTPRequest(tenantID, senderJID, senderPhone)
-		return
-	}
-
-	if isSixDigitOTP(upperText) {
-		handleWALoginOTPReply(tenantID, senderJID, senderPhone, upperText)
-		return
-	}
-
-	if upperText == "REG" || upperText == "REGISTER" || upperText == "DAFTAR" {
-		startWARegistration(tenantID, senderJID, senderPhone)
-		return
-	}
-
-	if upperText == "RESET" || upperText == "LUPA PASSWORD" {
-		startWAPasswordReset(tenantID, senderJID, senderPhone)
-		return
-	}
-
-	if upperText == "HELP" || upperText == "BANTUAN" || upperText == "MENU" {
-		sendHelpMenu(tenantID, senderJID)
+	if handleCommandMessage(tenantID, senderJID, senderPhone, upperText) {
 		return
 	}
 
 	forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText)
+}
+
+func extractMessageText(v *events.Message) string {
+	if v.Message.Conversation != nil {
+		return *v.Message.Conversation
+	}
+	if v.Message.ExtendedTextMessage != nil && v.Message.ExtendedTextMessage.Text != nil {
+		return *v.Message.ExtendedTextMessage.Text
+	}
+	return ""
+}
+
+func handleActiveSession(tenantID, senderJID, rawText, upperText string) bool {
+	if session, exists := loadRegSession(senderJID); exists {
+		return handleWARegistrationStep(tenantID, session, rawText, upperText)
+	}
+	if session, exists := loadPWResetSession(senderJID); exists {
+		return handleWAPasswordResetStep(tenantID, session, rawText, upperText)
+	}
+	return false
+}
+
+func handleCommandMessage(tenantID, senderJID, senderPhone, upperText string) bool {
+	if strings.HasPrefix(upperText, "VERIF ") {
+		code := strings.TrimSpace(upperText[6:])
+		handleWAVerifyOTP(tenantID, senderJID, code)
+		return true
+	}
+
+	if upperText == "OTP" {
+		handleWAOTPRequest(tenantID, senderJID, senderPhone)
+		return true
+	}
+
+	if isSixDigitOTP(upperText) {
+		handleWALoginOTPReply(tenantID, senderJID, senderPhone, upperText)
+		return true
+	}
+
+	if isRegistrationCommand(upperText) {
+		startWARegistration(tenantID, senderJID, senderPhone)
+		return true
+	}
+
+	if isPasswordResetCommand(upperText) {
+		startWAPasswordReset(tenantID, senderJID, senderPhone)
+		return true
+	}
+
+	if isHelpCommand(upperText) {
+		sendHelpMenu(tenantID, senderJID)
+		return true
+	}
+
+	return false
+}
+
+func isRegistrationCommand(text string) bool {
+	return text == "REG" || text == "REGISTER" || text == "DAFTAR"
+}
+
+func isPasswordResetCommand(text string) bool {
+	return text == "RESET" || text == "LUPA PASSWORD"
+}
+
+func isHelpCommand(text string) bool {
+	return text == "HELP" || text == "BANTUAN" || text == "MENU"
 }
 
 func sendHelpMenu(tenantID, senderJID string) {

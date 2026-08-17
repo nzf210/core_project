@@ -65,6 +65,10 @@ func handleAdminQuotaUsage(w http.ResponseWriter, r *http.Request) {
 		c.ResetAt = resetAt.Format(time.RFC3339)
 		counters = append(counters, c)
 	}
+	if err := rows.Err(); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to iterate quota counters", err)
+		return
+	}
 
 	response.JSON(w, http.StatusOK, "Quota usage retrieved", map[string]interface{}{
 		"tenant_id": tenantID,
@@ -146,6 +150,10 @@ func handleAddonMarketplace(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		items = append(items, m)
+	}
+	if err := rows.Err(); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to iterate marketplace items", err)
+		return
 	}
 
 	response.JSON(w, http.StatusOK, "Addon marketplace", map[string]any{"addons": items})
@@ -337,6 +345,10 @@ func handleMyAddons(w http.ResponseWriter, r *http.Request) {
 			a.ExpiresAt = &ea
 		}
 		items = append(items, a)
+	}
+	if err := rows.Err(); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to iterate addons", err)
+		return
 	}
 
 	response.JSON(w, http.StatusOK, "My addons", map[string]any{"addons": items})

@@ -64,6 +64,10 @@ func handleAdminAddonPrices(w http.ResponseWriter, r *http.Request) {
 			list = append(list, a)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to iterate addon prices", err)
+		return
+	}
 	response.JSON(w, http.StatusOK, "Addon prices retrieved", list)
 }
 
@@ -167,6 +171,10 @@ func handleWallet(w http.ResponseWriter, r *http.Request) {
 			txs = append(txs, t)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to iterate transactions", err)
+		return
+	}
 	response.JSON(w, http.StatusOK, "Wallet retrieved", map[string]interface{}{
 		"balance_cents": balance,
 		"transactions":  txs,
@@ -240,6 +248,9 @@ func cleanupPendingTenants(ctx context.Context) {
 				deleted++
 			}
 		}
+	}
+	if err := rows.Err(); err != nil {
+		slog.Error("Pending cleanup: failed to iterate rows", "error", err)
 	}
 	if deleted > 0 {
 		slog.Info("Pending cleanup worker ran", "deleted", deleted)

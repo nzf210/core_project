@@ -26,70 +26,83 @@ func handleUploadProfileLogo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
-	if err := r.ParseMultipartForm(2 << 20); err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "File terlalu besar (max 2MB)"})
-		return
-	}
-
-	file, header, err := r.FormFile("logo")
+	file, ext, err := parseProfileLogoUpload(w, r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Logo file is required"})
+		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: err.Error()})
 		return
 	}
 	defer file.Close()
 
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".webp" {
-		writeJSON(w, http.StatusBadRequest, Response{Success: false, Message: "Format file tidak didukung (PNG, JPG, WebP)"})
-		return
-	}
-
-	uploadDir := os.Getenv("UPLOAD_DIR")
-	if uploadDir == "" {
-		uploadDir = "./uploads"
-	}
-	os.MkdirAll(filepath.Join(uploadDir, "logos"), 0755)
-
-	outExt := ".png"
-	switch ext {
-	case ".jpg", ".jpeg":
-		outExt = ".jpg"
-	case ".webp":
-		outExt = ".webp"
-	}
-
-	// Delete existing old files with different extensions before writing new one
-	oldExts := []string{".png", ".jpg", ".jpeg", ".webp"}
-	for _, e := range oldExts {
-		if e != outExt {
-			os.Remove(filepath.Join(uploadDir, "logos", claims.TenantID+e))
-		}
-	}
-
-	filename := claims.TenantID + outExt
-	outPath := filepath.Join(uploadDir, "logos", filename)
-	dst, err := os.Create(outPath)
+	logoURL, err := saveProfileLogo(claims.TenantID, file, ext)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to save logo"})
 		return
 	}
-	defer dst.Close()
 
-	if _, err = io.Copy(dst, file); err != nil {
-		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to save logo"})
-		return
-	}
-
-	logoURL := "/uploads/logos/" + filename
-	ctx := context.Background()
-	_, err = DB.Exec(ctx, `UPDATE tenants SET logo_url = $1, updated_at = NOW() WHERE id = $2`, logoURL, claims.TenantID)
-	if err != nil {
+	if err := updateProfileLogoURL(claims.TenantID, logoURL); err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to update logo URL"})
 		return
 	}
 
 	writeJSON(w, http.StatusOK, Response{Success: true, Message: "Logo uploaded successfully", Data: map[string]any{"logo_url": logoURL}})
+}
+
+func parseProfileLogoUpload(w http.ResponseWriter, r *http.Request) (io.ReadCloser, string, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+	if err := r.ParseMultipartForm(2 << 20); err != nil {
+		return nil, "", fmt.Errorf("File terlalu besar (max 2MB)")
+	}
+
+	file, header, err := r.FormFile("logo")
+	if err != nil {
+		return nil, "", fmt.Errorf("Logo file is required")
+	}
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if !isValidLogoExtension(ext) {
+		file.Close()
+		return nil, "", fmt.Errorf("Format file tidak didukung (PNG, JPG, WebP)")
+	}
+
+	return file, ext, nil
+}
+
+func saveProfileLogo(tenantID string, file io.Reader, ext string) (string, error) {
+	uploadDir := getUploadDir()
+	os.MkdirAll(filepath.Join(uploadDir, "logos"), 0755)
+
+	outExt := normalizeExtension(ext)
+	cleanupProfileLogos(uploadDir, tenantID, outExt)
+
+	filename := tenantID + outExt
+	outPath := filepath.Join(uploadDir, "logos", filename)
+
+	dst, err := os.Create(outPath)
+	if err != nil {
+		return "", err
+	}
+	defer dst.Close()
+
+	if _, err = io.Copy(dst, file); err != nil {
+		return "", err
+	}
+
+	return "/uploads/logos/" + filename, nil
+}
+
+func cleanupProfileLogos(uploadDir, tenantID, keepExt string) {
+	oldExts := []string{".png", ".jpg", ".jpeg", ".webp"}
+	for _, e := range oldExts {
+		if e != keepExt {
+			os.Remove(filepath.Join(uploadDir, "logos", tenantID+e))
+		}
+	}
+}
+
+func updateProfileLogoURL(tenantID, logoURL string) error {
+	ctx := context.Background()
+	_, err := DB.Exec(ctx, `UPDATE tenants SET logo_url = $1, updated_at = NOW() WHERE id = $2`, logoURL, tenantID)
+	return err
 }
 
 func handleProfile(w http.ResponseWriter, r *http.Request) {

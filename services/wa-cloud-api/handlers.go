@@ -48,32 +48,7 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload := MetaSendPayload{
-		MessagingProduct: "whatsapp",
-		RecipientType:   "individual",
-		To:              normalizeTo(req.To),
-	}
-
-	if req.Type == "template" && req.Template != "" {
-		payload.Type = "template"
-		payload.Template = &MetaTemplate{
-			Name:     req.Template,
-			Language: MetaTemplateLanguage{Code: "id"},
-		}
-		if len(req.Params) > 0 {
-			var params []MetaTemplateParam
-			for _, p := range req.Params {
-				params = append(params, MetaTemplateParam{Type: "text", Text: p})
-			}
-			payload.Template.Components = []MetaTemplateComp{
-				{Type: "body", Parameters: params},
-			}
-		}
-	} else {
-		payload.Type = "text"
-		payload.Text = &MetaText{Body: req.Text}
-	}
-
+	payload := buildMetaPayload(req)
 	result, err := sendToMeta(r.Context(), cred.PhoneNumberID, cred.AccessToken, payload)
 	if err != nil {
 		slog.Error("Failed to send via Cloud API", "tenant", tenantID, "error", err)
@@ -82,28 +57,69 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if result.Error != nil {
-		slog.Error("Meta API error", "tenant", tenantID,
-			"meta_code", result.Error.Code,
-			"meta_message", result.Error.Message)
-		templateName := "custom"
-		if req.Type == "template" && req.Template != "" {
-			templateName = req.Template
-		}
-		waCloudMessagesTotal.WithLabelValues(templateName, "failed").Inc()
-		response.Error(w, http.StatusBadGateway,
-			fmt.Sprintf("Meta API error: %s", result.Error.Message), nil)
+		handleMetaAPIError(w, tenantID, result.Error, req)
 		return
 	}
 
+	handleSendSuccess(w, tenantID, req, result)
+}
+
+func buildMetaPayload(req SendRequest) MetaSendPayload {
+	payload := MetaSendPayload{
+		MessagingProduct: "whatsapp",
+		RecipientType:    "individual",
+		To:               normalizeTo(req.To),
+	}
+
+	if req.Type == "template" && req.Template != "" {
+		payload.Type = "template"
+		payload.Template = buildTemplatePayload(req)
+	} else {
+		payload.Type = "text"
+		payload.Text = &MetaText{Body: req.Text}
+	}
+
+	return payload
+}
+
+func buildTemplatePayload(req SendRequest) *MetaTemplate {
+	tmpl := &MetaTemplate{
+		Name:     req.Template,
+		Language: MetaTemplateLanguage{Code: "id"},
+	}
+
+	if len(req.Params) > 0 {
+		var params []MetaTemplateParam
+		for _, p := range req.Params {
+			params = append(params, MetaTemplateParam{Type: "text", Text: p})
+		}
+		tmpl.Components = []MetaTemplateComp{
+			{Type: "body", Parameters: params},
+		}
+	}
+
+	return tmpl
+}
+
+func handleMetaAPIError(w http.ResponseWriter, tenantID string, metaErr *MetaError, req SendRequest) {
+	slog.Error("Meta API error", "tenant", tenantID,
+		"meta_code", metaErr.Code,
+		"meta_message", metaErr.Message)
+
+	templateName := getTemplateName(req)
+	waCloudMessagesTotal.WithLabelValues(templateName, "failed").Inc()
+
+	response.Error(w, http.StatusBadGateway,
+		fmt.Sprintf("Meta API error: %s", metaErr.Message), nil)
+}
+
+func handleSendSuccess(w http.ResponseWriter, tenantID string, req SendRequest, result *MetaResponse) {
 	waMsgID := ""
 	if len(result.Messages) > 0 {
 		waMsgID = result.Messages[0].ID
 	}
 
-	templateName := "custom"
-	if req.Type == "template" && req.Template != "" {
-		templateName = req.Template
-	}
+	templateName := getTemplateName(req)
 	waCloudMessagesTotal.WithLabelValues(templateName, "sent").Inc()
 
 	slog.Info("Message sent via Cloud API",
@@ -119,6 +135,13 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		Message: "Message sent via WhatsApp Cloud API",
 		WAMsgID: waMsgID,
 	})
+}
+
+func getTemplateName(req SendRequest) string {
+	if req.Type == "template" && req.Template != "" {
+		return req.Template
+	}
+	return "custom"
 }
 
 func handleWebhook(w http.ResponseWriter, r *http.Request) {

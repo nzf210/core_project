@@ -177,6 +177,10 @@ func handleAdminListVoucherLinks(w http.ResponseWriter, r *http.Request) {
 			out = append(out, entry)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to iterate links", err)
+		return
+	}
 	response.JSON(w, http.StatusOK, "Links retrieved", out)
 }
 
@@ -184,4 +188,5 @@ type pgxRows interface {
 	Next() bool
 	Close()
 	Scan(...any) error
+	Err() error
 }
