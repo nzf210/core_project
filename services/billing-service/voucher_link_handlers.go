@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -40,73 +41,20 @@ func handleAdminGenerateVoucherLinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var (
-		planID             string
-		durationMonths    int
-		programExpiresAt   *time.Time
-	)
-	err := DB.QueryRow(r.Context(), `
-		SELECT target_plan_id, COALESCE(duration_months, 1), expires_at
-		FROM voucher_programs WHERE id = $1 AND is_active = true
-	`, req.ProgramID).Scan(&planID, &durationMonths, &programExpiresAt)
-	if err != nil || planID == nilStr() {
-		response.Error(w, http.StatusBadRequest, "Program not found or inactive", nil)
+	ctx := r.Context()
+	program, err := loadVoucherProgram(ctx, req.ProgramID)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	var linkExpiresAt time.Time
-	if req.ValidDays > 0 {
-		linkExpiresAt = time.Now().AddDate(0, 0, req.ValidDays)
-	} else if programExpiresAt != nil {
-		linkExpiresAt = *programExpiresAt
-	} else {
-		linkExpiresAt = time.Now().AddDate(1, 0, 0)
-	}
+	linkExpiresAt := calculateLinkExpiry(req.ValidDays, program.ExpiresAt)
+	creatorID, _ := ctx.Value(auth.UserIDKey).(string)
+	baseURL := resolveBaseURL(req.BaseURL)
 
-	creatorID, _ := r.Context().Value(auth.UserIDKey).(string)
+	links := generateVoucherLinks(ctx, req.ProgramID, req.Count, program, linkExpiresAt, creatorID, baseURL)
 
-	baseURL := req.BaseURL
-	if baseURL == "" {
-		baseURL = os.Getenv("PUBLIC_BASE_URL")
-		if baseURL == "" {
-			baseURL = "https://app.wch.id"
-		}
-	}
-
-	type linkOut struct {
-		Token string `json:"token"`
-		URL   string `json:"url"`
-	}
-	links := make([]linkOut, 0, req.Count)
-
-	for i := 0; i < req.Count; i++ {
-		tok, err := signVoucherToken(req.ProgramID, planID, durationMonths, linkExpiresAt)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "Failed to sign token", err)
-			return
-		}
-		hash := hashToken(tok)
-		prefix := tok[:8]
-		_, err = DB.Exec(r.Context(), `
-			INSERT INTO voucher_links (program_id, token_hash, token_prefix, created_by, expires_at, is_active)
-			VALUES ($1, $2, $3, $4, $5, true)
-		`, req.ProgramID, hash, prefix, creatorID, linkExpiresAt)
-		if err != nil {
-			slog.Warn("Failed to persist link", "error", err)
-			continue
-		}
-		links = append(links, linkOut{
-			Token: tok,
-			URL:   fmt.Sprintf("%s/redeem?token=%s", baseURL, tok),
-		})
-	}
-
-	_, _ = DB.Exec(r.Context(), `
-		INSERT INTO voucher_generation_logs (program_id, generated_by, count, prefix)
-		VALUES ($1, $2, $3, $4)
-	`, req.ProgramID, creatorID, len(links), "")
-
-	slog.Info("Voucher links generated", "program_id", req.ProgramID, "count", len(links), "by", creatorID)
+	logVoucherGeneration(ctx, req.ProgramID, creatorID, len(links))
 
 	response.JSON(w, http.StatusOK, "Links generated", map[string]interface{}{
 		"program_id": req.ProgramID,
@@ -114,6 +62,96 @@ func handleAdminGenerateVoucherLinks(w http.ResponseWriter, r *http.Request) {
 		"expires_at": linkExpiresAt.Format(time.RFC3339),
 		"links":      links,
 	})
+}
+
+type voucherProgramData struct {
+	PlanID         string
+	DurationMonths int
+	ExpiresAt      *time.Time
+}
+
+func loadVoucherProgram(ctx context.Context, programID string) (*voucherProgramData, error) {
+	var prog voucherProgramData
+	err := DB.QueryRow(ctx, `
+		SELECT target_plan_id, COALESCE(duration_months, 1), expires_at
+		FROM voucher_programs WHERE id = $1 AND is_active = true
+	`, programID).Scan(&prog.PlanID, &prog.DurationMonths, &prog.ExpiresAt)
+
+	if err != nil || prog.PlanID == nilStr() {
+		return nil, fmt.Errorf("Program not found or inactive")
+	}
+	return &prog, nil
+}
+
+func calculateLinkExpiry(validDays int, programExpiresAt *time.Time) time.Time {
+	if validDays > 0 {
+		return time.Now().AddDate(0, 0, validDays)
+	}
+	if programExpiresAt != nil {
+		return *programExpiresAt
+	}
+	return time.Now().AddDate(1, 0, 0)
+}
+
+func resolveBaseURL(requestedURL string) string {
+	if requestedURL != "" {
+		return requestedURL
+	}
+	if envURL := os.Getenv("PUBLIC_BASE_URL"); envURL != "" {
+		return envURL
+	}
+	return "https://app.wch.id"
+}
+
+func generateVoucherLinks(ctx context.Context, programID string, count int, program *voucherProgramData, expiresAt time.Time, creatorID, baseURL string) []linkOut {
+	links := make([]linkOut, 0, count)
+
+	for i := 0; i < count; i++ {
+		tok, err := signVoucherToken(programID, program.PlanID, program.DurationMonths, expiresAt)
+		if err != nil {
+			slog.Error("Failed to sign voucher token", "error", err)
+			continue
+		}
+
+		if persistVoucherLink(ctx, programID, tok, creatorID, expiresAt) {
+			links = append(links, linkOut{
+				Token: tok,
+				URL:   fmt.Sprintf("%s/redeem?token=%s", baseURL, tok),
+			})
+		}
+	}
+
+	return links
+}
+
+func persistVoucherLink(ctx context.Context, programID, token, creatorID string, expiresAt time.Time) bool {
+	hash := hashToken(token)
+	prefix := token[:8]
+
+	_, err := DB.Exec(ctx, `
+		INSERT INTO voucher_links (program_id, token_hash, token_prefix, created_by, expires_at, is_active)
+		VALUES ($1, $2, $3, $4, $5, true)
+	`, programID, hash, prefix, creatorID, expiresAt)
+
+	if err != nil {
+		slog.Warn("Failed to persist link", "error", err)
+		return false
+	}
+	return true
+}
+
+func logVoucherGeneration(ctx context.Context, programID, creatorID string, count int) {
+	DB.Exec(ctx, `
+		INSERT INTO voucher_generation_logs (program_id, generated_by, count, prefix)
+		VALUES ($1, $2, $3, $4)
+	`, programID, creatorID, count, "")
+
+	slog.Info("Voucher links generated", "program_id", programID, "count", count, "by", creatorID)
+}
+
+type linkOut struct {
+	Token string `json:"token"`
+	URL   string `json:"url"`
 }
 
 func handleAdminListVoucherLinks(w http.ResponseWriter, r *http.Request) {
