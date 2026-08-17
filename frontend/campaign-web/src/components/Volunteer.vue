@@ -54,7 +54,9 @@ const fetchVolunteers = async () => {
   await volunteersApi.execute(() => apiClient('/volunteers', {
     headers: { 'X-Tenant-ID': 'default' }
   }), {
-    onSuccess: (data) => { volunteers.value = data },
+    onSuccess: (data) => {
+      volunteers.value = Array.isArray(data) ? data : []
+    },
     silent: false
   })
 }
@@ -71,8 +73,8 @@ const addVolunteer = async () => {
       form.value = { name: '', phone: '' }
       fetchVolunteers()
     }
-  } catch (err) {
-    console.error(err)
+  } catch {
+    // fetch error — form stays open for retry
   }
 }
 

@@ -94,7 +94,9 @@ const fetchVoters = async () => {
   await votersApi.execute(() => apiClient('/voters', {
     headers: { 'X-Tenant-ID': 'default' }
   }), {
-    onSuccess: (data) => { voters.value = data },
+    onSuccess: (data) => {
+      voters.value = Array.isArray(data) ? data : []
+    },
     silent: false
   })
 }
@@ -111,8 +113,8 @@ const addVoter = async () => {
       form.value = { nik: '', name: '', address: '', phone: '', status: '', potential_level: '', competitor_support: '' }
       fetchVoters()
     }
-  } catch (err) {
-    console.error(err)
+  } catch {
+    // fetch error — form stays open for retry
   }
 }
 

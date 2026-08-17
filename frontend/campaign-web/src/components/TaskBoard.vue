@@ -74,7 +74,9 @@ const tasksApi = useApiWithRetry<any[]>()
 
 const fetchTasks = async () => {
   await tasksApi.execute(() => apiClient('/tasks'), {
-    onSuccess: (data) => { tasks.value = data },
+    onSuccess: (data) => {
+      tasks.value = Array.isArray(data) ? data : []
+    },
     silent: false
   })
 }
@@ -115,8 +117,6 @@ const addTask = async () => {
       form.value.description = ''
       form.value.assigned_to = ''
       fetchTasks()
-    } else {
-      console.error(data.message)
     }
   } catch { /* ignore fetch errors */ }
 }
@@ -132,7 +132,7 @@ const updateTaskStatus = async (id: string, status: string) => {
     if (data.success) {
       fetchTasks()
     }
-  } catch (err) { console.error(err) }
+  } catch { /* ignore fetch errors */ }
 }
 
 onMounted(() => {

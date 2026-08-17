@@ -1,6 +1,31 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, RouteLocationNormalized, NavigationGuardNext } from 'vue-router'
 
 import { api, sanitizeJWT, sanitizeUUID, sanitizeRole, sanitizeText, sanitizeBoolean } from '../api'
+
+interface UserData {
+  onboarding_completed?: boolean
+  plan?: string
+  role?: string
+  is_frozen?: boolean
+  addons?: Array<{ id: string; name: string }>
+  must_change_password?: boolean
+}
+
+interface MeCache {
+  key: string
+  ts: number
+  data: UserData
+}
+
+interface AuthValidateResponse {
+  success: boolean
+  data: {
+    tenant_id: string
+    user_id: string
+    role: string
+    impersonated_by?: string
+  }
+}
 import Dashboard from '../components/Dashboard.vue'
 import DynamicDashboard from '../components/DynamicDashboard.vue'
 import Onboarding from '../components/Onboarding.vue'
@@ -68,44 +93,44 @@ const router = createRouter({
 
 // In-memory cache of the last /api/me result, used to avoid hammering the
 // backend on every navigation. Keyed by tenant_id+user_id pair.
-let _meCache: { key: string; ts: number; data: any } | null = null
+let _meCache: MeCache | null = null
 const ME_CACHE_TTL_MS = 30_000 // 30s
 
-function syncOnboardingFlag(value: any) {
+function syncOnboardingFlag(value: boolean | undefined) {
   const flag = sanitizeBoolean(value ? 'true' : 'false')
   // Always write flag to localStorage, even when false — prevents redirect loop on reload
   localStorage.setItem('onboarding_completed', flag || 'false')
 }
 
-function syncPlan(value: any) {
+function syncPlan(value: string | undefined) {
   localStorage.setItem('plan', sanitizeText(value || '', 50))
 }
 
-function syncRole(value: any) {
+function syncRole(value: string | undefined) {
   const role = sanitizeRole(value || '')
   if (role) localStorage.setItem('role', role)
 }
 
-function syncFrozenStatus(isFrozen: any) {
+function syncFrozenStatus(isFrozen: boolean | undefined) {
   const status = isFrozen ? 'frozen' : 'active'
   sessionStorage.setItem('subscription_status', sanitizeText(status, 20))
 }
 
-function syncAddons(addons: any) {
+function syncAddons(addons: Array<{ id: string; name: string }> | undefined) {
   if (!Array.isArray(addons)) return
-  const sanitized = addons.map((a: any) => ({
+  const sanitized = addons.map((a) => ({
     id: sanitizeUUID(a.id),
     name: sanitizeText(a.name || '', 100)
   }))
   localStorage.setItem('tenant_addons', JSON.stringify(sanitized))
 }
 
-function syncPasswordFlag(value: any) {
+function syncPasswordFlag(value: boolean | undefined) {
   const flag = sanitizeBoolean(value ? 'true' : 'false')
   if (flag) localStorage.setItem('must_change_password', flag)
 }
 
-function syncUserDataToStorage(data: any) {
+function syncUserDataToStorage(data: UserData) {
   if (data.onboarding_completed !== undefined) syncOnboardingFlag(data.onboarding_completed)
   if (data.plan !== undefined) syncPlan(data.plan)
   if (data.role !== undefined) syncRole(data.role)
@@ -114,7 +139,7 @@ function syncUserDataToStorage(data: any) {
   if (data.must_change_password !== undefined) syncPasswordFlag(data.must_change_password)
 }
 
-async function fetchAndSyncMe(): Promise<any | null> {
+async function fetchAndSyncMe(): Promise<UserData | null> {
   const token = localStorage.getItem('access_token')
   const tenantId = localStorage.getItem('tenant_id')
   if (!token || !tenantId) return null
@@ -132,7 +157,7 @@ async function fetchAndSyncMe(): Promise<any | null> {
 }
 
 // Helper: handle impersonate auto-login via query param
-async function handleImpersonateLogin(to: any, next: any): Promise<boolean> {
+async function handleImpersonateLogin(to: RouteLocationNormalized, next: NavigationGuardNext): Promise<boolean> {
   const impersonateToken = to.query.impersonate_token as string | undefined
   if (!impersonateToken) return false
 
@@ -159,13 +184,13 @@ async function handleImpersonateLogin(to: any, next: any): Promise<boolean> {
       return true
     }
   } catch (err) {
-    console.error('Impersonate auto-login failed:', err)
+    void err // impersonate token invalid or expired — redirect to login
   }
   return false
 }
 
 // Helper: handle guest routes (login/register)
-function handleGuestRoute(to: any, next: any, isLoggedIn: boolean, isSuperadmin: boolean): boolean {
+function handleGuestRoute(to: RouteLocationNormalized, next: NavigationGuardNext, isLoggedIn: boolean, isSuperadmin: boolean): boolean {
   if (!to.meta.requiresGuest) return false
 
   if (isLoggedIn || isSuperadmin) {
@@ -202,7 +227,7 @@ function shouldRedirectToOnboarding(isSuperadmin: boolean): boolean {
   return !localStorage.getItem('onboarding_completed')
 }
 
-function shouldRedirectFrozenUser(to: any, isSuperadmin: boolean): boolean {
+function shouldRedirectFrozenUser(to: RouteLocationNormalized, isSuperadmin: boolean): boolean {
   if (isSuperadmin) return false
   const subscriptionStatus = sessionStorage.getItem('subscription_status')
   if (subscriptionStatus !== 'frozen') return false
@@ -210,7 +235,7 @@ function shouldRedirectFrozenUser(to: any, isSuperadmin: boolean): boolean {
 }
 
 // Helper: handle authenticated routes with onboarding/frozen checks
-async function handleAuthenticatedRoute(to: any, next: any, isSuperadmin: boolean): Promise<void> {
+async function handleAuthenticatedRoute(to: RouteLocationNormalized, next: NavigationGuardNext, isSuperadmin: boolean): Promise<void> {
   await syncOnboardingIfNeeded(isSuperadmin)
 
   if (isAuthBypassPath(to.path)) {
