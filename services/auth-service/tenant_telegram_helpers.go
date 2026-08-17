@@ -130,6 +130,10 @@ func normalizeExtension(ext string) string {
 }
 
 func cleanupOldLogos(uploadDir, tenantID string) {
+	// Validate tenant ID to prevent path traversal
+	if !uuidRE.MatchString(tenantID) {
+		return
+	}
 	oldExts := []string{".png", ".jpg", ".jpeg", ".webp"}
 	for _, e := range oldExts {
 		os.Remove(filepath.Join(uploadDir, "logos", tenantID+e))

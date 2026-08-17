@@ -91,6 +91,10 @@ func saveProfileLogo(tenantID string, file io.Reader, ext string) (string, error
 }
 
 func cleanupProfileLogos(uploadDir, tenantID, keepExt string) {
+	// Validate tenant ID to prevent path traversal
+	if !uuidRE.MatchString(tenantID) {
+		return
+	}
 	oldExts := []string{".png", ".jpg", ".jpeg", ".webp"}
 	for _, e := range oldExts {
 		if e != keepExt {
@@ -256,7 +260,8 @@ func updateTenantFields(ctx context.Context, req UpdateProfileRequest, tenantID 
 	}
 	if len(tenantUpdates) > 0 {
 		tenantArgs = append(tenantArgs, tenantID)
-		query := fmt.Sprintf("UPDATE tenants SET %s, updated_at = NOW() WHERE id = $%d", strings.Join(tenantUpdates, ", "), argIdx)
+		// Safe: tenantUpdates contains only "$N" placeholders built via fmt.Sprintf above, not user input
+		query := "UPDATE tenants SET " + strings.Join(tenantUpdates, ", ") + fmt.Sprintf(", updated_at = NOW() WHERE id = $%d", argIdx)
 		DB.Exec(ctx, query, tenantArgs...)
 	}
 }

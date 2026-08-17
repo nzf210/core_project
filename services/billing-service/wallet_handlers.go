@@ -122,7 +122,8 @@ func handleAdminAddonPricesItem(w http.ResponseWriter, r *http.Request) {
 		argIdx++
 	}
 	args = append(args, key)
-	query := fmt.Sprintf("UPDATE available_features SET %s WHERE feature_key = $%d", setParts, argIdx)
+	// Safe: setParts contains only "$N" placeholders built via fmt.Sprintf above, not user input
+	query := "UPDATE available_features SET " + setParts + fmt.Sprintf(" WHERE feature_key = $%d", argIdx)
 	_, err := DB.Exec(ctx, query, args...)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Update failed", err)
