@@ -96,7 +96,8 @@ func handlePhoneInputStep(tenantID string, session *waPasswordResetSession, rawT
 
 	if db != nil {
 		var userID string
-		err := db.QueryRow("SELECT id FROM users WHERE phone_number = $1 OR phone_number = $2", phone, "0"+phone[2:]).Scan(&userID)
+		phoneAlt := "0" + phone[2:]
+		err := db.QueryRow("SELECT id FROM users WHERE phone_number = $1 OR phone_number = $2", phone, phoneAlt).Scan(&userID)
 		if err != nil {
 			sendWAMessage(tenantID, session.SenderJID,
 				"📱 Nomor tidak ditemukan di sistem kami.\n\n"+

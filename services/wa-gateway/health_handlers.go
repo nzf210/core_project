@@ -110,4 +110,7 @@ func restoreSessions(ctx context.Context, container *sqlstore.Container) {
 			ReleaseSessionLock(ctx, tID)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		slog.Error("restoreSessions: rows iteration error", "error", err)
+	}
 }
