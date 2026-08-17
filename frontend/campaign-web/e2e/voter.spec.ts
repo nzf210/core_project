@@ -31,5 +31,7 @@ test.describe('Voter Registration', () => {
 
     // Form validation should prevent submission
     // Browser's built-in validation will trigger for required fields
+    const nikInput = page.locator('input[placeholder*="NIK"], input[id*="nik"]');
+    await expect(nikInput).toHaveAttribute('required', '');
   });
 });
