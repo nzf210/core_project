@@ -35,13 +35,13 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 	rawText := strings.TrimSpace(messageText)
 	upperText := strings.ToUpper(rawText)
 
-	if session, exists := waRegistrationSessions[senderJID]; exists {
+	if session, exists := loadRegSession(senderJID); exists {
 		if handleWARegistrationStep(tenantID, session, rawText, upperText) {
 			return
 		}
 	}
 
-	if session, exists := waPasswordResetSessions[senderJID]; exists {
+	if session, exists := loadPWResetSession(senderJID); exists {
 		if handleWAPasswordResetStep(tenantID, session, rawText, upperText) {
 			return
 		}

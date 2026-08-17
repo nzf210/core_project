@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"strings"
 	"time"
@@ -91,7 +93,8 @@ func handleWAOTPRequest(tenantID, senderJID, senderPhone string) {
 }
 
 func generateAndSendOTP(ctx context.Context, tenantID, senderJID, senderPhone string) {
-	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	n, _ := rand.Int(rand.Reader, big.NewInt(1000000))
+	otp := fmt.Sprintf("%06d", n.Int64())
 	normPhone := senderPhone
 	if strings.HasPrefix(normPhone, "62") {
 		normPhone = "0" + normPhone[2:]

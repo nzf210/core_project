@@ -38,11 +38,7 @@ func handleSendRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pref := resolveProviderPreference(r, tenantID)
-	// Respect whatsmeow-only preference (skip Cloud API entirely)
-	// For auto/cloud_api: try Cloud first, fallback to whatsmeow on failure
-	skipCloud := pref == "whatsmeow"
-
-	if handleCloudAPIRouting(w, r, tenantID, target, message, skipCloud) {
+	if handleCloudAPIRouting(w, r, tenantID, target, message, pref) {
 		return
 	}
 
@@ -135,14 +131,11 @@ func writeServiceUnavailable(w http.ResponseWriter, msg string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
-func handleCloudAPIRouting(w http.ResponseWriter, r *http.Request, tenantID, target, message string, skipCloud bool) bool {
-	// skipCloud=true → force whatsmeow, no Cloud API attempt
-	if skipCloud {
+func handleCloudAPIRouting(w http.ResponseWriter, r *http.Request, tenantID, target, message, pref string) bool {
+	if pref == "whatsmeow" {
 		return false
 	}
 
-	// Try Cloud API if: explicitly forced (cloud_api pref) OR transactional message type
-	pref := resolveProviderPreference(r, tenantID)
 	shouldTryCloud := pref == "cloud_api" || (pref == "auto" && isTransactional(r))
 
 	if !shouldTryCloud {

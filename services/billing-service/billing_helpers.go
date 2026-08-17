@@ -59,6 +59,12 @@ func getTenantXenditClient(ctx context.Context, tenantID string) (*xendit.APICli
 	client := xendit.NewClient(apiKey)
 
 	xenditClientMu.Lock()
+	// Re-check under write lock: another goroutine may have populated the cache
+	// between our RUnlock above and this Lock.
+	if existing, exists := xenditClientCache[tenantID]; exists && time.Since(existing.createdAt) < 5*time.Minute {
+		xenditClientMu.Unlock()
+		return existing.client, nil
+	}
 	xenditClientCache[tenantID] = &xenditClientCacheEntry{
 		client:    client,
 		createdAt: time.Now(),

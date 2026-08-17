@@ -135,6 +135,7 @@ Format per feature:
 | F066 | Dynamic Feature Gating — Zero-Hardcode Feature Toggle System | ✅ Approved | ✅ Done | 2026-06-30 |
 | F067 | Grafana Production-Ready Monitoring — Prometheus + 8 Dashboards | ✅ Approved | ✅ Done | 2026-07-01 |
 | F068 | Standardisasi Format Rupiah — `formatRupiah()` & `formatRupiahShort()` | ✅ Approved | ✅ Done | 2026-06-29 |
+| F069 | Redis-Backed WA Registration Session Persistence | ✅ Approved | ✅ Done | 2026-08-18 |
 
 ---
 

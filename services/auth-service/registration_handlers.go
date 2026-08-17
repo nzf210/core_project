@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"strings"
 	"time"
@@ -57,7 +59,8 @@ func checkAndReuseExistingOTP(ctx context.Context, otpKey, phoneNumber string, w
 }
 
 func generateAndStoreRegistrationOTP(ctx context.Context, req RegisterRequest, otpKey string) (string, error) {
-	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	n, _ := rand.Int(rand.Reader, big.NewInt(1000000))
+	otp := fmt.Sprintf("%06d", n.Int64())
 	reqJSON, _ := json.Marshal(req)
 	err := Redis.Set(ctx, otpKey, string(reqJSON)+":"+otp, 1*time.Hour).Err()
 	if err != nil {

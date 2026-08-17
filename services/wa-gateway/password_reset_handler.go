@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"strings"
 	"time"
@@ -18,15 +20,61 @@ type waPasswordResetSession struct {
 	CreatedAt   time.Time
 }
 
+const waPWResetSessionTTL = 30 * time.Minute
+
+func pwResetSessionKey(senderJID string) string {
+	return "wa:pw-reset-session:" + senderJID
+}
+
+func savePWResetSession(session *waPasswordResetSession) {
+	if redisShared == nil {
+		waPasswordResetSessions[session.SenderJID] = session
+		return
+	}
+	data, err := json.Marshal(session)
+	if err != nil {
+		waPasswordResetSessions[session.SenderJID] = session
+		return
+	}
+	ctx := context.Background()
+	if err := redisShared.Set(ctx, pwResetSessionKey(session.SenderJID), data, waPWResetSessionTTL).Err(); err != nil {
+		waPasswordResetSessions[session.SenderJID] = session
+	}
+}
+
+func loadPWResetSession(senderJID string) (*waPasswordResetSession, bool) {
+	if redisShared != nil {
+		ctx := context.Background()
+		data, err := redisShared.Get(ctx, pwResetSessionKey(senderJID)).Bytes()
+		if err == nil {
+			var session waPasswordResetSession
+			if json.Unmarshal(data, &session) == nil {
+				return &session, true
+			}
+		}
+	}
+	s, ok := waPasswordResetSessions[senderJID]
+	return s, ok
+}
+
+func deletePWResetSession(senderJID string) {
+	if redisShared != nil {
+		ctx := context.Background()
+		redisShared.Del(ctx, pwResetSessionKey(senderJID))
+	}
+	delete(waPasswordResetSessions, senderJID)
+}
+
+// in-memory fallback map (used when Redis is unavailable)
 var waPasswordResetSessions = make(map[string]*waPasswordResetSession)
 
 func startWAPasswordReset(tenantID, senderJID, senderPhone string) {
-	waPasswordResetSessions[senderJID] = &waPasswordResetSession{
+	savePWResetSession(&waPasswordResetSession{
 		SenderJID:   senderJID,
 		PhoneNumber: senderPhone,
 		Step:        0,
 		CreatedAt:   time.Now(),
-	}
+	})
 	sendWAMessage(tenantID, senderJID,
 		"🔑 *Reset Password*\n\n"+
 			"Kirim nomor HP Anda yang terdaftar di platform WCH.\n"+
@@ -35,7 +83,7 @@ func startWAPasswordReset(tenantID, senderJID, senderPhone string) {
 }
 
 func cancelPasswordReset(tenantID, senderJID string) {
-	delete(waPasswordResetSessions, senderJID)
+	deletePWResetSession(senderJID)
 	sendWAMessage(tenantID, senderJID, msgResetPasswordCanceled)
 }
 
@@ -58,13 +106,15 @@ func handlePhoneInputStep(tenantID string, session *waPasswordResetSession, rawT
 		session.PhoneNumber = phone
 	}
 
-	otp := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	n, _ := rand.Int(rand.Reader, big.NewInt(1000000))
+	otp := fmt.Sprintf("%06d", n.Int64())
 	ctx := context.Background()
 	otpKey := redisKeyPWResetOTP + session.PhoneNumber
 	redisShared.Set(ctx, otpKey, otp, 1*time.Hour)
 
 	session.Step = 1
 	session.CreatedAt = time.Now()
+	savePWResetSession(session)
 
 	sendWAMessage(tenantID, session.SenderJID,
 		"📩 Kode OTP telah dikirim ke chat ini.\n\n"+
@@ -96,6 +146,7 @@ func handleOTPVerificationStep(tenantID string, session *waPasswordResetSession,
 
 	session.Step = 2
 	session.CreatedAt = time.Now()
+	savePWResetSession(session)
 	sendWAMessage(tenantID, session.SenderJID,
 		"✅ Kode OTP verified!\n\n"+
 			"Sekarang kirim password baru Anda (minimal 8 karakter).\n\n"+
@@ -110,7 +161,7 @@ func handleNewPasswordStep(tenantID string, session *waPasswordResetSession, raw
 	}
 
 	authSvcURL := getAuthServiceURL()
-	body, _ := json.Marshal(map[string]interface{}{
+	body, _ := json.Marshal(map[string]any{
 		"phoneNumber": session.PhoneNumber,
 		"newPassword": rawText,
 	})
@@ -121,14 +172,14 @@ func handleNewPasswordStep(tenantID string, session *waPasswordResetSession, raw
 	resp, err := client.Do(req)
 	if err != nil || resp == nil {
 		sendWAMessage(tenantID, session.SenderJID, "❌ Gagal mereset password. Silakan coba lagi.")
-		delete(waPasswordResetSessions, session.SenderJID)
+		deletePWResetSession(session.SenderJID)
 		return true
 	}
 	defer resp.Body.Close()
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
-	delete(waPasswordResetSessions, session.SenderJID)
+	deletePWResetSession(session.SenderJID)
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		ctx := context.Background()
