@@ -26,9 +26,9 @@ func handleAffiliateLeaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := DB.Query(context.Background(), `
-		SELECT 
-			u.full_name, 
-			COUNT(DISTINCT ae.tenant_id) as total_closing, 
+		SELECT
+			u.full_name,
+			COUNT(DISTINCT ae.tenant_id) as total_closing,
 			SUM(ae.amount_cents) as total_revenue
 		FROM affiliate_earnings ae
 		JOIN affiliates a ON ae.affiliate_id = a.id
@@ -56,7 +56,6 @@ func handleAffiliateLeaderboard(w http.ResponseWriter, r *http.Request) {
 			slog.Warn("Failed to scan leaderboard row", "error", err)
 			continue
 		}
-		// Masking name (e.g. "Budi Santoso" -> "Budi S.")
 		parts := strings.Split(rawName, " ")
 		if len(parts) > 1 && len(parts[1]) > 0 {
 			l.Name = parts[0] + " " + string(parts[1][0]) + "."
@@ -85,7 +84,6 @@ func handleAffiliateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch recent earnings (last 50)
 	rows, err2 := DB.Query(context.Background(),
 		`SELECT ae.id, ae.tenant_id, ae.invoice_id, ae.amount_cents, ae.commission_rate_percent, ae.transaction_type, ae.created_at,
 		        t.name as tenant_name
@@ -359,86 +357,4 @@ func handleAffiliateEarnings(w http.ResponseWriter, r *http.Request) {
 		earningsList = append(earningsList, e)
 	}
 	response.JSON(w, http.StatusOK, "Earnings retrieved", earningsList)
-}
-
-func handleAdminReferralConfig(w http.ResponseWriter, r *http.Request) {
-	role := r.Header.Get(response.XUserRole)
-	if role != "superadmin" {
-		response.Error(w, http.StatusForbidden, response.SuperadminOnly, nil)
-		return
-	}
-
-	ctx := r.Context()
-
-	switch r.Method {
-	case http.MethodGet:
-		var discountPct, commissionPct, minPurchase, maxCommission float64
-		var isActive bool
-		var linkBase string
-		err := DB.QueryRow(ctx, `
-			SELECT COALESCE(discount_percent,10), COALESCE(commission_percent,10),
-			       COALESCE(min_purchase_rupiah,0), COALESCE(max_commission_rupiah,0),
-			       COALESCE(is_active,true), COALESCE(referral_link_base,'wch.id/r')
-			FROM referral_config WHERE id = 1
-		`).Scan(&discountPct, &commissionPct, &minPurchase, &maxCommission, &isActive, &linkBase)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "Failed to load config", err)
-			return
-		}
-		response.JSON(w, http.StatusOK, "Referral config loaded", map[string]interface{}{
-			"discount_percent":       discountPct,
-			"commission_percent":     commissionPct,
-			"min_purchase_rupiah":    minPurchase,
-			"max_commission_rupiah":  maxCommission,
-			"is_active":              isActive,
-			"referral_link_base":     linkBase,
-		})
-
-	case http.MethodPut, http.MethodPost:
-		var req struct {
-			DiscountPercent      float64 `json:"discount_percent"`
-			CommissionPercent    float64 `json:"commission_percent"`
-			MinPurchaseRupiah    int64   `json:"min_purchase_rupiah"`
-			MaxCommissionRupiah  int64   `json:"max_commission_rupiah"`
-			IsActive             bool    `json:"is_active"`
-			ReferralLinkBase     string  `json:"referral_link_base"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			response.Error(w, http.StatusBadRequest, "Invalid body", err)
-			return
-		}
-		if req.DiscountPercent < 0 || req.DiscountPercent > 100 || req.CommissionPercent < 0 || req.CommissionPercent > 100 {
-			response.Error(w, http.StatusBadRequest, "Percentage must be 0-100", nil)
-			return
-		}
-
-		_, err := DB.Exec(ctx, `
-			INSERT INTO referral_config (id, discount_percent, commission_percent, min_purchase_rupiah, max_commission_rupiah, is_active, referral_link_base, updated_at)
-			VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
-			ON CONFLICT (id)
-			DO UPDATE SET discount_percent = EXCLUDED.discount_percent,
-			              commission_percent = EXCLUDED.commission_percent,
-			              min_purchase_rupiah = EXCLUDED.min_purchase_rupiah,
-			              max_commission_rupiah = EXCLUDED.max_commission_rupiah,
-			              is_active = EXCLUDED.is_active,
-			              referral_link_base = EXCLUDED.referral_link_base,
-			              updated_at = NOW()
-		`, req.DiscountPercent, req.CommissionPercent, req.MinPurchaseRupiah, req.MaxCommissionRupiah, req.IsActive, req.ReferralLinkBase)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "Failed to update config", err)
-			return
-		}
-		slog.Info("Referral config updated", "discount", req.DiscountPercent, "commission", req.CommissionPercent)
-		response.JSON(w, http.StatusOK, "Referral config updated", map[string]interface{}{
-			"discount_percent":       req.DiscountPercent,
-			"commission_percent":     req.CommissionPercent,
-			"min_purchase_rupiah":    req.MinPurchaseRupiah,
-			"max_commission_rupiah":  req.MaxCommissionRupiah,
-			"is_active":              req.IsActive,
-			"referral_link_base":   req.ReferralLinkBase,
-		})
-
-	default:
-		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
-	}
 }

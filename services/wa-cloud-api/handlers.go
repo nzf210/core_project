@@ -223,81 +223,93 @@ func handleAdminCredentials(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		tenantID := r.URL.Query().Get("tenant_id")
-		if tenantID != "" {
-			cred, err := getCredential(r.Context(), tenantID)
-			if err != nil {
-				response.Error(w, http.StatusNotFound, "Credential not found", err)
-				return
-			}
-			response.JSON(w, http.StatusOK, "Credential retrieved", cred)
-			return
-		}
-
-		rows, err := DB.Query(r.Context(), `
-			SELECT id, tenant_id, phone_number_id, waba_id, is_active, created_at, updated_at
-			FROM wa_cloud_api_credentials ORDER BY created_at DESC LIMIT 100
-		`, nil)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "Failed to list credentials", err)
-			return
-		}
-		defer rows.Close()
-
-		type credRow struct {
-			ID            string `json:"id"`
-			TenantID      string `json:"tenant_id"`
-			PhoneNumberID string `json:"phone_number_id"`
-			WABAID        string `json:"waba_id"`
-			IsActive      bool   `json:"is_active"`
-			CreatedAt     string `json:"created_at"`
-			UpdatedAt     string `json:"updated_at"`
-		}
-		var creds []credRow
-		for rows.Next() {
-			var c credRow
-			if rows.Scan(&c.ID, &c.TenantID, &c.PhoneNumberID, &c.WABAID, &c.IsActive, &c.CreatedAt, &c.UpdatedAt) == nil {
-				creds = append(creds, c)
-			}
-		}
-		response.JSON(w, http.StatusOK, "Credentials retrieved", creds)
-
+		getAdminCredentials(w, r)
 	case http.MethodPost:
-		var req struct {
-			TenantID      string `json:"tenant_id"`
-			PhoneNumberID string `json:"phone_number_id"`
-			WABAID        string `json:"waba_id"`
-			AccessToken   string `json:"access_token"`
-			VerifyToken   string `json:"verify_token"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
-			return
-		}
-
-		// Encrypt access_token before storing
-		encryptedToken, err := encryption.Encrypt(req.AccessToken, config.GlobalConfig.EncryptionKey)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "Failed to encrypt token", err)
-			return
-		}
-
-		var id string
-		err = DB.QueryRow(r.Context(), `
-			INSERT INTO wa_cloud_api_credentials (tenant_id, phone_number_id, waba_id, access_token, verify_token, is_active)
-			VALUES ($1, $2, $3, $4, $5, true)
-			ON CONFLICT (tenant_id) DO UPDATE SET phone_number_id = EXCLUDED.phone_number_id, waba_id = EXCLUDED.waba_id, access_token = EXCLUDED.access_token, is_active = true, updated_at = NOW()
-			RETURNING id
-		`, req.TenantID, req.PhoneNumberID, req.WABAID, encryptedToken, req.VerifyToken).Scan(&id)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "Failed to save credential", err)
-			return
-		}
-		response.JSON(w, http.StatusOK, "Credential saved", map[string]string{"id": id})
-
+		createAdminCredential(w, r)
 	default:
 		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
 	}
+}
+
+func getAdminCredentials(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.URL.Query().Get("tenant_id")
+	if tenantID != "" {
+		getSingleCredential(w, r, tenantID)
+		return
+	}
+	listAllCredentials(w, r)
+}
+
+func getSingleCredential(w http.ResponseWriter, r *http.Request, tenantID string) {
+	cred, err := getCredential(r.Context(), tenantID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "Credential not found", err)
+		return
+	}
+	response.JSON(w, http.StatusOK, "Credential retrieved", cred)
+}
+
+func listAllCredentials(w http.ResponseWriter, r *http.Request) {
+	rows, err := DB.Query(r.Context(), `
+		SELECT id, tenant_id, phone_number_id, waba_id, is_active, created_at, updated_at
+		FROM wa_cloud_api_credentials ORDER BY created_at DESC LIMIT 100
+	`, nil)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to list credentials", err)
+		return
+	}
+	defer rows.Close()
+
+	type credRow struct {
+		ID            string `json:"id"`
+		TenantID      string `json:"tenant_id"`
+		PhoneNumberID string `json:"phone_number_id"`
+		WABAID        string `json:"waba_id"`
+		IsActive      bool   `json:"is_active"`
+		CreatedAt     string `json:"created_at"`
+		UpdatedAt     string `json:"updated_at"`
+	}
+	var creds []credRow
+	for rows.Next() {
+		var c credRow
+		if rows.Scan(&c.ID, &c.TenantID, &c.PhoneNumberID, &c.WABAID, &c.IsActive, &c.CreatedAt, &c.UpdatedAt) == nil {
+			creds = append(creds, c)
+		}
+	}
+	response.JSON(w, http.StatusOK, "Credentials retrieved", creds)
+}
+
+func createAdminCredential(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		TenantID      string `json:"tenant_id"`
+		PhoneNumberID string `json:"phone_number_id"`
+		WABAID        string `json:"waba_id"`
+		AccessToken   string `json:"access_token"`
+		VerifyToken   string `json:"verify_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
+		return
+	}
+
+	encryptedToken, err := encryption.Encrypt(req.AccessToken, config.GlobalConfig.EncryptionKey)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to encrypt token", err)
+		return
+	}
+
+	var id string
+	err = DB.QueryRow(r.Context(), `
+		INSERT INTO wa_cloud_api_credentials (tenant_id, phone_number_id, waba_id, access_token, verify_token, is_active)
+		VALUES ($1, $2, $3, $4, $5, true)
+		ON CONFLICT (tenant_id) DO UPDATE SET phone_number_id = EXCLUDED.phone_number_id, waba_id = EXCLUDED.waba_id, access_token = EXCLUDED.access_token, is_active = true, updated_at = NOW()
+		RETURNING id
+	`, req.TenantID, req.PhoneNumberID, req.WABAID, encryptedToken, req.VerifyToken).Scan(&id)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to save credential", err)
+		return
+	}
+	response.JSON(w, http.StatusOK, "Credential saved", map[string]string{"id": id})
 }
 
 func handleAdminCredentialsItem(w http.ResponseWriter, r *http.Request) {
@@ -307,11 +319,7 @@ func handleAdminCredentialsItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := strings.TrimPrefix(r.URL.Path, "/admin/credentials/")
-	if id == "" {
-		id = r.URL.Query().Get("id")
-	}
-
+	id := extractCredentialID(r)
 	if id == "" {
 		response.Error(w, http.StatusBadRequest, "Missing credential id", nil)
 		return
@@ -319,62 +327,81 @@ func handleAdminCredentialsItem(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		var cred CloudAPICredential
-		err := DB.QueryRow(r.Context(), `
-			SELECT id, tenant_id, phone_number_id, COALESCE(waba_id, ''), is_active, created_at, updated_at
-			FROM wa_cloud_api_credentials WHERE id = $1
-		`, id).Scan(&cred.ID, &cred.TenantID, &cred.PhoneNumberID, &cred.WABAID, &cred.IsActive, &cred.CreatedAt, &cred.UpdatedAt)
-		if err != nil {
-			response.Error(w, http.StatusNotFound, "Credential not found", err)
-			return
-		}
-		response.JSON(w, http.StatusOK, "Credential retrieved", cred)
-
+		getCredentialByID(w, r, id)
 	case http.MethodPut:
-		var req struct {
-			PhoneNumberID string `json:"phone_number_id"`
-			WABAID        string `json:"waba_id"`
-			AccessToken   string `json:"access_token"`
-			IsActive      bool   `json:"is_active"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
-			return
-		}
-
-		// Encrypt access_token if provided
-		tokenToStore := req.AccessToken
-		if req.AccessToken != "" {
-			encrypted, err := encryption.Encrypt(req.AccessToken, config.GlobalConfig.EncryptionKey)
-			if err != nil {
-				response.Error(w, http.StatusInternalServerError, "Failed to encrypt token", err)
-				return
-			}
-			tokenToStore = encrypted
-		}
-
-		_, err := DB.Exec(r.Context(), `
-			UPDATE wa_cloud_api_credentials
-			SET phone_number_id = $1, waba_id = $2, access_token = $3, is_active = $4, updated_at = NOW()
-			WHERE id = $5
-		`, req.PhoneNumberID, req.WABAID, tokenToStore, req.IsActive, id)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "Failed to update credential", err)
-			return
-		}
-		response.JSON(w, http.StatusOK, "Credential updated", nil)
-
+		updateCredentialByID(w, r, id)
 	case http.MethodDelete:
-		_, err := DB.Exec(r.Context(), "DELETE FROM wa_cloud_api_credentials WHERE id = $1", id)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "Failed to delete credential", err)
-			return
-		}
-		response.JSON(w, http.StatusOK, "Credential deleted", nil)
-
+		deleteCredentialByID(w, r, id)
 	default:
 		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
 	}
+}
+
+func extractCredentialID(r *http.Request) string {
+	id := strings.TrimPrefix(r.URL.Path, "/admin/credentials/")
+	if id == "" {
+		id = r.URL.Query().Get("id")
+	}
+	return id
+}
+
+func getCredentialByID(w http.ResponseWriter, r *http.Request, id string) {
+	var cred CloudAPICredential
+	err := DB.QueryRow(r.Context(), `
+		SELECT id, tenant_id, phone_number_id, COALESCE(waba_id, ''), is_active, created_at, updated_at
+		FROM wa_cloud_api_credentials WHERE id = $1
+	`, id).Scan(&cred.ID, &cred.TenantID, &cred.PhoneNumberID, &cred.WABAID, &cred.IsActive, &cred.CreatedAt, &cred.UpdatedAt)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "Credential not found", err)
+		return
+	}
+	response.JSON(w, http.StatusOK, "Credential retrieved", cred)
+}
+
+func updateCredentialByID(w http.ResponseWriter, r *http.Request, id string) {
+	var req struct {
+		PhoneNumberID string `json:"phone_number_id"`
+		WABAID        string `json:"waba_id"`
+		AccessToken   string `json:"access_token"`
+		IsActive      bool   `json:"is_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
+		return
+	}
+
+	tokenToStore, err := encryptTokenIfProvided(req.AccessToken)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to encrypt token", err)
+		return
+	}
+
+	_, err = DB.Exec(r.Context(), `
+		UPDATE wa_cloud_api_credentials
+		SET phone_number_id = $1, waba_id = $2, access_token = $3, is_active = $4, updated_at = NOW()
+		WHERE id = $5
+	`, req.PhoneNumberID, req.WABAID, tokenToStore, req.IsActive, id)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to update credential", err)
+		return
+	}
+	response.JSON(w, http.StatusOK, "Credential updated", nil)
+}
+
+func encryptTokenIfProvided(token string) (string, error) {
+	if token == "" {
+		return token, nil
+	}
+	return encryption.Encrypt(token, config.GlobalConfig.EncryptionKey)
+}
+
+func deleteCredentialByID(w http.ResponseWriter, r *http.Request, id string) {
+	_, err := DB.Exec(r.Context(), "DELETE FROM wa_cloud_api_credentials WHERE id = $1", id)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to delete credential", err)
+		return
+	}
+	response.JSON(w, http.StatusOK, "Credential deleted", nil)
 }
 
 func handleHealthz(w http.ResponseWriter, r *http.Request) {
