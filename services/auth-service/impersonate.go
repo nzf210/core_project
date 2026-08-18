@@ -13,7 +13,7 @@ import (
 // Generate JWT token untuk login sebagai owner dari tenant tertentu
 func handleImpersonate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Message: msgMethodNotAllowed})
 		return
 	}
 

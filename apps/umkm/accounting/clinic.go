@@ -3,12 +3,10 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
 	"core_project/shared/sdk/response"
-	"github.com/google/uuid"
 	"log/slog"
 )
 
@@ -125,34 +123,18 @@ func handleClinicBook(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// 0. Anti-Double Booking (1 Nomor WA = 1 Antrian Aktif max)
-	var existingQueue string
-	err := DB.QueryRow(ctx, `
-		SELECT queue_number FROM appointments 
-		WHERE tenant_id = $1 AND patient_phone = $2 AND status = 'waiting'
-	`, tenantID, req.PatientPhone).Scan(&existingQueue)
-	if err == nil && existingQueue != "" {
+	existingQueue, err := checkExistingQueue(ctx, tenantID, req.PatientPhone)
+	if err != nil {
 		slog.Warn("Double booking attempt blocked", "tenant_id", tenantID, "phone", req.PatientPhone, "existing_queue", existingQueue)
 		response.Error(w, http.StatusConflict, "Anda sudah memiliki antrean aktif: "+existingQueue, nil)
 		return
 	}
 
-	var queueType string
-	var slotDuration int
-	err = DB.QueryRow(ctx, `
-		SELECT queue_type, slot_duration_minutes FROM clinic_settings WHERE tenant_id = $1 AND is_active = true
-	`, tenantID).Scan(&queueType, &slotDuration)
-
-	if err == sql.ErrNoRows {
-		queueType = "sequential"
-		slotDuration = 30
-	} else if err != nil {
+	queueType, slotDuration, err := getClinicSettings(ctx, tenantID)
+	if err != nil {
 		response.Error(w, http.StatusInternalServerError, errDBErrorClinic, nil)
 		return
 	}
-
-	var queueNum string
-	var scheduledTime *time.Time
 
 	tx, err := DB.Begin(ctx)
 	if err != nil {
@@ -161,26 +143,15 @@ func handleClinicBook(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 
-	if queueType == "sequential" {
-		var nextNum int
-		err = tx.QueryRow(ctx, `
-			INSERT INTO clinic_settings (tenant_id, current_queue_number, queue_date)
-			VALUES ($1, 1, CURRENT_DATE)
-			ON CONFLICT (tenant_id) DO UPDATE SET
-				current_queue_number = CASE
-					WHEN clinic_settings.queue_date = CURRENT_DATE
-					THEN clinic_settings.current_queue_number + 1
-					ELSE 1
-				END,
-				queue_date = CURRENT_DATE
-			RETURNING current_queue_number
-		`, tenantID).Scan(&nextNum)
+	var queueNum string
+	var scheduledTime *time.Time
 
+	if queueType == "sequential" {
+		queueNum, err = generateSequentialQueueNumber(ctx, tx, tenantID)
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, "Failed generating queue number", nil)
 			return
 		}
-		queueNum = fmt.Sprintf("A-%03d", nextNum)
 	} else {
 		if req.ScheduledAt == nil {
 			response.Error(w, http.StatusBadRequest, "scheduled_at is required for timeslot mode", nil)
@@ -190,24 +161,14 @@ func handleClinicBook(w http.ResponseWriter, r *http.Request) {
 		queueNum = req.ScheduledAt.Format("15:04")
 	}
 
-	appointmentID := uuid.NewString()
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO appointments (id, tenant_id, queue_number, patient_name, patient_phone, scheduled_time, status)
-		VALUES ($1, $2, $3, $4, $5, $6, 'waiting')
-	`, appointmentID, tenantID, queueNum, req.PatientName, req.PatientPhone, scheduledTime)
-
+	appointmentID, err := insertAppointment(ctx, tx, tenantID, queueNum, req.PatientName, req.PatientPhone, scheduledTime)
 	if err != nil {
 		slog.Error("Failed to book appointment", "tenant_id", tenantID, "error", err)
 		response.Error(w, http.StatusInternalServerError, "Failed to book appointment: "+err.Error(), nil)
 		return
 	}
 
-	_, _ = tx.Exec(ctx, `
-		INSERT INTO queue_history (tenant_id, appointment_id, action, performed_by, notes)
-		VALUES ($1, $2, 'booked', 'patient', $3)
-	`, tenantID, appointmentID, fmt.Sprintf("Patient booked queue %s", queueNum))
-
+	logQueueHistory(ctx, tx, tenantID, appointmentID, queueNum)
 	tx.Commit(ctx)
 
 	slog.Info("Clinic booking successful", "tenant_id", tenantID, "queue_num", queueNum, "phone", req.PatientPhone)

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -31,47 +30,22 @@ func HandleKTPScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call AI Gateway Vision OCR
-	visionPayload := map[string]string{
-		"image_url": req.ImageURL,
-		"prompt":    "Extract KTP data",
-	}
-	body, _ := json.Marshal(visionPayload)
-	
-	resp, err := http.Post(visionGatewayURL, "application/json", bytes.NewBuffer(body))
+	ocrText, err := callVisionOCR(req.ImageURL)
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "AI Gateway unreachable"})
 		return
 	}
-	defer resp.Body.Close()
-
-	var visionResp struct {
-		Success bool `json:"success"`
-		Data    struct {
-			Text string `json:"text"`
-		} `json:"data"`
-	}
-	json.NewDecoder(resp.Body).Decode(&visionResp)
-
-	if !visionResp.Success {
+	if ocrText == "" {
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "AI OCR failed"})
 		return
 	}
 
-	// Parse the structured JSON returned from mock vision
-	var ktpData struct {
-		NIK     string `json:"nik"`
-		Name    string `json:"name"`
-		Address string `json:"address"`
-		Gender  string `json:"gender"`
-		Age     int    `json:"age"`
-	}
-	if err := json.Unmarshal([]byte(visionResp.Data.Text), &ktpData); err != nil {
+	ktpData, err := parseKTPData(ocrText)
+	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "AI returned malformed data"})
 		return
 	}
 
-	// Auto-Register the citizen and endorsement — wrap in transaction to prevent orphan records
 	ctx := context.Background()
 	tx, err := repository.DB.Begin(ctx)
 	if err != nil {
@@ -80,29 +54,13 @@ func HandleKTPScan(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 
-	var citizenID string
-	queryCitizen := `
-		INSERT INTO citizens (nik, name, address, gender, age)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (nik) DO UPDATE SET
-			name = EXCLUDED.name,
-			address = EXCLUDED.address,
-			updated_at = NOW()
-		RETURNING id
-	`
-	err = tx.QueryRow(ctx, queryCitizen, ktpData.NIK, ktpData.Name, ktpData.Address, ktpData.Gender, ktpData.Age).Scan(&citizenID)
+	citizenID, err := upsertCitizenFromKTP(ctx, tx, ktpData)
 	if err != nil {
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to save citizen data"})
 		return
 	}
 
-	// Record endorsement
-	queryEndorsement := `
-		INSERT INTO endorsements (citizen_id, tenant_id, campaign_id, proof_image_url, status)
-		VALUES ($1, $2, $3, $4, 'valid')
-	`
-	_, err = tx.Exec(ctx, queryEndorsement, citizenID, tenantID, req.CampaignID, req.ImageURL)
-	if err != nil {
+	if err := recordKTPEndorsement(ctx, tx, citizenID, tenantID, req.CampaignID, req.ImageURL); err != nil {
 		WriteJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to record endorsement"})
 		return
 	}
@@ -118,3 +76,4 @@ func HandleKTPScan(w http.ResponseWriter, r *http.Request) {
 		Data:    ktpData,
 	})
 }
+

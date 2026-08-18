@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -8,6 +9,72 @@ import (
 
 	"core_project/shared/sdk/response"
 )
+
+func queryTenantCounts(ctx context.Context) (total, active, frozen int) {
+	DB.QueryRow(ctx, `SELECT COUNT(*) FROM tenants`).Scan(&total)
+	DB.QueryRow(ctx, `SELECT COUNT(*) FROM tenants WHERE is_frozen = false`).Scan(&active)
+	DB.QueryRow(ctx, `SELECT COUNT(*) FROM tenants WHERE is_frozen = true`).Scan(&frozen)
+	return
+}
+
+func queryVoucherStats(ctx context.Context) (generated, redeemed, activePrograms int) {
+	DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_links WHERE created_at >= NOW() - INTERVAL '30 days'`).Scan(&generated)
+	DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_links WHERE redeemed_at >= NOW() - INTERVAL '30 days'`).Scan(&redeemed)
+	DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_programs WHERE is_active = true`).Scan(&activePrograms)
+	return
+}
+
+func queryRevenue30d(ctx context.Context) int64 {
+	var revenue int64
+	DB.QueryRow(ctx, `SELECT COALESCE(SUM(amount), 0) FROM invoices WHERE status = 'paid' AND paid_at >= NOW() - INTERVAL '30 days'`).Scan(&revenue)
+	return revenue
+}
+
+func queryRecentFrozen(ctx context.Context) []map[string]interface{} {
+	rows, _ := DB.Query(ctx, `
+		SELECT t.id, t.name, t.plan, t.frozen_at, t.current_plan_expires_at
+		FROM tenants t WHERE t.is_frozen = true
+		ORDER BY t.frozen_at DESC NULLS LAST LIMIT 10
+	`)
+	result := []map[string]interface{}{}
+	if rows == nil {
+		return result
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, name, plan string
+		var frozenAt, expiresAt *time.Time
+		if rows.Scan(&id, &name, &plan, &frozenAt, &expiresAt) != nil {
+			continue
+		}
+		entry := map[string]interface{}{"id": id, "name": name, "plan": plan}
+		if frozenAt != nil {
+			entry["frozen_at"] = frozenAt.Format(time.RFC3339)
+		}
+		if expiresAt != nil {
+			entry["expired_at"] = expiresAt.Format(time.RFC3339)
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
+func querySubsByPlan(ctx context.Context) map[string]int {
+	planRows, _ := DB.Query(ctx, `SELECT plan, COUNT(*) FROM tenants WHERE is_frozen = false GROUP BY plan`)
+	result := map[string]int{}
+	if planRows == nil {
+		return result
+	}
+	defer planRows.Close()
+	for planRows.Next() {
+		var pid string
+		var cnt int
+		if planRows.Scan(&pid, &cnt) == nil {
+			result[pid] = cnt
+		}
+	}
+	return result
+}
 
 func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	role := r.Header.Get(response.XUserRole)
@@ -21,78 +88,8 @@ func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-
-	// Tenant counts
-	var (
-		totalTenants, activeTenants, frozenTenants int
-	)
-	DB.QueryRow(ctx, `SELECT COUNT(*) FROM tenants`).Scan(&totalTenants)
-	DB.QueryRow(ctx, `SELECT COUNT(*) FROM tenants WHERE is_frozen = false`).Scan(&activeTenants)
-	DB.QueryRow(ctx, `SELECT COUNT(*) FROM tenants WHERE is_frozen = true`).Scan(&frozenTenants)
-
-	// Voucher stats (last 30 days)
-	var (
-		linksGenerated30d, linksRedeemed30d int
-	)
-	DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_links WHERE created_at >= NOW() - INTERVAL '30 days'`).Scan(&linksGenerated30d)
-	DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_links WHERE redeemed_at >= NOW() - INTERVAL '30 days'`).Scan(&linksRedeemed30d)
-
-	// Active programs
-	var activePrograms int
-	DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_programs WHERE is_active = true`).Scan(&activePrograms)
-
-	// Revenue (Xendit fallback, last 30 days, in sen)
-	var revenue30d int64
-	DB.QueryRow(ctx, `
-		SELECT COALESCE(SUM(amount), 0) FROM invoices
-		WHERE status = 'paid' AND paid_at >= NOW() - INTERVAL '30 days'
-	`).Scan(&revenue30d)
-
-	// Recent frozen accounts (top 10)
-	rows, _ := DB.Query(ctx, `
-		SELECT t.id, t.name, t.plan, t.frozen_at, t.current_plan_expires_at
-		FROM tenants t WHERE t.is_frozen = true
-		ORDER BY t.frozen_at DESC NULLS LAST LIMIT 10
-	`)
-	recentFrozen := []map[string]interface{}{}
-	if rows != nil {
-		for rows.Next() {
-			var id, name, plan string
-			var frozenAt, expiresAt *time.Time
-			if rows.Scan(&id, &name, &plan, &frozenAt, &expiresAt) == nil {
-				entry := map[string]interface{}{
-					"id":   id,
-					"name": name,
-					"plan": plan,
-				}
-				if frozenAt != nil {
-					entry["frozen_at"] = frozenAt.Format(time.RFC3339)
-				}
-				if expiresAt != nil {
-					entry["expired_at"] = expiresAt.Format(time.RFC3339)
-				}
-				recentFrozen = append(recentFrozen, entry)
-			}
-		}
-		rows.Close()
-	}
-
-	// Active subscriptions by plan (using tenants table for source of truth of active plans)
-	planRows, _ := DB.Query(ctx, `
-		SELECT plan, COUNT(*) FROM tenants
-		WHERE is_frozen = false GROUP BY plan
-	`)
-	subsByPlan := map[string]int{}
-	if planRows != nil {
-		for planRows.Next() {
-			var pid string
-			var cnt int
-			if planRows.Scan(&pid, &cnt) == nil {
-				subsByPlan[pid] = cnt
-			}
-		}
-		planRows.Close()
-	}
+	totalTenants, activeTenants, frozenTenants := queryTenantCounts(ctx)
+	linksGenerated30d, linksRedeemed30d, activePrograms := queryVoucherStats(ctx)
 
 	response.JSON(w, http.StatusOK, "Dashboard data", map[string]interface{}{
 		"tenants": map[string]interface{}{
@@ -105,9 +102,9 @@ func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 			"links_redeemed":  linksRedeemed30d,
 			"active_programs": activePrograms,
 		},
-		"revenue_30d_sen": revenue30d,
-		"recent_frozen":   recentFrozen,
-		"subs_by_plan":    subsByPlan,
+		"revenue_30d_sen": queryRevenue30d(ctx),
+		"recent_frozen":   queryRecentFrozen(ctx),
+		"subs_by_plan":    querySubsByPlan(ctx),
 	})
 }
 

@@ -87,9 +87,10 @@ func handleRedeemVoucher(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("Failed to mark voucher redeemed", "error", err)
 	}
 
-	_, _ = DB.Exec(ctx, `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`, programID)
+	incrUsageSQL := `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`
+	_, _ = DB.Exec(ctx, incrUsageSQL, programID)
 
-	ticketID := activateSubscription(ctx, tenantID, planID, planName, codeValidityDays, "voucher", nil, "")
+	ticketID := activateSubscription(ctx, tenantID, planID, planName, codeValidityDays, "voucher", voucherActivationOpts{})
 
 	response.JSON(w, http.StatusOK, "Voucher redeemed successfully", map[string]interface{}{
 		"program_name":   programName,

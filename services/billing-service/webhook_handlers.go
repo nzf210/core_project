@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+
+	"core_project/shared/sdk/response"
 )
 
 func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, response.MethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 

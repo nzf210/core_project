@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,8 +15,8 @@ import (
 	"strings"
 
 	"core_project/shared/observability"
-	"core_project/shared/sdk/webhook"
 	"core_project/shared/sdk/response"
+	"core_project/shared/sdk/webhook"
 )
 
 // ─────────────────────────────────────────────
@@ -83,7 +84,7 @@ func main() {
 
 func handleSendNotification(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, response.MethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -134,7 +135,7 @@ func handleSendNotification(w http.ResponseWriter, r *http.Request) {
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(headerContentType, contentTypeJSON)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"service": "notification-service",
+		"service": serviceName,
 		"status":  "ok",
 	})
 }
@@ -232,7 +233,7 @@ func sendTelegramMedia(chatID, message, mediaURL, mediaName string) error {
 	}
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendDocument", botToken)
-	req, err := http.NewRequest("POST", apiURL, body)
+	req, err := http.NewRequestWithContext(context.Background(), "POST", apiURL, body)
 	if err != nil {
 		return err
 	}
@@ -280,13 +281,13 @@ func sendWAMedia(tenantID, target, message, mediaURL, mediaName string) error {
 		data.Set("media_name", mediaName)
 	}
 
-	req, err := http.NewRequest("POST", waGatewayURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", waGatewayURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(headerContentType, "application/x-www-form-urlencoded")
 	req.Header.Set("X-Message-Type", "system")
-	req.Header.Set("X-Source", "notification-service")
+	req.Header.Set("X-Source", serviceName)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)

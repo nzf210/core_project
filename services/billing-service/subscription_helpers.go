@@ -11,126 +11,35 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"core_project/shared/sdk/auth"
 )
 
-func activateSubscription(ctx context.Context, tenantID, planID, planName string, validityDays int, activatedBy string, voucherCodeID *string, systemVoucherCode string) string {
+type voucherActivationOpts struct {
+	VoucherCodeID     *string
+	SystemVoucherCode string
+}
+
+func activateSubscription(ctx context.Context, tenantID, planID, planName string, validityDays int, activatedBy string, voucher voucherActivationOpts) string {
 	now := time.Now()
 	ticketNumber := generateTicketNumber()
 
-	// F027 AC-4: Proration — preserve remaining days from previous active subscription
-	var proratedDays int
-	row := DB.QueryRow(ctx, `
-		SELECT GREATEST(0,
-			EXTRACT(EPOCH FROM (current_plan_expires_at - NOW())) / 86400
-		)::INTEGER
-		FROM tenant_subscriptions
-		WHERE tenant_id = $1 AND status = 'active'
-	`, tenantID)
-	if err := row.Scan(&proratedDays); err == nil && proratedDays > 0 {
-		validityDays += proratedDays
-		slog.Info("prorated subscription", "tenant_id", tenantID, "prorated_days", proratedDays, "new_validity", validityDays)
-	}
+	proratedDays := calculateProratedDays(ctx, tenantID)
+	validityDays += proratedDays
 
-	// 1. Day-duration accumulator logic via voucher_subscriptions
-	// If same plan already exists → accumulate remaining_days
-	// If different plan → create new row (both co-exist; priority decides which is active)
-	var newOrUpdatedVoucherSubID string
-	err := DB.QueryRow(ctx, `
-		INSERT INTO voucher_subscriptions (tenant_id, plan_id, validity_days, remaining_days, is_system_generated, source_voucher_code)
-		VALUES ($1, $2, $3, $3, $4, $5)
-		ON CONFLICT (tenant_id, plan_id) DO UPDATE SET
-			validity_days = voucher_subscriptions.validity_days + EXCLUDED.validity_days,
-			remaining_days = voucher_subscriptions.remaining_days + EXCLUDED.remaining_days,
-			updated_at = NOW(),
-			is_system_generated = COALESCE($4, voucher_subscriptions.is_system_generated),
-			source_voucher_code = COALESCE($5, voucher_subscriptions.source_voucher_code)
-		RETURNING id
-	`, tenantID, planID, validityDays, systemVoucherCode != "", systemVoucherCode).Scan(&newOrUpdatedVoucherSubID)
+	upsertVoucherSubscription(ctx, tenantID, planID, validityDays, voucher.SystemVoucherCode)
+
+	effectivePlanID, maxPriority := calculateEffectivePlan(ctx, tenantID)
+
+	upsertTenantSubscription(ctx, tenantID, effectivePlanID, validityDays, activatedBy, voucher.VoucherCodeID, voucher.SystemVoucherCode)
+
+	updateTenantPlanAndCache(ctx, tenantID, effectivePlanID, maxPriority)
+
+	ticketID, err := createSubscriptionTicket(ctx, tenantID, effectivePlanID, planName, ticketNumber, validityDays, activatedBy)
 	if err != nil {
-		slog.Error("Failed to upsert voucher_subscription", "error", err)
-	}
-
-	// 2. Recalculate effective plan_priority and update tenants
-	// Priority: business=4, pro=3, lite=2, free=1 (highest wins)
-	var effectivePlanID string
-	var maxPriority int
-	err = DB.QueryRow(ctx, `
-		SELECT vs.plan_id,
-			   CASE vs.plan_id
-				   WHEN 'ultimate' THEN 4 WHEN 'pro' THEN 3 WHEN 'lite' THEN 2
-				   ELSE 1
-			   END AS priority,
-			   vs.remaining_days
-		FROM voucher_subscriptions vs
-		WHERE vs.tenant_id = $1 AND vs.remaining_days > 0
-		ORDER BY priority DESC, remaining_days DESC
-		LIMIT 1
-	`, tenantID).Scan(&effectivePlanID, &maxPriority, new(int))
-	if err != nil || effectivePlanID == "" {
-		effectivePlanID = "inactive"
-		maxPriority = 0
-	}
-
-	// 3. Upsert subscription record
-	_, err = DB.Exec(ctx, `
-		INSERT INTO tenant_subscriptions (tenant_id, plan_id, plan_tier, status, period_days, remaining_days, activated_by, voucher_code_id, system_voucher_code, updated_at)
-		VALUES ($1, $2, $2, 'active', $3, $3, $4, $5, $6, NOW())
-		ON CONFLICT (tenant_id)
-		DO UPDATE SET
-			plan_id = $2,
-			plan_tier = $2,
-			status = 'active',
-			period_days = $3,
-			remaining_days = $3,
-			activated_by = $4,
-			voucher_code_id = COALESCE($5, tenant_subscriptions.voucher_code_id),
-			system_voucher_code = COALESCE($6, tenant_subscriptions.system_voucher_code),
-			updated_at = NOW()
-	`, tenantID, effectivePlanID, validityDays, activatedBy, voucherCodeID, systemVoucherCode)
-	if err != nil {
-		slog.Error("Failed to upsert subscription", "error", err)
-	}
-
-	// 4. Update tenant (un-freeze, set plan + priority)
-	_, _ = DB.Exec(ctx, `
-		UPDATE tenants SET
-			plan = $1,
-			plan_priority = $2,
-			is_frozen = false,
-			frozen_at = NULL,
-			current_plan_expires_at = NOW() + (SELECT COALESCE(SUM(remaining_days), 0) || ' days'::interval FROM voucher_subscriptions WHERE tenant_id = $3)
-		WHERE id = $3
-	`, effectivePlanID, maxPriority, tenantID)
-
-	// Sync Redis cache for quota gates
-	auth.SetTenantPlan(ctx, tenantID, effectivePlanID)
-
-	// 5. Create subscription ticket
-	var ticketID string
-	err = DB.QueryRow(ctx, `
-		INSERT INTO subscription_tickets (tenant_id, plan_id, plan_name, ticket_number, expires_at, activated_by, notify_wa, notify_telegram, notify_email)
-		VALUES ($1, $2, $3, $4, GREATEST(COALESCE((SELECT expires_at FROM subscription_tickets WHERE tenant_id = $1), NOW()), NOW()) + ($5 || ' days')::interval, $6, true, true, true)
-		ON CONFLICT (tenant_id) DO UPDATE SET
-			plan_id = EXCLUDED.plan_id,
-			plan_name = EXCLUDED.plan_name,
-			ticket_number = EXCLUDED.ticket_number,
-			status = 'active',
-			expires_at = GREATEST(COALESCE(subscription_tickets.expires_at, NOW()), NOW()) + ($5 || ' days')::interval,
-			activated_at = NOW(),
-			updated_at = NOW()
-		RETURNING id
-	`, tenantID, effectivePlanID, planName, ticketNumber, fmt.Sprintf("%d", validityDays), activatedBy).Scan(&ticketID)
-	if err != nil {
-		slog.Error("Failed to create ticket", "error", err)
 		return ""
 	}
 
-	// 6. Update subscription with ticket ID
-	_, _ = DB.Exec(ctx, "UPDATE tenant_subscriptions SET ticket_id = $1 WHERE tenant_id = $2", ticketID, tenantID)
+	linkTicketToSubscription(ctx, ticketID, tenantID)
 
-	// 7. Async notification
 	go sendTicketNotifications(tenantID, TicketPayload{
 		TicketNumber:  ticketNumber,
 		TenantName:    "",
@@ -140,10 +49,10 @@ func activateSubscription(ctx context.Context, tenantID, planID, planName string
 		ExpiresAt:     fmt.Sprintf("%d hari dari sekarang", validityDays),
 		AmountPaid:    0,
 		PaymentMethod: activatedBy,
-		VoucherCode:   systemVoucherCode,
+		VoucherCode:   voucher.SystemVoucherCode,
 	})
 
-	slog.Info("Subscription activated (day-duration)", "tenant_id", tenantID, "plan", effectivePlanID, "validity_days", validityDays, "ticket", ticketNumber, "system_voucher", systemVoucherCode)
+	slog.Info("Subscription activated (day-duration)", "tenant_id", tenantID, "plan", effectivePlanID, "validity_days", validityDays, "ticket", ticketNumber, "system_voucher", voucher.SystemVoucherCode)
 	return ticketID
 }
 
@@ -195,8 +104,8 @@ func applyVoucher(ctx context.Context, code, planID, tenantID string) (bool, *st
 		return false, nil
 	}
 
-	// Increment usage count
-	DB.Exec(ctx, `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`, programID)
+	incrUsageSQL := `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`
+	DB.Exec(ctx, incrUsageSQL, programID)
 
 	return true, nil
 }
@@ -293,7 +202,7 @@ func sendWANotification(tenantID, target, message string) {
 	data.Set("target", targetJID)
 	data.Set("message", message)
 
-	req, err := http.NewRequest("POST", waURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", waURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		slog.Error("WA notification: failed to create request", "error", err)
 		return

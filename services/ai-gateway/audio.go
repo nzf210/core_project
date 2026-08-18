@@ -16,7 +16,7 @@ type TranscribeRequest struct {
 
 func HandleTranscribe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: response.MethodNotAllowed})
 		return
 	}
 	var req TranscribeRequest
@@ -50,7 +50,7 @@ type SpeakRequest struct {
 
 func HandleSpeak(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Success: false, Message: response.MethodNotAllowed})
 		return
 	}
 	var req SpeakRequest

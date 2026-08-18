@@ -166,7 +166,7 @@ func handleNewPasswordStep(tenantID string, session *waPasswordResetSession, raw
 		"phoneNumber": session.PhoneNumber,
 		"newPassword": rawText,
 	})
-	req, _ := http.NewRequest("POST", authSvcURL+"/reset-password-verify", bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", authSvcURL+"/reset-password-verify", bytes.NewReader(body))
 	req.Header.Set("Content-Type", contentTypeJSON)
 	req.Header.Set("X-OTP-Verified", "true")
 	client := &http.Client{Timeout: 10 * time.Second}

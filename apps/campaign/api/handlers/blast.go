@@ -22,57 +22,19 @@ type BlastTargetResponse struct {
 	TargetCount int      `json:"target_count"`
 }
 
-// HandleBlastTarget generates phone number lists based on micro-targeting filters.
-// Filters: village_id (via dpt_records), gender (citizens.gender), age_range (citizens.age).
-// Always excludes flagged anomalies (endorsements.is_anomaly = TRUE).
-func HandleBlastTarget(w http.ResponseWriter, r *http.Request) {
-	tenantID := ExtractTenantID(r)
-	if tenantID == "" {
-		WriteJSON(w, http.StatusUnauthorized, APIResponse{
-			Success: false,
-			Message: "Unauthorized - Tenant ID missing",
-		})
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
-		return
-	}
-
-	var req BlastTargetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSON(w, http.StatusBadRequest, APIResponse{
-			Success: false,
-			Message: "Invalid JSON payload",
-		})
-		return
-	}
-
-	// Validate age_range if provided
-	ageMin, ageMax, err := parseAgeRange(req.AgeRange)
+func validateBlastRequest(req BlastTargetRequest) (ageMin, ageMax int, err error) {
+	ageMin, ageMax, err = parseAgeRange(req.AgeRange)
 	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, APIResponse{
-			Success: false,
-			Message: err.Error(),
-		})
 		return
 	}
-
-	// Validate gender if provided
 	if req.Gender != "" && req.Gender != "L" && req.Gender != "P" {
-		WriteJSON(w, http.StatusBadRequest, APIResponse{
-			Success: false,
-			Message: "gender must be 'L', 'P', or empty",
-		})
-		return
+		return 0, 0, fmt.Errorf("gender must be 'L', 'P', or empty")
 	}
+	return
+}
 
-	ctx := context.Background()
-
-	// Build query with dynamic WHERE clauses using indexed positional args.
-	// Base filter: tenant + non-anomaly. Optional filters applied conditionally.
-	query := `
+func queryBlastPhones(ctx context.Context, tenantID, gender, villageID string, ageMin, ageMax int) ([]string, error) {
+	const query = `
 		SELECT c.phone
 		FROM citizens c
 		JOIN endorsements e ON e.citizen_id = c.id AND e.tenant_id = $1 AND e.is_anomaly = FALSE
@@ -85,41 +47,55 @@ func HandleBlastTarget(w http.ResponseWriter, r *http.Request) {
 		  AND ($5 = '' OR d.village_id = $5::uuid)
 		GROUP BY c.id, c.phone
 	`
-
-	rows, err := repository.DB.Query(ctx, query,
-		tenantID,
-		req.Gender,
-		ageMin,
-		ageMax,
-		req.VillageID,
-	)
+	rows, err := repository.DB.Query(ctx, query, tenantID, gender, ageMin, ageMax, villageID)
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, APIResponse{
-			Success: false,
-			Message: "Failed to query target audience: " + err.Error(),
-		})
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
-	var phones []string
+	phones := []string{}
 	for rows.Next() {
 		var phone string
-		if err := rows.Scan(&phone); err == nil && phone != "" {
+		if rows.Scan(&phone) == nil && phone != "" {
 			phones = append(phones, phone)
 		}
 	}
-	if phones == nil {
-		phones = []string{}
+	return phones, nil
+}
+
+func HandleBlastTarget(w http.ResponseWriter, r *http.Request) {
+	tenantID := ExtractTenantID(r)
+	if tenantID == "" {
+		WriteJSON(w, http.StatusUnauthorized, APIResponse{Success: false, Message: "Unauthorized - Tenant ID missing"})
+		return
+	}
+	if r.Method != http.MethodPost {
+		WriteJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
+		return
+	}
+
+	var req BlastTargetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: "Invalid JSON payload"})
+		return
+	}
+
+	ageMin, ageMax, err := validateBlastRequest(req)
+	if err != nil {
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Success: false, Message: err.Error()})
+		return
+	}
+
+	phones, err := queryBlastPhones(context.Background(), tenantID, req.Gender, req.VillageID, ageMin, ageMax)
+	if err != nil {
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{Success: false, Message: "Failed to query target audience: " + err.Error()})
+		return
 	}
 
 	WriteJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Message: "Target audience generated and dispatched to WA Gateway",
-		Data: BlastTargetResponse{
-			Phones:      phones,
-			TargetCount: len(phones),
-		},
+		Data:    BlastTargetResponse{Phones: phones, TargetCount: len(phones)},
 	})
 }
 

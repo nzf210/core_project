@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -26,7 +27,7 @@ func sendWAGatewayOTP(senderTenant, authWAProvider, target, otp string) {
 	var err error
 	for i := 0; i < 3; i++ {
 		payload := strings.NewReader(formData.Encode())
-		req, _ := http.NewRequest("POST", waURL+"/api/wa/send", payload)
+		req, _ := http.NewRequestWithContext(context.Background(), "POST", waURL+"/api/wa/send", payload)
 		req.Header.Set(headerContentType, contentTypeFormURLEncoded)
 		req.Header.Set("X-Message-Type", "otp")
 		req.Header.Set("X-Source", "auth-service")

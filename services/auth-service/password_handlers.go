@@ -265,7 +265,7 @@ func sendWAPasswordResetOTP(senderTenant, target, otp string) error {
 	formData.Set("message", msg)
 
 	payload := strings.NewReader(formData.Encode())
-	req, err := http.NewRequest("POST", waURL+"/api/wa/send", payload)
+	req, err := http.NewRequestWithContext(context.Background(), "POST", waURL+"/api/wa/send", payload)
 	if err != nil {
 		return err
 	}

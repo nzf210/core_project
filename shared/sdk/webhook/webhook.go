@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -38,7 +39,7 @@ func DispatchEvent(eventName, tenantID string, data interface{}) {
 			return
 		}
 
-		req, err := http.NewRequest(http.MethodPost, webhookURL, bytes.NewBuffer(body))
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, webhookURL, bytes.NewBuffer(body))
 		if err != nil {
 			slog.Error("Failed to create webhook request", "error", err, "event", eventName)
 			return

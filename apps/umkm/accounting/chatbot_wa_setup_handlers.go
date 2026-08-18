@@ -232,7 +232,7 @@ func validateCloudAPICredentialsAfterSave(ctx context.Context, w http.ResponseWr
 		"phone_number_id": phoneID,
 		"waba_id":         wabaID,
 	})
-	vaReq, _ := http.NewRequest(http.MethodPost, vaURL, bytes.NewReader(vaBody))
+	vaReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, vaURL, bytes.NewReader(vaBody))
 	vaReq.Header.Set("Content-Type", "application/json")
 	vaReq.Header.Set(headerTenantID, tenantID)
 

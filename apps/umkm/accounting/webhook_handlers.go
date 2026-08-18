@@ -19,6 +19,58 @@ const (
 )
 
 
+func createWebhookJournalEntry(ctx context.Context, tenantID, reference, itemsJSON string, amount float64) {
+	var debitAccID, creditAccID string
+	DB.QueryRow(ctx, "SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = '101'", tenantID).Scan(&debitAccID)
+	DB.QueryRow(ctx, "SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = '400'", tenantID).Scan(&creditAccID)
+
+	var entryID string
+	err := DB.QueryRow(ctx,
+		"INSERT INTO journal_entries (tenant_id, date, description, reference, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+		tenantID, time.Now().Format("2006-01-02"), "Pembayaran Webhook: "+reference, reference, itemsJSON).Scan(&entryID)
+	if err != nil {
+		return
+	}
+	DB.Exec(ctx, "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0)", entryID, debitAccID, amount)
+	DB.Exec(ctx, "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)", entryID, creditAccID, amount)
+}
+
+func deductStockFromItems(ctx context.Context, tenantID, itemsJSON string) {
+	var parsedItems struct {
+		Items []struct {
+			ID       string `json:"id"`
+			Quantity int    `json:"quantity"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(itemsJSON), &parsedItems); err != nil {
+		return
+	}
+	for _, item := range parsedItems.Items {
+		DB.Exec(ctx, "UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2 AND tenant_id = $3", item.Quantity, item.ID, tenantID)
+	}
+}
+
+func sendWebhookWANotification(tenantID, phone, ref string, amount float64) {
+	msg := fmt.Sprintf("✅ *PEMBAYARAN DITERIMA* ✅\n\nRef: %s\nNominal: Rp %.0f\nMetode: QRIS\n\nTerima kasih, dana telah masuk ke rekening Anda dan sistem telah mencatat transaksi ini.", ref, amount)
+	target := phone
+	if strings.HasPrefix(target, "0") {
+		target = "62" + target[1:]
+	}
+	if !strings.Contains(target, "@") {
+		target = target + "@s.whatsapp.net"
+	}
+	data := url.Values{}
+	data.Set("tenant_id", tenantID)
+	data.Set("target", target)
+	data.Set("message", msg)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "http://wa-gateway:8202/api/wa/send", strings.NewReader(data.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Message-Type", "subscription")
+	req.Header.Set("X-Source", "umkm-accounting")
+	client := &http.Client{Timeout: 10 * time.Second}
+	client.Do(req)
+}
+
 func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: errMethodNotAllowed})
@@ -34,11 +86,9 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-
 	var tenantID, currentStatus, paymentMethod, itemsJSONStr string
 	var totalAmount float64
 	err := DB.QueryRow(ctx, "SELECT tenant_id, status, payment_method, total_amount, items_json::text FROM pos_transactions WHERE reference = $1 FOR UPDATE", req.Reference).Scan(&tenantID, &currentStatus, &paymentMethod, &totalAmount, &itemsJSONStr)
-
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, APIResponse{Message: errTransactionNotFound})
 		return
@@ -49,71 +99,18 @@ func handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update to paid
-	_, err = DB.Exec(ctx, "UPDATE pos_transactions SET status = 'paid', updated_at = NOW() WHERE reference = $1", req.Reference)
-	if err != nil {
+	if _, err = DB.Exec(ctx, "UPDATE pos_transactions SET status = 'paid', updated_at = NOW() WHERE reference = $1", req.Reference); err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to update status"})
 		return
 	}
 
-	// Create journal entries
-	var debitAccID, creditAccID string
-	DB.QueryRow(ctx, "SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = '101'", tenantID).Scan(&debitAccID)
-	DB.QueryRow(ctx, "SELECT id FROM chart_of_accounts WHERE tenant_id = $1 AND code = '400'", tenantID).Scan(&creditAccID)
+	createWebhookJournalEntry(ctx, tenantID, req.Reference, itemsJSONStr, totalAmount)
+	deductStockFromItems(ctx, tenantID, itemsJSONStr)
 
-	dateStr := time.Now().Format("2006-01-02")
-	var entryID string
-	err = DB.QueryRow(ctx,
-		"INSERT INTO journal_entries (tenant_id, date, description, reference, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-		tenantID, dateStr, "Pembayaran Webhook: "+req.Reference, req.Reference, itemsJSONStr).Scan(&entryID)
-
-	if err == nil {
-		DB.Exec(ctx, "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0)", entryID, debitAccID, totalAmount)
-		DB.Exec(ctx, "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)", entryID, creditAccID, totalAmount)
-	}
-
-	// Deduct Stock
-	var parsedItems struct {
-		Items []struct {
-			ID       string `json:"id"`
-			Quantity int    `json:"quantity"`
-		} `json:"items"`
-	}
-	json.Unmarshal([]byte(itemsJSONStr), &parsedItems)
-
-	for _, item := range parsedItems.Items {
-		DB.Exec(ctx, "UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2 AND tenant_id = $3", item.Quantity, item.ID, tenantID)
-	}
-
-	// Send WA Notification
 	var waNumber *string
 	DB.QueryRow(ctx, "SELECT wa_number FROM tenants WHERE id = $1", tenantID).Scan(&waNumber)
 	if waNumber != nil && *waNumber != "" {
-		go func(tenantID, phone, ref string, amount float64) {
-			msg := fmt.Sprintf("✅ *PEMBAYARAN DITERIMA* ✅\n\nRef: %s\nNominal: Rp %.0f\nMetode: QRIS\n\nTerima kasih, dana telah masuk ke rekening Anda dan sistem telah mencatat transaksi ini.", ref, amount)
-
-			// Format phone to JID
-			target := phone
-			if strings.HasPrefix(target, "0") {
-				target = "62" + target[1:]
-			}
-			if !strings.Contains(target, "@") {
-				target = target + "@s.whatsapp.net"
-			}
-
-			// Internal WA Gateway call
-			data := url.Values{}
-			data.Set("tenant_id", tenantID)
-			data.Set("target", target)
-			data.Set("message", msg)
-
-			req, _ := http.NewRequest("POST", "http://wa-gateway:8202/api/wa/send", strings.NewReader(data.Encode()))
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			req.Header.Set("X-Message-Type", "subscription")
-			req.Header.Set("X-Source", "umkm-accounting")
-			client := &http.Client{Timeout: 10 * time.Second}
-			client.Do(req)
-		}(tenantID, *waNumber, req.Reference, totalAmount)
+		go sendWebhookWANotification(tenantID, *waNumber, req.Reference, totalAmount)
 	}
 
 	writeJSON(w, http.StatusOK, APIResponse{Success: true, Message: "Payment processed successfully"})
@@ -200,21 +197,6 @@ func createPaymentJournal(ctx context.Context, tenantID, reference string, total
 	DB.Exec(ctx, "INSERT INTO journal_lines (entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)", entryID, creditAccID, totalAmount)
 }
 
-func deductStockFromItems(ctx context.Context, tenantID, itemsJSONStr string) {
-	var parsedItems struct {
-		Items []struct {
-			ID       string `json:"id"`
-			Quantity int    `json:"quantity"`
-		} `json:"items"`
-	}
-	if json.Unmarshal([]byte(itemsJSONStr), &parsedItems); parsedItems.Items == nil {
-		return
-	}
-	for _, item := range parsedItems.Items {
-		DB.Exec(ctx, "UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2 AND tenant_id = $3", item.Quantity, item.ID, tenantID)
-	}
-}
-
 func sendPaymentWANotification(tenantID, reference string, totalAmount float64) {
 	var waNumber *string
 	// ponytail: blocking DB call ok here; goroutine below is the async part
@@ -238,7 +220,7 @@ func sendPaymentWANotification(tenantID, reference string, totalAmount float64) 
 		data.Set("target", target)
 		data.Set("message", msg)
 
-		req, _ := http.NewRequest("POST", "http://wa-gateway:8202/api/wa/send", strings.NewReader(data.Encode()))
+		req, _ := http.NewRequestWithContext(context.Background(), "POST", "http://wa-gateway:8202/api/wa/send", strings.NewReader(data.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("X-Message-Type", "subscription")
 		req.Header.Set("X-Source", "umkm-accounting")

@@ -19,7 +19,7 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 // onboarding redirect loop when localStorage flags are missing (e.g. new device).
 func handleMe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
@@ -93,7 +93,7 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 
 func handleTenantResolve(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 

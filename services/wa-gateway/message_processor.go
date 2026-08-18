@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -145,7 +146,7 @@ func forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText string) {
 	}
 
 	body, _ := json.Marshal(payload)
-	req, _ := http.NewRequest("POST", n8nURL+"/webhook/chatbot", bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", n8nURL+"/webhook/chatbot", bytes.NewReader(body))
 	req.Header.Set("Content-Type", contentTypeJSON)
 
 	client := &http.Client{Timeout: 30 * time.Second}

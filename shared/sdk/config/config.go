@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -196,236 +195,84 @@ func getEnvAsInt(name string, defaultVal int) int {
 }
 
 // loadLLMModels loads LLM models with 3-tier fallback chains from environment variables.
-//
-// Environment format per provider:
-//   MINIMAX_API_KEY=xxx
-//   MINIMAX_BASE_URL=https://api.minimax.io/v1
-//   MINIMAX_MODELS=MiniMax-M2.7;MiniMax-M2.7-Fast
-//   MINIMAX_CAPABILITIES=general,product,faq;general
-//   MINIMAX_CONTEXT_WINDOW=1000000;200000
-//   MINIMAX_COST_PER_1M_IN=0.30;0.10
-//   MINIMAX_COST_PER_1M_OUT=1.20;0.40
-//   MINIMAX_FALLBACK_1=gemini:gemini-1.5-flash
-//   MINIMAX_FALLBACK_2=openai:gpt-4o-mini
-//   MINIMAX_FALLBACK_3=
-//
-// Fallback format: "provider:model" (e.g., "gemini:gemini-1.5-flash")
 func loadLLMModels(cfg *Config) LLMConfig {
 	var models []LLMModel
 	byCapability := make(map[string][]LLMModel)
 	byProvider := make(map[string][]LLMModel)
 
-	// MiniMax (primary)
-	if cfg.AI.MiniMaxAPIKey != "" {
-		modelList := splitEnv(getEnv("MINIMAX_MODELS", cfg.AI.MiniMaxModel))
-		caps := splitEnv(getEnv("MINIMAX_CAPABILITIES", "general,product,faq"))
-		contexts := splitEnv(getEnv("MINIMAX_CONTEXT_WINDOW", "1000000"))
-		costsIn := splitEnv(getEnv("MINIMAX_COST_PER_1M_IN", "0.30"))
-		costsOut := splitEnv(getEnv("MINIMAX_COST_PER_1M_OUT", "1.20"))
-		fb1 := splitEnv(getEnv("MINIMAX_FALLBACK_1", "gemini:gemini-1.5-flash"))
-		fb2 := splitEnv(getEnv("MINIMAX_FALLBACK_2", ""))
-		fb3 := splitEnv(getEnv("MINIMAX_FALLBACK_3", ""))
+	providers := []struct {
+		cfg      providerConfig
+		provider string
+	}{
+		{
+			cfg: providerConfig{
+				apiKey:       cfg.AI.MiniMaxAPIKey,
+				prefix:       "MINIMAX",
+				defaultModel: cfg.AI.MiniMaxModel,
+				defaultCaps:  "general,product,faq",
+				defaultTier:  1,
+				priority:     0,
+			},
+			provider: "minimax",
+		},
+		{
+			cfg: providerConfig{
+				apiKey:       cfg.AI.OpenAIApiKey,
+				prefix:       "OPENAI",
+				defaultModel: "gpt-4o",
+				defaultCaps:  "general,coding",
+				defaultTier:  2,
+				priority:     10,
+			},
+			provider: "openai",
+		},
+		{
+			cfg: providerConfig{
+				apiKey:       cfg.AI.GeminiApiKey,
+				prefix:       "GEMINI",
+				defaultModel: "gemini-1.5-flash",
+				defaultCaps:  "general,vision",
+				defaultTier:  3,
+				priority:     100,
+			},
+			provider: "gemini",
+		},
+		{
+			cfg: providerConfig{
+				apiKey:       getEnv("LLM_API_KEY", ""),
+				prefix:       "LLM",
+				defaultModel: getEnv("LLM_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"),
+				defaultCaps:  "general,coding",
+				defaultTier:  1,
+				priority:     5,
+			},
+			provider: "custom",
+		},
+	}
 
-		for i, model := range modelList {
-			m := LLMModel{
-				ID:            "minimax:" + model,
-				Provider:      "minimax",
-				Model:         model,
-				BaseURL:       getEnv("MINIMAX_BASE_URL", cfg.AI.MiniMaxBaseURL),
-				APIKey:        cfg.AI.MiniMaxAPIKey,
-				Capability:    getOrElse(caps, i, "general"),
-				CostPer1MIn:   getOrElseFloat(costsIn, i, 0.30),
-				CostPer1MOut:  getOrElseFloat(costsOut, i, 1.20),
-				ContextWindow: getOrElseInt(contexts, i, 1000000),
-				Priority:      i,
-				FallbackTier1: getOrElse(fb1, i, ""),
-				FallbackTier2: getOrElse(fb2, i, ""),
-				FallbackTier3: getOrElse(fb3, i, ""),
-				IsEnabled:     true,
-				Tier:          1,
-			}
-			models = append(models, m)
-			byProvider["minimax"] = append(byProvider["minimax"], m)
-			for _, cap := range strings.Split(m.Capability, ",") {
-				cap = strings.TrimSpace(cap)
-				if cap != "" {
-					byCapability[cap] = append(byCapability[cap], m)
+	for _, p := range providers {
+		providerModels := loadProviderModels(p.cfg)
+		models = append(models, providerModels...)
+		indexModelsByProvider(providerModels, p.provider, byProvider)
+		indexModelsByCapability(providerModels, byCapability)
+
+		// Special handling for custom provider sonnet alias
+		if p.provider == "custom" && len(providerModels) > 0 {
+			defaultModel := getEnv("LLM_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")
+			for _, m := range providerModels {
+				if m.Model == defaultModel {
+					sonnetAlias := m
+					sonnetAlias.ID = "Anthropic:sonnet"
+					models = append(models, sonnetAlias)
+					break
 				}
 			}
 		}
 	}
-
-	// OpenAI (optional)
-	if cfg.AI.OpenAIApiKey != "" {
-		modelList := splitEnv(getEnv("OPENAI_MODELS", "gpt-4o"))
-		caps := splitEnv(getEnv("OPENAI_CAPABILITIES", "general,coding"))
-		contexts := splitEnv(getEnv("OPENAI_CONTEXT_WINDOW", "128000"))
-		costsIn := splitEnv(getEnv("OPENAI_COST_PER_1M_IN", "5.00"))
-		costsOut := splitEnv(getEnv("OPENAI_COST_PER_1M_OUT", "15.00"))
-		fb1 := splitEnv(getEnv("OPENAI_FALLBACK_1", "gemini:gemini-1.5-flash"))
-		fb2 := splitEnv(getEnv("OPENAI_FALLBACK_2", ""))
-		fb3 := splitEnv(getEnv("OPENAI_FALLBACK_3", ""))
-
-		for i, model := range modelList {
-			m := LLMModel{
-				ID:            "openai:" + model,
-				Provider:      "openai",
-				Model:         model,
-				BaseURL:       getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-				APIKey:        cfg.AI.OpenAIApiKey,
-				Capability:    getOrElse(caps, i, "general"),
-				CostPer1MIn:   getOrElseFloat(costsIn, i, 5.00),
-				CostPer1MOut:  getOrElseFloat(costsOut, i, 15.00),
-				ContextWindow: getOrElseInt(contexts, i, 128000),
-				Priority:      i + 10,
-				FallbackTier1: getOrElse(fb1, i, ""),
-				FallbackTier2: getOrElse(fb2, i, ""),
-				FallbackTier3: getOrElse(fb3, i, ""),
-				IsEnabled:     true,
-				Tier:          2,
-			}
-			models = append(models, m)
-			byProvider["openai"] = append(byProvider["openai"], m)
-			for _, cap := range strings.Split(m.Capability, ",") {
-				cap = strings.TrimSpace(cap)
-				if cap != "" {
-					byCapability[cap] = append(byCapability[cap], m)
-				}
-			}
-		}
-	}
-
-	// Gemini (fallback)
-	if cfg.AI.GeminiApiKey != "" {
-		modelList := splitEnv(getEnv("GEMINI_MODELS", "gemini-1.5-flash"))
-		caps := splitEnv(getEnv("GEMINI_CAPABILITIES", "general,vision"))
-		contexts := splitEnv(getEnv("GEMINI_CONTEXT_WINDOW", "1000000"))
-		costsIn := splitEnv(getEnv("GEMINI_COST_PER_1M_IN", "0.075"))
-		costsOut := splitEnv(getEnv("GEMINI_COST_PER_1M_OUT", "0.30"))
-		fb1 := splitEnv(getEnv("GEMINI_FALLBACK_1", ""))
-		fb2 := splitEnv(getEnv("GEMINI_FALLBACK_2", ""))
-		fb3 := splitEnv(getEnv("GEMINI_FALLBACK_3", ""))
-
-		for i, model := range modelList {
-			m := LLMModel{
-				ID:            "gemini:" + model,
-				Provider:      "gemini",
-				Model:         model,
-				BaseURL:       getEnv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"),
-				APIKey:        cfg.AI.GeminiApiKey,
-				Capability:    getOrElse(caps, i, "general"),
-				CostPer1MIn:   getOrElseFloat(costsIn, i, 0.075),
-				CostPer1MOut:  getOrElseFloat(costsOut, i, 0.30),
-				ContextWindow: getOrElseInt(contexts, i, 1000000),
-				Priority:      i + 100,
-				FallbackTier1: getOrElse(fb1, i, ""),
-				FallbackTier2: getOrElse(fb2, i, ""),
-				FallbackTier3: getOrElse(fb3, i, ""),
-				IsEnabled:     true,
-				Tier:          3,
-			}
-			models = append(models, m)
-			byProvider["gemini"] = append(byProvider["gemini"], m)
-			for _, cap := range strings.Split(m.Capability, ",") {
-				cap = strings.TrimSpace(cap)
-				if cap != "" {
-					byCapability[cap] = append(byCapability[cap], m)
-				}
-			}
-		}
-	}
-
-	// Custom / OpenRouter (optional)
-	if getEnv("LLM_API_KEY", "") != "" {
-		modelList := splitEnv(getEnv("LLM_MODELS", getEnv("LLM_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free")))
-		caps := splitEnv(getEnv("LLM_CAPABILITIES", "general,coding"))
-		contexts := splitEnv(getEnv("LLM_CONTEXT_WINDOW", "131072"))
-		costsIn := splitEnv(getEnv("LLM_COST_PER_1M_IN", "0.0"))
-		costsOut := splitEnv(getEnv("LLM_COST_PER_1M_OUT", "0.0"))
-		fb1 := splitEnv(getEnv("LLM_FALLBACK_1", "gemini:gemini-1.5-flash"))
-		fb2 := splitEnv(getEnv("LLM_FALLBACK_2", ""))
-		fb3 := splitEnv(getEnv("LLM_FALLBACK_3", ""))
-
-		for i, model := range modelList {
-			m := LLMModel{
-				ID:            "custom:" + model,
-				Provider:      "custom",
-				Model:         model,
-				BaseURL:       getEnv("LLM_BASE_URL", "https://openrouter.ai/api/v1"),
-				APIKey:        getEnv("LLM_API_KEY", ""),
-				Capability:    getOrElse(caps, i, "general"),
-				CostPer1MIn:   getOrElseFloat(costsIn, i, 0.0),
-				CostPer1MOut:  getOrElseFloat(costsOut, i, 0.0),
-				ContextWindow: getOrElseInt(contexts, i, 131072),
-				Priority:      i + 5,
-				FallbackTier1: getOrElse(fb1, i, ""),
-				FallbackTier2: getOrElse(fb2, i, ""),
-				FallbackTier3: getOrElse(fb3, i, ""),
-				IsEnabled:     true,
-				Tier:          1,
-			}
-			models = append(models, m)
-			byProvider["custom"] = append(byProvider["custom"], m)
-			for _, cap := range strings.Split(m.Capability, ",") {
-				cap = strings.TrimSpace(cap)
-				if cap != "" {
-					byCapability[cap] = append(byCapability[cap], m)
-				}
-			}
-
-			// Register "Anthropic:sonnet" alias to route "sonnet" requests to OpenRouter
-			if model == getEnv("LLM_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free") {
-				sonnetAlias := m
-				sonnetAlias.ID = "Anthropic:sonnet"
-				models = append(models, sonnetAlias)
-			}
-		}
-	}
-
 
 	return LLMConfig{
 		Models:       models,
 		ByCapability: byCapability,
 		ByProvider:   byProvider,
 	}
-}
-
-func splitEnv(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ";")
-	var result []string
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result
-}
-
-func getOrElse(slice []string, i int, defaultVal string) string {
-	if i < len(slice) {
-		return slice[i]
-	}
-	return defaultVal
-}
-
-func getOrElseFloat(slice []string, i int, defaultVal float64) float64 {
-	if i < len(slice) && slice[i] != "" {
-		if f, err := strconv.ParseFloat(slice[i], 64); err == nil {
-			return f
-		}
-	}
-	return defaultVal
-}
-
-func getOrElseInt(slice []string, i int, defaultVal int) int {
-	if i < len(slice) && slice[i] != "" {
-		if v, err := strconv.Atoi(slice[i]); err == nil {
-			return v
-		}
-	}
-	return defaultVal
 }

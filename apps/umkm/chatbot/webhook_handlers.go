@@ -6,13 +6,14 @@ import (
 	"io"
 	"net/http"
 
+	"core_project/shared/sdk/response"
 	"log/slog"
 )
 
 // handleWAWebhook processes incoming WhatsApp messages from wa-gateway internal (whatsmeow)
 func handleWAWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, response.MethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 

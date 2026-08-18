@@ -9,6 +9,23 @@ import (
 // WA Gateway Rate Limiter Tests
 // ========================================
 
+func runRateLimitCase(t *testing.T, rate, requests, expectedAllows int, interval time.Duration) {
+	t.Helper()
+	limiter := NewTenantRateLimiter(rate)
+	allowCount := 0
+	for i := 0; i < requests; i++ {
+		if limiter.Allow("test-tenant") {
+			allowCount++
+		}
+		if interval > 0 {
+			time.Sleep(interval / time.Duration(requests))
+		}
+	}
+	if allowCount != expectedAllows {
+		t.Errorf("Expected %d allowed, got %d", expectedAllows, allowCount)
+	}
+}
+
 func TestTokenBucket_RateLimiting(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping slow rate limiting test in -short mode")
@@ -20,30 +37,15 @@ func TestTokenBucket_RateLimiting(t *testing.T) {
 		interval       time.Duration
 		expectedAllows int
 	}{
-		{"5 msg/min - under limit", 5, 4, 0, 4},   // No sleep - test burst
-		{"5 msg/min - at limit", 5, 5, 0, 5},      // No sleep - test burst
-		{"5 msg/min - over limit", 5, 10, 0, 5},   // No sleep - test burst
+		{"5 msg/min - under limit", 5, 4, 0, 4},
+		{"5 msg/min - at limit", 5, 5, 0, 5},
+		{"5 msg/min - over limit", 5, 10, 0, 5},
 		{"Burst prevention", 5, 10, 0, 5},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			limiter := NewTenantRateLimiter(tc.rate)
-			tenantID := "test-tenant"
-			allowCount := 0
-
-			for i := 0; i < tc.requests; i++ {
-				if limiter.Allow(tenantID) {
-					allowCount++
-				}
-				if tc.interval > 0 {
-					time.Sleep(tc.interval / time.Duration(tc.requests))
-				}
-			}
-
-			if allowCount != tc.expectedAllows {
-				t.Errorf("Expected %d allowed, got %d", tc.expectedAllows, allowCount)
-			}
+			runRateLimitCase(t, tc.rate, tc.requests, tc.expectedAllows, tc.interval)
 		})
 	}
 }
@@ -131,25 +133,25 @@ func TestWARouting_ProviderPreference(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var actualProvider string
-
-			switch tt.preference {
-			case "cloud_api":
-				actualProvider = "cloud_api"
-			case "whatsmeow":
-				actualProvider = "whatsmeow"
-			default:
-				if isTransactionalType(tt.messageType) {
-					actualProvider = "cloud_api"
-				} else {
-					actualProvider = "whatsmeow"
-				}
-			}
-
-			if actualProvider != tt.expectedProvider {
-				t.Errorf("Expected provider %s, got %s", tt.expectedProvider, actualProvider)
+			actual := resolveProvider(tt.preference, tt.messageType)
+			if actual != tt.expectedProvider {
+				t.Errorf("Expected provider %s, got %s", tt.expectedProvider, actual)
 			}
 		})
+	}
+}
+
+func resolveProvider(preference, messageType string) string {
+	switch preference {
+	case "cloud_api":
+		return "cloud_api"
+	case "whatsmeow":
+		return "whatsmeow"
+	default:
+		if isTransactionalType(messageType) {
+			return "cloud_api"
+		}
+		return "whatsmeow"
 	}
 }
 
@@ -200,35 +202,36 @@ func TestPhoneNumber_Normalization(t *testing.T) {
 // Reconnect Backoff Tests
 // ========================================
 
+func assertBackoff(t *testing.T, attempt int, maxBackoff time.Duration) {
+	t.Helper()
+	backoff := calculateBackoff(attempt, maxBackoff)
+	if backoff > maxBackoff {
+		t.Errorf("Backoff %v exceeds max %v", backoff, maxBackoff)
+	}
+	if attempt < 10 {
+		expectedMin := time.Duration(30) * time.Second * (1 << (attempt - 1))
+		if backoff < expectedMin {
+			t.Errorf("Expected at least %v, got %v", expectedMin, backoff)
+		}
+	}
+}
+
 func TestReconnect_ExponentialBackoff(t *testing.T) {
 	tests := []struct {
-		name            string
-		attempt         int
-		expectedBackoff time.Duration
-		maxBackoff      time.Duration
+		name       string
+		attempt    int
+		maxBackoff time.Duration
 	}{
-		{"First attempt", 1, 30 * time.Second, 10 * time.Minute},
-		{"Second attempt", 2, 60 * time.Second, 10 * time.Minute},
-		{"Third attempt", 3, 120 * time.Second, 10 * time.Minute},
-		{"Fourth attempt", 4, 240 * time.Second, 10 * time.Minute},
-		{"Max backoff reached", 10, 10 * time.Minute, 10 * time.Minute},
+		{"First attempt", 1, 10 * time.Minute},
+		{"Second attempt", 2, 10 * time.Minute},
+		{"Third attempt", 3, 10 * time.Minute},
+		{"Fourth attempt", 4, 10 * time.Minute},
+		{"Max backoff reached", 10, 10 * time.Minute},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			backoff := calculateBackoff(tt.attempt, tt.maxBackoff)
-
-			if backoff > tt.maxBackoff {
-				t.Errorf("Backoff %v exceeds max %v", backoff, tt.maxBackoff)
-			}
-
-			// Validate exponential growth
-			if tt.attempt < 10 {
-				expectedMin := time.Duration(30) * time.Second * (1 << (tt.attempt - 1))
-				if backoff < expectedMin {
-					t.Errorf("Expected at least %v, got %v", expectedMin, backoff)
-				}
-			}
+			assertBackoff(t, tt.attempt, tt.maxBackoff)
 		})
 	}
 }

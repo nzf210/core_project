@@ -73,7 +73,7 @@ func handleN8NExecutions(w http.ResponseWriter, r *http.Request) {
 	n8nURL := "http://localhost:5678/rest/executions?limit=10&includeData=true"
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	req, _ := http.NewRequest("GET", n8nURL, nil)
+	req, _ := http.NewRequestWithContext(r.Context(), "GET", n8nURL, nil)
 	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("admin:n8n_secure_admin_password_123")))
 
 	resp, err := client.Do(req)

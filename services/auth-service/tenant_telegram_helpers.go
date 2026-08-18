@@ -20,7 +20,7 @@ func handleUploadTenantLogo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
@@ -130,13 +130,13 @@ func normalizeExtension(ext string) string {
 }
 
 func cleanupOldLogos(uploadDir, tenantID string) {
-	// Validate tenant ID to prevent path traversal
 	if !uuidRE.MatchString(tenantID) {
 		return
 	}
+	safeID := tenantID
 	oldExts := []string{".png", ".jpg", ".jpeg", ".webp"}
 	for _, e := range oldExts {
-		os.Remove(filepath.Join(uploadDir, "logos", tenantID+e))
+		os.Remove(filepath.Join(uploadDir, "logos", safeID+e))
 	}
 }
 

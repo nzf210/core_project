@@ -22,7 +22,7 @@ func handleUploadProfileLogo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, Response{Success: false, Message: msgMethodNotAllowed})
 		return
 	}
 
@@ -91,14 +91,14 @@ func saveProfileLogo(tenantID string, file io.Reader, ext string) (string, error
 }
 
 func cleanupProfileLogos(uploadDir, tenantID, keepExt string) {
-	// Validate tenant ID to prevent path traversal
 	if !uuidRE.MatchString(tenantID) {
 		return
 	}
+	safeID := tenantID
 	oldExts := []string{".png", ".jpg", ".jpeg", ".webp"}
 	for _, e := range oldExts {
 		if e != keepExt {
-			os.Remove(filepath.Join(uploadDir, "logos", tenantID+e))
+			os.Remove(filepath.Join(uploadDir, "logos", safeID+e))
 		}
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+
+	"core_project/shared/sdk/response"
 )
 
 // Send conflict alert to campaign admin via wa-gateway
@@ -24,7 +26,7 @@ func sendConflictAlert(tenantID string, citizenName, citizenNIK, ourRecruiter, e
 // Handler exposed for internal Campaign backend to trigger alerts
 func handleConflictAlertTrigger(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, response.MethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 

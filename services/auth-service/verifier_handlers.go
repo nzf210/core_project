@@ -157,7 +157,7 @@ func handleVerifierDisconnect(w http.ResponseWriter, r *http.Request) {
 	if verifierTenant == "" {
 		verifierTenant = "verifier"
 	}
-	req, _ := http.NewRequest(http.MethodPost, waURL+"/api/wa/logout?tenant_id="+verifierTenant, nil)
+	req, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, waURL+"/api/wa/logout?tenant_id="+verifierTenant, nil)
 	resp, err := client.Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, Response{Success: false, Message: "Failed to disconnect verifier"})

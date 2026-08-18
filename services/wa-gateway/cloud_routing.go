@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -67,7 +68,7 @@ func routeToCloudAPI(tenantID, target, message, msgType string) (string, error) 
 	}
 
 	body, _ := json.Marshal(payload)
-	req, err := http.NewRequest(http.MethodPost, cloudAPIHost+"/send", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, cloudAPIHost+"/send", bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}

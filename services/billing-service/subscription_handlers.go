@@ -108,7 +108,7 @@ func processWalletSubscription(w http.ResponseWriter, ctx context.Context, req S
 	if voucherCode != "" {
 		_ = DB.QueryRow(ctx, "SELECT validity_days FROM voucher_codes WHERE code=$1", voucherCode).Scan(&validityDays)
 	}
-	activateSubscription(ctx, tenantID, planID, planName, validityDays, "wallet", nil, "")
+	activateSubscription(ctx, tenantID, planID, planName, validityDays, "wallet", voucherActivationOpts{})
 
 	if referral.AffiliateID != nil && referral.DiscountAmount >= 0 {
 		var commRate float64
@@ -145,7 +145,7 @@ func processFreeSubscription(w http.ResponseWriter, ctx context.Context, req Sub
 		codeValidityDays = 30
 	}
 
-	activateSubscription(ctx, req.TenantID, req.PlanID, req.PlanName, codeValidityDays, "voucher_direct", nil, "")
+	activateSubscription(ctx, req.TenantID, req.PlanID, req.PlanName, codeValidityDays, "voucher_direct", voucherActivationOpts{})
 
 	extID := fmt.Sprintf("FREE-%s|%s", uuid.NewString()[:8], req.TenantID)
 	_, _ = DB.Exec(ctx, "INSERT INTO invoices (id, tenant_id, plan_id, amount, status, payment_url, voucher_code, paid_at) VALUES ($1, $2, $3, 0, 'paid', 'free_bypass', $4, NOW())", extID, req.TenantID, req.PlanID, req.VoucherCode)

@@ -216,7 +216,7 @@ func finalizeSubscriptionActivation(ctx context.Context, tenantID, planID, planN
 		}
 	}
 
-	ticketID := activateSubscription(ctx, tenantID, planID, planName, periodDays, activatedBy, voucherCodeID, autoVoucherCode)
+	ticketID := activateSubscription(ctx, tenantID, planID, planName, periodDays, activatedBy, voucherActivationOpts{VoucherCodeID: voucherCodeID, SystemVoucherCode: autoVoucherCode})
 
 	slog.Info("Payment processed", "tenant_id", tenantID, "plan", planID, "ticket_id", ticketID, "voucher_code", autoVoucherCode)
 

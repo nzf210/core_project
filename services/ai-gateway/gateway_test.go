@@ -73,7 +73,7 @@ func BenchmarkHandleChat(b *testing.B) {
 	payload := []byte(`{"message": "Hello world", "provider": "gemini"}`)
 	
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		req, _ := http.NewRequest("POST", "/v1/chat", bytes.NewBuffer(payload))
 		rr := httptest.NewRecorder()
 		handleChat(rr, req)

@@ -18,7 +18,7 @@ type ChatReq struct {
 
 func handleChat(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: "Method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, APIResponse{Message: response.MethodNotAllowed})
 		return
 	}
 	tenantID := r.Header.Get(response.XTenantID)
