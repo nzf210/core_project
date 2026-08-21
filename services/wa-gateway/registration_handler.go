@@ -163,19 +163,37 @@ func handlePasswordStep(tenantID string, session *waRegistrationSession, rawText
 
 func handlePhoneConfirmStep(tenantID string, session *waRegistrationSession, rawText string) bool {
 	phone := strings.TrimSpace(rawText)
+	upperText := strings.ToUpper(phone)
+
+	// Handle "YA" confirmation
+	if upperText == "YA" {
+		session.Step = 6
+		saveRegSession(session)
+		submitWARegistration(tenantID, session)
+		return true
+	}
+
+	// Handle phone number correction
 	normalizedInput := phone
 	if strings.HasPrefix(normalizedInput, "0") {
 		normalizedInput = "62" + normalizedInput[1:]
 	}
+
+	// Check if input looks like a phone number (starts with 08 or 628)
+	if strings.HasPrefix(phone, "08") || strings.HasPrefix(phone, "628") {
+		// Update phone number
+		session.PhoneNumber = normalizedInput
+		saveRegSession(session)
+		sendWAMessage(tenantID, session.SenderJID, "✅ Nomor HP diperbarui: "+normalizedInput+"\n\nKetik YA untuk melanjutkan:")
+		return true
+	}
+
+	// Invalid input
 	normalizedSession := session.PhoneNumber
 	if strings.HasPrefix(normalizedSession, "0") {
 		normalizedSession = "62" + normalizedSession[1:]
 	}
-	if normalizedInput != normalizedSession {
-		sendWAMessage(tenantID, session.SenderJID, "❌ Nomor HP tidak cocok. Masukkan nomor HP yang sama dengan nomor WA ini:")
-		return true
-	}
-	submitWARegistration(tenantID, session)
+	sendWAMessage(tenantID, session.SenderJID, "❌ Nomor HP tidak cocok. Masukkan nomor HP yang sama dengan nomor WA ini atau ketik YA untuk konfirmasi:")
 	return true
 }
 

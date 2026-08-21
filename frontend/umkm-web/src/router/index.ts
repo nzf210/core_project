@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory, RouteLocationNormalized, NavigationGuardNext } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationNormalized, type NavigationGuardNext } from 'vue-router'
 
 import { api, sanitizeJWT, sanitizeUUID, sanitizeRole, sanitizeText, sanitizeBoolean } from '../api'
 
@@ -17,15 +17,15 @@ interface MeCache {
   data: UserData
 }
 
-interface AuthValidateResponse {
-  success: boolean
-  data: {
-    tenant_id: string
-    user_id: string
-    role: string
-    impersonated_by?: string
-  }
-}
+// interface AuthValidateResponse {
+//   success: boolean
+//   data: {
+//     tenant_id: string
+//     user_id: string
+//     role: string
+//     impersonated_by?: string
+//   }
+// }
 import Dashboard from '../components/Dashboard.vue'
 import DynamicDashboard from '../components/DynamicDashboard.vue'
 import Onboarding from '../components/Onboarding.vue'
