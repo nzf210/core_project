@@ -1,174 +1,25 @@
 <template>
   <div class="landing" :class="themeClass" lang="id">
-    <!-- Navbar -->
-    <nav class="navbar">
-      <div class="nav-inner">
-        <a href="/" class="nav-logo">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <rect width="28" height="28" rx="8" fill="#f59e0b"/>
-            <path d="M7 9h14M7 14h9M7 19h12" stroke="#1a1a2e" stroke-width="2.2" stroke-linecap="round"/>
-          </svg>
-          <span>WCH Platform</span>
-        </a>
-        <div class="nav-links">
-          <a href="#fitur">Fitur</a>
-          <a href="#harga">Harga</a>
-          <a href="#testimoni">Testimoni</a>
-        </div>
-        <div class="nav-actions">
-          <a href="/login" class="btn-ghost">Masuk</a>
-          <a href="/register" class="btn-primary">Daftar Gratis</a>
-        </div>
-        <!-- Mobile toggle -->
-        <button class="nav-mobile-toggle" @click="mobileOpen = !mobileOpen" aria-label="Menu">
-          <span></span><span></span><span></span>
-        </button>
-      </div>
-      <!-- Mobile menu -->
-      <div v-if="mobileOpen" class="nav-mobile-menu">
-        <a href="#fitur" @click="mobileOpen = false">Fitur</a>
-        <a href="#harga" @click="mobileOpen = false">Harga</a>
-        <a href="#testimoni" @click="mobileOpen = false">Testimoni</a>
-        <hr>
-        <a href="/login" @click="mobileOpen = false">Masuk</a>
-        <a href="/register" class="cta-mobile" @click="mobileOpen = false">Daftar Gratis</a>
-      </div>
-    </nav>
+    <NavBar />
+    <HeroSection :hero="hero" />
 
-    <!-- Hero -->
-    <section class="hero">
-      <div class="hero-bg">
-        <div class="hero-mesh"></div>
-        <div class="hero-glow"></div>
-      </div>
-      <div class="hero-inner reveal">
-        <div class="hero-badge">
-          <span class="badge-dot"></span>
-          {{ hero.badge }}
-        </div>
-        <h1 class="hero-title">
-          {{ hero.title_line1 }}<br>
-          <span class="title-accent">{{ hero.title_line2 }}</span><br>
-          {{ hero.title_line3 }}
-        </h1>
-        <p class="hero-sub">
-          {{ hero.subtitle }}
-        </p>
-        <div class="hero-cta">
-          <a href="/register" class="cta-main">
-            <span>{{ hero.cta_primary }}</span>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </a>
-          <a href="#fitur" class="cta-secondary">{{ hero.cta_secondary }}</a>
-        </div>
-        <div class="hero-stats">
-          <template v-for="(stat, i) in hero.stats" :key="i">
-            <div v-if="Number(i) > 0" class="stat-divider"></div>
-            <div class="stat">
-              <strong>{{ stat.value }}</strong>
-              <span>{{ stat.label }}</span>
-            </div>
-          </template>
-        </div>
-      </div>
-    </section>
-
-    <!-- Logos / Trust bar -->
     <div class="trust-bar reveal">
-      <p class="trust-label">{{ trust.label }}</p>
+      <p>{{ trust.label }}</p>
       <div class="trust-badges">
         <span v-for="city in trust.cities" :key="city">{{ city }}</span>
       </div>
     </div>
 
-    <!-- Features -->
-    <section id="fitur" class="section-features reveal">
-      <div class="section-inner">
-        <div class="section-label">Fitur Unggulan</div>
-        <h2 class="section-title">Semua yang Anda butuhkan,<br>dalam satu aplikasi</h2>
-        <div class="features-grid">
-          <div v-for="(f, i) in features" :key="i" class="feature-card" :style="{ '--delay': `${Number(i) * 80}ms` }">
-            <div class="feature-icon">{{ f.icon }}</div>
-            <h3>{{ f.title }}</h3>
-            <p>{{ f.desc }}</p>
-          </div>
-        </div>
-      </div>
-    </section>
+    <FeaturesSection :features="features" />
+    <HowItWorksSection :steps="steps" />
+    <PricingSection :plans="plans" :formatRupiah="formatRupiah" />
 
-    <!-- How it works -->
-    <section class="section-how reveal">
-      <div class="section-inner">
-        <div class="section-label">Cara Kerja</div>
-        <h2 class="section-title">Dari nol ke operasional<br>dalam 3 menit</h2>
-        <div class="steps">
-          <div v-for="(step, i) in steps" :key="i" class="step" :style="{ '--delay': `${Number(i) * 120}ms` }">
-            <div class="step-num">{{ String(Number(i) + 1).padStart(2, '0') }}</div>
-            <div class="step-body">
-              <h3>{{ step.title }}</h3>
-              <p>{{ step.desc }}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Pricing -->
-    <section id="harga" class="section-pricing reveal">
-      <div class="section-inner">
-        <div class="section-label">Harga Transparan</div>
-        <h2 class="section-title">Paket yang cocok untuk<br>semua ukuran usaha</h2>
-        <p class="section-sub">Tidak ada biaya tersembunyi. Mulai gratis, upgrade sesuai kebutuhan.</p>
-
-        <!-- Billing cycle toggle -->
-        <div class="billing-toggle">
-          <button :class="['toggle-btn', billingCycle === 'monthly' ? 'active' : '']"
-            @click="billingCycle = 'monthly'">Bulanan</button>
-          <button :class="['toggle-btn', billingCycle === 'yearly' ? 'active' : '']"
-            @click="billingCycle = 'yearly'">Tahunan <span class="save-badge">Hemat</span></button>
-        </div>
-
-        <div class="pricing-grid">
-          <div
-            v-for="plan in plans"
-            :key="plan.id"
-            class="pricing-card"
-            :class="{ 'pricing-featured': plan.sort_order === 2 }"
-          >
-            <div v-if="plan.sort_order === 2" class="pricing-badge">Paling Populer</div>
-            <div class="plan-name">{{ plan.name }}</div>
-            <div class="plan-price">
-              <span v-if="billingCycle === 'monthly'">
-                <span v-if="plan.price_monthly === 0" class="price-amount">Gratis</span>
-                <span v-else class="price-amount">{{ formatRupiah(plan.price_monthly) }}<span class="price-period">/bulan</span></span>
-              </span>
-              <span v-else>
-                <span v-if="plan.price_yearly === 0" class="price-amount">Gratis</span>
-                <span v-else class="price-amount">{{ formatRupiah(plan.price_yearly) }}<span class="price-period">/tahun</span></span>
-              </span>
-            </div>
-            <p class="plan-desc">{{ plan.description }}</p>
-            <ul class="plan-features">
-              <li v-for="f in plan.features" :key="f.feature_key">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                {{ f.feature_name }}
-              </li>
-            </ul>
-            <a :href="'/register?plan=' + plan.id + '&cycle=' + billingCycle" class="plan-cta" :class="{ 'cta-active': plan.sort_order === 2 }">
-              {{ plan.price_monthly === 0 ? 'Mulai Gratis' : 'Mulai ' + plan.name }}
-            </a>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Testimonials -->
     <section id="testimoni" class="section-testimoni reveal">
       <div class="section-inner">
-        <div class="section-label">Cerita User</div>
-        <h2 class="section-title">Dipercaya oleh pelaku usaha<br>seperti Anda</h2>
+        <div class="section-label">Testimoni</div>
+        <h2 class="section-title">Dipercaya oleh<br>ratusan pemilik usaha</h2>
         <div class="testimoni-grid">
-          <div v-for="(t, i) in testimonials" :key="i" class="testimoni-card" :style="{ '--delay': `${Number(i) * 100}ms` }">
+          <div v-for="(t, i) in testimonials" :key="i" class="testimoni-card">
             <div class="testimoni-stars">
               <span v-for="n in 5" :key="n">★</span>
             </div>
@@ -185,7 +36,6 @@
       </div>
     </section>
 
-    <!-- CTA Banner -->
     <section class="section-cta reveal">
       <div class="cta-inner">
         <div class="cta-glow"></div>
@@ -198,44 +48,7 @@
       </div>
     </section>
 
-    <!-- Footer -->
-    <footer class="footer">
-      <div class="footer-inner">
-        <div class="footer-brand">
-          <div class="footer-logo">
-            <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
-              <rect width="28" height="28" rx="8" fill="#f59e0b"/>
-              <path d="M7 9h14M7 14h9M7 19h12" stroke="#1a1a2e" stroke-width="2.2" stroke-linecap="round"/>
-            </svg>
-            <span>WCH Platform</span>
-          </div>
-          <p>All-in-one aplikasi kasir, pembukuan, dan AI chatbot untuk UMKM Indonesia.</p>
-        </div>
-        <div class="footer-links">
-          <div class="footer-col">
-            <h4>Produk</h4>
-            <a href="#fitur">Fitur</a>
-            <a href="#harga">Harga</a>
-            <a href="/register">Daftar</a>
-          </div>
-          <div class="footer-col">
-            <h4>Perusahaan</h4>
-            <a href="#">Tentang Kami</a>
-            <a href="#">Blog</a>
-            <a href="#">Karir</a>
-          </div>
-          <div class="footer-col">
-            <h4>Bantuan</h4>
-            <a href="#">Pusat Bantuan</a>
-            <a href="#">Syarat & Ketentuan</a>
-            <a href="#">Kebijakan Privasi</a>
-          </div>
-        </div>
-      </div>
-      <div class="footer-bottom">
-        <p>© 2026 WCH Platform. Hak cipta dilindungi.</p>
-      </div>
-    </footer>
+    <FooterSection />
   </div>
 </template>
 
@@ -244,6 +57,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useHead } from '@unhead/vue'
 import { api } from '../api'
 import { formatRupiah } from '../composables/useCurrency'
+import NavBar from './landing/NavBar.vue'
+import HeroSection from './landing/HeroSection.vue'
+import FeaturesSection from './landing/FeaturesSection.vue'
+import HowItWorksSection from './landing/HowItWorksSection.vue'
+import PricingSection from './landing/PricingSection.vue'
+import FooterSection from './landing/FooterSection.vue'
 
 useHead({
   title: 'WCH Platform — Kasir, Pembukuan & AI Chatbot untuk UMKM Indonesia',
@@ -257,21 +76,12 @@ useHead({
     { name: 'twitter:description', content: 'All-in-one aplikasi kasir, pembukuan, dan AI chatbot untuk UMKM Indonesia.' },
     { name: 'robots', content: 'index, follow' },
   ],
-  link: [
-    { rel: 'canonical', href: 'https://wch.id' },
-  ],
+  link: [{ rel: 'canonical', href: 'https://wch.id' }],
 })
 
-const mobileOpen = ref(false)
-
-// F059: Dynamic plans from backend (public endpoint, no auth)
 const plans = ref<any[]>([])
-const plansLoading = ref(false)
-
-// F060: Dynamic landing content from backend
 const landingContent = ref<Record<string, any>>({})
 
-// Fallback static content if API fails
 const fallbackLandingContent: Record<string, any> = {
   hero: {
     badge: 'Kasir · Pembukuan · AI Chatbot — dalam satu platform',
@@ -322,71 +132,47 @@ const fallbackPlans = [
   { id: 'ultimate', name: 'Ultimate', sort_order: 3, price_monthly: 30000000, price_yearly: 300000000, description: 'Untuk bisnis menengah dan franchise.', features: [{ feature_key: 'pos', feature_name: 'Kasir POS Lengkap' }, { feature_key: 'journal', feature_name: 'Transaksi Unlimited' }, { feature_key: 'reports', feature_name: 'Semua Laporan Keuangan' }, { feature_key: 'chatbot', feature_name: 'AI Chatbot Unlimited' }, { feature_key: 'users', feature_name: 'User Unlimited' }, { feature_key: 'multi_branch', feature_name: 'Multi-Toko (5 Cabang)' }, { feature_key: 'ai_multimodal', feature_name: 'AI Multimodal (vision + audio)' }, { feature_key: 'custom_branding', feature_name: 'Custom Branding' }, { feature_key: 'priority_support', feature_name: 'Priority Support' }] },
 ]
 
-const billingCycle = ref<'monthly' | 'yearly'>('monthly')
-
-const fetchPlans = async () => {
-  plansLoading.value = true
-  try {
-    const res = await api.getPublicPlans()
-    if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
-      plans.value = res.data
-    } else {
-      plans.value = fallbackPlans
-    }
-  } catch (e) {
-    console.error('Failed to fetch plans', e)
-    plans.value = fallbackPlans
-  } finally {
-    plansLoading.value = false
-  }
-}
-
-const fetchLandingContent = async () => {
-  try {
-    const res = await api.getLandingConfigs()
-    if (res?.success && res.data) {
-      landingContent.value = res.data
-    } else {
-      landingContent.value = fallbackLandingContent
-    }
-  } catch (e) {
-    console.error('Failed to fetch landing content', e)
-    landingContent.value = fallbackLandingContent
-  }
-}
-
-// Computed getters for dynamic content
 const hero = computed(() => (landingContent.value.hero || fallbackLandingContent.hero) as typeof fallbackLandingContent.hero)
 const features = computed(() => (landingContent.value.features || fallbackLandingContent.features) as typeof fallbackLandingContent.features)
 const steps = computed(() => (landingContent.value.steps || fallbackLandingContent.steps) as typeof fallbackLandingContent.steps)
 const testimonials = computed(() => (landingContent.value.testimonials || fallbackLandingContent.testimonials) as typeof fallbackLandingContent.testimonials)
 const cta = computed(() => (landingContent.value.cta || fallbackLandingContent.cta) as typeof fallbackLandingContent.cta)
 const trust = computed(() => (landingContent.value.trust || fallbackLandingContent.trust) as typeof fallbackLandingContent.trust)
+const themeClass = computed(() => 'dark')
 
-// Dark landing always — matches existing WCH dark theme
-const themeClass = computed(() => 'theme-dark')
+onMounted(async () => {
+  await Promise.all([
+    (async () => {
+      try {
+        const res = await api.getPublicPlans()
+        plans.value = (res?.success && Array.isArray(res.data) && res.data.length > 0) ? res.data : fallbackPlans
+      } catch (e) {
+        plans.value = fallbackPlans
+      }
+    })(),
+    (async () => {
+      try {
+        const res = await api.getLandingConfigs()
+        landingContent.value = (res?.success && res.data) ? res.data : fallbackLandingContent
+      } catch (e) {
+        landingContent.value = fallbackLandingContent
+      }
+    })(),
+  ])
 
-// Scroll reveal via IntersectionObserver
-onMounted(() => {
-  fetchPlans()
-  fetchLandingContent()
-  const observer = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('revealed')
-          observer.unobserve(entry.target)
-        }
-      })
-    },
-    { threshold: 0.12 }
-  )
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('revealed')
+      }
+    })
+  }, { threshold: 0.1 })
+
   document.querySelectorAll('.reveal').forEach((el) => observer.observe(el))
 })
 </script>
 
 <style scoped>
-/* ── Theme: always dark, reuses WCH CSS vars ── */
 .landing {
   background: #0d0d14;
   color: #e2e8f0;
@@ -394,889 +180,223 @@ onMounted(() => {
   overflow-x: hidden;
 }
 
-/* ── Navbar ── */
-.navbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  background: rgba(13, 13, 20, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+.trust-bar {
+  padding: 60px 1.5rem;
+  text-align: center;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.8s ease;
 }
 
-.nav-inner {
+.trust-bar.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.trust-bar p {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin: 0 0 1rem;
+}
+
+.trust-badges {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.trust-badges span {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+}
+
+.section-testimoni {
+  padding: 100px 1.5rem;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.section-inner {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 0 1.5rem;
-  height: 64px;
-  display: flex;
-  align-items: center;
+}
+
+.section-label {
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fbbf24;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 1rem;
+}
+
+.section-title {
+  text-align: center;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.2;
+  color: #f1f5f9;
+  margin: 0 0 3rem;
+}
+
+.testimoni-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 2rem;
 }
 
-.nav-logo {
+.testimoni-card {
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+
+.testimoni-stars {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  text-decoration: none;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #f1f5f9;
-  letter-spacing: -0.02em;
-  flex-shrink: 0;
-}
-
-.nav-links {
-  display: flex;
-  gap: 1.75rem;
-  margin-left: auto;
-}
-
-.nav-links a {
-  text-decoration: none;
-  color: #94a3b8;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: color 0.2s;
-}
-
-.nav-links a:hover { color: #e2e8f0; }
-
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.btn-ghost {
-  text-decoration: none;
-  color: #94a3b8;
-  font-size: 0.9rem;
-  font-weight: 500;
-  padding: 0.4rem 1rem;
-  border-radius: 8px;
-  transition: color 0.2s, background 0.2s;
-}
-.btn-ghost:hover { color: #e2e8f0; background: rgba(255,255,255,0.05); }
-
-.btn-primary {
-  text-decoration: none;
-  background: #f59e0b;
-  color: #1a1a2e;
-  font-size: 0.9rem;
-  font-weight: 700;
-  padding: 0.45rem 1.1rem;
-  border-radius: 8px;
-  transition: background 0.2s, transform 0.15s;
-}
-.btn-primary:hover { background: #fbbf24; transform: translateY(-1px); }
-
-.nav-mobile-toggle {
-  display: none;
-  flex-direction: column;
-  gap: 5px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  margin-left: auto;
-}
-.nav-mobile-toggle span {
-  display: block;
-  width: 22px;
-  height: 2px;
-  background: #e2e8f0;
-  border-radius: 2px;
-  transition: 0.2s;
-}
-
-.nav-mobile-menu {
-  display: flex;
-  flex-direction: column;
-  padding: 1rem 1.5rem 1.5rem;
-  gap: 0.5rem;
-  background: rgba(13, 13, 20, 0.97);
-  border-top: 1px solid rgba(255,255,255,0.06);
-}
-.nav-mobile-menu a {
-  text-decoration: none;
-  color: #94a3b8;
-  font-size: 1rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-}
-.cta-mobile {
-  color: #f59e0b !important;
-  font-weight: 700;
-  border-bottom: none !important;
-  margin-top: 0.5rem;
-}
-
-/* ── Hero ── */
-.hero {
-  position: relative;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  padding: 8rem 1.5rem 6rem;
-}
-
-.hero-bg {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.hero-mesh {
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(245, 158, 11, 0.12) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 40% at 80% 60%, rgba(20, 184, 166, 0.07) 0%, transparent 60%);
-}
-
-.hero-glow {
-  position: absolute;
-  top: 20%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 600px;
-  height: 400px;
-  background: radial-gradient(ellipse, rgba(245, 158, 11, 0.08) 0%, transparent 70%);
-  filter: blur(40px);
-}
-
-.hero-inner {
-  position: relative;
-  max-width: 720px;
-  margin: 0 auto;
-  text-align: center;
-}
-
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  gap: 4px;
+  margin-bottom: 1rem;
   color: #fbbf24;
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.35rem 0.9rem;
-  border-radius: 100px;
-  margin-bottom: 1.75rem;
-  letter-spacing: 0.01em;
+  font-size: 1.25rem;
 }
 
-.badge-dot {
-  width: 7px;
-  height: 7px;
-  background: #22c55e;
+.testimoni-card blockquote {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #cbd5e1;
+  margin: 0 0 1.5rem;
+  font-style: italic;
+}
+
+.testimoni-author {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.author-avatar {
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  animation: pulse-dot 2s infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(0.8); }
-}
-
-.hero-title {
-  font-size: clamp(2.4rem, 6vw, 4rem);
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-  color: #f1f5f9;
-  margin-bottom: 1.5rem;
-}
-
-.title-accent {
-  background: linear-gradient(135deg, #f59e0b, #fbbf24);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.hero-sub {
-  font-size: 1.1rem;
-  line-height: 1.7;
-  color: #94a3b8;
-  max-width: 560px;
-  margin: 0 auto 2.5rem;
-}
-
-.hero-cta {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #1a1a2e;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  margin-bottom: 3.5rem;
-  flex-wrap: wrap;
+  font-size: 1.25rem;
+}
+
+.testimoni-author strong {
+  display: block;
+  font-size: 1rem;
+  color: #f1f5f9;
+  margin-bottom: 2px;
+}
+
+.testimoni-author span {
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+.section-cta {
+  padding: 100px 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.cta-inner {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+  position: relative;
+  padding: 4rem 2rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+}
+
+.cta-glow {
+  position: absolute;
+  top: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.15), transparent 70%);
+  filter: blur(80px);
+  pointer-events: none;
+}
+
+.cta-inner h2 {
+  font-size: clamp(2rem, 4vw, 2.5rem);
+  font-weight: 800;
+  color: #f1f5f9;
+  margin: 0 0 1rem;
+}
+
+.cta-inner p {
+  font-size: 1.125rem;
+  color: #94a3b8;
+  margin: 0 0 2rem;
 }
 
 .cta-main {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  background: #f59e0b;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   color: #1a1a2e;
-  font-weight: 700;
-  font-size: 1rem;
-  padding: 0.8rem 1.75rem;
-  border-radius: 12px;
+  font-weight: 600;
+  font-size: 1.125rem;
   text-decoration: none;
-  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.3);
 }
+
 .cta-main:hover {
-  background: #fbbf24;
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(245, 158, 11, 0.3);
-}
-.cta-main svg { transition: transform 0.2s; }
-.cta-main:hover svg { transform: translateX(3px); }
-
-.cta-secondary {
-  display: inline-flex;
-  align-items: center;
-  color: #94a3b8;
-  font-weight: 600;
-  font-size: 0.95rem;
-  text-decoration: none;
-  padding: 0.8rem 1.5rem;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.1);
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
-}
-.cta-secondary:hover {
-  color: #e2e8f0;
-  border-color: rgba(255,255,255,0.2);
-  background: rgba(255,255,255,0.04);
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
 }
 
-.hero-stats {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2rem;
-  flex-wrap: wrap;
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-}
-
-.stat strong {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: #f59e0b;
-  letter-spacing: -0.03em;
-}
-
-.stat span {
-  font-size: 0.78rem;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.stat-divider {
-  width: 1px;
-  height: 36px;
-  background: rgba(255,255,255,0.08);
-}
-
-/* ── Trust bar ── */
-.trust-bar {
-  padding: 2rem 1.5rem;
-  border-top: 1px solid rgba(255,255,255,0.05);
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  text-align: center;
-}
-
-.trust-label {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: #475569;
-  margin-bottom: 1rem;
-}
-
-.trust-badges {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.trust-badges span {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: #64748b;
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.3rem 0.8rem;
-  border-radius: 100px;
-  letter-spacing: 0.03em;
-}
-
-/* ── Sections shared ── */
-.section-inner {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-}
-
-.section-label {
-  display: inline-block;
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: #f59e0b;
-  margin-bottom: 0.75rem;
-}
-
-.section-title {
-  font-size: clamp(1.8rem, 4vw, 2.6rem);
-  font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
-  color: #f1f5f9;
-  margin-bottom: 1rem;
-}
-
-.section-sub {
-  font-size: 1rem;
-  color: #64748b;
-  max-width: 500px;
-  line-height: 1.6;
-  margin-bottom: 3rem;
-}
-
-/* ── Scroll reveal ── */
 .reveal {
   opacity: 0;
-  transform: translateY(24px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  transform: translateY(20px);
+  transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
 .reveal.revealed {
   opacity: 1;
   transform: translateY(0);
 }
 
-/* ── Features ── */
-.section-features {
-  padding: 6rem 0;
-}
-
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
-}
-
-.feature-card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 16px;
-  padding: 1.75rem;
-  transition: border-color 0.25s, transform 0.25s, background 0.25s;
-  transition-delay: var(--delay, 0ms);
-}
-.feature-card:hover {
-  border-color: rgba(245, 158, 11, 0.3);
-  background: rgba(245, 158, 11, 0.04);
-  transform: translateY(-3px);
-}
-
-.feature-icon {
-  font-size: 2rem;
-  margin-bottom: 1rem;
-}
-
-.feature-card h3 {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #f1f5f9;
-  margin-bottom: 0.5rem;
-}
-
-.feature-card p {
-  font-size: 0.88rem;
-  color: #64748b;
-  line-height: 1.6;
-}
-
-/* ── How it works ── */
-.section-how {
-  padding: 6rem 0;
-  background: rgba(255,255,255,0.015);
-}
-
-.steps {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  margin-top: 3rem;
-  position: relative;
-}
-
-.steps::before {
-  content: '';
-  position: absolute;
-  left: 1.4rem;
-  top: 2.5rem;
-  bottom: 2.5rem;
-  width: 2px;
-  background: linear-gradient(to bottom, rgba(245,158,11,0.4), rgba(245,158,11,0.05));
-  border-radius: 2px;
-}
-
-.step {
-  display: flex;
-  gap: 1.5rem;
-  align-items: flex-start;
-  padding-left: 0.5rem;
-}
-
-.step-num {
-  flex-shrink: 0;
-  width: 3rem;
-  height: 3rem;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 800;
-  color: #1a1a2e;
-  letter-spacing: 0.05em;
-  position: relative;
-  z-index: 1;
-}
-
-.step-body h3 {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #f1f5f9;
-  margin-bottom: 0.3rem;
-  padding-top: 0.5rem;
-}
-
-.step-body p {
-  font-size: 0.88rem;
-  color: #64748b;
-  line-height: 1.6;
-}
-
-/* ── Pricing ── */
-.section-pricing {
-  padding: 6rem 0;
-}
-
-.pricing-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
-  align-items: start;
-}
-
-/* Billing cycle toggle */
-.billing-toggle {
-  display: flex;
-  justify-content: center;
-  gap: 0.5rem;
-  margin-bottom: 2.5rem;
-}
-
-.billing-toggle .toggle-btn {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: #94a3b8;
-  font-size: 0.9rem;
-  font-weight: 600;
-  padding: 0.5rem 1.5rem;
-  border-radius: 100px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.billing-toggle .toggle-btn.active {
-  background: #f59e0b;
-  border-color: #f59e0b;
-  color: #1a1a2e;
-}
-
-.billing-toggle .toggle-btn .save-badge {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.1rem 0.4rem;
-  border-radius: 100px;
-}
-
-.billing-toggle .toggle-btn.active .save-badge {
-  background: rgba(0,0,0,0.2);
-  color: #1a1a2e;
-}
-
-.pricing-card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 20px;
-  padding: 2rem;
-  position: relative;
-  transition: border-color 0.25s;
-}
-
-.pricing-featured {
-  background: rgba(245, 158, 11, 0.06);
-  border-color: rgba(245, 158, 11, 0.35);
-}
-
-.pricing-badge {
-  position: absolute;
-  top: -12px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: #1a1a2e;
-  font-size: 0.72rem;
-  font-weight: 800;
-  padding: 0.25rem 0.9rem;
-  border-radius: 100px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.plan-name {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 0.75rem;
-}
-
-.plan-price {
-  margin-bottom: 0.75rem;
-}
-
-.price-amount {
-  font-size: 2rem;
-  font-weight: 800;
-  color: #f1f5f9;
-  letter-spacing: -0.04em;
-}
-
-.price-period {
-  font-size: 0.85rem;
-  color: #64748b;
-  margin-left: 0.3rem;
-  font-weight: 500;
-}
-
-.plan-desc {
-  font-size: 0.85rem;
-  color: #64748b;
-  margin-bottom: 1.5rem;
-  line-height: 1.5;
-}
-
-.plan-features {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.plan-features li {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  font-size: 0.88rem;
-  color: #cbd5e1;
-}
-
-.plan-features li svg {
-  color: #22c55e;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.plan-cta {
-  display: block;
-  text-align: center;
-  text-decoration: none;
-  font-weight: 700;
-  font-size: 0.92rem;
-  padding: 0.75rem;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.12);
-  color: #94a3b8;
-  transition: all 0.2s;
-}
-
-.plan-cta:hover {
-  border-color: rgba(245,158,11,0.4);
-  color: #f59e0b;
-}
-
-.cta-active {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: #1a1a2e !important;
-  border-color: transparent !important;
-}
-.cta-active:hover { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
-
-/* ── Testimonials ── */
-.section-testimoni {
-  padding: 6rem 0;
-  background: rgba(255,255,255,0.015);
-}
-
-.testimoni-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
-  margin-top: 3rem;
-}
-
-.testimoni-card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 16px;
-  padding: 1.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  transition: border-color 0.25s, transform 0.25s;
-}
-.testimoni-card:hover {
-  border-color: rgba(245,158,11,0.2);
-  transform: translateY(-2px);
-}
-
-.testimoni-stars {
-  color: #f59e0b;
-  font-size: 0.9rem;
-  letter-spacing: 2px;
-}
-
-.testimoni-card blockquote {
-  font-size: 0.92rem;
-  color: #94a3b8;
-  line-height: 1.7;
-  font-style: italic;
-  flex: 1;
-}
-
-.testimoni-author {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.author-avatar {
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.85rem;
-  font-weight: 800;
-  color: #1a1a2e;
-  flex-shrink: 0;
-}
-
-.author-name strong {
-  display: block;
-  font-size: 0.88rem;
-  color: #e2e8f0;
-}
-
-.author-name span {
-  display: block;
-  font-size: 0.78rem;
-  color: #475569;
-}
-
-/* ── CTA Banner ── */
-.section-cta {
-  padding: 6rem 1.5rem;
-}
-
-.cta-inner {
-  position: relative;
-  max-width: 680px;
-  margin: 0 auto;
-  text-align: center;
-  background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(217,119,6,0.04));
-  border: 1px solid rgba(245,158,11,0.2);
-  border-radius: 24px;
-  padding: 4rem 2rem;
-  overflow: hidden;
-}
-
-.cta-glow {
-  position: absolute;
-  top: -60px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 400px;
-  height: 200px;
-  background: radial-gradient(ellipse, rgba(245,158,11,0.15), transparent 70%);
-  filter: blur(30px);
-  pointer-events: none;
-}
-
-.cta-inner h2 {
-  font-size: clamp(1.5rem, 3.5vw, 2.2rem);
-  font-weight: 800;
-  color: #f1f5f9;
-  letter-spacing: -0.03em;
-  margin-bottom: 0.75rem;
-  position: relative;
-}
-
-.cta-inner p {
-  font-size: 1rem;
-  color: #64748b;
-  margin-bottom: 2rem;
-  position: relative;
-}
-
-.cta-large {
-  font-size: 1.05rem;
-  padding: 0.9rem 2rem;
-  position: relative;
-}
-
-/* ── Footer ── */
-.footer {
-  border-top: 1px solid rgba(255,255,255,0.06);
-  padding: 4rem 0 0;
-}
-
-.footer-inner {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-  display: grid;
-  grid-template-columns: 1.5fr 2fr;
-  gap: 4rem;
-}
-
-.footer-logo {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #f1f5f9;
-  margin-bottom: 0.75rem;
-}
-
-.footer-brand p {
-  font-size: 0.85rem;
-  color: #475569;
-  line-height: 1.6;
-  max-width: 280px;
-}
-
-.footer-links {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2rem;
-}
-
-.footer-col h4 {
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: #f59e0b;
-  margin-bottom: 1rem;
-}
-
-.footer-col a {
-  display: block;
-  text-decoration: none;
-  font-size: 0.88rem;
-  color: #475569;
-  padding: 0.25rem 0;
-  transition: color 0.2s;
-}
-
-.footer-col a:hover { color: #94a3b8; }
-
-.footer-bottom {
-  border-top: 1px solid rgba(255,255,255,0.04);
-  padding: 1.5rem;
-  text-align: center;
-}
-
-.footer-bottom p {
-  font-size: 0.78rem;
-  color: #334155;
-}
-
-/* ── Responsive ── */
-@media (max-width: 900px) {
-  .features-grid,
-  .pricing-grid,
-  .testimoni-grid {
-    grid-template-columns: repeat(2, 1fr);
+@media (max-width: 768px) {
+  .trust-bar {
+    padding: 40px 1.25rem;
   }
-  .footer-inner {
-    grid-template-columns: 1fr;
-    gap: 2rem;
+
+  .section-testimoni {
+    padding: 60px 1.25rem;
   }
-}
 
-@media (max-width: 640px) {
-  .nav-links, .nav-actions { display: none; }
-  .nav-mobile-toggle { display: flex; }
-
-  .features-grid,
-  .pricing-grid,
   .testimoni-grid {
     grid-template-columns: 1fr;
   }
 
-  .hero-stats { gap: 1rem; }
-  .stat-divider { display: none; }
-
-  .footer-links {
-    grid-template-columns: repeat(2, 1fr);
+  .section-cta {
+    padding: 60px 1.25rem;
   }
 
-  .steps::before { display: none; }
-  .step { padding-left: 0; }
-}
-
-/* ── Staggered reveal for grid items ── */
-.features-grid .feature-card,
-.testimoni-grid .testimoni-card {
-  transition-delay: var(--delay, 0ms);
+  .cta-inner {
+    padding: 3rem 1.5rem;
+  }
 }
 </style>
