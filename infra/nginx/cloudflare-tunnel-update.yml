@@ -1,0 +1,50 @@
+# =============================================================================
+# Cloudflare Tunnel config — diupdate agar semua traffic lewat Nginx
+# Copy ke VPS: sudo cp infra/nginx/cloudflare-tunnel-update.yml /etc/cloudflared/config.yml
+# Lalu restart: sudo systemctl restart cloudflared
+#
+# Perubahan dari config sebelumnya:
+#   Sebelum: hostname → langsung ke port Docker (21000, 23001, 23678)
+#   Sesudah: hostname → Nginx di localhost:80 (Nginx yang forward ke Docker)
+#
+# Hostname baru yang ditambahkan:
+#   stg-app.umkmai.id     → UMKM Frontend (22001)
+#   stg-admin.umkmai.id   → Superadmin Frontend (22002)
+#   stg-campaign.umkmai.id → Campaign Frontend (22003)
+# =============================================================================
+
+tunnel: 810694f9-cd2e-4732-8aac-5e16d7e9d379
+credentials-file: /etc/cloudflared/810694f9-cd2e-4732-8aac-5e16d7e9d379.json
+
+ingress:
+  - hostname: stg-api.umkmai.id
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: stg-api.umkmai.id
+
+  - hostname: stg-app.umkmai.id
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: stg-app.umkmai.id
+
+  - hostname: stg-admin.umkmai.id
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: stg-admin.umkmai.id
+
+  - hostname: stg-campaign.umkmai.id
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: stg-campaign.umkmai.id
+
+  - hostname: stg-grf.umkmai.id
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: stg-grf.umkmai.id
+
+  - hostname: stg-n8n.umkmai.id
+    service: http://localhost:80
+    originRequest:
+      httpHostHeader: stg-n8n.umkmai.id
+
+  - service: http_status:404
