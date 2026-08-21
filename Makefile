@@ -15,7 +15,7 @@
         run-frontend \
         build build-all \
         test test-verbose test-race \
-        vet tidy check \
+        vet tidy check swagger \
         logs-auth logs-ai logs-accounting logs-chatbot \
         logs-campaign logs-gateway logs-all \
         clean clean-logs clean-build
@@ -435,6 +435,16 @@ tidy:
 check: tidy vet build test
 	@echo ""
 	@echo "✓ All checks passed!"
+
+# =============================================================================
+# API Documentation (Swagger)
+# =============================================================================
+swagger:
+	@echo "▶ Generating Swagger documentation..."
+	@command -v swag >/dev/null 2>&1 || { echo "  Installing swag..."; go install github.com/swaggo/swag/cmd/swag@latest; }
+	@swag init -g services/api-gateway/main.go -o docs/swagger --parseDependency --parseInternal
+	@echo "✓ Swagger docs generated at docs/swagger/"
+	@echo "  View at: http://localhost:8000/swagger/"
 
 # =============================================================================
 # Cleanup
