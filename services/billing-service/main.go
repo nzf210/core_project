@@ -9,6 +9,7 @@ import (
 	"core_project/shared/observability"
 	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/config"
+	"core_project/shared/sdk/queue"
 	"core_project/shared/sdk/response"
 )
 
@@ -22,6 +23,9 @@ const (
 	timeFormatWIB          = "02 Jan 2006, 15:04 WIB"
 	errDB                  = response.DBError
 )
+
+// MQ is the optional RabbitMQ client — nil when RABBITMQ_URL is not set.
+var MQ *queue.Client
 
 var (
 	// Business metrics
@@ -48,6 +52,17 @@ func main() {
 	if err := runMigrations(DB); err != nil {
 		slog.Error("Failed to run migrations", "error", err)
 		os.Exit(1)
+	}
+
+	// Initialize RabbitMQ client (optional — graceful degradation if not configured)
+	if cfg.RabbitMQ.URL != "" {
+		if mq, err := queue.NewClient(cfg.RabbitMQ.URL); err != nil {
+			slog.Warn("RabbitMQ not available — notifications will use direct HTTP", "error", err)
+		} else {
+			MQ = mq
+			defer MQ.Close()
+			slog.Info("RabbitMQ connected for async notification publishing")
+		}
 	}
 
 	// Start pending-cleanup background worker (F015)

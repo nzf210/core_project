@@ -36,7 +36,9 @@ X  Y  Z Z
 |:--------|:-------------|:----|:----|:-----|:--------|
 | PostgreSQL (langsung) | 5432 | — | — | — | Internal only, akses via pgbouncer |
 | pgbouncer | 6432 | `10433` | `20433` | internal | Connection pooler untuk PostgreSQL |
-| Redis | 6379 | `10631` | `20631` | internal | Cache + queue |
+| Redis | 6379 | `10631` | `20631` | internal | Cache + session store |
+| RabbitMQ AMQP | 5672 | `10672` | `20672` | internal | Message queue protocol |
+| RabbitMQ Management | 15672 | `10673` | `20673` | internal | RabbitMQ web UI |
 | Chatwoot Redis | 6379 | — | — | — | Dedicated Redis untuk Chatwoot, tidak expose |
 
 > **PROD note:** PostgreSQL dan Redis TIDAK expose port ke host. Akses hanya via Docker internal network.

@@ -37,6 +37,13 @@ services:
     ports:
       - "20631:6379"  # STG: 2=stg, 0=infra, 631=redis
 
+  rabbitmq:
+    container_name: wch-stg-rabbitmq
+    env_file: .env.staging
+    ports:
+      - "20672:5672"   # STG: 2=stg, 0=infra, 672=rabbitmq AMQP
+      - "20673:15672"  # STG: 2=stg, 0=infra, 673=rabbitmq management UI
+
   # ── Backend Go Services (internal only) ─────────────────────────────────────
   api-gateway:
     container_name: wch-stg-api-gateway

@@ -11,8 +11,10 @@ import (
 	"os"
 	"strings"
 	"time"
-)
 
+	"core_project/shared/sdk/queue"
+	"github.com/google/uuid"
+)
 type voucherActivationOpts struct {
 	VoucherCodeID     *string
 	SystemVoucherCode string
@@ -146,7 +148,7 @@ func sendTicketNotifications(tenantID string, payload TicketPayload) {
 
 	if notifyTelegram && telegramChatID != "" {
 		msg := buildTicketMessage(payload)
-		go sendTelegramNotification(telegramChatID, msg)
+		go sendTelegramNotification(tenantID, telegramChatID, msg)
 		DB.Exec(context.Background(), `
 			UPDATE subscription_tickets SET telegram_sent_at = NOW() WHERE ticket_number = $1
 		`, payload.TicketNumber)
@@ -191,6 +193,20 @@ func sendWANotification(tenantID, target, message string) {
 		targetJID = targetJID + "@s.whatsapp.net"
 	}
 
+	// Publish async via RabbitMQ if available; fall back to direct HTTP.
+	if MQ != nil {
+		job := buildNotifJob(tenantID, "notifications.wa", map[string]interface{}{
+			"target":  targetJID,
+			"message": message,
+		})
+		if err := MQ.Publish(context.Background(), "notifications.wa", job); err != nil {
+			slog.Warn("RabbitMQ publish failed, falling back to direct HTTP", "error", err)
+		} else {
+			slog.Info("WA notification queued", "tenant_id", tenantID, "target", targetJID)
+			return
+		}
+	}
+
 	waBase := Cfg.WhatsApp.GatewayURL
 	if waBase == "" {
 		waBase = "http://wa-gateway:8202"
@@ -227,7 +243,21 @@ func sendWANotification(tenantID, target, message string) {
 // Send Telegram Notification
 // ─────────────────────────────────────────────
 
-func sendTelegramNotification(chatID, message string) {
+func sendTelegramNotification(tenantID, chatID, message string) {
+	// Publish async via RabbitMQ if available; fall back to direct Telegram API.
+	if MQ != nil {
+		job := buildNotifJob(tenantID, "notifications.telegram", map[string]interface{}{
+			"target":  chatID,
+			"message": message,
+		})
+		if err := MQ.Publish(context.Background(), "notifications.telegram", job); err != nil {
+			slog.Warn("RabbitMQ publish failed, falling back to direct Telegram API", "error", err)
+		} else {
+			slog.Info("Telegram notification queued", "tenant_id", tenantID, "chat_id", chatID)
+			return
+		}
+	}
+
 	botToken := Cfg.Telegram.BotToken
 	if botToken == "" {
 		slog.Warn("TELEGRAM_BOT_TOKEN not set, skipping")
@@ -285,3 +315,14 @@ func sendEmailNotification(email string, payload TicketPayload) {
 
 // ─────────────────────────────────────────────
 // Helpers
+
+// buildNotifJob creates a queue.Job for notification queues.
+func buildNotifJob(tenantID, jobType string, data map[string]interface{}) queue.Job {
+	return queue.Job{
+		JobID:     uuid.New().String(),
+		TenantID:  tenantID,
+		Type:      jobType,
+		Data:      data,
+		CreatedAt: time.Now(),
+	}
+}

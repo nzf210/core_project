@@ -1398,3 +1398,38 @@ tenants (1) ──┬── (*) users
 
 *Generated: June 2026*
 *Project: WCH Platform*
+
+---
+
+### Migration 000084: async_jobs
+
+**Purpose:** Create `async_jobs` table for tracking RabbitMQ-based async job status (pending → processing → completed/failed). Enables the `GET /api/jobs/{job_id}` polling endpoint introduced in Phase 2 of the RabbitMQ integration.
+
+**Tables Created:**
+
+#### async_jobs
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PRIMARY KEY DEFAULT gen_random_uuid() | Internal row ID |
+| job_id | VARCHAR(255) | UNIQUE NOT NULL | Public job identifier (UUID string) |
+| tenant_id | UUID | NOT NULL REFERENCES tenants(id) | Owning tenant |
+| type | VARCHAR(100) | NOT NULL | Queue name / job type (e.g. `notifications.wa`) |
+| status | VARCHAR(50) | DEFAULT 'pending' CHECK IN (pending, processing, completed, failed) | Current status |
+| data | JSONB | | Input payload |
+| result | JSONB | | Output payload on completion |
+| error | TEXT | | Error message on failure |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | |
+| started_at | TIMESTAMPTZ | | Set when worker picks up job |
+| completed_at | TIMESTAMPTZ | | Set when job finishes |
+
+**Indexes:**
+- `idx_async_jobs_tenant_id` on `tenant_id`
+- `idx_async_jobs_status` on `status`
+- `idx_async_jobs_type` on `type`
+- `idx_async_jobs_created_at` on `created_at DESC`
+- `idx_async_jobs_job_id` on `job_id`
+- `idx_async_jobs_tenant_status` composite on `(tenant_id, status, created_at DESC)`
+
+**Note:** Jobs are published by any service and consumed by `apps/umkm/automation`. The `GET /api/jobs/{job_id}` endpoint in `services/api-gateway/job_status.go` queries this table for status polling.
+
+*Updated: August 2026*

@@ -60,6 +60,25 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: wch-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-wch_admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq_pass}
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "10672:5672"   # DEV: 1=dev, 0=infra, 672=rabbitmq AMQP
+      - "10673:15672"  # DEV: 1=dev, 0=infra, 673=rabbitmq management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
   api-gateway:
     image: ghcr.io/nzf210/core_project:${IMAGE_TAG:-latest}
     container_name: wch-api-gateway
@@ -588,6 +607,7 @@ services:
 volumes:
   pgdata: null
   redisdata: null
+  rabbitmq_data: null
   n8n_data: null
   chatwoot_redis_data: null
   loki_data: null

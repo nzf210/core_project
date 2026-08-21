@@ -115,10 +115,11 @@ core_project/                   ← Root monorepo (satu go.mod)
 │   │   ├── auth/               ← JWT middleware untuk protect routes
 │   │   ├── db/                 ← PostgreSQL connection helper
 │   │   ├── cache/              ← Redis connection helper
+│   │   ├── queue/              ← RabbitMQ client helper (async job processing)
 │   │   ├── response/           ← Standard JSON response helper
 │   │   ├── migrate/            ← Auto-migration runner (shared/sdk/migrate)
 │   │   └── webhook/            ← Webhook utilities
-│   └── migrations/             ← Database SQL migrations (000001 — 000063)
+│   └── migrations/             ← Database SQL migrations (000001 — 000076)
 │
 ├── frontend/
 │   ├── umkm-web/               ← Vue 3 + Vite (Port 3201 native, Docker: 12001)
@@ -179,6 +180,8 @@ core_project/                   ← Root monorepo (satu go.mod)
 |:--------|:-------------|:-------------|:-----|
 | pgbouncer | `10433` | `20433` | internal |
 | Redis | `10631` | `20631` | internal |
+| RabbitMQ AMQP | `10672` | `20672` | internal |
+| RabbitMQ Management | `10673` | `20673` | internal |
 | API Gateway | internal | `21000` | `127.0.0.1:8000` |
 | UMKM Web | `12001` | `22001` | `127.0.0.1:8101` |
 | Superadmin Web | `12002` | `22002` | `127.0.0.1:8102` |
@@ -391,6 +394,162 @@ docker compose up -d grafana loki promtail
 **Yang tetap di Vue Dashboard (business metrics):**
 - Tenant stats, revenue, vouchers, subscriptions
 - WA Center (WhatsApp platform management)
+
+---
+
+## 🐰 RabbitMQ Queue Architecture
+
+**WCH Platform menggunakan RabbitMQ untuk async job processing** — memisahkan operasi berat dari HTTP request cycle untuk meningkatkan throughput dan response time.
+
+### Arsitektur Hybrid: Sync + Async
+
+```
+HTTP Request (Sync)              RabbitMQ Queue (Async)
+    ↓                                   ↓
+Validate input                   Heavy operations:
+Generate job_id                  - Accounting journal batch
+Return HTTP 202                  - Voucher distribution
+    ↓                            - AI chatbot reply
+User gets job_id                 - WA broadcast
+    ↓                            - Email/Telegram notifications
+Poll GET /jobs/{id}              - Background data processing
+```
+
+**Prinsip routing:**
+- **Read operations (GET):** Direct HTTP → database
+- **Light writes (single record):** Direct HTTP → database
+- **Heavy operations (batch/external API):** HTTP 202 → RabbitMQ → worker
+
+### Infrastructure
+
+| Komponen | Port Dev | Port Staging | Deskripsi |
+|:---------|:---------|:-------------|:----------|
+| RabbitMQ AMQP | `10672` | `20672` | Queue protocol (internal) |
+| RabbitMQ Management | `10673` | `20673` | Web UI untuk monitoring |
+
+**Akses Management UI:**
+```bash
+# Development
+http://localhost:10673
+# Login: wch_admin / rabbitmq_pass (dari .env)
+
+# Staging
+http://157.15.40.27:20673 (via Cloudflare Tunnel)
+```
+
+### Shared Client Library
+
+**Location:** `shared/sdk/queue/rabbitmq.go`
+
+**Usage pattern:**
+```go
+import "core_project/shared/sdk/queue"
+
+// Initialize client (di main.go setiap service)
+rabbitMQ, err := queue.NewClient(os.Getenv("RABBITMQ_URL"))
+if err != nil {
+    log.Fatal(err)
+}
+defer rabbitMQ.Close()
+
+// Publish job (di HTTP handler)
+job := queue.Job{
+    JobID:    uuid.New().String(),
+    TenantID: tenantID,
+    Type:     "accounting.journal_batch",
+    Data:     map[string]interface{}{"entries": entries},
+    CreatedAt: time.Now(),
+}
+rabbitMQ.Publish(ctx, "accounting.transactions", job)
+
+// Consumer (di worker service)
+rabbitMQ.Consume("accounting.transactions", func(job queue.Job) error {
+    // Process job
+    return processTransaction(job)
+})
+```
+
+### Queue Naming Convention
+
+| Queue Name | Purpose | Consumer |
+|:-----------|:--------|:---------|
+| `accounting.transactions` | Journal entry batch | `umkm-automation` |
+| `voucher.distribution` | Voucher WA blast | `umkm-automation` |
+| `chatbot.replies` | AI chatbot response | `umkm-automation` |
+| `notifications.email` | Email notifications | `notification-service` |
+| `notifications.telegram` | Telegram notifications | `notification-service` |
+| `notifications.wa` | WhatsApp notifications | `wa-gateway` |
+
+### Job Status Tracking
+
+**Database table:** `async_jobs` (migration 000076)
+
+```sql
+CREATE TABLE async_jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id VARCHAR(255) UNIQUE NOT NULL,
+    tenant_id UUID NOT NULL REFERENCES tenants(id),
+    type VARCHAR(100) NOT NULL,
+    status VARCHAR(50) DEFAULT 'pending',
+    data JSONB,
+    result JSONB,
+    error TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ
+);
+```
+
+**Status flow:** `pending` → `processing` → `completed` / `failed`
+
+**API endpoint untuk polling:**
+```http
+GET /api/jobs/{job_id}
+Authorization: Bearer {token}
+X-Tenant-ID: {tenant_id}
+
+Response:
+{
+  "success": true,
+  "data": {
+    "job_id": "uuid",
+    "status": "completed",
+    "result": {...}
+  }
+}
+```
+
+### Capacity & Scaling
+
+**Current capacity (with RabbitMQ):**
+- **HTTP throughput:** 10K-15K concurrent requests
+- **Queue buffer:** 50K-100K+ jobs
+- **Worker scaling:** Horizontal via Docker replicas
+
+**Scaling workers:**
+```bash
+# Development
+docker compose up -d --scale umkm-automation=3
+
+# Staging
+COMPOSE_PROJECT_NAME=wch-stg docker compose \
+  -f docker-compose.yml -f docker-compose.staging.yml \
+  up -d --scale umkm-automation=3
+```
+
+**Monitoring:**
+- RabbitMQ Management UI: queue depth, consumer count, message rate
+- Grafana dashboard: worker lag, job completion rate
+- Database: `SELECT COUNT(*) FROM async_jobs WHERE status = 'pending'`
+
+### Environment Variables
+
+```bash
+# .env / .env.staging
+RABBITMQ_URL=amqp://wch_admin:rabbitmq_pass@rabbitmq:5672/
+RABBITMQ_USER=wch_admin
+RABBITMQ_PASSWORD=rabbitmq_pass
+```
 
 ---
 

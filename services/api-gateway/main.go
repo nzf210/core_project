@@ -94,6 +94,8 @@ func main() {
 	// onboarding_completed, plan, role, is_frozen on every page reload.
 	// Fixes the onboarding redirect loop when localStorage flags are missing.
 	mux.Handle("/api/me", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api", newTenantProxy(getTarget(svcAuth, "8001"))))))
+	// Job Status API — async job tracking
+	mux.Handle("/api/jobs/", auth.Middleware(tenantRateLimitMiddleware(handleJobStatus(db.Pool))))
 	mux.Handle("/api/ai/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(auth.RequireFeature("ai")(http.StripPrefix("/api/ai", newTenantProxy(getTarget("ai-gateway", "8002"))))))))
 	mux.Handle("/api/umkm/business/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/umkm/business", newTenantProxy(getTarget("umkm-business", "9005"))))))
 	mux.Handle("/api/umkm/automation/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/umkm/automation", newTenantProxy(getTarget("umkm-automation", "8203"))))))

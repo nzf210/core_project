@@ -106,6 +106,11 @@ type Config struct {
 	N8N struct {
 		WebhookSecret string
 	}
+
+	// RabbitMQ Message Queue
+	RabbitMQ struct {
+		URL string // AMQP connection string (amqp://user:pass@host:port/)
+	}
 }
 
 // Global Config instance
@@ -149,6 +154,9 @@ func LoadConfig(envPath string) *Config {
 	cfg.Redis.Host = getEnv("REDIS_HOST", "127.0.0.1")
 	cfg.Redis.Port = getEnvAsInt("REDIS_PORT", 6379)
 	cfg.Redis.Password = getEnv("REDIS_PASSWORD", "secure_redis_password_123")
+
+	// RabbitMQ
+	cfg.RabbitMQ.URL = getEnv("RABBITMQ_URL", "amqp://wch_admin:rabbitmq_pass@127.0.0.1:5672/")
 
 	// AI
 	cfg.AI.OpenAIApiKey = getEnv("OPENAI_API_KEY", "")
