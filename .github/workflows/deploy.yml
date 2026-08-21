@@ -195,30 +195,30 @@ jobs:
       - name: Checkout Code (for compose files)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Ensure target directory permissions
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          port: ${{ needs.set-env.outputs.vps_ssh_port }}
-          username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            DEPLOY_DIR=${{ needs.set-env.outputs.environment == 'production' && '/opt/wch-production' || '/opt/wch-staging' }}
-            mkdir -p "$DEPLOY_DIR"
-            # Clean infra/ directory to avoid file vs directory conflicts
-            rm -rf "$DEPLOY_DIR/infra"
-
       - name: Copy compose files to VPS
-        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          port: ${{ needs.set-env.outputs.vps_ssh_port }}
-          username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: "docker-compose.yml,${{ needs.set-env.outputs.compose_override }},infra/"
-          target: ${{ needs.set-env.outputs.environment == 'production' && '/opt/wch-production' || '/opt/wch-staging' }}
-          overwrite: true
-          strip_components: 0
+        env:
+          DEPLOY_DIR: ${{ needs.set-env.outputs.environment == 'production' && '/opt/wch-production' || '/opt/wch-staging' }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ needs.set-env.outputs.vps_ssh_port }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          COMPOSE_OVERRIDE: ${{ needs.set-env.outputs.compose_override }}
+        run: |
+          # Write SSH key to temp file
+          KEY_FILE=$(mktemp)
+          echo "$VPS_SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+
+          SSH_OPTS="-i $KEY_FILE -p $VPS_PORT -o StrictHostKeyChecking=no -o BatchMode=yes"
+
+          # Ensure target directory exists (deploy user owns their home; for /opt we rely on pre-created dir)
+          ssh $SSH_OPTS "$VPS_USERNAME@$VPS_HOST" "mkdir -p $DEPLOY_DIR && rm -rf $DEPLOY_DIR/infra"
+
+          # Transfer files via tar pipe — no drone-scp, no remote mkdir by third-party tool
+          tar czf - docker-compose.yml "$COMPOSE_OVERRIDE" infra/ | \
+            ssh $SSH_OPTS "$VPS_USERNAME@$VPS_HOST" "tar xzf - -C $DEPLOY_DIR"
+
+          rm -f "$KEY_FILE"
 
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
