@@ -207,19 +207,23 @@ async function applyLoginSuccess(d: any) {
     const profileRes = await api.get('/api/profile')
     if (profileRes.success && profileRes.data) {
       localStorage.setItem('plan', sanitizeText(profileRes.data.plan || 'lite', 50))
-      if (profileRes.data.business_name || d.role !== 'owner') {
-        const onboardingFlag = sanitizeBoolean('true')
-        if (onboardingFlag) {
-          localStorage.setItem('onboarding_completed', onboardingFlag)
-        }
+
+      // Synchronously set onboarding flag before navigation to prevent router guard race
+      const hasBusinessName = !!profileRes.data.business_name
+      const isStaff = d.role !== 'owner'
+      if (hasBusinessName || isStaff) {
+        localStorage.setItem('onboarding_completed', 'true')
       }
+
       let subStatus = 'active'
       if (typeof profileRes.data.is_frozen === 'boolean') {
         subStatus = profileRes.data.is_frozen ? 'frozen' : 'active'
       }
       sessionStorage.setItem('subscription_status', subStatus)
     }
-  } catch { console.error('Failed to check profile for onboarding status') }
+  } catch (err) {
+    console.error('Failed to check profile for onboarding status:', err)
+  }
   await redeemPendingReferral()
   router.push('/dashboard')
 }
