@@ -28,6 +28,12 @@ services:
   pgbouncer:
     container_name: wch-stg-pgbouncer
     env_file: .env.staging
+    environment:
+      - PGBOUNCER_MAX_CLIENT_CONN=1000
+      - PGBOUNCER_DEFAULT_POOL_SIZE=25
+      - PGBOUNCER_POOL_MODE=transaction
+    volumes:
+      - ./infra/pgbouncer/pgbouncer-high-capacity.ini:/etc/pgbouncer/pgbouncer.ini:ro
     ports:
       - "20433:6432"  # STG: 2=stg, 0=infra, 433=pgbouncer
 
@@ -43,6 +49,12 @@ services:
     ports:
       - "20672:5672"   # STG: 2=stg, 0=infra, 672=rabbitmq AMQP
       - "20673:15672"  # STG: 2=stg, 0=infra, 673=rabbitmq management UI
+
+  worker-autoscaler:
+    container_name: wch-stg-worker-autoscaler
+    env_file: .env.staging
+    environment:
+      - COMPOSE_PROJECT_NAME=wch-stg
 
   # ── Backend Go Services (internal only) ─────────────────────────────────────
   api-gateway:

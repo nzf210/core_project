@@ -30,8 +30,14 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
       - N8N_DB_NAME=${N8N_DB_NAME:-wch_n8n_db}
+      # High-capacity mode (auto-enable via env vars)
+      - PGBOUNCER_MAX_CLIENT_CONN=${PGBOUNCER_MAX_CLIENT_CONN:-1000}
+      - PGBOUNCER_DEFAULT_POOL_SIZE=${PGBOUNCER_DEFAULT_POOL_SIZE:-25}
+      - PGBOUNCER_POOL_MODE=${PGBOUNCER_POOL_MODE:-transaction}
     ports:
       - "10433:6432"  # DEV: 1=dev, 0=infra, 433=pgbouncer
+    volumes:
+      - ./infra/pgbouncer/pgbouncer-high-capacity.ini:/etc/pgbouncer/pgbouncer.ini:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -603,6 +609,33 @@ services:
     restart: unless-stopped
     depends_on:
       - redis
+
+  # ── Worker Autoscaler (Auto-scale umkm-automation workers) ──────────────
+  worker-autoscaler:
+    image: docker:27-cli
+    container_name: wch-worker-autoscaler
+    environment:
+      - RABBITMQ_URL=${RABBITMQ_URL:-http://rabbitmq:15672}
+      - RABBITMQ_USER=${RABBITMQ_USER:-wch_admin}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq_pass}
+      - MIN_WORKERS=${AUTOSCALE_MIN_WORKERS:-1}
+      - MAX_WORKERS=${AUTOSCALE_MAX_WORKERS:-10}
+      - QUEUE_THRESHOLD=${AUTOSCALE_THRESHOLD:-100}
+      - CHECK_INTERVAL=${AUTOSCALE_INTERVAL:-30}
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./scripts/autoscale-workers.sh:/autoscale-workers.sh:ro
+    entrypoint: ["/bin/sh"]
+    command:
+      - -c
+      - |
+        apk add --no-cache bash curl jq
+        exec /autoscale-workers.sh
+    restart: unless-stopped
+    depends_on:
+      - rabbitmq
+      - umkm-automation
 
 volumes:
   pgdata: null

@@ -1,0 +1,17 @@
+[Unit]
+Description=WCH Platform Worker Autoscaler
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/wch-platform
+ExecStart=/root/wch-platform/scripts/autoscale-workers.sh --max-workers 10 --min-workers 1 --threshold 100
+Restart=always
+RestartSec=10
+StandardOutput=append:/root/wch-platform/logs/autoscaler.log
+StandardError=append:/root/wch-platform/logs/autoscaler.log
+
+[Install]
+WantedBy=multi-user.target
