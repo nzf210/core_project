@@ -4,11 +4,16 @@
 
 ```
 Internet
-  → Cloudflare DNS (*.umkmai.id → Tunnel CNAME)
-    → Cloudflare Tunnel (cloudflared di VPS)
-      → Host Nginx (port 80) ← PERLU INSTALL
-        → Docker containers (port 21000, 22001–22003, 23001, 23678)
+  → Cloudflare DNS (*.umkmai.id)
+    ├── Frontend (stg-app, stg-admin, stg-campaign) → Cloudflare Pages/Workers (hosting langsung di CF)
+    └── Backend + Tools → Cloudflare Tunnel (cloudflared di VPS)
+          → Host Nginx (port 80) ← PERLU INSTALL
+            → Docker containers (port 21000, 23001, 23678)
 ```
+
+**Catatan penting:** Frontend (umkm-web, superadmin-web, campaign-web) di-hosting langsung
+di Cloudflare, bukan dari container di VPS. Container frontend di `docker-compose.yml` tidak
+digunakan untuk staging.
 
 ## Cloudflare Tunnel Config
 
@@ -77,9 +82,9 @@ ke tunnel (nilai: `810694f9-cd2e-4732-8aac-5e16d7e9d379.cfargotunnel.com`):
 | stg-api.umkmai.id | ✅ Aktif | 21000 (api-gateway) |
 | stg-grf.umkmai.id | ✅ Aktif | 23001 (grafana) |
 | stg-n8n.umkmai.id | ✅ Aktif | 23678 (n8n) |
-| stg-app.umkmai.id | ✅ Aktif (DNS ada, container belum jalan) | 22001 (umkm-frontend) |
-| stg-admin.umkmai.id | ✅ Aktif (DNS ada, container belum jalan) | 22002 (superadmin-frontend) |
-| stg-campaign.umkmai.id | ✅ Aktif (DNS ada, container belum jalan) | 22003 (campaign-frontend) |
+| stg-app.umkmai.id | ✅ Aktif | Cloudflare Pages (FE langsung di CF) |
+| stg-admin.umkmai.id | ✅ Aktif | Cloudflare Pages (FE langsung di CF) |
+| stg-campaign.umkmai.id | ✅ Aktif | Cloudflare Pages (FE langsung di CF) |
 
 ## Status Container di VPS (2026-08-22)
 
