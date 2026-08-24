@@ -110,8 +110,12 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:    ":" + port,
-		Handler: observability.Middleware("umkm-chatbot")(loggingMiddleware(mux)),
+		Addr:           ":" + port,
+		Handler:        observability.Middleware("umkm-chatbot")(loggingMiddleware(mux)),
+		ReadTimeout:    30 * time.Second,
+		WriteTimeout:   30 * time.Second,
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20,
 	}
 
 	startWorkerPool(100)

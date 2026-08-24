@@ -141,10 +141,12 @@ func main() {
 	mux.Handle("/metrics", observability.PrometheusHandler())
 
 	server := &http.Server{
-		Addr:         ":8002",
-		Handler:      observability.Middleware("ai-gateway")(loggingMiddleware(rateLimitMiddleware(mux))),
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
+		Addr:           ":8002",
+		Handler:        observability.Middleware("ai-gateway")(loggingMiddleware(rateLimitMiddleware(mux))),
+		ReadTimeout:    30 * time.Second,
+		WriteTimeout:   60 * time.Second,
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20,
 	}
 
 	slog.Info("AI Gateway listening", "port", 8002)

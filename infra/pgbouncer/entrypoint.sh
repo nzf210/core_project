@@ -24,17 +24,17 @@ auth_file = /etc/pgbouncer/userlist.txt
 
 pool_mode = transaction
 
-max_client_conn = 100
-default_pool_size = 25
-min_pool_size = 5
-reserve_pool_size = 5
+max_client_conn = 10000
+default_pool_size = 100
+min_pool_size = 10
+reserve_pool_size = 50
 reserve_pool_timeout = 3
 
 server_reset_query = DISCARD ALL
 server_check_delay = 30
 server_check_query = SELECT 1
 server_lifetime = 3600
-server_idle_timeout = 600
+server_idle_timeout = 30
 
 server_round_robin = 0
 

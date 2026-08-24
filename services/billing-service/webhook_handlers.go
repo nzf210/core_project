@@ -66,7 +66,7 @@ func parseWebhookPayload(r *http.Request) (*webhookPayload, error) {
 		Status:          status,
 		ExternalID:      externalID,
 		PaidAmountFloat: paidAmountFloat,
-		PaidAmountCents: int64(paidAmountFloat),
+		PaidAmountCents: int64(paidAmountFloat * 100),
 	}, nil
 }
 

@@ -243,7 +243,15 @@ func main() {
 	// Wrap: observability -> CORS -> logging
 	handler := observability.Middleware("auth-service")(corsMiddleware(loggingMiddleware(mux)))
 
-	if err := http.ListenAndServe(serverAddress, handler); err != nil {
+	server := &http.Server{
+		Addr:           serverAddress,
+		Handler:        handler,
+		ReadTimeout:    30 * time.Second,
+		WriteTimeout:   30 * time.Second,
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		slog.Error("Failed to start Auth Service", "error", err)
 		os.Exit(1)
 	}

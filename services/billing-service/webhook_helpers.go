@@ -26,11 +26,8 @@ func extractTenantIDFromExternalID(externalID string) (string, error) {
 }
 
 // verifyWebhookToken checks per-tenant webhook token with env fallback.
+// Rejects requests when no token is provided but one is configured (prevents bypass).
 func verifyWebhookToken(ctx context.Context, callbackToken, tenantID string) error {
-	if callbackToken == "" {
-		return nil // No token provided — skip verification (legacy behavior)
-	}
-
 	// Priority 1: Per-tenant token from DB
 	dbToken, err := getTenantXenditWebhookToken(ctx, tenantID)
 	if err == nil && dbToken != "" {
@@ -47,15 +44,14 @@ func verifyWebhookToken(ctx context.Context, callbackToken, tenantID string) err
 	envToken := os.Getenv("XENDIT_WEBHOOK_TOKEN")
 	if envToken != "" {
 		if callbackToken != envToken {
-			slog.Warn("Unauthorized webhook attempt", "token", callbackToken)
+			slog.Warn("Unauthorized webhook attempt", "tenant_id", tenantID)
 			return fmt.Errorf("unauthorized")
 		}
 		return nil
 	}
 
-	// Token provided but no token configured anywhere — reject to avoid silent bypass.
-	slog.Warn("Unauthorized webhook: token provided but none configured", "tenant_id", tenantID)
-	return fmt.Errorf("unauthorized")
+	// No token configured anywhere — allow (legacy tenants without token setup).
+	return nil
 }
 
 // handleWalletTopupWebhook processes wallet topup invoice payment.
@@ -77,23 +73,32 @@ func handleWalletTopupWebhook(ctx context.Context, externalID, status string, pa
 		return true, nil
 	}
 
-	amountCents := int64(paidAmountFloat)
+	amountCents := int64(paidAmountFloat * 100)
 
-	// Deduplication check
-	var existing int
-	DB.QueryRow(ctx, "SELECT count(id) FROM wallet_transactions WHERE reference = $1", externalID).Scan(&existing)
-	if existing > 0 {
-		return true, nil // Already processed
-	}
-
-	// Process topup transaction
+	// Idempotent transaction insert — migration 000085 adds UNIQUE constraint on reference.
+	// ON CONFLICT DO NOTHING makes concurrent Xendit retries safe (no double-credit).
 	tx, err := DB.Begin(ctx)
 	if err != nil {
 		return true, fmt.Errorf("DB transaction failed: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	// Upsert wallet_credits
+	// Insert transaction log first — if reference already exists, constraint triggers CONFLICT.
+	result, err := tx.Exec(ctx, `
+		INSERT INTO wallet_transactions (tenant_id, amount_cents, transaction_type, reference, description)
+		VALUES ($1, $2, 'topup', $3, 'Top-up via Xendit invoice')
+		ON CONFLICT (reference) DO NOTHING
+	`, tenantID, amountCents, externalID)
+	if err != nil {
+		return true, err
+	}
+
+	// Check if the insert was a no-op (duplicate reference) — RowsAffected() == 0 means already processed.
+	if rows := result.RowsAffected(); rows == 0 {
+		return true, nil // Duplicate webhook — wallet already credited, nothing to do.
+	}
+
+	// Credit wallet only if transaction insert succeeded (not a duplicate).
 	_, err = tx.Exec(ctx, `
 		INSERT INTO wallet_credits (tenant_id, balance_cents, updated_at)
 		VALUES ($1, $2, NOW())
@@ -102,15 +107,6 @@ func handleWalletTopupWebhook(ctx context.Context, externalID, status string, pa
 	`, tenantID, amountCents)
 	if err != nil {
 		slog.Error("Topup: Failed to update wallet_credits", "tenant", tenantID, "err", err)
-		return true, err
-	}
-
-	// Insert transaction log
-	_, err = tx.Exec(ctx, `
-		INSERT INTO wallet_transactions (tenant_id, amount_cents, transaction_type, reference, description)
-		VALUES ($1, $2, 'topup', $3, 'Top-up via Xendit invoice')
-	`, tenantID, amountCents, externalID)
-	if err != nil {
 		return true, err
 	}
 
@@ -189,13 +185,22 @@ func finalizeSubscriptionActivation(ctx context.Context, tenantID, planID, planN
 
 	if voucherCode != "" {
 		activatedBy = "voucher"
-		var duration int
+		// Try reading validity_days first (set at generate time), fall back to duration_months
+		var validityDays int
 		DB.QueryRow(ctx, `
-			SELECT duration_months FROM voucher_programs vp
-			JOIN voucher_codes vc ON vc.program_id = vp.id WHERE vc.code = $1
-		`, voucherCode).Scan(&duration)
-		if duration > 0 {
-			periodDays = duration * 30
+			SELECT COALESCE(vc.validity_days, 0) FROM voucher_codes vc WHERE vc.code = $1
+		`, voucherCode).Scan(&validityDays)
+		if validityDays > 0 {
+			periodDays = validityDays
+		} else {
+			var duration int
+			DB.QueryRow(ctx, `
+				SELECT COALESCE(vp.duration_months, 0) FROM voucher_programs vp
+				JOIN voucher_codes vc ON vc.program_id = vp.id WHERE vc.code = $1
+			`, voucherCode).Scan(&duration)
+			if duration > 0 {
+				periodDays = duration * 30
+			}
 		}
 	}
 

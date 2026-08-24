@@ -153,8 +153,12 @@ func main() {
 	mux.Handle("/metrics", observability.PrometheusHandler())
 
 	server := &http.Server{
-		Addr:    ":9002", // Campaign port
-		Handler: observability.Middleware("campaign-api")(loggingMiddleware(mux)),
+		Addr:           ":9002",
+		Handler:        observability.Middleware("campaign-api")(loggingMiddleware(mux)),
+		ReadTimeout:    30 * time.Second,
+		WriteTimeout:   30 * time.Second,
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20,
 	}
 
 	slog.Info("Campaign API Server listening", "port", 9002)

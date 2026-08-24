@@ -62,7 +62,9 @@ func main() {
 	// - n8n:    POST /webhooks/n8n/{workflow_name}  (custom workflow trigger)
 	// F054: Campaign webhook — must be BEFORE the catch-all /webhooks/xendit/ route
 	mux.Handle("/webhooks/xendit/campaign/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks/xendit/campaign", newProxy(getTarget(svcCampaign, "9002")+"/billing/webhook"))))
-	mux.Handle("/webhooks/xendit/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix(pathWebhook, newProxy(getTarget(svcBilling, "8003")))))
+	// Strip /webhooks/xendit so billing-service receives /xendit/... which it routes to /webhook/payment
+	// via its own internal handler. The billing-service registers /webhook/payment (no /xendit prefix).
+	mux.Handle("/webhooks/xendit/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks/xendit", newProxy(getTarget(svcBilling, "8003")+"/webhook/payment"))))
 	mux.Handle("/webhooks/wa/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix(pathWebhook, newProxy(getTarget(svcWAGateway, "8202")))))
 	mux.Handle("/webhooks/wa-cloud/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix("/webhooks/wa-cloud", newProxy(getTarget("wa-cloud-api", "8210")+"/webhook"))))
 	mux.Handle("/webhooks/n8n/", rateLimitMiddleware(rateLimitPublic*5)(http.StripPrefix(pathWebhook, newProxy(getTarget("n8n", "5678")))))
@@ -147,11 +149,12 @@ func main() {
 	mux.HandleFunc("/metrics", handleAggregatedMetrics(getTarget, cfg))
 
 	server := &http.Server{
-		Addr:         ":8000",
-		Handler:      observability.Middleware("api-gateway")(corsMiddleware(ipRateLimitMiddleware(mux))),
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:           ":8000",
+		Handler:        observability.Middleware("api-gateway")(corsMiddleware(ipRateLimitMiddleware(mux))),
+		ReadTimeout:    30 * time.Second,
+		WriteTimeout:   30 * time.Second,
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1MB
 	}
 
 	slog.Info("API Gateway listening", "port", 8000)

@@ -1,0 +1,449 @@
+<title>WCH Platform E2E Checklist</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --bg: #F7F6F3;
+    --surface: #FFFFFF;
+    --border: #E2DFD8;
+    --text: #1A1917;
+    --text-muted: #6B6760;
+    --accent: #2A5EDB;
+    --accent-bg: #EEF3FD;
+    --pass: #1A7F5A;
+    --pass-bg: #EDFAF3;
+    --warn: #C45700;
+    --warn-bg: #FFF4EB;
+    --fail: #B91C1C;
+    --fail-bg: #FEF2F2;
+    --badge-skip: #8B8680;
+    --badge-skip-bg: #F0EFED;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111110;
+      --surface: #1C1B1A;
+      --border: #2E2D2B;
+      --text: #E8E6E1;
+      --text-muted: #8A8882;
+      --accent: #5B8BF5;
+      --accent-bg: #1A2340;
+      --pass: #34C88A;
+      --pass-bg: #0D2B1E;
+      --warn: #F09342;
+      --warn-bg: #2A1A0A;
+      --fail: #F87171;
+      --fail-bg: #2A0F0F;
+      --badge-skip: #6B6760;
+      --badge-skip-bg: #252422;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111110;
+    --surface: #1C1B1A;
+    --border: #2E2D2B;
+    --text: #E8E6E1;
+    --text-muted: #8A8882;
+    --accent: #5B8BF5;
+    --accent-bg: #1A2340;
+    --pass: #34C88A;
+    --pass-bg: #0D2B1E;
+    --warn: #F09342;
+    --warn-bg: #2A1A0A;
+    --fail: #F87171;
+    --fail-bg: #2A0F0F;
+    --badge-skip: #6B6760;
+    --badge-skip-bg: #252422;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .header-left { display: flex; flex-direction: column; gap: 2px; }
+  .header-title { font-size: 1.05rem; font-weight: 600; letter-spacing: -0.01em; }
+  .header-sub { font-size: 0.8rem; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; }
+
+  .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+  .progress-bar-wrap {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .progress-label { font-size: 0.78rem; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+  .progress-track {
+    width: 140px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+  }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
+
+  .btn-theme {
+    padding: 5px 10px; font-size: 0.75rem; font-family: 'IBM Plex Mono', monospace;
+    background: var(--bg); border: 1px solid var(--border); color: var(--text-muted);
+    border-radius: 4px; cursor: pointer; transition: color 0.15s, border-color 0.15s;
+  }
+  .btn-theme:hover { color: var(--text); border-color: var(--text-muted); }
+
+  .btn-reset {
+    padding: 5px 12px; font-size: 0.75rem; font-family: 'IBM Plex Mono', monospace;
+    background: var(--fail-bg); border: 1px solid var(--fail); color: var(--fail);
+    border-radius: 4px; cursor: pointer; transition: opacity 0.15s;
+  }
+  .btn-reset:hover { opacity: 0.75; }
+
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  .section { margin-bottom: 36px; }
+
+  .section-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 14px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-icon { font-size: 1.1rem; }
+  .section-name { font-size: 0.92rem; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+  .section-count { font-size: 0.75rem; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; margin-left: auto; }
+
+  .check-list { display: flex; flex-direction: column; gap: 3px; }
+
+  .check-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: border-color 0.1s;
+    user-select: none;
+  }
+  .check-item:hover { border-color: var(--accent); }
+  .check-item.done { background: var(--pass-bg); border-color: var(--pass); }
+  .check-item.fail { background: var(--fail-bg); border-color: var(--fail); }
+  .check-item.skip { background: var(--badge-skip-bg); border-color: var(--border); opacity: 0.65; }
+
+  .check-left { display: flex; flex-direction: column; gap: 3px; }
+  .check-text { font-size: 0.875rem; line-height: 1.45; }
+  .check-item.done .check-text { color: var(--pass); text-decoration: line-through; text-decoration-color: var(--pass); }
+  .check-item.fail .check-text { color: var(--fail); }
+  .check-item.skip .check-text { color: var(--text-muted); }
+
+  .check-note { font-size: 0.75rem; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; }
+
+  .check-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; padding-top: 1px; }
+
+  .btn-status {
+    padding: 3px 8px; font-size: 0.7rem; font-family: 'IBM Plex Mono', monospace;
+    border-radius: 3px; border: 1px solid var(--border); background: transparent;
+    color: var(--text-muted); cursor: pointer; transition: all 0.1s; white-space: nowrap;
+  }
+  .btn-pass { color: var(--pass); border-color: var(--pass); }
+  .btn-pass:hover, .check-item.done .btn-pass { background: var(--pass); color: #fff; }
+  .btn-fail { color: var(--fail); border-color: var(--fail); }
+  .btn-fail:hover, .check-item.fail .btn-fail { background: var(--fail); color: #fff; }
+  .btn-skip { color: var(--badge-skip); border-color: var(--badge-skip); }
+  .btn-skip:hover, .check-item.skip .btn-skip { background: var(--badge-skip); color: #fff; }
+
+  .env-note {
+    background: var(--accent-bg);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 0.8rem;
+    color: var(--accent);
+    margin-bottom: 32px;
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 1.5;
+  }
+
+  .summary-row {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 32px;
+  }
+  .summary-chip {
+    padding: 6px 14px; border-radius: 20px; font-size: 0.78rem;
+    font-family: 'IBM Plex Mono', monospace; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text-muted);
+  }
+  .summary-chip.c-pass { background: var(--pass-bg); border-color: var(--pass); color: var(--pass); }
+  .summary-chip.c-fail { background: var(--fail-bg); border-color: var(--fail); color: var(--fail); }
+  .summary-chip.c-skip { background: var(--badge-skip-bg); border-color: var(--border); color: var(--badge-skip); }
+
+  @media (max-width: 600px) {
+    header { padding: 16px 16px; }
+    main { padding: 24px 12px 60px; }
+  }
+</style>
+
+<header>
+  <div class="header-left">
+    <div class="header-title">WCH Platform — E2E Test Checklist</div>
+    <div class="header-sub">Staging · <span id="date-label"></span></div>
+  </div>
+  <div class="header-right">
+    <div class="progress-bar-wrap">
+      <span class="progress-label" id="progress-text">0 / 0</span>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+    <button class="btn-theme" onclick="toggleTheme()">toggle theme</button>
+    <button class="btn-reset" onclick="resetAll()">reset</button>
+  </div>
+</header>
+
+<main>
+  <div class="env-note">
+    Jalankan di staging sebelum deploy production. Semua test harus dilakukan dengan akun tenant nyata (bukan superadmin). Gunakan Xendit test-mode untuk payment flows. Pastikan WA Gateway, RabbitMQ, dan Redis aktif.
+  </div>
+
+  <div class="summary-row">
+    <div class="summary-chip c-pass" id="chip-pass">✓ Pass: 0</div>
+    <div class="summary-chip c-fail" id="chip-fail">✗ Fail: 0</div>
+    <div class="summary-chip c-skip" id="chip-skip">− Skip: 0</div>
+    <div class="summary-chip" id="chip-pend">⬜ Pending: 0</div>
+  </div>
+
+  <div id="checklist-root"></div>
+</main>
+
+<script>
+const SECTIONS = [
+  {
+    icon: "🔐",
+    name: "Auth & Onboarding",
+    items: [
+      { text: "Register akun baru via nomor HP — OTP dikirim ke WhatsApp", note: "POST /auth/register → OTP via wa-gateway" },
+      { text: "Verify OTP, login berhasil, JWT token diterima" },
+      { text: "Login di device baru: flag onboarding_completed ter-sync dari BE (tidak redirect loop)", note: "GET /api/me → syncOnboardingFlag()" },
+      { text: "Onboarding: pilih paket → generate Xendit invoice → status = pending" },
+      { text: "Setelah subscription aktif: redirect ke dashboard, semua menu muncul" },
+      { text: "Login via Telegram Bot: /start → dapat Chat ID → daftar dengan telegramChatId" },
+      { text: "Staff login: menu Billing & Upgrade tersembunyi, hanya muncul menu operasional" },
+      { text: "Superadmin login: akses penuh ke superadmin dashboard" },
+    ]
+  },
+  {
+    icon: "💳",
+    name: "Subscription & Billing",
+    items: [
+      { text: "Beli paket Lite/Pro/Ultimate → invoice Xendit terbuat dengan amount benar (sen)", note: "Bug fix: int64(paidAmountFloat * 100)" },
+      { text: "Xendit webhook diterima: POST /webhooks/xendit/ → status subscription jadi active", note: "api-gateway strips prefix, forward ke billing-service /webhook/payment" },
+      { text: "Webhook duplicate (retry Xendit) → tidak double-credit wallet", note: "ON CONFLICT DO NOTHING pada wallet_transactions" },
+      { text: "Redeem voucher: masukkan kode → subscription aktif sesuai validity_days" },
+      { text: "Wallet topup via Xendit → saldo bertambah benar di dashboard" },
+      { text: "Tenant expired: status frozen → akses terbatas, muncul notif perpanjang" },
+      { text: "Superadmin generate voucher batch → download CSV, redeem oleh tenant berhasil" },
+    ]
+  },
+  {
+    icon: "📊",
+    name: "UMKM Accounting",
+    items: [
+      { text: "Tambah produk/jasa → tampil di daftar produk" },
+      { text: "Tambah transaksi penjualan → journal entry double-entry terbuat" },
+      { text: "Lihat laporan keuangan (Laba Rugi, Neraca) → angka konsisten" },
+      { text: "Export PDF Cash Flow → file ter-download dengan data benar" },
+      { text: "Tambah akun COA custom → muncul di chart of accounts" },
+      { text: "POS checkout cash: pilih produk, bayar tunai → stok berkurang, transaksi tercatat" },
+      { text: "POS checkout Xendit QRIS: scan QR → payment callback → transaksi complete" },
+    ]
+  },
+  {
+    icon: "🤖",
+    name: "AI Chatbot WhatsApp",
+    items: [
+      { text: "Setup WA via QR scan (whatsmeow): status connected di dashboard" },
+      { text: "Setup WA Cloud API: validate token Meta → simpan credential → status verified", note: "POST /api/wa/validate → Meta Graph API" },
+      { text: "Kirim pesan ke nomor WA toko → chatbot reply dalam <5 detik" },
+      { text: "Tanya produk tersedia → chatbot jawab sesuai FAQ/katalog (RAG)" },
+      { text: "Aktifkan chatbot tanpa WA terhubung → 400 error ditampilkan dengan benar", note: "validateWAConnectionForChatbot()" },
+      { text: "Ganti wa_provider_preference ke cloud_api → pesan berikutnya via Cloud API" },
+      { text: "Escalation ke Chatwoot: ketik keyword eskalasi → agent manusia menerima chat" },
+    ]
+  },
+  {
+    icon: "🏥",
+    name: "Klinik (UMKM Clinic)",
+    items: [
+      { text: "Konfigurasi tipe bisnis = clinic di settings" },
+      { text: "Pasien daftar antrian via WhatsApp → muncul di Clinic Frontdesk" },
+      { text: "Operator panggil pasien (next queue) → status antrian update real-time" },
+      { text: "Tambah medical record pasien → tersimpan, bisa dicari" },
+      { text: "Batalkan booking → slot tersedia lagi" },
+    ]
+  },
+  {
+    icon: "📢",
+    name: "Campaign (Pemilu)",
+    items: [
+      { text: "Buat campaign baru → data tersimpan" },
+      { text: "Input relawan → muncul di daftar relawan dengan hierarki koordinator" },
+      { text: "Input DPT (pemilih) → data tersimpan, NIK terenkripsi di DB" },
+      { text: "Real count: input perolehan suara per TPS → agregat terupdate" },
+      { text: "Billing campaign: checkout via Xendit → invoice terbuat, webhook diterima" },
+    ]
+  },
+  {
+    icon: "📡",
+    name: "WhatsApp Broadcast (Cloud API)",
+    items: [
+      { text: "Tenant dengan plan yang punya fitur wa_cloud_api: tombol Cloud API aktif" },
+      { text: "Kirim broadcast message → pesan terkirim via Meta Cloud API (bukan whatsmeow)" },
+      { text: "Tenant tanpa fitur wa_cloud_api: tombol broadcast di-disable / 402 error" },
+      { text: "Rate limiter whatsmeow: kirim >5 msg/menit → pesan ke-6 di-queue, tidak dibanned" },
+    ]
+  },
+  {
+    icon: "🔔",
+    name: "Notifikasi & OTP",
+    items: [
+      { text: "OTP login: kirim via WA → kode valid 1 jam, re-request sebelum expired → tolak 'sudah dikirim'" },
+      { text: "OTP via Telegram: user dengan telegramChatId terdaftar → OTP dikirim ke Telegram" },
+      { text: "Invoice notif: tenant terima WA/Telegram saat subscription dibuat" },
+      { text: "Notif subscription hampir expired → reminder terkirim H-3" },
+    ]
+  },
+  {
+    icon: "👑",
+    name: "Superadmin",
+    items: [
+      { text: "Daftar tenant: tampil semua tenant dengan status subscription" },
+      { text: "Impersonate tenant: klik Login Sebagai → masuk sebagai owner tenant di tab baru" },
+      { text: "Generate voucher: isi form → codes muncul, download CSV berfungsi" },
+      { text: "Hapus voucher (unused) → berhasil. Hapus voucher (used) → error 400" },
+      { text: "Link Grafana Monitoring → terbuka di tab baru ke Grafana dashboard" },
+    ]
+  },
+  {
+    icon: "⚡",
+    name: "Performance & Infrastruktur",
+    items: [
+      { text: "Semua service restart clean: make start-all → semua port aktif dalam 30 detik" },
+      { text: "PgBouncer high-capacity: cek pool mode = transaction di pgbouncer.ini", note: "pgbouncer-high-capacity.ini" },
+      { text: "RabbitMQ: kirim 50 transaksi batch → semua diproses tanpa error, queue kosong" },
+      { text: "HTTP timeouts: koneksi idle >120 detik di-drop (verifikasi di logs)" },
+      { text: "Redis OTP cache: TTL 1 jam, key otp:{phone} ada setelah request OTP" },
+      { text: "API Gateway timeout tidak block: request >30 detik → 504 bukan hang selamanya" },
+    ]
+  },
+];
+
+const STATE_KEY = 'wch_e2e_v2';
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(STATE_KEY)) || {}; } catch { return {}; }
+}
+function save(state) {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch {}
+}
+
+let state = load();
+
+function itemId(si, ii) { return `s${si}_i${ii}`; }
+
+function setStatus(id, status) {
+  if (state[id] === status) { state[id] = null; }
+  else { state[id] = status; }
+  save(state);
+  render();
+}
+
+function resetAll() {
+  if (!confirm('Reset semua status checklist?')) return;
+  state = {};
+  save(state);
+  render();
+}
+
+function toggleTheme() {
+  const root = document.documentElement;
+  const cur = root.getAttribute('data-theme');
+  if (!cur) {
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  } else {
+    root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+}
+
+function render() {
+  const root = document.getElementById('checklist-root');
+  let pass = 0, fail = 0, skip = 0, pend = 0, total = 0;
+
+  let html = '';
+  SECTIONS.forEach((sec, si) => {
+    let sPass = 0, sTotal = sec.items.length;
+    sec.items.forEach((_, ii) => {
+      const s = state[itemId(si, ii)];
+      if (s === 'pass') sPass++;
+    });
+
+    html += `<div class="section">
+      <div class="section-header">
+        <span class="section-icon">${sec.icon}</span>
+        <span class="section-name">${sec.name}</span>
+        <span class="section-count">${sPass}/${sTotal}</span>
+      </div>
+      <div class="check-list">`;
+
+    sec.items.forEach((item, ii) => {
+      const id = itemId(si, ii);
+      const s = state[id] || null;
+      total++;
+      if (s === 'pass') pass++;
+      else if (s === 'fail') fail++;
+      else if (s === 'skip') skip++;
+      else pend++;
+
+      const cls = s === 'pass' ? 'done' : s === 'fail' ? 'fail' : s === 'skip' ? 'skip' : '';
+
+      html += `<div class="check-item ${cls}">
+        <div class="check-left">
+          <span class="check-text">${item.text}</span>
+          ${item.note ? `<span class="check-note">${item.note}</span>` : ''}
+        </div>
+        <div class="check-actions">
+          <button class="btn-status btn-pass ${s==='pass'?'active':''}" onclick="setStatus('${id}','pass')">✓</button>
+          <button class="btn-status btn-fail ${s==='fail'?'active':''}" onclick="setStatus('${id}','fail')">✗</button>
+          <button class="btn-status btn-skip ${s==='skip'?'active':''}" onclick="setStatus('${id}','skip')">−</button>
+        </div>
+      </div>`;
+    });
+
+    html += `</div></div>`;
+  });
+
+  root.innerHTML = html;
+
+  const done = pass + fail + skip;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  document.getElementById('progress-text').textContent = `${done} / ${total}`;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('chip-pass').textContent = `✓ Pass: ${pass}`;
+  document.getElementById('chip-fail').textContent = `✗ Fail: ${fail}`;
+  document.getElementById('chip-skip').textContent = `− Skip: ${skip}`;
+  document.getElementById('chip-pend').textContent = `⬜ Pending: ${pend}`;
+}
+
+document.getElementById('date-label').textContent = new Date().toLocaleDateString('id-ID', {day:'numeric',month:'long',year:'numeric'});
+render();
+</script>

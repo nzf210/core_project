@@ -29,11 +29,13 @@ services:
     container_name: wch-stg-pgbouncer
     env_file: .env.staging
     environment:
-      - PGBOUNCER_MAX_CLIENT_CONN=1000
-      - PGBOUNCER_DEFAULT_POOL_SIZE=25
+      - PGBOUNCER_MAX_CLIENT_CONN=10000
+      - PGBOUNCER_DEFAULT_POOL_SIZE=100
       - PGBOUNCER_POOL_MODE=transaction
-    volumes:
-      - ./infra/pgbouncer/pgbouncer-high-capacity.ini:/etc/pgbouncer/pgbouncer.ini:ro
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
       - "20433:6432"  # STG: 2=stg, 0=infra, 433=pgbouncer
 

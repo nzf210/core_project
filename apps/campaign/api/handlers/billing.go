@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -269,11 +270,11 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate X-Callback-Token inline to reduce complexity
-	if cbToken := r.Header.Get("X-Callback-Token"); cbToken != "" {
-		if !validateWebhookToken(w, r, cbToken) {
-			return
-		}
+	// Read body once so both token validation and payload decode can use it.
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: errInvalidJSON})
+		return
 	}
 
 	type XenditPayload struct {
@@ -284,8 +285,14 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload XenditPayload
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
 		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: errInvalidJSON})
+		return
+	}
+
+	// Validate token using already-parsed external_id to avoid double body read.
+	cbToken := r.Header.Get("X-Callback-Token")
+	if !checkWebhookToken(r.Context(), w, cbToken, payload.ExternalID) {
 		return
 	}
 
@@ -327,15 +334,9 @@ func HandleBillingWebhook(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, APIResponse{Message: "OK"})
 }
 
-func validateWebhookToken(w http.ResponseWriter, r *http.Request, callbackToken string) bool {
-	ctx := context.Background()
-	var rawPayload map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&rawPayload); err != nil {
-		WriteJSON(w, http.StatusBadRequest, APIResponse{Message: errInvalidJSON})
-		return false
-	}
-
-	externalID, _ := rawPayload["external_id"].(string)
+// checkWebhookToken validates the callback token using an already-parsed externalID.
+// Avoids double-reading r.Body — caller must parse the body first and pass externalID.
+func checkWebhookToken(ctx context.Context, w http.ResponseWriter, callbackToken, externalID string) bool {
 	var tenantID string
 	if externalID != "" {
 		parts := splitExternalID(externalID)
@@ -352,9 +353,7 @@ func validateWebhookToken(w http.ResponseWriter, r *http.Request, callbackToken 
 			WriteJSON(w, http.StatusUnauthorized, APIResponse{Message: "Unauthorized"})
 			return false
 		}
-	} else if callbackToken != "" {
-		// Note: XENDIT_WEBHOOK_TOKEN kept as os.Getenv for runtime override capability
-		// Xendit webhook tokens may need emergency rotation without config rebuild
+	} else {
 		envToken := os.Getenv("XENDIT_WEBHOOK_TOKEN")
 		if envToken != "" && callbackToken != envToken {
 			slog.Warn("Unauthorized campaign webhook: env token mismatch")

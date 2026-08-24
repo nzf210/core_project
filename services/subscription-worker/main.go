@@ -84,7 +84,19 @@ func main() {
 	// Wrap handler with observability middleware
 	handler := observability.Middleware("subscription-worker")(mux)
 
-	go http.ListenAndServe(":8006", handler)
+	go func() {
+		srv := &http.Server{
+			Addr:           ":8006",
+			Handler:        handler,
+			ReadTimeout:    30 * time.Second,
+			WriteTimeout:   30 * time.Second,
+			IdleTimeout:    120 * time.Second,
+			MaxHeaderBytes: 1 << 20,
+		}
+		if err := srv.ListenAndServe(); err != nil {
+			slog.Error("Subscription worker HTTP server error", "error", err)
+		}
+	}()
 
 	slog.Info("Subscription worker started", "interval", interval.String(), "grace_hours", graceHours)
 

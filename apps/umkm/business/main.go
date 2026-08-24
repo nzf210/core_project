@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"core_project/shared/observability"
 	"core_project/shared/sdk/auth"
@@ -202,7 +203,15 @@ func main() {
 	port := "9001"
 
 	slog.Info("UMKM Business Service starting", "port", port)
-	if err := http.ListenAndServe(":"+port, handler); err != nil {
+	server := &http.Server{
+		Addr:           ":" + port,
+		Handler:        handler,
+		ReadTimeout:    30 * time.Second,
+		WriteTimeout:   30 * time.Second,
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		slog.Error("Failed to start server", "error", err)
 		os.Exit(1)
 	}

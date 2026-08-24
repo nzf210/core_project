@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"core_project/shared/observability"
 	"core_project/shared/sdk/auth"
@@ -160,8 +161,12 @@ func main() {
 	mux.Handle("/admin/licenses/generate", auth.Middleware(http.HandlerFunc(handleAdminGenerateLicenses)))
 
 	server := &http.Server{
-		Addr:    ":8003",
-		Handler: observability.Middleware("billing-service")(mux),
+		Addr:           ":8003",
+		Handler:        observability.Middleware("billing-service")(mux),
+		ReadTimeout:    30 * time.Second,
+		WriteTimeout:   30 * time.Second,
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20,
 	}
 
 	slog.Info("Billing Service listening", "port", 8003)

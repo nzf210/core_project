@@ -192,7 +192,15 @@ func main() {
 	slog.Info("WA Gateway running", "port", port, "instance_id", instanceID)
 	slog.Info("Active WhatsApp sessions", "count", len(clientMap))
 	go func() {
-		if err := http.ListenAndServe(port, corsMiddleware(handler)); err != nil {
+		srv := &http.Server{
+			Addr:           port,
+			Handler:        corsMiddleware(handler),
+			ReadTimeout:    30 * time.Second,
+			WriteTimeout:   30 * time.Second,
+			IdleTimeout:    120 * time.Second,
+			MaxHeaderBytes: 1 << 20,
+		}
+		if err := srv.ListenAndServe(); err != nil {
 			slog.Error("WA Gateway server error", "error", err)
 			os.Exit(1)
 		}

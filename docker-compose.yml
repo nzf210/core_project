@@ -51,7 +51,7 @@ services:
     restart: unless-stopped
   redis:
     image: redis:7-alpine
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru --appendonly yes --tcp-backlog 511 --hz 20 --timeout 300
     container_name: wch-redis
     ports:
       - "10631:6379"  # DEV: 1=dev, 0=infra, 631=redis

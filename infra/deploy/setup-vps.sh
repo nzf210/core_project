@@ -42,7 +42,7 @@ echo ""
 # -----------------------------------------------------------------------------
 # 1. Buat direktori deploy
 # -----------------------------------------------------------------------------
-echo "--- [1/5] Buat direktori deploy ---"
+echo "--- [1/6] Buat direktori deploy ---"
 if [ "$MODE" = "shared" ] || [ "$MODE" = "staging" ]; then
     $SSH "sudo mkdir -p /opt/wch-staging && sudo chown $VPS_USER:$VPS_USER /opt/wch-staging && echo 'staging dir: OK'"
 fi
@@ -53,7 +53,7 @@ fi
 # -----------------------------------------------------------------------------
 # 2. Setup passwordless sudo untuk docker
 # -----------------------------------------------------------------------------
-echo "--- [2/5] Setup passwordless sudo untuk docker ---"
+echo "--- [2/6] Setup passwordless sudo untuk docker ---"
 # Cek apakah sudo sudah passwordless — kalau sudah, skip (jangan overwrite diri sendiri)
 if $SSH "sudo -n true 2>/dev/null"; then
     echo "sudoers: already configured (skipped)"
@@ -66,15 +66,39 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 3. Install Nginx + Certbot
+# 3. Kernel tuning untuk 100K concurrent connections
 # -----------------------------------------------------------------------------
-echo "--- [3/5] Install Nginx + Certbot ---"
+echo "--- [3/6] Kernel & fd tuning ---"
+$SSH "sudo tee /etc/sysctl.d/99-wch-highload.conf > /dev/null << 'EOF'
+net.core.somaxconn = 65535
+net.ipv4.tcp_max_syn_backlog = 65535
+net.ipv4.ip_local_port_range = 1024 65535
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_fin_timeout = 15
+net.core.netdev_max_backlog = 65535
+fs.file-max = 1000000
+EOF
+sudo sysctl -p /etc/sysctl.d/99-wch-highload.conf && echo 'sysctl: OK'"
+
+$SSH "sudo tee /etc/security/limits.d/99-wch-highload.conf > /dev/null << 'EOF'
+* soft nofile 1000000
+* hard nofile 1000000
+root soft nofile 1000000
+root hard nofile 1000000
+EOF
+echo 'fd limits: OK'"
+
+# -----------------------------------------------------------------------------
+# 4. Install Nginx + Certbot
+# -----------------------------------------------------------------------------
+echo "--- [4/6] Install Nginx + Certbot ---"
 $SSH "which nginx > /dev/null 2>&1 && echo 'nginx: already installed' || (sudo apt-get update -qq && sudo apt-get install -y nginx certbot python3-certbot-nginx && echo 'nginx: installed')"
 
 # -----------------------------------------------------------------------------
-# 4. Deploy Nginx config
+# 5. Deploy Nginx config
 # -----------------------------------------------------------------------------
-echo "--- [4/5] Deploy Nginx config ---"
+echo "--- [5/6] Deploy Nginx config ---"
+
 
 # Hapus default config
 $SSH "sudo rm -f /etc/nginx/sites-enabled/default"
@@ -99,7 +123,7 @@ $SSH "sudo nginx -t && sudo systemctl enable nginx && sudo systemctl reload ngin
 # -----------------------------------------------------------------------------
 # 5. Reminder .env dan SSL
 # -----------------------------------------------------------------------------
-echo "--- [5/5] Selesai ---"
+echo "--- [6/6] Selesai ---"
 echo ""
 echo "======================================================"
 echo " VPS $VPS_HOST ($MODE) siap!"

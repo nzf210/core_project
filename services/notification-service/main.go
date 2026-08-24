@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"core_project/shared/observability"
 	"core_project/shared/sdk/response"
@@ -73,7 +74,15 @@ func main() {
 
 	port := "8005"
 	slog.Info("Notification Service listening", "port", port)
-	if err := http.ListenAndServe(":"+port, observability.Middleware(serviceName)(mux)); err != nil {
+	server := &http.Server{
+		Addr:           ":" + port,
+		Handler:        observability.Middleware(serviceName)(mux),
+		ReadTimeout:    30 * time.Second,
+		WriteTimeout:   30 * time.Second,
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		slog.Error("Failed to start server", "error", err)
 	}
 }
