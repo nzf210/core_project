@@ -12,7 +12,7 @@ import (
 
 const (
 	authServiceURL    = "http://localhost:8001"
-	billingServiceURL = "http://localhost:8013"
+	billingServiceURL = "http://localhost:8003"
 	accountingURL     = "http://localhost:8201"
 	chatbotURL        = "http://localhost:8202"
 )

@@ -11,6 +11,9 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/10-create-n8n-db.sql:ro
     # Internal only - access via PgBouncer
+    # Port 15432 exposed directly for migration runner (bypasses pgbouncer transaction mode)
+    ports:
+      - "127.0.0.1:15432:5432"
     expose:
       - 5432
     healthcheck:

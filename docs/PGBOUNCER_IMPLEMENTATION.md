@@ -104,4 +104,37 @@ PostgreSQL (max_connections=50) — 60% reduction!
 4. Update backend pool configs (optional but recommended)
 5. Monitor with `SHOW POOLS;` and Grafana
 
-**Rollback:** pgbouncer selalu digunakan di semua environment — bypass tidak didukung. Jika pgbouncer bermasalah, debug dengan `docker compose logs pgbouncer`.
+**Rollback:** pgbouncer selalu digunakan di semua environment untuk runtime. Jika pgbouncer bermasalah, debug dengan `docker compose logs pgbouncer`.
+
+## Migration Runner — Bypass PgBouncer (Penting saat Deploy VPS)
+
+PgBouncer transaction mode tidak kompatibel dengan DDL (CREATE TABLE, CREATE INDEX) yang dibungkus dalam explicit transaction. Migration runner menggunakan koneksi langsung ke PostgreSQL via env var `DB_DIRECT_HOST`/`DB_DIRECT_PORT`.
+
+### Konfigurasi per Environment
+
+**DEV local** — service berjalan native (bukan di dalam Docker):
+```bash
+# .env
+DB_DIRECT_PORT=15432   # postgres port yang di-expose ke host
+# docker-compose.yml sudah ada: ports: "127.0.0.1:15432:5432"
+```
+
+**Staging & Production** — service berjalan di dalam Docker network:
+```bash
+# .env.staging atau .env.prod
+DB_DIRECT_HOST=postgres   # Docker container name — langsung tanpa host mapping
+DB_DIRECT_PORT=5432
+```
+
+Jika salah satu dari `DB_DIRECT_HOST` atau `DB_DIRECT_PORT` di-set, migration runner koneksi langsung ke postgres. Runtime normal tetap pakai `DB_HOST`/`DB_PORT` (pgbouncer).
+
+### Checklist Deploy VPS Baru
+
+1. Pastikan `.env.prod` (atau env yang dipakai) punya:
+   ```bash
+   DB_DIRECT_HOST=postgres
+   DB_DIRECT_PORT=5432
+   ```
+2. `docker-compose.prod.yml` tidak perlu expose port 5432 ke host — service Go di Docker network sudah bisa reach `postgres:5432` langsung.
+3. Services yang sudah terintegrasi: `auth-service`, `billing-service`, `wa-cloud-api`.
+4. Services yang belum (perlu update manual jika ada migration baru): `apps/umkm/accounting`, `apps/umkm/chatbot`.

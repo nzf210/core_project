@@ -196,19 +196,29 @@ func handleAdminListVoucherLinks(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]interface{}{}
 	for rows.Next() {
 		var (
-			id, progID, prefix               string
-			redeemedBy                       *string
-			redeemedAt, expiresAt, createdAt time.Time
-			isActive                         bool
+			id, progID, prefix        string
+			redeemedBy                *string
+			redeemedAt, expiresAt     *time.Time
+			createdAt                 time.Time
+			isActive                  bool
 		)
 		if rows.Scan(&id, &progID, &prefix, &redeemedBy, &redeemedAt, &expiresAt, &isActive, &createdAt) == nil {
+			var redeemedAtStr, expiresAtStr *string
+			if redeemedAt != nil {
+				s := redeemedAt.Format(time.RFC3339)
+				redeemedAtStr = &s
+			}
+			if expiresAt != nil {
+				s := expiresAt.Format(time.RFC3339)
+				expiresAtStr = &s
+			}
 			entry := map[string]interface{}{
 				"id":          id,
 				"program_id":  progID,
 				"prefix":      prefix,
 				"redeemed_by": redeemedBy,
-				"redeemed_at": redeemedAt.Format(time.RFC3339),
-				"expires_at":  expiresAt.Format(time.RFC3339),
+				"redeemed_at": redeemedAtStr,
+				"expires_at":  expiresAtStr,
 				"is_active":   isActive,
 				"created_at":  createdAt.Format(time.RFC3339),
 			}

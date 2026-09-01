@@ -151,3 +151,16 @@ make stop-all && make dev-all
 ---
 
 **Status:** ✅ **PgBouncer READY. Waiting for `.env` update to activate for all services.**
+
+---
+
+## Migration Runner — Bypass PgBouncer
+
+PgBouncer transaction mode tidak kompatibel dengan DDL yang dibungkus dalam explicit transaction. Migration runner (`auth-service`, `billing-service`, `wa-cloud-api`) menggunakan koneksi langsung ke PostgreSQL via `DB_DIRECT_HOST`/`DB_DIRECT_PORT`.
+
+| Environment | Config yang dibutuhkan |
+|:------------|:----------------------|
+| DEV local (native) | `DB_DIRECT_PORT=15432` di `.env` |
+| Staging/Production (Docker) | `DB_DIRECT_HOST=postgres` + `DB_DIRECT_PORT=5432` di `.env.staging`/`.env.prod` |
+
+Untuk deploy ke VPS baru, pastikan env file production punya kedua variabel ini. Lihat `docs/PGBOUNCER_IMPLEMENTATION.md` untuk detail lengkap.
