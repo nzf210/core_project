@@ -251,20 +251,46 @@ jobs:
               umkm-accounting umkm-business umkm-chatbot umkm-automation \
               wa-gateway wa-cloud-api campaign-api
 
-            echo "=== Pulling pgbouncer image ==="
+            echo "=== Starting infrastructure dependencies (postgres + redis) ==="
+            COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
+            docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d \
+              postgres redis
+
+            echo "=== Waiting for postgres to be healthy ==="
+            for i in $(seq 1 30); do
+              if docker exec ${{ needs.set-env.outputs.compose_project }}-postgres pg_isready -U wch_admin > /dev/null 2>&1; then
+                echo "Postgres is healthy"
+                break
+              fi
+              echo "Attempt $i/30 failed, retrying in 5s..."
+              sleep 5
+            done
+
+            echo "=== Waiting for redis to be healthy ==="
+            for i in $(seq 1 12); do
+              if docker exec ${{ needs.set-env.outputs.compose_project }}-redis redis-cli ping > /dev/null 2>&1; then
+                echo "Redis is healthy"
+                break
+              fi
+              echo "Attempt $i/12 failed, retrying in 3s..."
+              sleep 3
+            done
+
+            echo "=== Pulling and starting pgbouncer ==="
             docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" pull pgbouncer
 
-            echo "=== Restarting Go services (rolling — infra first, then BE) ==="
             COMPOSE_PROJECT_NAME=${{ needs.set-env.outputs.compose_project }} \
             IMAGE_TAG="$IMAGE_TAG" docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$OVERRIDE_FILE" up -d \
               pgbouncer
 
             # Wait for pgbouncer before restarting BE services
+            echo "=== Waiting for pgbouncer to be healthy ==="
             for i in $(seq 1 12); do
               if docker exec ${{ needs.set-env.outputs.compose_project }}-pgbouncer nc -z 127.0.0.1 6432 > /dev/null 2>&1; then
                 echo "PgBouncer ready"
                 break
               fi
+              echo "Attempt $i/12 failed, retrying in 5s..."
               sleep 5
             done
 
