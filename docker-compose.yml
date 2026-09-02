@@ -47,7 +47,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - 'pg_isready -h 127.0.0.1 -p 6432 -U ${DB_USER:-postgres} || exit 1'
+        - 'timeout 3 sh -c "cat < /dev/null > /dev/tcp/127.0.0.1/6432" || exit 1'
       interval: 10s
       timeout: 5s
       retries: 15
