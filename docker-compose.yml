@@ -46,8 +46,11 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        - CMD-SHELL
-        - 'timeout 3 sh -c "cat < /dev/null > /dev/tcp/127.0.0.1/6432" || exit 1'
+        - CMD
+        - nc
+        - -z
+        - 127.0.0.1
+        - "6432"
       interval: 10s
       timeout: 5s
       retries: 15
