@@ -39,8 +39,6 @@ services:
       - PGBOUNCER_POOL_MODE=${PGBOUNCER_POOL_MODE:-transaction}
     ports:
       - "10433:6432"  # DEV: 1=dev, 0=infra, 433=pgbouncer
-    volumes:
-      - ./infra/pgbouncer/pgbouncer-high-capacity.ini:/etc/pgbouncer/pgbouncer.ini:ro
     depends_on:
       postgres:
         condition: service_healthy
