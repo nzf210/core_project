@@ -47,10 +47,11 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - nc -z 127.0.0.1 6432 || exit 1
+        - 'PGPASSWORD=${DB_PASSWORD:-postgres} psql -h 127.0.0.1 -p 6432 -U ${DB_USER:-postgres} -d ${DB_NAME:-wch_core} -c "SELECT 1" > /dev/null 2>&1 || exit 1'
       interval: 10s
-      timeout: 3s
-      retries: 5
+      timeout: 5s
+      retries: 10
+      start_period: 15s
     restart: unless-stopped
   redis:
     image: redis:7-alpine
