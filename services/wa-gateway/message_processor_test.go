@@ -106,8 +106,8 @@ func TestForwardToN8NChatbot_HTTPError(t *testing.T) {
 func TestForwardToN8NChatbot_ValidResponse(t *testing.T) {
 	// Start mock N8N server that returns valid response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/webhook/chatbot" {
-			t.Errorf("expected path /webhook/chatbot, got %s", r.URL.Path)
+		if r.URL.Path != "/webhook/chatbot/incoming" {
+			t.Errorf("expected path /webhook/chatbot/incoming, got %s", r.URL.Path)
 		}
 
 		w.Header().Set("Content-Type", "application/json")

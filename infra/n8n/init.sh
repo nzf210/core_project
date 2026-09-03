@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # N8N Init Script — Queue Mode Support
 # Import semua workflow di /workflows/*.json ke n8n.
 # Tandai .workflow_imported supaya idempotent (tidak re-import setiap restart).
@@ -16,13 +16,13 @@ MARKER="/home/node/.n8n/.workflow_imported"
 # Worker dipanggil dengan command "worker", main tanpa argument
 IS_WORKER=false
 for arg in "$@"; do
-  if [ "$arg" = "worker" ]; then
+  if [[ "$arg" = "worker" ]]; then
     IS_WORKER=true
     break
   fi
 done
 
-if [ "$IS_WORKER" = "true" ]; then
+if [[ "$IS_WORKER" = "true" ]]; then
   echo "=== N8N Worker Mode ==="
   echo "Starting n8n worker..."
   echo "Queue: Redis ${QUEUE_BULL_REDIS_HOST:-redis}:${QUEUE_BULL_REDIS_PORT:-6379} DB:${QUEUE_BULL_REDIS_DB:-2}"
@@ -33,10 +33,10 @@ else
   echo "Execution Mode: ${EXECUTIONS_MODE:-regular}"
 
   # Import workflows hanya di main instance
-  if [ ! -f "$MARKER" ]; then
+  if [[ ! -f "$MARKER" ]]; then
     echo "Importing n8n workflows from $IMPORT_DIR ..."
     for wf in "$IMPORT_DIR"/*.json; do
-      [ -e "$wf" ] || continue
+      [[ -e "$wf" ]] || continue
       name=$(basename "$wf")
       echo "  → $name"
       n8n import:workflow --input="$wf" --active=true || echo "    failed: $name"
