@@ -39,7 +39,7 @@ else
       [ -e "$wf" ] || continue
       name=$(basename "$wf")
       echo "  → $name"
-      n8n import:workflow --input="$wf" || echo "    failed: $name"
+      n8n import:workflow --input="$wf" --active=true || echo "    failed: $name"
     done
     touch "$MARKER"
     echo "All workflows imported."
