@@ -5,7 +5,7 @@
 				<h2>Super Admin Dashboard</h2>
 				<p class="text-muted">Kelola WhatsApp Verifier & pantau semua tenant</p>
 				<a
-					href="http://localhost:5678"
+					:href="n8nUrl"
 					target="_blank"
 					rel="noopener noreferrer"
 					class="btn btn-primary"
@@ -97,16 +97,16 @@
 						Semua fitur manajemen tenant, paket, voucher, dan landing page sekarang tersedia di dashboard superadmin dedicated.
 					</p>
 					<div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-						<a href="http://localhost:3202/tenants" target="_blank" class="admin-link-btn">👥 Tenant</a>
-						<a href="http://localhost:3202/vouchers/programs" target="_blank" class="admin-link-btn">🎫 Voucher Programs</a>
-						<a href="http://localhost:3202/vouchers/generate" target="_blank" class="admin-link-btn">🔗 Generate Links</a>
-						<a href="http://localhost:3202/landing-editor" target="_blank" class="admin-link-btn">🌐 Landing Editor</a>
-						<a href="http://localhost:3202/plan-features" target="_blank" class="admin-link-btn">💰 Paket</a>
-						<a href="http://localhost:3202/feature-matrix" target="_blank" class="admin-link-btn">🔲 Feature Matrix</a>
-						<a href="http://localhost:3202/addon-pricing" target="_blank" class="admin-link-btn">📦 Add-on</a>
-						<a href="http://localhost:3202/referral-config" target="_blank" class="admin-link-btn">🤝 Referral</a>
-						<a href="http://localhost:3202/frozen-accounts" target="_blank" class="admin-link-btn">❄️ Frozen Accounts</a>
-						<a href="http://localhost:3202/campaign-licenses" target="_blank" class="admin-link-btn">🏛️ Campaign Licenses</a>
+						<a :href="`${superadminUrl}/tenants`" target="_blank" class="admin-link-btn">👥 Tenant</a>
+						<a :href="`${superadminUrl}/vouchers/programs`" target="_blank" class="admin-link-btn">🎫 Voucher Programs</a>
+						<a :href="`${superadminUrl}/vouchers/generate`" target="_blank" class="admin-link-btn">🔗 Generate Links</a>
+						<a :href="`${superadminUrl}/landing-editor`" target="_blank" class="admin-link-btn">🌐 Landing Editor</a>
+						<a :href="`${superadminUrl}/plan-features`" target="_blank" class="admin-link-btn">💰 Paket</a>
+						<a :href="`${superadminUrl}/feature-matrix`" target="_blank" class="admin-link-btn">🔲 Feature Matrix</a>
+						<a :href="`${superadminUrl}/addon-pricing`" target="_blank" class="admin-link-btn">📦 Add-on</a>
+						<a :href="`${superadminUrl}/referral-config`" target="_blank" class="admin-link-btn">🤝 Referral</a>
+						<a :href="`${superadminUrl}/frozen-accounts`" target="_blank" class="admin-link-btn">❄️ Frozen Accounts</a>
+						<a :href="`${superadminUrl}/campaign-licenses`" target="_blank" class="admin-link-btn">🏛️ Campaign Licenses</a>
 					</div>
 				</div>
 			</div>
@@ -135,6 +135,9 @@
 <script setup lang="ts">
 import { useSuperAdmin } from '../composables/useSuperAdmin'
 import SuperAdminMyProfileModal from './SuperAdminMyProfileModal.vue'
+
+const n8nUrl = import.meta.env.VITE_N8N_URL || 'http://localhost:5678'
+const superadminUrl = import.meta.env.VITE_SUPERADMIN_URL || 'http://localhost:3202'
 
 const {
 	verifierStatus, verifierJID, qrCode, loadingQR, checkingStatus, disconnecting,
