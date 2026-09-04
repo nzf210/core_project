@@ -18,7 +18,10 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 		return
 	}
 
-	senderJID := v.Info.Sender.String()
+	// Normalize sender JID: strip agent/device part supaya session key & reply
+	// konsisten. WhatsApp bisa kirim JID sama dengan device berbeda (user@lid vs
+	// user:9@lid) → tanpa normalize, session state hilang antar-step & reply gagal.
+	senderJID := v.Info.Sender.ToNonAD().String()
 	senderPhone := v.Info.Sender.User
 	messageText := extractMessageText(v)
 

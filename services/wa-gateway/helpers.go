@@ -24,6 +24,10 @@ func sendWAMessage(tenantID, jid, text string) {
 		slog.Error("sendWAMessage: invalid JID", "jid", jid, "error", err)
 		return
 	}
+	// Strip agent/device part (e.g. "user:9@lid" → "user@lid"). WhatsApp menolak
+	// balasan ke JID yang punya device part: "message recipient must be a user JID
+	// with no device part".
+	parsed = parsed.ToNonAD()
 	_, err = client.SendMessage(context.Background(), parsed, &waE2E.Message{
 		Conversation: proto.String(text),
 	})
