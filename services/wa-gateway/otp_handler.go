@@ -73,22 +73,52 @@ func handleWAOTPRequest(tenantID, senderJID, senderPhone string) {
 	ctx := context.Background()
 	localPhone := toLocalPhone(senderPhone)
 
+	slog.Info("handleWAOTPRequest: checking OTP request",
+		"tenant_id", tenantID,
+		"sender_jid", senderJID,
+		"sender_phone", senderPhone,
+		"local_phone", localPhone)
+
 	if checkAuthPendingKeys(ctx, senderPhone, localPhone) {
+		slog.Info("handleWAOTPRequest: found via auth pending keys")
 		generateAndSendOTP(ctx, tenantID, senderJID, senderPhone)
 		return
 	}
 
 	if scanAuthPendingByValue(ctx, senderPhone, localPhone) {
+		slog.Info("handleWAOTPRequest: found via value scan")
 		generateAndSendOTP(ctx, tenantID, senderJID, senderPhone)
 		return
 	}
 
 	if _, found := checkRegisteredPhoneByJID(ctx, senderJID); found {
+		slog.Info("handleWAOTPRequest: found via registered phone by JID")
 		generateAndSendOTP(ctx, tenantID, senderJID, senderPhone)
 		return
 	}
 
-	slog.Warn("OTP request without pending login", "phone", senderPhone)
+	slog.Warn("OTP request without pending login", "tenant_id", tenantID, "sender_phone", senderPhone, "local_phone", localPhone)
+
+	// Debug: list all pending keys in Redis
+	keys, _ := redisShared.Keys(ctx, "auth:pending:*").Result()
+	slog.Info("handleWAOTPRequest: available auth:pending keys", "keys", keys)
+
+	// Debug: check JID mapping
+	if db != nil {
+		var phone string
+		err := db.QueryRow("SELECT phone_number FROM users WHERE wa_jid = $1", senderJID).Scan(&phone)
+		if err == nil {
+			slog.Info("handleWAOTPRequest: found user by JID", "phone", phone)
+		} else {
+			// Try short JID
+			shortJID := strings.Split(senderJID, ":")[0] + "@s.whatsapp.net"
+			err = db.QueryRow("SELECT phone_number FROM users WHERE wa_jid = $1", shortJID).Scan(&phone)
+			if err == nil {
+				slog.Info("handleWAOTPRequest: found user by short JID", "phone", phone)
+			}
+		}
+	}
+
 	sendWAMessage(tenantID, senderJID, "❌ Tidak ada permintaan login. Silakan coba login di website terlebih dahulu.")
 }
 

@@ -149,6 +149,11 @@ func checkServiceConnection(url, path string) bool {
 // requireServices checks if required services are available
 // Returns list of missing services
 func requireServices(t *testing.T, services map[string]string) []string {
+	// Skip E2E tests when -short flag is used
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
 	log := NewTestLogger(t)
 	var missing []string
 
