@@ -48,14 +48,15 @@ func normalizeWAPhone(phoneNumber string) string {
 func checkDuplicateWAUser(ctx context.Context, phoneNumber, username string) error {
 	var exists bool
 	localPhone := "0" + phoneNumber[2:]
-	slog.Info("handleRegisterWA: checking duplicate", "normalized", phoneNumber, "local", localPhone)
+	slog.Info("handleRegisterWA: checking duplicate", "normalized", phoneNumber, "local", localPhone, "via", "wa_registration")
 
 	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1 OR phone_number = $2)", phoneNumber, localPhone).Scan(&exists); err == nil && exists {
-		slog.Warn("handleRegisterWA: duplicate phone found", "normalized", phoneNumber, "local", localPhone)
+		slog.Warn("handleRegisterWA: duplicate phone found — user completed 5-step WA wizard but phone already registered (likely via web form race)", "normalized", phoneNumber, "local", localPhone, "via", "wa_registration")
 		return fmt.Errorf("Nomor HP sudah terdaftar")
 	}
 
 	if err := DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)", username).Scan(&exists); err == nil && exists {
+		slog.Warn("handleRegisterWA: duplicate username found — user completed 5-step WA wizard but username taken", "username", username, "via", "wa_registration")
 		return fmt.Errorf("Username sudah digunakan")
 	}
 

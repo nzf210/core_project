@@ -6,9 +6,14 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
+
+// usernameRE matches auth-service validation: ^[a-zA-Z0-9_]+$
+// Duplicated here (not imported) to avoid cross-service coupling.
+var usernameRE = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
 type waRegistrationSession struct {
 	SenderJID    string
@@ -142,6 +147,10 @@ func handleUsernameStep(tenantID string, session *waRegistrationSession, rawText
 		sendWAMessage(tenantID, session.SenderJID, "❌ Username minimal 3 karakter. Coba lagi:")
 		return true
 	}
+	if !usernameRE.MatchString(username) {
+		sendWAMessage(tenantID, session.SenderJID, "❌ Username hanya boleh huruf, angka, dan underscore. Coba lagi:")
+		return true
+	}
 	session.Username = username
 	session.Step = 4
 	saveRegSession(session)
@@ -157,7 +166,11 @@ func handlePasswordStep(tenantID string, session *waRegistrationSession, rawText
 	session.Password = rawText
 	session.Step = 5
 	saveRegSession(session)
-	sendWAMessage(tenantID, session.SenderJID, "✅ Password tersimpan.\n\n5️⃣ Konfirmasi nomor HP Anda (format: 08xx atau 628xx):")
+	displayPhone := session.PhoneNumber
+	if strings.HasPrefix(displayPhone, "62") {
+		displayPhone = "0" + displayPhone[2:]
+	}
+	sendWAMessage(tenantID, session.SenderJID, "✅ Password tersimpan.\n\n5️⃣ Konfirmasi nomor HP Anda: "+displayPhone+"\n\nKetik YA untuk konfirmasi, atau masukkan nomor lain (format: 08xx atau 628xx):")
 	return true
 }
 
@@ -167,6 +180,12 @@ func handlePhoneConfirmStep(tenantID string, session *waRegistrationSession, raw
 
 	// Handle "YA" confirmation
 	if upperText == "YA" {
+		// Normalize phone to 62xxx format before submit
+		if strings.HasPrefix(session.PhoneNumber, "0") {
+			session.PhoneNumber = "62" + session.PhoneNumber[1:]
+		} else if strings.HasPrefix(session.PhoneNumber, "+") {
+			session.PhoneNumber = session.PhoneNumber[1:]
+		}
 		session.Step = 6
 		saveRegSession(session)
 		submitWARegistration(tenantID, session)
@@ -228,11 +247,15 @@ func submitWARegistration(tenantID string, session *waRegistrationSession) {
 		"password":     session.Password,
 		"businessName": session.BusinessName,
 		"businessType": session.BusinessType,
-		"source":       "wa",
+		"wa_jid":       session.SenderJID,
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := http.Post(authSvcURL+"/register-wa", contentTypeJSON, bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", authSvcURL+"/register-wa", bytes.NewReader(body))
+	req.Header.Set("Content-Type", contentTypeJSON)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil || resp == nil {
+		deleteRegSession(session.SenderJID)
 		sendWAMessage(tenantID, session.SenderJID, "❌ Gagal mendaftar. Silakan coba lagi nanti.")
 		return
 	}
@@ -267,7 +290,10 @@ func handleWAVerifyOTP(tenantID, senderJID, code string) {
 		"sender_jid": senderJID,
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := http.Post(authSvcURL+"/verify-otp-wa", contentTypeJSON, bytes.NewReader(body))
+	verifyReq, _ := http.NewRequestWithContext(context.Background(), "POST", authSvcURL+"/verify-otp-wa", bytes.NewReader(body))
+	verifyReq.Header.Set("Content-Type", contentTypeJSON)
+	verifyClient := &http.Client{Timeout: 10 * time.Second}
+	resp, err := verifyClient.Do(verifyReq)
 	if err != nil || resp == nil {
 		sendWAMessage(tenantID, senderJID, "❌ Gagal memverifikasi. Silakan coba lagi.")
 		return
