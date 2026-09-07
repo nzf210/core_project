@@ -66,6 +66,12 @@ func handleActiveSession(tenantID, senderJID, rawText, upperText string) bool {
 }
 
 func handleCommandMessage(tenantID, senderJID, senderPhone, upperText string) bool {
+	slog.Info("handleCommandMessage: received",
+		"tenant_id", tenantID,
+		"sender_jid", senderJID,
+		"sender_phone", senderPhone,
+		"upper_text", upperText)
+
 	if strings.HasPrefix(upperText, "VERIF ") {
 		code := strings.TrimSpace(upperText[6:])
 		handleWAVerifyOTP(tenantID, senderJID, code)

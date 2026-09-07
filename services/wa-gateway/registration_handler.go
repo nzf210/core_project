@@ -198,6 +198,13 @@ func handlePhoneConfirmStep(tenantID string, session *waRegistrationSession, raw
 }
 
 func handleWARegistrationStep(tenantID string, session *waRegistrationSession, rawText, upperText string) bool {
+	// Handle BATAL command to cancel registration
+	if upperText == "BATAL" {
+		deleteRegSession(session.SenderJID)
+		sendWAMessage(tenantID, session.SenderJID, "✅ Pendaftaran dibatalkan.\n\nKetik REG untuk mulai ulang, atau hubungi admin jika butuh bantuan.")
+		return true
+	}
+
 	switch session.Step {
 	case 1:
 		return handleBusinessNameStep(tenantID, session, rawText)
