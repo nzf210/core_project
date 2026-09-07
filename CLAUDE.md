@@ -48,6 +48,14 @@ USER menulis SPEC      →       AI review & clarify      →       USER approve
    - `make check` (untuk menjalankan linter, build, dan semua test)
    - Atau `go test ./apps/umkm/... -v` (untuk test spesifik)
 
+### 🎯 Goal Alignment & Anti-Drift Protocol (`/goal` + `/graphify`)
+
+Setiap task WAJIB menjaga konsistensi terhadap sasaran proyek (`docs/PROJECT_GOALS.md`):
+1. **Pilar Aktif**: Hanya kerjakan **UMKM** (`apps/umkm/`) atau **Campaign** (`apps/campaign/`). Dilarang sentuh modul **Crypto** (ARCHIVED).
+2. **Graphify Pre-check**: Jalankan `graphify query "<feature>"` sebelum eksplorasi atau edit file.
+3. **Spec & Limits**: Wajib spec approved di `docs/FEATURE_MAP.md`, BE Go <= 450 baris, FE Vue <= 500 baris.
+4. **Post-check**: Jalankan unit test dan perbarui graph dengan `graphify update .`.
+
 ### Cara Menambah Fitur Baru:
 
 1. User tambah entry di `docs/FEATURE_MAP.md` (tabel registry)
