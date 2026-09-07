@@ -42,7 +42,9 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 		return
 	}
 
-	forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText)
+	// Dispatch asynchronous to avoid blocking the whatsmeow message receiving loop
+	// while waiting for N8N and LLM inference response.
+	go forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText)
 }
 
 func extractMessageText(v *events.Message) string {
@@ -137,6 +139,17 @@ Ketik perintah yang Anda butuhkan!`
 	sendWAMessage(tenantID, senderJID, menu)
 }
 
+// n8nHTTPClient is a shared HTTP client with an optimized connection pool (Keep-Alive)
+// to handle high-concurrency requests to N8N without socket exhaustion.
+var n8nHTTPClient = &http.Client{
+	Timeout: 30 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        200,
+		MaxIdleConnsPerHost: 100,
+		IdleConnTimeout:     90 * time.Second,
+	},
+}
+
 func forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText string) {
 	n8nURL := getN8NWebhookURL()
 	if n8nURL == "" {
@@ -158,8 +171,7 @@ func forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText string) {
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", n8nURL+"/webhook/chatbot/incoming", bytes.NewReader(body))
 	req.Header.Set("Content-Type", contentTypeJSON)
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := n8nHTTPClient.Do(req)
 	if err != nil {
 		slog.Error("Failed to forward message to N8N", "error", err)
 		sendWAMessage(tenantID, senderJID, "❌ Maaf, terjadi kesalahan. Silakan coba lagi.")
