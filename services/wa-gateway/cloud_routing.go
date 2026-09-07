@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 )
 
 // ─────────────────────────────────────────────
@@ -51,6 +52,16 @@ func isTransactional(r *http.Request) bool {
 	return false
 }
 
+// cloudAPIHTTPClient is a pooled HTTP client for inter-service communication with wa-cloud-api
+var cloudAPIHTTPClient = &http.Client{
+	Timeout: 15 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 50,
+		IdleConnTimeout:     90 * time.Second,
+	},
+}
+
 // routeToCloudAPI sends a message via the wa-cloud-api service (Meta Cloud API)
 func routeToCloudAPI(tenantID, target, message, msgType string) (string, error) {
 	cloudAPIHost := "http://localhost:8210"
@@ -68,14 +79,17 @@ func routeToCloudAPI(tenantID, target, message, msgType string) (string, error) 
 	}
 
 	body, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, cloudAPIHost+"/send", bytes.NewReader(body))
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cloudAPIHost+"/send", bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set(headerContentType, contentTypeJSON)
 	req.Header.Set("X-Tenant-ID", tenantID)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cloudAPIHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
