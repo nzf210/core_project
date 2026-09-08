@@ -24,12 +24,11 @@ func handleStatusRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if client, ok := getClientByTenant(tenantID); ok && client.Store.ID != nil {
-		writeStatus(w, "connected", client.Store.ID.String(), "", "")
-		return
-	}
-
-	if jid := getSessionJIDFromDB(tenantID); jid != "" {
-		writeStatus(w, "connected", jid, "", "")
+		if client.IsConnected() {
+			writeStatus(w, "connected", client.Store.ID.String(), "", "")
+			return
+		}
+		writeStatus(w, "connecting", client.Store.ID.String(), "", "Session reconnecting")
 		return
 	}
 
