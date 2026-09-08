@@ -52,6 +52,17 @@ function formatDateForInput(dtStr: string | null | undefined): string {
   }
 }
 
+function formatDateTimeForPayload(val: string): string {
+  if (!val) return ''
+  try {
+    const d = new Date(val)
+    if (!isNaN(d.getTime())) {
+      return d.toISOString()
+    }
+  } catch {}
+  return val
+}
+
 function startEdit(prog: any) {
   editingId.value = prog.id
   form.value = {
@@ -81,6 +92,8 @@ async function create() {
       discount_value: Number(form.value.discount_value),
       duration_months: Number(form.value.duration_months),
       max_uses: Number(form.value.max_uses),
+      starts_at: formatDateTimeForPayload(form.value.starts_at),
+      expires_at: formatDateTimeForPayload(form.value.expires_at),
     })
     resetForm()
     await load()
@@ -97,6 +110,8 @@ async function saveEdit() {
       discount_value: Number(form.value.discount_value),
       duration_months: Number(form.value.duration_months),
       max_uses: Number(form.value.max_uses),
+      starts_at: formatDateTimeForPayload(form.value.starts_at),
+      expires_at: formatDateTimeForPayload(form.value.expires_at),
     })
     resetForm()
     await load()

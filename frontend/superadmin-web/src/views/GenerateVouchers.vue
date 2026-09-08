@@ -78,6 +78,7 @@ async function generate() {
     } else {
       const planId = prog?.target_plan_id || 'lite'
       const res = await api.generateVouchers({
+        program_id: programId.value,
         plan_id: planId,
         validity_days: Number(validDays.value),
         quantity: Number(count.value),

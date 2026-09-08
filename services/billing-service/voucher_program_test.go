@@ -59,3 +59,31 @@ func TestUpdateVoucherProgramItem_Validation(t *testing.T) {
 		t.Errorf("expected status 400 Bad Request for missing name/type, got %d", w.Code)
 	}
 }
+
+func TestParseDateTime(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"", false},
+		{"   ", false},
+		{"invalid-date", false},
+		{"2026-09-08T12:00:00Z", true},
+		{"2026-09-08T12:00:00+07:00", true},
+		{"2026-09-08T12:00:00", true},
+		{"2026-09-08T12:00", true},
+		{"2026-09-08 12:00:00", true},
+		{"2026-09-08 12:00", true},
+		{"2026-09-08", true},
+	}
+
+	for _, tt := range tests {
+		parsed, ok := parseDateTime(tt.input)
+		if ok != tt.expected {
+			t.Errorf("parseDateTime(%q) ok = %v, want %v", tt.input, ok, tt.expected)
+		}
+		if ok && parsed.IsZero() {
+			t.Errorf("parseDateTime(%q) returned zero time when ok=true", tt.input)
+		}
+	}
+}

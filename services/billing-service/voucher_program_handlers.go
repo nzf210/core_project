@@ -111,6 +111,27 @@ func getVoucherProgramItem(w http.ResponseWriter, r *http.Request, id string) {
 	response.JSON(w, http.StatusOK, "Voucher program retrieved", p)
 }
 
+func parseDateTime(val string) (time.Time, bool) {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return time.Time{}, false
+	}
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02",
+	}
+	for _, f := range formats {
+		if t, err := time.Parse(f, val); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
 func updateVoucherProgramItem(w http.ResponseWriter, r *http.Request, id string) {
 	var req UpdateVoucherProgramReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -126,24 +147,16 @@ func updateVoucherProgramItem(w http.ResponseWriter, r *http.Request, id string)
 	ctx := r.Context()
 
 	var startsAt time.Time
-	if req.StartsAt != "" {
-		if t, err := time.Parse(time.RFC3339, req.StartsAt); err == nil {
-			startsAt = t
-		} else if t2, err2 := time.Parse("2006-01-02T15:04", req.StartsAt); err2 == nil {
-			startsAt = t2
-		}
+	if t, ok := parseDateTime(req.StartsAt); ok {
+		startsAt = t
 	}
 	if startsAt.IsZero() {
 		startsAt = time.Now()
 	}
 
 	var expiresAt *time.Time
-	if req.ExpiresAt != "" {
-		if t, err := time.Parse(time.RFC3339, req.ExpiresAt); err == nil {
-			expiresAt = &t
-		} else if t2, err2 := time.Parse("2006-01-02T15:04", req.ExpiresAt); err2 == nil {
-			expiresAt = &t2
-		}
+	if t, ok := parseDateTime(req.ExpiresAt); ok {
+		expiresAt = &t
 	}
 
 	isActive := true
@@ -250,17 +263,13 @@ func createVoucherProgram(w http.ResponseWriter, r *http.Request) {
 	}
 
 	startsAt := time.Now()
-	if req.StartsAt != "" {
-		if t, err := time.Parse(time.RFC3339, req.StartsAt); err == nil {
-			startsAt = t
-		}
+	if t, ok := parseDateTime(req.StartsAt); ok {
+		startsAt = t
 	}
 
 	var expiresAt *time.Time
-	if req.ExpiresAt != "" {
-		if t, err := time.Parse(time.RFC3339, req.ExpiresAt); err == nil {
-			expiresAt = &t
-		}
+	if t, ok := parseDateTime(req.ExpiresAt); ok {
+		expiresAt = &t
 	}
 
 	ctx := r.Context()

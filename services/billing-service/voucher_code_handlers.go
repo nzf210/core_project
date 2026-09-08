@@ -14,6 +14,7 @@ import (
 )
 
 type GenerateVouchersReq struct {
+	ProgramID     string `json:"program_id"`
 	PlanID        string `json:"plan_id"`
 	ValidityDays  int    `json:"validity_days"`
 	Quantity      int    `json:"quantity"`
@@ -39,33 +40,44 @@ func handleAdminGenerateVouchers(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, response.InvalidRequest, err)
 		return
 	}
-	if req.PlanID == "" || req.ValidityDays <= 0 || req.Quantity <= 0 || req.Quantity > 1000 {
-		response.Error(w, http.StatusBadRequest, "plan_id, validity_days (>0), and quantity (1-1000) required", nil)
-		return
-	}
 
 	ctx := r.Context()
 	creatorID, _ := r.Context().Value(auth.UserIDKey).(string)
 
 	var programID string
-	programName := req.ProgramName
-	if programName == "" {
-		programName = "Ad-hoc Voucher - " + req.PlanID
+	if req.ProgramID != "" {
+		var pPlanID string
+		err := DB.QueryRow(ctx, `SELECT id, COALESCE(target_plan_id, '') FROM voucher_programs WHERE id = $1`, req.ProgramID).Scan(&programID, &pPlanID)
+		if err == nil && req.PlanID == "" && pPlanID != "" {
+			req.PlanID = pPlanID
+		}
 	}
 
-	vType := req.VoucherType
-	if vType == "" {
-		vType = "bonus_months"
+	if req.PlanID == "" || req.ValidityDays <= 0 || req.Quantity <= 0 || req.Quantity > 1000 {
+		response.Error(w, http.StatusBadRequest, "plan_id, validity_days (>0), and quantity (1-1000) required", nil)
+		return
 	}
 
-	err := DB.QueryRow(ctx, `
-		INSERT INTO voucher_programs (name, voucher_type, discount_value, target_plan_id, duration_months, max_uses, is_active)
-		VALUES ($1, $2, $3, $4, 0, $5, true)
-		ON CONFLICT DO NOTHING
-		RETURNING id
-	`, programName, vType, req.DiscountValue, req.PlanID, req.MaxUses).Scan(&programID)
-	if err != nil {
-		DB.QueryRow(ctx, `SELECT id FROM voucher_programs WHERE name = $1`, programName).Scan(&programID)
+	if programID == "" {
+		programName := req.ProgramName
+		if programName == "" {
+			programName = "Ad-hoc Voucher - " + req.PlanID
+		}
+
+		vType := req.VoucherType
+		if vType == "" {
+			vType = "bonus_months"
+		}
+
+		err := DB.QueryRow(ctx, `
+			INSERT INTO voucher_programs (name, voucher_type, discount_value, target_plan_id, duration_months, max_uses, is_active)
+			VALUES ($1, $2, $3, $4, 0, $5, true)
+			ON CONFLICT DO NOTHING
+			RETURNING id
+		`, programName, vType, req.DiscountValue, req.PlanID, req.MaxUses).Scan(&programID)
+		if err != nil {
+			_ = DB.QueryRow(ctx, `SELECT id FROM voucher_programs WHERE name = $1`, programName).Scan(&programID)
+		}
 	}
 
 	type codeOut struct {
