@@ -117,6 +117,7 @@ func handleRedeemCodeVoucher(w http.ResponseWriter, ctx context.Context, cleanIn
 	var expiresAt *time.Time
 	var maxUses, usesCount int
 	var codeValidityDays int
+	var isDirectProgramRedeem bool
 
 	err := DB.QueryRow(ctx, `
 		SELECT vp.id, vp.name, vp.voucher_type, vp.discount_value, vp.duration_months,
@@ -130,6 +131,25 @@ func handleRedeemCodeVoucher(w http.ResponseWriter, ctx context.Context, cleanIn
 		LIMIT 1
 	`, cleanInput).Scan(&programID, &programName, &voucherType, &discountValue, &programDurationMonths,
 		&targetPlanID, &expiresAt, &maxUses, &usesCount, &codeValidityDays)
+
+	if err != nil {
+		// Fallback: Check if cleanInput is directly a voucher_programs.id (UUID)
+		err = DB.QueryRow(ctx, `
+			SELECT vp.id, vp.name, vp.voucher_type, vp.discount_value, vp.duration_months,
+			       vp.target_plan_id, vp.expires_at, vp.max_uses, vp.uses_count,
+			       (vp.duration_months * 30) AS validity_days
+			FROM voucher_programs vp
+			WHERE LOWER(vp.id::text) = LOWER(TRIM($1))
+			  AND vp.is_active = true
+			  AND (vp.expires_at IS NULL OR vp.expires_at > NOW())
+			LIMIT 1
+		`, cleanInput).Scan(&programID, &programName, &voucherType, &discountValue, &programDurationMonths,
+			&targetPlanID, &expiresAt, &maxUses, &usesCount, &codeValidityDays)
+
+		if err == nil {
+			isDirectProgramRedeem = true
+		}
+	}
 
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, "Voucher invalid or already used", nil)
@@ -153,17 +173,21 @@ func handleRedeemCodeVoucher(w http.ResponseWriter, ctx context.Context, cleanIn
 	amountToCharge := calculateVoucherCharge(priceMonthly, voucherType, discountValue)
 	finalValidityDays := resolveVoucherValidityDays(codeValidityDays, programDurationMonths)
 
-	_, err = DB.Exec(ctx, `
-		UPDATE voucher_codes SET is_redeemed = true, used_by = $1, used_at = NOW()
-		WHERE UPPER(TRIM(code)) = UPPER(TRIM($2)) AND is_redeemed = false
-	`, tenantID, cleanInput)
-	if err != nil {
-		slog.Warn("Failed to mark voucher redeemed", "error", err)
+	if !isDirectProgramRedeem {
+		_, err = DB.Exec(ctx, `
+			UPDATE voucher_codes SET is_redeemed = true, used_by = $1, used_at = NOW()
+			WHERE UPPER(TRIM(code)) = UPPER(TRIM($2)) AND is_redeemed = false
+		`, tenantID, cleanInput)
+		if err != nil {
+			slog.Warn("Failed to mark voucher redeemed", "error", err)
+		}
 	}
 
 	_, _ = DB.Exec(ctx, `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`, programID)
 
-	ticketID := activateSubscription(ctx, tenantID, planID, planName, finalValidityDays, "voucher", voucherActivationOpts{})
+	ticketID := activateSubscription(ctx, tenantID, planID, planName, finalValidityDays, "voucher", voucherActivationOpts{
+		SystemVoucherCode: cleanInput,
+	})
 
 	response.JSON(w, http.StatusOK, "Voucher redeemed successfully", map[string]interface{}{
 		"program_name":   programName,
