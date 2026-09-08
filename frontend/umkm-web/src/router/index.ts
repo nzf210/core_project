@@ -32,11 +32,9 @@ import Onboarding from '../components/Onboarding.vue'
 import Journal from '../components/Journal.vue'
 import ProductCatalog from '../components/ProductCatalog.vue'
 import POS from '../components/POS.vue'
-import SuperAdminDashboard from '../components/SuperAdminDashboard.vue'
 import Settings from '../components/Settings.vue'
 import Login from '../components/Login.vue'
 import Register from '../components/Register.vue'
-import SuperAdminLogin from '../components/SuperAdminLogin.vue'
 import ForgotPassword from '../components/ForgotPassword.vue'
 import Automations from '../components/Automations.vue'
 import WASetup from '../components/WASetup.vue'
@@ -63,7 +61,7 @@ const routes = [
   { path: '/reports', component: Reports, name: 'Reports' },
   { path: '/catalog', component: ProductCatalog, name: 'ProductCatalog' },
   { path: '/pos', component: POS, name: 'POS' },
-  { path: '/superadmin', component: SuperAdminDashboard, name: 'SuperAdminDashboard' },
+  { path: '/superadmin', redirect: '/dashboard' },
   { path: '/settings', component: Settings, name: 'Settings' },
   { path: '/automations', component: Automations, name: 'Automations' },
   { path: '/wa-setup', component: WASetup, name: 'WASetup' },
@@ -76,7 +74,7 @@ const routes = [
   { path: '/clinic/medical-record', redirect: '/clinic/frontdesk?tab=records' },
   { path: '/clinic/schedule', redirect: '/clinic/frontdesk?tab=doctors' },
   { path: '/clinic/notifications', redirect: '/clinic/frontdesk?tab=notifications' },
-  { path: '/superadmin-login', component: SuperAdminLogin, name: 'SuperAdminLogin', meta: { requiresGuest: true } },
+  { path: '/superadmin-login', redirect: '/login' },
   { path: '/forgot-password', component: ForgotPassword, name: 'ForgotPassword', meta: { requiresGuest: true } },
   // Legacy token-based reset — dead endpoint, redirect to the chat-based flow
   { path: '/reset-password', redirect: '/forgot-password' },

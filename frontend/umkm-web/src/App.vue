@@ -16,7 +16,7 @@
       <div class="frozen-text">
         <strong>Akun Anda dalam masa freeze.</strong>
         Anda masih bisa melihat data historis, tetapi tidak bisa input transaksi baru.
-        <a href="/superadmin-login" class="redeem-link">Redeem voucher →</a>
+        <a href="/redeem" class="redeem-link">Redeem voucher →</a>
       </div>
     </div>
 

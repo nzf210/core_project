@@ -53,10 +53,4 @@ export const menuConfig: MenuGroup[] = [
       { label: 'Add-ons', to: '/addons', icon: '⚙️', roles: ['owner', 'admin', 'superadmin'] },
     ],
   },
-  {
-    group: 'Admin',
-    items: [
-      { label: 'Super Admin', to: '/superadmin', icon: '🔐', roles: ['superadmin'] },
-    ],
-  },
 ]
