@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -58,30 +59,58 @@ func handleRedeemVoucher(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-
-	// 1. Check if input is a signed claim link or JWT token
 	if linkToken := extractTokenFromVoucherInput(cleanInput); linkToken != "" {
-		resp, err := redeemVoucherLinkCore(ctx, linkToken, tenantID, r)
-		if err != nil {
-			response.Error(w, http.StatusBadRequest, err.Error(), nil)
-			return
-		}
-		response.JSON(w, http.StatusOK, "Voucher redeemed successfully", map[string]interface{}{
-			"program_name":   resp.PlanName,
-			"voucher_type":   "link",
-			"discount_value": 0,
-			"target_plan":    resp.PlanName,
-			"plan_id":        resp.PlanID,
-			"ticket_id":      resp.TicketNumber,
-			"ticket_number":  resp.TicketNumber,
-			"validity_days":  resp.DurationMonths * 30,
-			"amount_charged": 0,
-			"expires_at":     resp.ExpiresAt,
-		})
+		handleRedeemLinkVoucher(w, r, ctx, linkToken, tenantID)
 		return
 	}
 
-	// 2. Alphanumeric voucher code lookup
+	handleRedeemCodeVoucher(w, ctx, cleanInput, tenantID)
+}
+
+func handleRedeemLinkVoucher(w http.ResponseWriter, r *http.Request, ctx context.Context, linkToken, tenantID string) {
+	resp, err := redeemVoucherLinkCore(ctx, linkToken, tenantID, r)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+	response.JSON(w, http.StatusOK, "Voucher redeemed successfully", map[string]interface{}{
+		"program_name":   resp.PlanName,
+		"voucher_type":   "link",
+		"discount_value": 0,
+		"target_plan":    resp.PlanName,
+		"plan_id":        resp.PlanID,
+		"ticket_id":      resp.TicketNumber,
+		"ticket_number":  resp.TicketNumber,
+		"validity_days":  resp.DurationMonths * 30,
+		"amount_charged": 0,
+		"expires_at":     resp.ExpiresAt,
+	})
+}
+
+func calculateVoucherCharge(priceMonthly int64, voucherType string, discountValue int) int64 {
+	switch voucherType {
+	case "free_months":
+		return 0
+	case "discount_percent":
+		return priceMonthly * int64(100-discountValue) / 100
+	case "discount_fixed":
+		return maxInt64(0, priceMonthly-int64(discountValue))
+	default:
+		return priceMonthly
+	}
+}
+
+func resolveVoucherValidityDays(codeValidityDays, programDurationMonths int) int {
+	if codeValidityDays > 0 {
+		return codeValidityDays
+	}
+	if programDurationMonths > 0 {
+		return programDurationMonths * 30
+	}
+	return 30
+}
+
+func handleRedeemCodeVoucher(w http.ResponseWriter, ctx context.Context, cleanInput, tenantID string) {
 	var programID, programName, voucherType string
 	var discountValue, programDurationMonths int
 	var targetPlanID *string
@@ -119,24 +148,10 @@ func handleRedeemVoucher(w http.ResponseWriter, r *http.Request) {
 
 	var planName string
 	var priceMonthly int64
-	DB.QueryRow(ctx, "SELECT name, price_monthly FROM saas_plans WHERE id = $1", planID).Scan(&planName, &priceMonthly)
+	_ = DB.QueryRow(ctx, "SELECT name, price_monthly FROM saas_plans WHERE id = $1", planID).Scan(&planName, &priceMonthly)
 
-	amountToCharge := priceMonthly
-	switch voucherType {
-	case "free_months":
-		amountToCharge = 0
-	case "discount_percent":
-		amountToCharge = priceMonthly * int64(100-discountValue) / 100
-	case "discount_fixed":
-		amountToCharge = maxInt64(0, priceMonthly-int64(discountValue))
-	}
-
-	if codeValidityDays <= 0 && programDurationMonths > 0 {
-		codeValidityDays = programDurationMonths * 30
-	}
-	if codeValidityDays <= 0 {
-		codeValidityDays = 30
-	}
+	amountToCharge := calculateVoucherCharge(priceMonthly, voucherType, discountValue)
+	finalValidityDays := resolveVoucherValidityDays(codeValidityDays, programDurationMonths)
 
 	_, err = DB.Exec(ctx, `
 		UPDATE voucher_codes SET is_redeemed = true, used_by = $1, used_at = NOW()
@@ -146,10 +161,9 @@ func handleRedeemVoucher(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("Failed to mark voucher redeemed", "error", err)
 	}
 
-	incrUsageSQL := `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`
-	_, _ = DB.Exec(ctx, incrUsageSQL, programID)
+	_, _ = DB.Exec(ctx, `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`, programID)
 
-	ticketID := activateSubscription(ctx, tenantID, planID, planName, codeValidityDays, "voucher", voucherActivationOpts{})
+	ticketID := activateSubscription(ctx, tenantID, planID, planName, finalValidityDays, "voucher", voucherActivationOpts{})
 
 	response.JSON(w, http.StatusOK, "Voucher redeemed successfully", map[string]interface{}{
 		"program_name":   programName,
@@ -157,7 +171,7 @@ func handleRedeemVoucher(w http.ResponseWriter, r *http.Request) {
 		"discount_value": discountValue,
 		"target_plan":    planName,
 		"plan_id":        planID,
-		"validity_days":  codeValidityDays,
+		"validity_days":  finalValidityDays,
 		"amount_charged": amountToCharge,
 		"ticket_id":      ticketID,
 	})

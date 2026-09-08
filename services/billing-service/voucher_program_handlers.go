@@ -9,6 +9,8 @@ import (
 	"core_project/shared/sdk/response"
 )
 
+const errVoucherProgramNotFound = "Voucher program not found"
+
 type CreateVoucherProgramReq struct {
 	Name           string `json:"name"`
 	Description    string `json:"description"`
@@ -104,7 +106,7 @@ func getVoucherProgramItem(w http.ResponseWriter, r *http.Request, id string) {
 		&p.StartsAt, &p.ExpiresAt, &p.IsActive,
 	)
 	if err != nil {
-		response.Error(w, http.StatusNotFound, "Voucher program not found", err)
+		response.Error(w, http.StatusNotFound, errVoucherProgramNotFound, err)
 		return
 	}
 
@@ -179,7 +181,7 @@ func updateVoucherProgramItem(w http.ResponseWriter, r *http.Request, id string)
 		return
 	}
 	if res.RowsAffected() == 0 {
-		response.Error(w, http.StatusNotFound, "Voucher program not found", nil)
+		response.Error(w, http.StatusNotFound, errVoucherProgramNotFound, nil)
 		return
 	}
 
@@ -213,7 +215,7 @@ func deleteVoucherProgramItem(w http.ResponseWriter, r *http.Request, id string)
 		return
 	}
 	if res.RowsAffected() == 0 {
-		response.Error(w, http.StatusNotFound, "Voucher program not found", nil)
+		response.Error(w, http.StatusNotFound, errVoucherProgramNotFound, nil)
 		return
 	}
 

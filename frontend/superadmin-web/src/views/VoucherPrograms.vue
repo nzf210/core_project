@@ -44,7 +44,7 @@ function formatDateForInput(dtStr: string | null | undefined): string {
   if (!dtStr) return ''
   try {
     const d = new Date(dtStr)
-    if (isNaN(d.getTime())) return ''
+    if (Number.isNaN(d.getTime())) return ''
     const pad = (n: number) => n.toString().padStart(2, '0')
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
   } catch {
@@ -56,7 +56,7 @@ function formatDateTimeForPayload(val: string): string {
   if (!val) return ''
   try {
     const d = new Date(val)
-    if (!isNaN(d.getTime())) {
+    if (!Number.isNaN(d.getTime())) {
       return d.toISOString()
     }
   } catch {}
@@ -167,7 +167,7 @@ function fallbackCopy(text: string) {
   document.body.appendChild(input)
   input.select()
   document.execCommand('copy')
-  document.body.removeChild(input)
+  input.remove()
   copiedId.value = text
   setTimeout(() => {
     if (copiedId.value === text) copiedId.value = null
@@ -208,7 +208,7 @@ function formatExpires(expiresAt: string | null | undefined): string {
   if (!expiresAt) return 'Selamanya (Tanpa Expired)'
   try {
     const d = new Date(expiresAt)
-    if (isNaN(d.getTime())) return 'Tanpa Expired'
+    if (Number.isNaN(d.getTime())) return 'Tanpa Expired'
     return d.toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' })
   } catch {
     return 'Tanpa Expired'
@@ -223,7 +223,7 @@ function formatExpires(expiresAt: string | null | undefined): string {
         <h1>Voucher Programs</h1>
         <p class="subtitle">Kelola program voucher dan buat link/kode voucher untuk pelanggan & reseller.</p>
       </div>
-      <button class="btn-primary" @click="showCreate = !showCreate">
+      <button type="button" class="btn-primary" @click="showCreate = !showCreate">
         {{ showCreate ? '✕ Batal' : '+ Program Baru' }}
       </button>
     </div>
@@ -317,18 +317,18 @@ function formatExpires(expiresAt: string | null | undefined): string {
             <div class="id-row">
               <span class="id-label">ID Program:</span>
               <code class="id-code">{{ prog.id }}</code>
-              <button class="btn-copy" @click="copyId(prog.id)" :title="copiedId === prog.id ? 'Tersalin!' : 'Copy Program ID'">
+              <button type="button" class="btn-copy" @click="copyId(prog.id)" :title="copiedId === prog.id ? 'Tersalin!' : 'Copy Program ID'">
                 {{ copiedId === prog.id ? '✅ Disalin!' : '📋 Copy ID' }}
               </button>
             </div>
           </div>
 
           <div class="actions">
-            <button class="btn-generate" @click="goToGenerate(prog.id)" title="Buat link klaim untuk program ini">
+            <button type="button" class="btn-generate" @click="goToGenerate(prog.id)" title="Buat link klaim untuk program ini">
               🔗 Pakai / Generate Links
             </button>
-            <button class="btn-edit" @click="startEdit(prog)">Edit</button>
-            <button class="btn-delete" @click="deleteProgram(prog.id)">Hapus</button>
+            <button type="button" class="btn-edit" @click="startEdit(prog)">Edit</button>
+            <button type="button" class="btn-delete" @click="deleteProgram(prog.id)">Hapus</button>
           </div>
         </div>
 
@@ -349,15 +349,15 @@ function formatExpires(expiresAt: string | null | undefined): string {
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
 h1 { font-size: 24px; margin: 0 0 4px 0; font-weight: 700; }
 .subtitle { color: var(--muted); margin: 0; font-size: 14px; }
-.btn-primary { background: var(--accent); color: white; border: none; padding: 9px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-.btn-primary:hover { background: #2563eb; }
+.btn-primary { background: #2563eb; color: #ffffff; border: none; padding: 9px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+.btn-primary:hover { background: #1d4ed8; }
 .btn-secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 9px 16px; border-radius: 6px; cursor: pointer; }
 .btn-secondary:hover { background: var(--border); }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
 .form { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
 .form-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .form-title-row h3 { margin: 0; font-size: 18px; }
-.editing-badge { font-size: 12px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; padding: 3px 8px; border-radius: 4px; }
+.editing-badge { font-size: 12px; background: #1e3a8a; color: #93c5fd; padding: 3px 8px; border-radius: 4px; }
 .form .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .form label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); }
 .form input, .form select, .form textarea { font-size: 14px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
@@ -375,20 +375,20 @@ h1 { font-size: 24px; margin: 0 0 4px 0; font-weight: 700; }
 .desc { margin: 0 0 10px 0; font-size: 13px; color: var(--muted); }
 .id-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .id-label { font-size: 12px; color: var(--muted); font-weight: 500; }
-.id-code { font-family: monospace; font-size: 12px; background: rgba(59, 130, 246, 0.1); color: #3b82f6; padding: 3px 7px; border-radius: 4px; border: 1px solid rgba(59, 130, 246, 0.2); word-break: break-all; }
+.id-code { font-family: monospace; font-size: 12px; background: #0f172a; color: #93c5fd; padding: 3px 7px; border-radius: 4px; border: 1px solid #3b82f6; word-break: break-all; }
 .btn-copy { font-size: 11px; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; transition: all 0.2s; font-weight: 500; }
-.btn-copy:hover { background: var(--accent); color: white; border-color: var(--accent); }
+.btn-copy:hover { background: #2563eb; color: #ffffff; border-color: #2563eb; }
 .badge { font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }
-.badge-active { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-.badge-inactive { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-.badge-plan { background: rgba(99, 102, 241, 0.15); color: #6366f1; }
+.badge-active { background: #064e3b; color: #a7f3d0; }
+.badge-inactive { background: #7f1d1d; color: #fecaca; }
+.badge-plan { background: #312e81; color: #c7d2fe; }
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.btn-generate { font-size: 12px; padding: 6px 12px; border-radius: 5px; border: 1px solid rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.1); color: #10b981; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-.btn-generate:hover { background: #10b981; color: white; }
+.btn-generate { font-size: 12px; padding: 6px 12px; border-radius: 5px; border: 1px solid #059669; background: #064e3b; color: #a7f3d0; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btn-generate:hover { background: #047857; color: #ffffff; }
 .btn-edit, .btn-delete { font-size: 12px; padding: 6px 12px; border-radius: 5px; border: none; cursor: pointer; font-weight: 500; }
-.btn-edit { background: var(--accent); color: white; }
-.btn-edit:hover { background: #2563eb; }
-.btn-delete { background: #dc2626; color: white; }
+.btn-edit { background: #2563eb; color: #ffffff; }
+.btn-edit:hover { background: #1d4ed8; }
+.btn-delete { background: #dc2626; color: #ffffff; }
 .btn-delete:hover { background: #b91c1c; }
 .program-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; font-size: 13px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text); }
 .detail-label { color: var(--muted); font-size: 12px; margin-right: 4px; }
