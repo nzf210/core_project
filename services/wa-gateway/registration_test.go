@@ -35,6 +35,7 @@ func TestUsernameValidation(t *testing.T) {
 }
 
 func TestHandleBusinessNameStep(t *testing.T) {
+	// Valid business name
 	session := &waRegistrationSession{
 		SenderJID:   "628123456789@s.whatsapp.net",
 		PhoneNumber: "628123456789",
@@ -51,6 +52,39 @@ func TestHandleBusinessNameStep(t *testing.T) {
 	}
 	if session.Step != 2 {
 		t.Errorf("expected step to advance to 2, got %d", session.Step)
+	}
+
+	// Invalid: empty string (should NOT advance step)
+	sessionEmpty := &waRegistrationSession{
+		SenderJID:   "628123456789@s.whatsapp.net",
+		PhoneNumber: "628123456789",
+		Step:        1,
+	}
+	handleBusinessNameStep("test-tenant", sessionEmpty, "   ")
+	if sessionEmpty.BusinessName != "" || sessionEmpty.Step != 1 {
+		t.Errorf("expected empty business name to be rejected, got name=%q, step=%d", sessionEmpty.BusinessName, sessionEmpty.Step)
+	}
+
+	// Invalid: 1 char (should NOT advance step)
+	session1Char := &waRegistrationSession{
+		SenderJID:   "628123456789@s.whatsapp.net",
+		PhoneNumber: "628123456789",
+		Step:        1,
+	}
+	handleBusinessNameStep("test-tenant", session1Char, "X")
+	if session1Char.BusinessName != "" || session1Char.Step != 1 {
+		t.Errorf("expected 1-char business name to be rejected, got name=%q, step=%d", session1Char.BusinessName, session1Char.Step)
+	}
+
+	// Invalid: keyword command (REG / DAFTAR)
+	sessionKeyword := &waRegistrationSession{
+		SenderJID:   "628123456789@s.whatsapp.net",
+		PhoneNumber: "628123456789",
+		Step:        1,
+	}
+	handleBusinessNameStep("test-tenant", sessionKeyword, "REG")
+	if sessionKeyword.BusinessName != "" || sessionKeyword.Step != 1 {
+		t.Errorf("expected keyword REG to be rejected as business name, got name=%q, step=%d", sessionKeyword.BusinessName, sessionKeyword.Step)
 	}
 }
 

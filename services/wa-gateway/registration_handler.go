@@ -119,7 +119,16 @@ func startWARegistration(tenantID, senderJID, senderPhone string) {
 }
 
 func handleBusinessNameStep(tenantID string, session *waRegistrationSession, rawText string) bool {
-	session.BusinessName = strings.TrimSpace(rawText)
+	name := strings.TrimSpace(rawText)
+	if len(name) < 2 {
+		sendWAMessage(tenantID, session.SenderJID, "❌ Nama bisnis minimal 2 karakter. Silakan ketik nama toko/usaha Anda:")
+		return true
+	}
+	if strings.EqualFold(name, "REG") || strings.EqualFold(name, "REGISTER") || strings.EqualFold(name, "DAFTAR") {
+		sendWAMessage(tenantID, session.SenderJID, "❌ Silakan ketik nama toko/usaha Anda yang sebenarnya (bukan keyword):")
+		return true
+	}
+	session.BusinessName = name
 	session.Step = 2
 	saveRegSession(session)
 	sendWAMessage(tenantID, session.SenderJID, "✅ Nama bisnis: "+session.BusinessName+"\n\n2️⃣ Tipe bisnis Anda?\n1. Umum\n2. Warung/Kedai\n3. Klinik\n\nKetik nomor (1-3):")

@@ -8,13 +8,54 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"go.mau.fi/whatsmeow/types/events"
 )
 
+var (
+	memDedupMu sync.Mutex
+	memDedup   = make(map[string]time.Time)
+)
+
+func isDuplicateMessage(ctx context.Context, msgID string) bool {
+	if msgID == "" {
+		return false
+	}
+	if redisShared != nil {
+		ok, err := redisShared.SetNX(ctx, "wa:msg-dedup:"+msgID, "1", 2*time.Minute).Result()
+		if err == nil {
+			return !ok
+		}
+	}
+	// In-memory fallback (tests / when Redis is offline)
+	memDedupMu.Lock()
+	defer memDedupMu.Unlock()
+	now := time.Now()
+	if len(memDedup) > 500 {
+		for id, expiry := range memDedup {
+			if now.After(expiry) {
+				delete(memDedup, id)
+			}
+		}
+	}
+	if expiry, exists := memDedup[msgID]; exists && now.Before(expiry) {
+		return true
+	}
+	memDedup[msgID] = now.Add(2 * time.Minute)
+	return false
+}
+
 func handleMessageEvent(tenantID string, v *events.Message) {
 	if v.Info.IsFromMe {
+		return
+	}
+
+	ctx := context.Background()
+	msgID := v.Info.ID
+	if msgID != "" && isDuplicateMessage(ctx, msgID) {
+		slog.Debug("handleMessageEvent: duplicate message ignored", "tenant_id", tenantID, "msg_id", msgID)
 		return
 	}
 
@@ -22,7 +63,6 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 	// konsisten. WhatsApp bisa kirim JID sama dengan device berbeda (user@lid vs
 	// user:9@lid) → tanpa normalize, session state hilang antar-step & reply gagal.
 	senderJID := v.Info.Sender.ToNonAD().String()
-	ctx := context.Background()
 	senderPhone := resolveSenderPhone(ctx, tenantID, v)
 	messageText := extractMessageText(v)
 
@@ -33,6 +73,11 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 	}
 
 	rawText := strings.TrimSpace(messageText)
+	if rawText == "" {
+		// Event tanpa pesan teks (misal protocol message, reaction, sync, atau media tanpa caption)
+		// TIDAK BOLEH diproses sebagai input percakapan / step wizard.
+		return
+	}
 	upperText := strings.ToUpper(rawText)
 
 	if handleActiveSession(tenantID, senderJID, rawText, upperText) {
@@ -49,11 +94,23 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 }
 
 func extractMessageText(v *events.Message) string {
+	if v == nil || v.Message == nil {
+		return ""
+	}
 	if v.Message.Conversation != nil {
 		return *v.Message.Conversation
 	}
 	if v.Message.ExtendedTextMessage != nil && v.Message.ExtendedTextMessage.Text != nil {
 		return *v.Message.ExtendedTextMessage.Text
+	}
+	if v.Message.ImageMessage != nil && v.Message.ImageMessage.Caption != nil {
+		return *v.Message.ImageMessage.Caption
+	}
+	if v.Message.VideoMessage != nil && v.Message.VideoMessage.Caption != nil {
+		return *v.Message.VideoMessage.Caption
+	}
+	if v.Message.DocumentMessage != nil && v.Message.DocumentMessage.Caption != nil {
+		return *v.Message.DocumentMessage.Caption
 	}
 	return ""
 }

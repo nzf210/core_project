@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	"go.mau.fi/whatsmeow/types/events"
 )
 
 // TestGetN8NWebhookURL_Default verifies default URL
@@ -151,5 +154,34 @@ func TestToLocalPhoneAndToIntlPhone(t *testing.T) {
 	}
 	if got := toIntlPhone("6281355492003"); got != "6281355492003" {
 		t.Errorf("expected 6281355492003, got %s", got)
+	}
+}
+
+func TestIsDuplicateMessage(t *testing.T) {
+	ctx := context.Background()
+	msgID := "unique-test-msg-123"
+
+	// First time: not duplicate
+	if isDuplicateMessage(ctx, msgID) {
+		t.Errorf("expected first check of %q to be false (not duplicate)", msgID)
+	}
+
+	// Second time: must be duplicate
+	if !isDuplicateMessage(ctx, msgID) {
+		t.Errorf("expected second check of %q to be true (duplicate)", msgID)
+	}
+
+	// Empty message ID: never duplicate
+	if isDuplicateMessage(ctx, "") {
+		t.Error("expected empty msgID to return false")
+	}
+}
+
+func TestExtractMessageText_NilAndEmpty(t *testing.T) {
+	if got := extractMessageText(nil); got != "" {
+		t.Errorf("expected empty string for nil event, got %q", got)
+	}
+	if got := extractMessageText(&events.Message{}); got != "" {
+		t.Errorf("expected empty string for empty message, got %q", got)
 	}
 }
