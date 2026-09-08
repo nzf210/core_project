@@ -106,6 +106,7 @@ func main() {
 	mux.Handle("/admin/feature-matrix", auth.Middleware(http.HandlerFunc(handleAdminFeatureMatrix)))
 	mux.Handle("/admin/addon-gating", auth.Middleware(http.HandlerFunc(handleAdminAddonGating)))
 	mux.Handle("/admin/voucher-programs", auth.Middleware(http.HandlerFunc(handleAdminVoucherProgramsCollection)))
+	mux.Handle("/admin/voucher-programs/", auth.Middleware(http.HandlerFunc(handleAdminVoucherProgramsItem)))
 	mux.Handle("/admin/voucher-analytics", auth.Middleware(http.HandlerFunc(handleAdminVoucherAnalytics)))
 
 	// Voucher link routes (public redeem + superadmin generate)
