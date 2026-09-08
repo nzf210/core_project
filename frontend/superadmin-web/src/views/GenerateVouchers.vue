@@ -76,7 +76,7 @@ async function generate() {
         ...res.data,
       }
     } else {
-      const planId = prog?.target_plan_id || 'lite'
+      const planId = prog?.target_plan_id || 'pro'
       const res = await api.generateVouchers({
         program_id: programId.value,
         plan_id: planId,
@@ -187,7 +187,7 @@ function copyAll() {
           <select v-model="programId" required>
             <option value="">-- Pilih Program Voucher --</option>
             <option v-for="p in programs" :key="p.id" :value="p.id">
-              {{ p.name }} ({{ p.voucher_type }} — {{ p.duration_months }} bln{{ p.target_plan_id ? ' — ' + p.target_plan_id.toUpperCase() : '' }})
+              {{ p.name }} ({{ p.voucher_type }} — {{ p.duration_months }} bln — {{ (p.target_plan_id || 'PRO').toUpperCase() }})
             </option>
           </select>
         </label>

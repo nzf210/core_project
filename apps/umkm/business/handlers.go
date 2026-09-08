@@ -78,6 +78,7 @@ func handleOnboarding(w http.ResponseWriter, r *http.Request) {
 	if req.BusinessAddress != "" {
 		_, _ = DB.Exec(r.Context(), `UPDATE tenants SET business_address = $1 WHERE id = $2`, req.BusinessAddress, tenantID)
 	}
+	_, _ = DB.Exec(r.Context(), `UPDATE tenants SET onboarding_completed = true WHERE id = $1`, tenantID)
 
 	response.JSON(w, http.StatusOK, "Onboarding updated", nil)
 }

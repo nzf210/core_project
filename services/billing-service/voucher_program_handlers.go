@@ -264,6 +264,10 @@ func createVoucherProgram(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.TargetPlanID == "" {
+		req.TargetPlanID = "pro"
+	}
+
 	startsAt := time.Now()
 	if t, ok := parseDateTime(req.StartsAt); ok {
 		startsAt = t

@@ -24,16 +24,13 @@ func activateSubscription(ctx context.Context, tenantID, planID, planName string
 	now := time.Now()
 	ticketNumber := generateTicketNumber()
 
-	proratedDays := calculateProratedDays(ctx, tenantID)
-	validityDays += proratedDays
-
 	upsertVoucherSubscription(ctx, tenantID, planID, validityDays, voucher.SystemVoucherCode)
 
 	effectivePlanID, maxPriority := calculateEffectivePlan(ctx, tenantID)
 
 	upsertTenantSubscription(ctx, tenantID, effectivePlanID, validityDays, activatedBy, voucher.VoucherCodeID, voucher.SystemVoucherCode)
 
-	updateTenantPlanAndCache(ctx, tenantID, effectivePlanID, maxPriority)
+	updateTenantPlanAndCache(ctx, tenantID, effectivePlanID, maxPriority, validityDays)
 
 	ticketID, err := createSubscriptionTicket(ctx, tenantID, effectivePlanID, planName, ticketNumber, validityDays, activatedBy)
 	if err != nil {

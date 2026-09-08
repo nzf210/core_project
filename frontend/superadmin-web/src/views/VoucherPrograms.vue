@@ -16,7 +16,7 @@ const form = ref({
   description: '',
   voucher_type: 'free_months',
   discount_value: 0,
-  target_plan_id: '',
+  target_plan_id: 'pro',
   duration_months: 1,
   max_uses: 0,
   starts_at: '',
@@ -138,7 +138,7 @@ function resetForm() {
     description: '',
     voucher_type: 'free_months',
     discount_value: 0,
-    target_plan_id: '',
+    target_plan_id: 'pro',
     duration_months: 1,
     max_uses: 0,
     starts_at: '',
@@ -250,11 +250,22 @@ function formatExpires(expiresAt: string | null | undefined): string {
       </div>
 
       <div class="row">
-        <label>Target Plan
+        <label>Target Plan (Paket Akses)
           <select v-model="form.target_plan_id" required>
             <option value="">-- Pilih Paket --</option>
-            <option v-for="p in plans" :key="p.id" :value="p.id">{{ p.name }}</option>
+            <option v-for="p in plans" :key="p.id" :value="p.id">
+              {{ p.name }} {{ p.id === 'lite' ? '— Kasir & Jurnal Dasar' : (p.id === 'pro' ? '— Rekomendasi (+ AI CS WhatsApp)' : '— Akses Penuh / Ultimate') }}
+            </option>
           </select>
+          <small v-if="form.target_plan_id === 'lite'" class="plan-hint warning">
+            ⚠️ Paket Lite hanya mencakup modul Kasir & Jurnal (AI Chatbot WhatsApp terkunci).
+          </small>
+          <small v-else-if="form.target_plan_id === 'pro'" class="plan-hint success">
+            ✅ Paket Pro: Termasuk AI Chatbot WhatsApp CS & Akuntansi Lengkap.
+          </small>
+          <small v-else-if="form.target_plan_id === 'ultimate'" class="plan-hint success">
+            🚀 Paket Ultimate: Seluruh modul terbuka (WA Cloud API + Multi-outlet).
+          </small>
         </label>
         <label>Durasi (Bulan)
           <input type="number" v-model="form.duration_months" min="1" />
@@ -392,6 +403,9 @@ h1 { font-size: 24px; margin: 0 0 4px 0; font-weight: 700; }
 .btn-delete:hover { background: #b91c1c; }
 .program-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; font-size: 13px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text); }
 .detail-label { color: var(--muted); font-size: 12px; margin-right: 4px; }
+.plan-hint { font-size: 11px; margin-top: 3px; display: block; line-height: 1.3; }
+.plan-hint.warning { color: #f59e0b; }
+.plan-hint.success { color: #10b981; }
 .form-actions { display: flex; gap: 12px; margin-top: 16px; }
 .form-actions button { flex: 1; }
 </style>

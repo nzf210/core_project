@@ -14,8 +14,8 @@ func calculateProratedDays(ctx context.Context, tenantID string) int {
 		SELECT GREATEST(0,
 			EXTRACT(EPOCH FROM (current_plan_expires_at - NOW())) / 86400
 		)::INTEGER
-		FROM tenant_subscriptions
-		WHERE tenant_id = $1 AND status = 'active'
+		FROM tenants
+		WHERE id = $1 AND (is_frozen = false OR is_frozen IS NULL)
 	`, tenantID)
 	if err := row.Scan(&proratedDays); err == nil && proratedDays > 0 {
 		slog.Info("prorated subscription", "tenant_id", tenantID, "prorated_days", proratedDays)
@@ -64,15 +64,16 @@ func calculateEffectivePlan(ctx context.Context, tenantID string) (planID string
 
 func upsertTenantSubscription(ctx context.Context, tenantID, planID string, validityDays int, activatedBy string, voucherCodeID *string, systemVoucherCode string) error {
 	_, err := DB.Exec(ctx, `
-		INSERT INTO tenant_subscriptions (tenant_id, plan_id, plan_tier, status, period_days, remaining_days, activated_by, voucher_code_id, system_voucher_code, updated_at)
-		VALUES ($1, $2, $2, 'active', $3, $3, $4, $5, $6, NOW())
+		INSERT INTO tenant_subscriptions (tenant_id, plan_id, plan_tier, status, period_days, remaining_days, current_period_end, activated_by, voucher_code_id, system_voucher_code, updated_at)
+		VALUES ($1, $2, $2, 'active', $3, $3, NOW() + ($3 || ' days')::interval, $4, $5, $6, NOW())
 		ON CONFLICT (tenant_id)
 		DO UPDATE SET
 			plan_id = $2,
 			plan_tier = $2,
 			status = 'active',
-			period_days = $3,
-			remaining_days = $3,
+			period_days = tenant_subscriptions.period_days + $3,
+			remaining_days = tenant_subscriptions.remaining_days + $3,
+			current_period_end = GREATEST(COALESCE(tenant_subscriptions.current_period_end, NOW()), NOW()) + ($3 || ' days')::interval,
 			activated_by = $4,
 			voucher_code_id = COALESCE($5, tenant_subscriptions.voucher_code_id),
 			system_voucher_code = COALESCE($6, tenant_subscriptions.system_voucher_code),
@@ -84,16 +85,17 @@ func upsertTenantSubscription(ctx context.Context, tenantID, planID string, vali
 	return err
 }
 
-func updateTenantPlanAndCache(ctx context.Context, tenantID, planID string, priority int) {
+func updateTenantPlanAndCache(ctx context.Context, tenantID, planID string, priority int, validityDays int) {
 	DB.Exec(ctx, `
 		UPDATE tenants SET
 			plan = $1,
 			plan_priority = $2,
 			is_frozen = false,
 			frozen_at = NULL,
-			current_plan_expires_at = NOW() + (SELECT COALESCE(SUM(remaining_days), 0) || ' days'::interval FROM voucher_subscriptions WHERE tenant_id = $3)
+			onboarding_completed = true,
+			current_plan_expires_at = GREATEST(COALESCE(current_plan_expires_at, NOW()), NOW()) + ($4 || ' days')::interval
 		WHERE id = $3
-	`, planID, priority, tenantID)
+	`, planID, priority, tenantID, validityDays)
 	auth.SetTenantPlan(ctx, tenantID, planID)
 }
 

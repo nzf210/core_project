@@ -161,7 +161,7 @@ func handleRedeemCodeVoucher(w http.ResponseWriter, ctx context.Context, cleanIn
 		return
 	}
 
-	planID := "lite"
+	planID := "pro"
 	if targetPlanID != nil && *targetPlanID != "" {
 		planID = *targetPlanID
 	}
