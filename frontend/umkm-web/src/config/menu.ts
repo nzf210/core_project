@@ -47,6 +47,7 @@ export const menuConfig: MenuGroup[] = [
       { label: 'Automasi', to: '/automations', icon: '⚡', roles: ['owner', 'admin', 'superadmin'] },
       { label: 'WhatsApp & AI CS', to: '/wa-setup', icon: '🤖', roles: ['owner', 'admin', 'superadmin'] },
       { label: 'Agen Afiliasi', to: '/affiliate', icon: '🤝' },
+      { label: 'Klaim Voucher', to: '/redeem', icon: '🎟️', roles: ['owner', 'admin', 'superadmin'] },
       { label: 'Pengaturan', to: '/settings', icon: '⚙️', roles: ['owner', 'admin', 'superadmin'] },
       { label: 'Wallet', to: '/wallet', icon: '💳', roles: ['owner', 'admin', 'superadmin'] },
       { label: 'Add-ons', to: '/addons', icon: '⚙️', roles: ['owner', 'admin', 'superadmin'] },

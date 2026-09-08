@@ -170,6 +170,18 @@
       </router-link>
     </div>
 
+    <!-- Paket Langganan & Voucher -->
+    <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;"
+      v-if="userRole === 'owner' || userRole === 'admin'">
+      <h3 style="margin-bottom: 1rem;">🎟️ Paket Langganan & Voucher</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+        Punya kode voucher baru atau link klaim dari admin/reseller? Masukkan voucher untuk memperpanjang masa aktif atau upgrade paket toko Anda.
+      </p>
+      <router-link to="/redeem" class="btn btn-primary" style="display: inline-block; text-decoration: none;">
+        Klaim / Perpanjang via Voucher ➡️
+      </router-link>
+    </div>
+
     <!-- Staff Management -->
     <div class="glass-card animate-fade-in" style="max-width: 600px; padding: 2rem; margin-top: 2rem;"
       v-if="userRole === 'owner' || userRole === 'admin'">

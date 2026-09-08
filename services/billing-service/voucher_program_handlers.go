@@ -192,11 +192,12 @@ func updateVoucherProgramItem(w http.ResponseWriter, r *http.Request, id string)
 
 func deleteVoucherProgramItem(w http.ResponseWriter, r *http.Request, id string) {
 	ctx := r.Context()
-	var redeemedCodes, redeemedLinks int
+	var redeemedCodes, redeemedLinks, usesCount int
 	_ = DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_codes WHERE program_id = $1 AND is_redeemed = true`, id).Scan(&redeemedCodes)
 	_ = DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_links WHERE program_id = $1 AND redeemed_by IS NOT NULL`, id).Scan(&redeemedLinks)
+	_ = DB.QueryRow(ctx, `SELECT COALESCE(uses_count, 0) FROM voucher_programs WHERE id = $1`, id).Scan(&usesCount)
 
-	if redeemedCodes > 0 || redeemedLinks > 0 {
+	if redeemedCodes > 0 || redeemedLinks > 0 || usesCount > 0 {
 		_, err := DB.Exec(ctx, `UPDATE voucher_programs SET is_active = false, updated_at = NOW() WHERE id = $1`, id)
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, "Failed to deactivate voucher program", err)

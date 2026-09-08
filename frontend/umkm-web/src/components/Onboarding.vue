@@ -68,13 +68,27 @@
           <p>Detail usaha Anda sudah disimpan untuk {{ getTypeName(selectedType) }}</p>
         </div>
 
-        <!-- Aktivasi banner — muncul jika belum aktif -->
-        <div v-if="!isActivated" class="activation-banner">
-          <h3>Aktifkan Langganan Anda</h3>
-          <p>Pilih metode aktivasi di bawah untuk mulai menggunakan WCH Platform</p>
+        <!-- Sudah aktif -->
+        <div v-if="isActivated" class="activated-notice">
+          <span class="check-icon">✓</span>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem;">
+            <p style="margin: 0;">Langganan Anda sudah aktif!</p>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" @click="showExtendVoucher = !showExtendVoucher">
+                {{ showExtendVoucher ? '✕ Tutup Form Voucher' : '🎟️ Perpanjang / Upgrade via Voucher' }}
+              </button>
+              <button class="link-btn" @click="goToDashboard">Buka Dashboard →</button>
+            </div>
+          </div>
+        </div>
 
-          <!-- Tab: Beli Paket / Masukkan Voucher -->
-          <div class="activation-tabs">
+        <!-- Aktivasi / Perpanjang banner -->
+        <div v-if="!isActivated || showExtendVoucher" class="activation-banner">
+          <h3>{{ isActivated ? 'Perpanjang Masa Aktif / Upgrade Paket' : 'Aktifkan Langganan Anda' }}</h3>
+          <p>{{ isActivated ? 'Masukkan kode voucher atau token baru untuk menambah masa aktif langganan toko Anda' : 'Pilih metode aktivasi di bawah untuk mulai menggunakan WCH Platform' }}</p>
+
+          <!-- Tab: Beli Paket / Masukkan Voucher (Hanya jika belum aktif) -->
+          <div v-if="!isActivated" class="activation-tabs">
             <button :class="['tab-btn', activationTab === 'buy' ? 'active' : '']" @click="activationTab = 'buy'">
               Beli Paket
             </button>
@@ -85,7 +99,7 @@
           </div>
 
           <!-- Beli Paket -->
-          <div v-if="activationTab === 'buy'" class="activation-panel">
+          <div v-if="!isActivated && activationTab === 'buy'" class="activation-panel">
             <!-- Billing cycle toggle -->
             <div class="billing-toggle">
               <button :class="['toggle-btn', billingCycle === 'monthly' ? 'active' : '']"
@@ -140,27 +154,21 @@
           </div>
 
           <!-- Masukkan Voucher -->
-          <div v-if="activationTab === 'voucher'" class="activation-panel">
+          <div v-if="isActivated || activationTab === 'voucher'" class="activation-panel">
             <div class="voucher-input-group">
               <label for="onboard-voucher" class="sr-only">Kode Voucher</label>
-              <input id="onboard-voucher" v-model="voucherCode" type="text" placeholder="Kode voucher / referral agen (AGEN-XXX)"
+              <input id="onboard-voucher" v-model="voucherCode" type="text" placeholder="Kode voucher / link token / referral agen (AGEN-XXX)"
                 class="input-field" @keyup.enter="redeemVoucher" />
               <button class="btn btn-primary" :disabled="!voucherCode || isActivating" @click="redeemVoucher">
                 <span v-if="isActivating">...</span>
-                <span v-else>Aktivasi</span>
+                <span v-else>{{ isActivated ? 'Terapkan Voucher' : 'Aktivasi' }}</span>
               </button>
             </div>
-            <p class="voucher-hint">Voucher admin atau kode referral agen (AGEN-XXXXXX)</p>
+            <p class="voucher-hint">Voucher admin, token link klaim, atau kode referral agen</p>
           </div>
 
           <p v-if="activationError" class="error-text">{{ activationError }}</p>
           <p v-if="activationSuccess" class="success-text">{{ activationSuccess }}</p>
-        </div>
-
-        <!-- Sudah aktif -->
-        <div v-else class="activated-notice">
-          <span class="check-icon">✓</span>
-          <p>Langganan Anda sudah aktif! <button class="link-btn" @click="goToDashboard">Buka Dashboard →</button></p>
         </div>
 
         <button v-if="!isActivated" class="btn btn-secondary btn-large skip-btn" @click="goToDashboard">
@@ -192,6 +200,7 @@ const billingCycle = ref<'monthly' | 'yearly'>('monthly')
 const activationTab = ref<'buy' | 'voucher'>('buy')
 const isActivating = ref(false)
 const isActivated = ref(false)
+const showExtendVoucher = ref(false)
 const activationError = ref('')
 const activationSuccess = ref('')
 const voucherCode = ref('')
@@ -375,7 +384,9 @@ const redeemVoucher = async () => {
         activationError.value = data.message || 'Kode voucher tidak valid atau sudah digunakan'
         return
       }
-      activationSuccess.value = 'Voucher berhasil diaktifkan! Selamat menikmati WCH Platform.'
+      activationSuccess.value = isActivated.value
+        ? 'Voucher berhasil diterapkan! Masa aktif paket langganan Anda telah diperpanjang/diperbarui.'
+        : 'Voucher berhasil diaktifkan! Selamat menikmati WCH Platform.'
       isActivated.value = true
       localStorage.setItem('onboarding_completed', 'true')
       if (data.data?.plan_id) localStorage.setItem('plan', data.data.plan_id)
