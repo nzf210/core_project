@@ -123,6 +123,7 @@ func main() {
 	mux.Handle("/subscribe", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("", newTenantProxy(getTarget(svcBilling, "8003"))))))
 	mux.Handle("/subscription", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("", newTenantProxy(getTarget(svcBilling, "8003"))))))
 	mux.Handle("/voucher/redeem", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("", newTenantProxy(getTarget(svcBilling, "8003"))))))
+	mux.Handle("/voucher/redeem-link", rateLimitMiddleware(rateLimitPublic)(http.StripPrefix("", newProxy(getTarget(svcBilling, "8003")))))
 	// F036: Affiliate — all /affiliate/* routes proxy to billing-service (some are public, some require auth)
 	mux.Handle("/api/public/affiliate-leaderboard", rateLimitMiddleware(rateLimitPublic)(newProxy(getTarget(svcBilling, "8003"))))
 	mux.Handle("/affiliate/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/affiliate", newTenantProxy(getTarget(svcBilling, "8003"))))))

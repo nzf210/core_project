@@ -227,6 +227,68 @@ func processVoucherRedemptionTx(ctx context.Context, req VoucherLinkRedeemReq, l
 	}
 	return newPeriodEnd, ticketNumber, nil
 }
+func redeemVoucherLinkCore(ctx context.Context, token, tenantID string, r *http.Request) (*VoucherLinkRedeemResp, error) {
+	claims, err := parseVoucherLinkToken(token, config.GlobalConfig.JWTSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenHash := hashToken(token)
+
+	linkDB, err := lookupVoucherLink(ctx, tokenHash)
+	if err != nil {
+		return nil, fmt.Errorf("Voucher link not found")
+	}
+	if err := validateVoucherLink(linkDB, claims.ProgramID); err != nil {
+		return nil, err
+	}
+
+	progInfo, err := lookupVoucherProgramInfo(ctx, claims.PlanID, claims.ProgramID)
+	if err != nil {
+		return nil, fmt.Errorf("Program inactive or not found")
+	}
+
+	durationMonths := claims.DurationMonths
+	if durationMonths == 0 {
+		durationMonths = progInfo.ProgramDuration
+	}
+
+	if err := checkVoucherUsageQuota(ctx, claims.ProgramID, tenantID, progInfo.MaxUsesPerTenant); err != nil {
+		return nil, fmt.Errorf("Voucher quota per tenant exceeded")
+	}
+
+	req := VoucherLinkRedeemReq{Token: token, TenantID: tenantID}
+	newPeriodEnd, ticketNumber, err := processVoucherRedemptionTx(ctx, req, linkDB, &claims, progInfo, durationMonths, r)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+
+	auth.SetTenantPlan(ctx, tenantID, claims.PlanID)
+
+	go sendTicketNotifications(tenantID, TicketPayload{
+		TicketNumber:  ticketNumber,
+		PlanName:      progInfo.PlanName,
+		PlanID:        claims.PlanID,
+		ActivatedAt:   now.Format(timeFormatWIB),
+		ExpiresAt:     newPeriodEnd.Format(timeFormatWIB),
+		AmountPaid:    0,
+		PaymentMethod: "voucher",
+	})
+
+	slog.Info("Voucher link redeemed", "tenant_id", tenantID, "plan", claims.PlanID, "duration_months", durationMonths, "new_expires", newPeriodEnd)
+
+	return &VoucherLinkRedeemResp{
+		PlanID:         claims.PlanID,
+		PlanName:       progInfo.PlanName,
+		ActivatedAt:    now.Format(time.RFC3339),
+		ExpiresAt:      newPeriodEnd.Format(time.RFC3339),
+		DurationMonths: durationMonths,
+		TicketNumber:   ticketNumber,
+	}, nil
+}
+
 func handleRedeemVoucherLink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
@@ -243,82 +305,20 @@ func handleRedeemVoucherLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Verify JWT signature & extract claims
-	claims, err := parseVoucherLinkToken(req.Token, config.GlobalConfig.JWTSecret)
+	resp, err := redeemVoucherLinkCore(r.Context(), req.Token, req.TenantID, r)
 	if err != nil {
+		if err.Error() == "Voucher quota per tenant exceeded" {
+			w.Header().Set(response.ContentType, response.ApplicationJSON)
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
 		response.Error(w, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	ctx := r.Context()
-	tokenHash := hashToken(req.Token)
-
-	// 2. Lookup link in DB
-	linkDB, err := lookupVoucherLink(ctx, tokenHash)
-	if err != nil {
-		response.Error(w, http.StatusBadRequest, "Voucher link not found", nil)
-		return
-	}
-	if err := validateVoucherLink(linkDB, claims.ProgramID); err != nil {
-		response.Error(w, http.StatusBadRequest, err.Error(), nil)
-		return
-	}
-
-	// 3. Lookup program & plan
-	progInfo, err := lookupVoucherProgramInfo(ctx, claims.PlanID, claims.ProgramID)
-	if err != nil {
-		response.Error(w, http.StatusBadRequest, "Program inactive or not found", nil)
-		return
-	}
-
-	durationMonths := claims.DurationMonths
-	if durationMonths == 0 {
-		durationMonths = progInfo.ProgramDuration
-	}
-
-	// 4. Check max_uses_per_tenant (default 1)
-	if err := checkVoucherUsageQuota(ctx, claims.ProgramID, req.TenantID, progInfo.MaxUsesPerTenant); err != nil {
-		w.Header().Set(response.ContentType, response.ApplicationJSON)
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"message": "Voucher quota per tenant exceeded",
-			"data":    map[string]interface{}{"max_uses_per_tenant": progInfo.MaxUsesPerTenant},
-		})
-		return
-	}
-
-	// 5. Begin tx: mark link redeemed, activate/extend subscription
-	newPeriodEnd, ticketNumber, err := processVoucherRedemptionTx(ctx, req, linkDB, &claims, progInfo, durationMonths, r)
-	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error(), nil)
-		return
-	}
-
-	now := time.Now()
-
-	// Sync Redis cache so quota gates read the correct plan tier.
-	auth.SetTenantPlan(ctx, req.TenantID, claims.PlanID)
-
-	// Async notification
-	go sendTicketNotifications(req.TenantID, TicketPayload{
-		TicketNumber:  ticketNumber,
-		PlanName:      progInfo.PlanName,
-		PlanID:        claims.PlanID,
-		ActivatedAt:   now.Format(timeFormatWIB),
-		ExpiresAt:     newPeriodEnd.Format(timeFormatWIB),
-		AmountPaid:    0,
-		PaymentMethod: "voucher",
-	})
-
-	slog.Info("Voucher link redeemed", "tenant_id", req.TenantID, "plan", claims.PlanID, "duration_months", durationMonths, "new_expires", newPeriodEnd)
-
-	response.JSON(w, http.StatusOK, "Voucher redeemed successfully", VoucherLinkRedeemResp{
-		PlanID:         claims.PlanID,
-		PlanName:       progInfo.PlanName,
-		ActivatedAt:    now.Format(time.RFC3339),
-		ExpiresAt:      newPeriodEnd.Format(time.RFC3339),
-		DurationMonths: durationMonths,
-		TicketNumber:   ticketNumber,
-	})
+	response.JSON(w, http.StatusOK, "Voucher redeemed successfully", resp)
 }

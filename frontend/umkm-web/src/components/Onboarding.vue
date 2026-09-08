@@ -341,23 +341,44 @@ const redeemVoucher = async () => {
   isActivating.value = true
   activationError.value = ''
   activationSuccess.value = ''
-  const code = voucherCode.value.trim().toUpperCase()
+  const raw = voucherCode.value.trim()
   try {
-    if (code.startsWith('AGEN-')) {
-      const data = await api.redeemReferral(code)
-      if (data.status >= 400) {
+    if (raw.toUpperCase().startsWith('AGEN-')) {
+      const data = await api.redeemReferral(raw.toUpperCase())
+      if (data.status >= 400 || data.success === false) {
         activationError.value = data.message || 'Kode referral tidak valid'
         return
       }
       activationSuccess.value = 'Kode referral berhasil diterapkan! Akun Anda kini terhubung dengan agen.'
     } else {
-      const data = await api.post('/voucher/redeem', { code })
-      if (data.status >= 400) {
-        activationError.value = data.message || 'Kode voucher tidak valid'
+      let data: any
+      let token = ''
+      if (raw.includes('token=')) {
+        try {
+          const u = new URL(raw.startsWith('http') ? raw : `https://${raw}`)
+          token = u.searchParams.get('token') || ''
+        } catch {
+          const match = raw.match(/[?&]token=([^&#]+)/)
+          if (match) token = match[1]
+        }
+      } else if (raw.startsWith('ey') && raw.includes('.')) {
+        token = raw
+      }
+
+      if (token) {
+        data = await api.redeemVoucherLink(token)
+      } else {
+        data = await api.post('/voucher/redeem', { code: raw.toUpperCase() })
+      }
+
+      if (data.status >= 400 || data.success === false) {
+        activationError.value = data.message || 'Kode voucher tidak valid atau sudah digunakan'
         return
       }
       activationSuccess.value = 'Voucher berhasil diaktifkan! Selamat menikmati WCH Platform.'
       isActivated.value = true
+      localStorage.setItem('onboarding_completed', 'true')
+      if (data.data?.plan_id) localStorage.setItem('plan', data.data.plan_id)
       sessionStorage.setItem('chatbot_wizard_pending', '1')
     }
     voucherCode.value = ''

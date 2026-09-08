@@ -545,6 +545,15 @@ export const api = {
     })
     return res.json()
   },
+  async redeemVoucherLink(token: string, tenantId?: string) {
+    const tid = tenantId || localStorage.getItem('tenant_id') || ''
+    const res = await fetch(`${API_BASE}/voucher/redeem-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, tenant_id: tid })
+    })
+    return res.json()
+  },
 
   // F053: Addon Marketplace & Purchase
   async getAddons() {

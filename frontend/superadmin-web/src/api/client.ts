@@ -96,6 +96,19 @@ export const api = {
     return request(`/api/superadmin/billing/voucher-links?${qs.toString()}`)
   },
 
+  // Alphanumeric voucher codes (F015)
+  generateVouchers: (body: any) =>
+    request('/api/superadmin/billing/vouchers/generate', { method: 'POST', body: JSON.stringify(body) }),
+  listVouchers: (params: { plan_id?: string; used?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams()
+    if (params.plan_id) qs.set('plan_id', params.plan_id)
+    if (params.used) qs.set('used', params.used)
+    if (params.limit) qs.set('limit', String(params.limit))
+    return request(`/api/superadmin/billing/vouchers?${qs.toString()}`)
+  },
+  deleteVoucher: (id: string) =>
+    request(`/api/superadmin/billing/vouchers?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
   // Plans & features
   listPlans: () => request('/api/superadmin/billing/plans'),
 

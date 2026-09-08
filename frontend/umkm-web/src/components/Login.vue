@@ -225,6 +225,7 @@ async function applyLoginSuccess(d: any) {
     console.error('Failed to check profile for onboarding status:', err)
   }
   await redeemPendingReferral()
+  await redeemPendingVoucher()
   router.push('/dashboard')
 }
 
@@ -236,6 +237,19 @@ async function redeemPendingReferral() {
     if (res && res.status >= 200 && res.status < 300) successMsg.value = 'Kode referral berhasil diterapkan!'
   } catch { /* kode sudah terpakai, abaikan */ }
   localStorage.removeItem('pending_referral_code')
+}
+
+async function redeemPendingVoucher() {
+  const tok = localStorage.getItem('pending_voucher_token')
+  if (!tok) return
+  try {
+    const res = await api.redeemVoucherLink(tok)
+    if (res && res.success) {
+      localStorage.setItem('onboarding_completed', 'true')
+      if (res.data?.plan_id) localStorage.setItem('plan', res.data.plan_id)
+    }
+  } catch { /* voucher sudah terpakai/expired */ }
+  localStorage.removeItem('pending_voucher_token')
 }
 
 const handlePhoneLogin = async () => {

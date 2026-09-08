@@ -49,11 +49,13 @@ import AffiliateLeaderboard from '../components/AffiliateLeaderboard.vue'
 import Wallet from '../components/Wallet.vue'
 import Addons from '../components/Addons.vue'
 import LandingPage from '../components/LandingPage.vue'
+import RedeemVoucher from '../components/RedeemVoucher.vue'
 
 const routes = [
   // Landing page: root and /landing are both public
   { path: '/', component: LandingPage, name: 'Landing', meta: { public: true } },
   { path: '/landing', redirect: '/' },
+  { path: '/redeem', component: RedeemVoucher, name: 'RedeemVoucher', meta: { public: true } },
   { path: '/dashboard', component: DynamicDashboard, name: 'DynamicDashboard' },
   { path: '/dashboard-classic', component: Dashboard, name: 'DashboardClassic' },
   { path: '/onboarding', component: Onboarding, name: 'Onboarding' },
