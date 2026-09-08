@@ -211,6 +211,7 @@ func main() {
 }
 
 func heartbeatLoop(ctx context.Context) {
+	Heartbeat(ctx)
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for {

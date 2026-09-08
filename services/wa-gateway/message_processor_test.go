@@ -138,3 +138,18 @@ func TestSendHelpMenu(t *testing.T) {
 	// Should not panic even without client
 	sendHelpMenu(tenantID, senderJID)
 }
+
+func TestToLocalPhoneAndToIntlPhone(t *testing.T) {
+	if got := toLocalPhone("6281355492003"); got != "081355492003" {
+		t.Errorf("expected 081355492003, got %s", got)
+	}
+	if got := toLocalPhone("081355492003"); got != "081355492003" {
+		t.Errorf("expected 081355492003, got %s", got)
+	}
+	if got := toIntlPhone("081355492003"); got != "6281355492003" {
+		t.Errorf("expected 6281355492003, got %s", got)
+	}
+	if got := toIntlPhone("6281355492003"); got != "6281355492003" {
+		t.Errorf("expected 6281355492003, got %s", got)
+	}
+}

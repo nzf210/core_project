@@ -7,6 +7,7 @@ import (
 
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -67,4 +68,51 @@ func invalidatePlatformWAProviderCache() {
 		return
 	}
 	redisShared.Del(ctx, keys...)
+}
+
+// resolveSenderPhone resolves the actual phone number of the sender from a WhatsApp message event.
+// WhatsApp modern multi-device protocol often uses @lid addressing instead of phone numbers.
+// This function checks:
+// 1. Direct phone JID (@s.whatsapp.net or @c.us)
+// 2. SenderAlt JID provided in event info
+// 3. whatsmeow_lid_map table in database
+// 4. users table via wa_jid
+func resolveSenderPhone(ctx context.Context, tenantID string, v *events.Message) string {
+	sender := v.Info.Sender
+
+	// 1. If sender is standard phone JID (@s.whatsapp.net or @c.us), User is the phone number
+	if sender.Server == "s.whatsapp.net" || sender.Server == "c.us" {
+		return sender.User
+	}
+
+	// 2. If sender is @lid or other server, check SenderAlt (alternative address provided by WhatsApp)
+	if (v.Info.SenderAlt.Server == "s.whatsapp.net" || v.Info.SenderAlt.Server == "c.us") && v.Info.SenderAlt.User != "" {
+		slog.Info("resolveSenderPhone: resolved via SenderAlt", "lid", sender.String(), "phone", v.Info.SenderAlt.User)
+		return v.Info.SenderAlt.User
+	}
+
+	// 3. Try to query whatsmeow_lid_map directly in DB
+	if db != nil {
+		var pn string
+		lidUser := strings.Split(strings.TrimSuffix(sender.User, "@lid"), ":")[0]
+		err := db.QueryRowContext(ctx, "SELECT pn FROM whatsmeow_lid_map WHERE lid = $1", lidUser).Scan(&pn)
+		if err == nil && pn != "" {
+			slog.Info("resolveSenderPhone: resolved via whatsmeow_lid_map", "lid", lidUser, "phone", pn)
+			return pn
+		}
+	}
+
+	// 4. Try to query users table by wa_jid
+	if db != nil {
+		var registeredPhone string
+		senderJID := sender.ToNonAD().String()
+		err := db.QueryRowContext(ctx, "SELECT phone_number FROM users WHERE wa_jid = $1", senderJID).Scan(&registeredPhone)
+		if err == nil && registeredPhone != "" {
+			slog.Info("resolveSenderPhone: resolved via users table wa_jid", "jid", senderJID, "phone", registeredPhone)
+			return registeredPhone
+		}
+	}
+
+	// Fallback to sender.User
+	return sender.User
 }

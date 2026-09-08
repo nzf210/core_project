@@ -22,10 +22,11 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 	// konsisten. WhatsApp bisa kirim JID sama dengan device berbeda (user@lid vs
 	// user:9@lid) → tanpa normalize, session state hilang antar-step & reply gagal.
 	senderJID := v.Info.Sender.ToNonAD().String()
-	senderPhone := v.Info.Sender.User
+	ctx := context.Background()
+	senderPhone := resolveSenderPhone(ctx, tenantID, v)
 	messageText := extractMessageText(v)
 
-	slog.Info("Message received", "tenant_id", tenantID, "sender", senderJID, "text", messageText)
+	slog.Info("Message received", "tenant_id", tenantID, "sender", senderJID, "phone", senderPhone, "text", messageText)
 
 	if senderJID != "" && senderPhone != "" {
 		mapUserJIDIfNeeded(senderJID, senderPhone)
@@ -82,6 +83,12 @@ func handleCommandMessage(tenantID, senderJID, senderPhone, upperText string) bo
 
 	if upperText == "OTP" {
 		handleWAOTPRequest(tenantID, senderJID, senderPhone)
+		return true
+	}
+
+	if strings.HasPrefix(upperText, "OTP ") {
+		phoneArg := strings.TrimSpace(upperText[4:])
+		handleWAOTPRequestWithPhone(tenantID, senderJID, senderPhone, phoneArg)
 		return true
 	}
 

@@ -108,13 +108,29 @@ func AcquireSessionLock(ctx context.Context, tenantID string) (bool, error) {
 	}
 	currentOwner, err := redisClient.Get(ctx, ownerKey).Result()
 	if err != nil {
-		return false, nil
+		redisClient.Set(ctx, lockKey, instanceID, sessionTTL)
+		redisClient.Set(ctx, ownerKey, instanceID, sessionTTL)
+		return true, nil
 	}
 	if currentOwner == instanceID {
 		redisClient.Expire(ctx, lockKey, sessionTTL)
 		redisClient.Expire(ctx, ownerKey, sessionTTL)
 		return true, nil
 	}
+
+	// Check if the current owner instance is still alive via its heartbeat key.
+	// If the previous instance died or was restarted, take over the lock immediately
+	// instead of leaving the session disconnected for the full sessionTTL (5 minutes).
+	ownerHeartbeatKey := fmt.Sprintf(instanceHeartbeatKey, currentOwner)
+	alive, err := redisClient.Exists(ctx, ownerHeartbeatKey).Result()
+	if err == nil && alive == 0 {
+		slog.Warn("AcquireSessionLock: previous owner is dead, taking over session",
+			"tenant_id", tenantID, "dead_owner", currentOwner, "new_owner", instanceID)
+		redisClient.Set(ctx, lockKey, instanceID, sessionTTL)
+		redisClient.Set(ctx, ownerKey, instanceID, sessionTTL)
+		return true, nil
+	}
+
 	return false, nil
 }
 

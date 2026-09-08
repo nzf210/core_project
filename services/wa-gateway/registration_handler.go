@@ -267,6 +267,12 @@ func submitWARegistration(tenantID string, session *waRegistrationSession) {
 	deleteRegSession(session.SenderJID)
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		mapUserJIDIfNeeded(session.SenderJID, session.PhoneNumber)
+		if db != nil && strings.Contains(session.SenderJID, "@lid") {
+			lid := strings.Split(strings.TrimSuffix(session.SenderJID, "@lid"), ":")[0]
+			intlPhone := toIntlPhone(session.PhoneNumber)
+			_, _ = db.Exec("INSERT INTO whatsmeow_lid_map (lid, pn) VALUES ($1, $2) ON CONFLICT (lid) DO UPDATE SET pn = EXCLUDED.pn", lid, intlPhone)
+		}
 		sendWAMessage(tenantID, session.SenderJID, "🎉 Pendaftaran berhasil!\n\nUsername: "+session.Username+"\n\nSilakan login di website dengan username dan password yang sudah dibuat.")
 	} else {
 		msg := "Pendaftaran gagal."

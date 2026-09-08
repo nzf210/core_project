@@ -85,13 +85,17 @@ func mapUserJIDIfNeeded(senderJID, senderPhone string) {
 	if db == nil || senderJID == "" || senderPhone == "" {
 		return
 	}
-	phone := senderPhone
-	if strings.HasPrefix(phone, "62") {
-		phone = "0" + phone[2:]
+	phoneLocal := senderPhone
+	if strings.HasPrefix(phoneLocal, "62") {
+		phoneLocal = "0" + phoneLocal[2:]
 	}
-	if _, err := db.Exec(`UPDATE users SET wa_jid = $1 WHERE phone_number = $2 AND (wa_jid IS NULL OR wa_jid = '')`,
-		senderJID, phone); err != nil {
-		slog.Error("Failed to update user wa_jid", "phone", phone, "error", err)
+	phoneIntl := senderPhone
+	if strings.HasPrefix(phoneIntl, "0") {
+		phoneIntl = "62" + phoneIntl[1:]
+	}
+	if _, err := db.Exec(`UPDATE users SET wa_jid = $1 WHERE (phone_number = $2 OR phone_number = $3) AND (wa_jid IS NULL OR wa_jid = '')`,
+		senderJID, phoneLocal, phoneIntl); err != nil {
+		slog.Error("Failed to update user wa_jid", "phone", senderPhone, "error", err)
 	}
 }
 
