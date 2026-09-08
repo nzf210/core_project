@@ -162,7 +162,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { api, API_BASE, sanitizeJWT, sanitizeUUID, sanitizeRole, sanitizeText, sanitizeBoolean } from '../api'
+import { api, API_BASE, sanitizeJWT, sanitizeUUID, sanitizeRole, sanitizeText } from '../api'
 
 const router = useRouter()
 
