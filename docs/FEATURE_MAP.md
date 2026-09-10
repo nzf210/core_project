@@ -136,6 +136,7 @@ Format per feature:
 | F067 | Grafana Production-Ready Monitoring — Prometheus + 8 Dashboards | ✅ Approved | ✅ Done | 2026-07-01 |
 | F068 | Standardisasi Format Rupiah — `formatRupiah()` & `formatRupiahShort()` | ✅ Approved | ✅ Done | 2026-06-29 |
 | F069 | Redis-Backed WA Registration Session Persistence | ✅ Approved | ✅ Done | 2026-08-18 |
+| F070 | Smart Dynamic QRIS (0% Fee) & Struk Digital WhatsApp POS | ✅ Approved | ✅ Done | 2026-09-09 |
 
 ---
 
@@ -3443,3 +3444,61 @@ CanUseFeature(ctx, tenantID, "feature_key")
 - `shared/sdk/auth/plan_features.go` — `Features map[string]bool` field + `syncHasFields()` + generic plan_features loop
 - `shared/sdk/auth/can_use.go` — `isEnabledViaPlan()` generic + `CanUseFeature()` dynamic lookup
 - `shared/sdk/auth/quota.go` — `HasFeatureAccess()` now delegates to `CanUseFeature()`
+
+---
+
+## F070: Smart Dynamic QRIS (0% Fee) & Struk Digital WhatsApp POS
+
+**Spec Status:** ✅ Approved  
+**Implementation:** ✅ Done  
+**Last Updated:** 2026-09-09
+
+### 🎯 Objectives & Background
+1. **Solusi Pembayaran Praktis UMKM (0% MDR):** Menjawab kendala pelaku usaha mikro yang belum memiliki badan hukum / rekening bisnis untuk mendaftar payment gateway pihak ketiga (seperti Xendit). Fitur ini mengkonversi QRIS Statik toko apa pun (BCA Merchant, Mandiri Livin Usaha, GoBiz, OVO, ShopeePay) menjadi **QRIS Dinamis ber-nominal otomatis** langsung di POS.
+2. **Kepatuhan EMVCo / ISO 20022:** Menggunakan standar Bank Indonesia dengan menyuntikkan Tag `010212` (Dynamic), Tag `54` (Nominal Transaksi), dan perhitungan CRC16-CCITT polynomial `0x1021`.
+3. **Struk Digital WhatsApp Paperless:** Memberikan fasilitas cetak struk tanpa kertas kasir termal. Kasir cukup memasukkan nomor WhatsApp pelanggan saat pembayaran (opsional), struk resmi berisikan rincian item, nomor referensi, toko, dan status lunas langsung terkirim via WhatsApp Gateway.
+4. **Otomasi Akuntansi Double-Entry:** Mengintegrasikan konfirmasi pembayaran secara langsung ke jurnal umum (Debit Kas 1000/101, Kredit Pendapatan 4000/400) serta pengurangan stok produk.
+
+### 🏗️ Arsitektur Dual-Track Payment
+```
+[ Pelanggan Bayar di Kasir POS ]
+               │
+               ▼
+[ Pilih Metode: QRIS ] + [ No. WA Pelanggan (Opsional) ]
+               │
+               ▼
+   Cek Konfigurasi Toko:
+   ├─ Prioritas 1: Punya `static_qris_payload` (QRIS Toko BCA/Mandiri/GoBiz)
+   │          ➔ Generate Dynamic QRIS (Tag 54 Nominal + CRC16)
+   │          ➔ Tampilkan QR Code nominal terkunci di POS (0% Fee)
+   │          ➔ Kasir tekan "Konfirmasi Pembayaran Diterima" ➔ POST /checkout/confirm
+   │
+   └─ Prioritas 2: Punya `xendit_api_key`
+              ➔ Buat Invoice Xendit Payment Gateway
+              ➔ Webhook Xendit menandai lunas
+               │
+               ▼
+[ Transaksi Status: PAID ]
+   ├─ Jurnal Akuntansi Otomatis (Debit 1000/101, Kredit 4000/400)
+   ├─ Pengurangan Stok Produk
+   └─ Kirim Struk Digital WhatsApp via wa-gateway (Port 8202)
+```
+
+### Acceptance Criteria
+- [x] AC-1: Migrasi skema database `000086_tenant_static_qris` menambah `static_qris_payload TEXT` pada `tenants` dan `customer_phone VARCHAR(50)` pada `pos_transactions`.
+- [x] AC-2: Pengaturan QRIS Statik Toko di `Settings.vue` dan backend `settingsGet`/`settingsPut`.
+- [x] AC-3: Konversi EMVCo QRIS Statik ke Dinamis dengan injeksi Tag `54` dan kalkulasi checksum `CRC16-CCITT` valid.
+- [x] AC-4: Fallback cerdas: Prioritas 1 Dynamic QRIS Toko (0% fee), Prioritas 2 Xendit Invoice.
+- [x] AC-5: Endpoint kasir `POST /checkout/confirm` untuk validasi pembayaran QRIS Dinamis, pembukuan jurnal, pemotongan stok, dan pengiriman notifikasi WhatsApp.
+- [x] AC-6: Modal POS kasir menampilkan QR Code ber-nominal, tombol konfirmasi kasir, dan notifikasi pengiriman struk digital WhatsApp.
+- [x] AC-7: Unit testing lulus untuk validasi checkout, Tag 54 insertion, dan endpoint confirm.
+
+**Files Changed:**
+- `shared/migrations/000086_tenant_static_qris.up.sql` & `.down.sql`
+- `apps/umkm/accounting/main.go` — route `/checkout/confirm`, `generateDynamicQRIS`, `CRC16CCITT`
+- `apps/umkm/accounting/checkout_handlers.go` — `handleCheckoutConfirm`, `sendCustomerReceiptWANotification`, dynamic QRIS generation
+- `apps/umkm/accounting/settings_handlers.go` — persist & load `static_qris_payload`
+- `apps/umkm/accounting/checkout_test.go` — unit test suite
+- `frontend/umkm-web/src/components/POS.vue` — UI POS, QR dinamis, nomor telepon pelanggan, tombol konfirmasi kasir
+- `frontend/umkm-web/src/components/Settings.vue` — formulir simpan QRIS Statik Toko
+

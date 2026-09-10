@@ -7,6 +7,7 @@ import (
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
 
@@ -60,12 +61,49 @@ func handleConnectedEvent(tenantID string) {
 		if _, err := db.Exec(`INSERT INTO wa_tenant_sessions (tenant_id, jid) VALUES ($1, $2) ON CONFLICT (tenant_id) DO UPDATE SET jid = EXCLUDED.jid`, tenantID, c.Store.ID.String()); err != nil {
 			slog.Error("Failed to save wa_tenant_sessions on connect", "tenant_id", tenantID, "error", err)
 		}
+		// Sync to wa_sessions if tenantID is valid UUID (UMKM tenant)
+		if _, err := db.Exec(`
+			INSERT INTO wa_sessions (tenant_id, session_name, status, wa_number, connected_at, last_seen, updated_at)
+			VALUES ($1::uuid, 'default', 'connected', $2, NOW(), NOW(), NOW())
+			ON CONFLICT (tenant_id, session_name) DO UPDATE SET
+				status = 'connected',
+				wa_number = EXCLUDED.wa_number,
+				last_seen = NOW(),
+				updated_at = NOW()
+		`, tenantID, c.Store.ID.User); err != nil {
+			slog.Debug("Skipped wa_sessions sync on connect (may be non-UUID tenant)", "tenant_id", tenantID, "error", err)
+		}
 	}
+}
+
+func handlePairSuccessEvent(tenantID string, v *events.PairSuccess) {
+	slog.Info("Whatsmeow PairSuccess event received", "tenant_id", tenantID, "jid", v.ID.String())
+	invalidatePlatformWAProviderCache()
+	if db != nil && v.ID.String() != "" {
+		if _, err := db.Exec(`INSERT INTO wa_tenant_sessions (tenant_id, jid) VALUES ($1, $2) ON CONFLICT (tenant_id) DO UPDATE SET jid = EXCLUDED.jid`, tenantID, v.ID.String()); err != nil {
+			slog.Error("Failed to save wa_tenant_sessions on pair success", "tenant_id", tenantID, "error", err)
+		}
+		if _, err := db.Exec(`
+			INSERT INTO wa_sessions (tenant_id, session_name, status, wa_number, connected_at, last_seen, updated_at)
+			VALUES ($1::uuid, 'default', 'connected', $2, NOW(), NOW(), NOW())
+			ON CONFLICT (tenant_id, session_name) DO UPDATE SET
+				status = 'connected',
+				wa_number = EXCLUDED.wa_number,
+				last_seen = NOW(),
+				updated_at = NOW()
+		`, tenantID, v.ID.User); err != nil {
+			slog.Debug("Skipped wa_sessions sync on pair success", "tenant_id", tenantID, "error", err)
+		}
+	}
+	handleConnectedEvent(tenantID)
 }
 
 func handleDisconnectedEvent(tenantID string) {
 	slog.Warn("Disconnected from WhatsApp", "tenant_id", tenantID)
 	invalidatePlatformWAProviderCache()
+	if db != nil {
+		_, _ = db.Exec(`UPDATE wa_sessions SET status = 'disconnected', updated_at = NOW() WHERE tenant_id = $1::uuid`, tenantID)
+	}
 }
 
 func handleLoggedOutEvent(tenantID string) {
@@ -76,6 +114,7 @@ func handleLoggedOutEvent(tenantID string) {
 	clientMu.Unlock()
 	if db != nil {
 		db.Exec(`DELETE FROM wa_tenant_sessions WHERE tenant_id = $1`, tenantID)
+		_, _ = db.Exec(`UPDATE wa_sessions SET status = 'disconnected', updated_at = NOW() WHERE tenant_id = $1::uuid`, tenantID)
 	}
 	ctx := context.Background()
 	ReleaseSessionLock(ctx, tenantID)

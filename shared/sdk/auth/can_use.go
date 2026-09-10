@@ -154,8 +154,12 @@ func CanUseFeature(ctx context.Context, tenantID, featureKey string) (bool, stri
 	return false, fmt.Sprintf("Fitur %s tidak tersedia di paket %s.", name, GetTenantPlan(ctx, tenantID))
 }
 
-// tierPriority returns numeric priority for tier comparison.
+// TierPriority returns numeric priority for tier comparison.
 // Higher = more capable. Used for min_tier enforcement.
+func TierPriority(tier string) int {
+	return tierPriority(tier)
+}
+
 func tierPriority(tier string) int {
 	switch tier {
 	case "superadmin":

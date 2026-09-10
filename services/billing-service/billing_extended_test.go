@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -231,5 +232,37 @@ func TestHandleWallet_MissingTenantID(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest && rr.Code != http.StatusUnauthorized {
 		t.Errorf("expected 400 or 401 for missing tenant, got %d", rr.Code)
+	}
+}
+
+func TestHandleWalletTopup_MissingTenantID(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/wallet/topup", strings.NewReader(`{"amount_rupiah":50000}`))
+	rr := httptest.NewRecorder()
+	handleWalletTopup(rr, req)
+
+	if rr.Code != http.StatusBadRequest && rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected 400 or 401 for missing tenant, got %d", rr.Code)
+	}
+}
+
+func TestHandleWalletTopup_InvalidJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/wallet/topup", strings.NewReader(`invalid json`))
+	req.Header.Set("X-Tenant-ID", "test-tenant-id")
+	rr := httptest.NewRecorder()
+	handleWalletTopup(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid json, got %d", rr.Code)
+	}
+}
+
+func TestHandleWalletTopup_AmountTooLow(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/wallet/topup", strings.NewReader(`{"amount_rupiah":5000}`))
+	req.Header.Set("X-Tenant-ID", "test-tenant-id")
+	rr := httptest.NewRecorder()
+	handleWalletTopup(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for amount < 10000, got %d", rr.Code)
 	}
 }

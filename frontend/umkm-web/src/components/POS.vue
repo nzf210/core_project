@@ -84,7 +84,19 @@
             </button>
           </div>
 
-          <div style="margin-top:2rem; text-align:center;">
+          <div style="margin-top: 1.25rem; text-align: left;">
+            <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; display: block;">
+              📲 No. WhatsApp Pelanggan (Struk Digital):
+            </label>
+            <input
+              type="tel"
+              v-model="customerPhone"
+              placeholder="Contoh: 08123456789 (Opsional)"
+              style="width: 100%; padding: 0.6rem 0.8rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: var(--surface-0); color: var(--text-primary);"
+            />
+          </div>
+
+          <div style="margin-top:1.5rem; text-align:center;">
             <p style="font-size:1.25rem; font-weight:600; margin-bottom:1.5rem;">Total Tagihan: {{ formatCurrency(cartTotal) }}</p>
             <div class="flex gap-4 justify-center">
               <button class="btn btn-outline" @click="showPaymentModal = false">Batal</button>
@@ -98,23 +110,35 @@
         <div v-else class="text-center">
           <div v-if="paymentStatus === 'paid'">
             <div style="font-size: 4rem; margin-bottom: 1rem;">✅</div>
-            <h3 style="margin-bottom: 1rem;">Transaksi Berhasil!</h3>
-            <p style="margin-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.9rem;">
-              Pembayaran otomatis terverifikasi. Struk/bukti pembayaran telah dikirim ke WhatsApp kasir.
+            <h3 style="margin-bottom: 0.5rem;">Transaksi Berhasil!</h3>
+            <p style="margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
+              Pembayaran telah terverifikasi dan tercatat otomatis ke jurnal akuntansi.
+            </p>
+            <p v-if="customerPhone" style="margin-bottom: 1.5rem; color: #10b981; font-weight: 600; font-size: 0.85rem;">
+              💬 Struk digital telah otomatis dikirimkan ke WhatsApp {{ customerPhone }}
             </p>
             <button class="btn btn-primary" @click="finishTransaction">Tutup & Transaksi Baru</button>
           </div>
-          
+
           <div v-else-if="paymentStatus === 'pending'">
-            <h3 style="margin-bottom: 1rem; color: var(--accent-primary);">Menunggu Pembayaran...</h3>
-            <p style="margin-bottom: 1rem;">Minta pelanggan untuk scan QR di bawah ini (Buka Xendit Checkout):</p>
-            <div style="margin-bottom:1.5rem; display: flex; flex-direction: column; align-items: center; gap: 1rem;">
-              <img :src="'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrisUrl)" alt="QR Code Invoice" style="width: 250px; height: 250px; border-radius: 8px; border: 4px solid var(--accent-primary);" />
-              <a :href="qrisUrl" target="_blank" class="btn btn-outline">Buka Link Pembayaran di Tab Baru</a>
-            </div>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
-              Sistem akan mengecek secara otomatis. Jangan tutup halaman ini sebelum pembayaran berhasil.
+            <h3 style="margin-bottom: 0.5rem; color: var(--accent-primary);">Scan QRIS Dinamis</h3>
+            <p style="margin-bottom: 0.75rem; font-size: 0.9rem; color: var(--text-secondary);">
+              Nominal Terkunci: <strong class="text-accent-primary" style="font-size: 1.1rem;">{{ formatCurrency(cartTotal) }}</strong>
             </p>
+            <div style="margin-bottom:1.25rem; display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
+              <img :src="'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrisContent || qrisUrl)" alt="QR Code QRIS Dinamis" style="width: 220px; height: 220px; border-radius: 8px; border: 4px solid var(--accent-primary);" />
+              <div v-if="qrisType === 'dynamic_qris'" style="font-size: 0.8rem; color: var(--text-muted);">
+                0% Fee Platform · Dana langsung masuk rekening/e-wallet toko Anda
+              </div>
+              <a v-else-if="qrisUrl" :href="qrisUrl" target="_blank" class="btn btn-outline btn-sm">Buka Link Pembayaran Xendit</a>
+            </div>
+
+            <div v-if="qrisType === 'dynamic_qris'" style="margin-bottom: 1rem;">
+              <button class="btn btn-primary" style="width: 100%; padding: 0.75rem;" @click="confirmManualQRIS" :disabled="confirmingQRIS">
+                {{ confirmingQRIS ? 'Memverifikasi...' : '✅ Konfirmasi Pembayaran Diterima' }}
+              </button>
+            </div>
+
             <button class="btn btn-outline" @click="finishTransaction">Batal Transaksi</button>
           </div>
         </div>
@@ -143,6 +167,10 @@ const loadingCheckout = ref(false)
 watch(showPaymentModal, (v) => { if (v) openModal(); else closeModal(); })
 const checkoutSuccess = ref(false)
 const qrisUrl = ref('')
+const qrisContent = ref('')
+const qrisType = ref('')
+const customerPhone = ref('')
+const confirmingQRIS = ref(false)
 const paymentStatus = ref('')
 const transactionRef = ref('')
 let pollInterval: any = null
@@ -215,19 +243,24 @@ const processCheckout = async () => {
     const payload = {
       payment_method: paymentMethod.value,
       total_amount: cartTotal.value,
-      items: cart.value
+      items: cart.value,
+      customer_phone: customerPhone.value.trim()
     }
-    
+
     const data = await api.post('/api/umkm/checkout', payload)
     if (data.success) {
       checkoutSuccess.value = true
       paymentStatus.value = data.status || 'paid'
       transactionRef.value = data.reference || ''
+      qrisType.value = data.type || ''
+      if (data.qris_content) {
+        qrisContent.value = data.qris_content
+      }
       if (data.qris_url) {
         qrisUrl.value = data.qris_url
       }
-      
-      if (paymentStatus.value === 'pending') {
+
+      if (paymentStatus.value === 'pending' && qrisType.value !== 'dynamic_qris') {
         startPolling()
       }
     } else {
@@ -238,6 +271,25 @@ const processCheckout = async () => {
     alert("Terjadi kesalahan jaringan")
   } finally {
     loadingCheckout.value = false
+  }
+}
+
+const confirmManualQRIS = async () => {
+  confirmingQRIS.value = true
+  try {
+    const data = await api.post('/api/umkm/checkout/confirm', {
+      reference: transactionRef.value
+    })
+    if (data.success) {
+      paymentStatus.value = 'paid'
+    } else {
+      alert(data.message || 'Gagal mengonfirmasi pembayaran')
+    }
+  } catch (error) {
+    console.error('Confirm error:', error)
+    alert('Terjadi kesalahan jaringan')
+  } finally {
+    confirmingQRIS.value = false
   }
 }
 
@@ -262,6 +314,10 @@ const finishTransaction = () => {
   showPaymentModal.value = false
   checkoutSuccess.value = false
   qrisUrl.value = ''
+  qrisContent.value = ''
+  qrisType.value = ''
+  customerPhone.value = ''
+  confirmingQRIS.value = false
   paymentStatus.value = ''
   transactionRef.value = ''
   paymentMethod.value = 'cash'

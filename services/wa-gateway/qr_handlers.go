@@ -102,10 +102,27 @@ func handleQRChannel(w http.ResponseWriter, client *whatsmeow.Client, tenantID s
 	for evt := range qrChan {
 		if evt.Event == "code" {
 			handleQRCode(w, client, tenantID, evt.Code)
+			go drainQRChannel(tenantID, qrChan)
 			return
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "timeout", "message": "Failed to get QR code"})
+}
+
+func drainQRChannel(tenantID string, qrChan <-chan whatsmeow.QRChannelItem) {
+	for evt := range qrChan {
+		switch evt.Event {
+		case "success":
+			slog.Info("QR pairing success from qrChan", "tenant_id", tenantID)
+			handleConnectedEvent(tenantID)
+			return
+		case "timeout":
+			slog.Info("QR channel timed out", "tenant_id", tenantID)
+			return
+		case "code":
+			slog.Debug("Subsequent QR code emitted", "tenant_id", tenantID)
+		}
+	}
 }
 
 func handleQRCode(w http.ResponseWriter, client *whatsmeow.Client, tenantID, code string) {

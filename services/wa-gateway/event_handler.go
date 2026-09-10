@@ -20,6 +20,10 @@ func eventHandler(tenantID string, evt interface{}) {
 		handleMessageEvent(tenantID, v)
 	case *events.Connected:
 		handleConnectedEvent(tenantID)
+	case *events.PairSuccess:
+		handlePairSuccessEvent(tenantID, v)
+	case *events.PairError:
+		slog.Error("Pairing error for tenant", "tenant_id", tenantID, "error", v.Error)
 	case *events.Disconnected:
 		handleDisconnectedEvent(tenantID)
 	case *events.LoggedOut:

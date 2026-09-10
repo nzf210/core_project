@@ -94,6 +94,7 @@ func main() {
 
 	// Webhook (public with token auth)
 	mux.HandleFunc("/webhook/payment", handlePaymentWebhook)
+	mux.HandleFunc("/webhook/payment/", handlePaymentWebhook)
 
 	// Superadmin routes (role checked in handler via X-User-Role header)
 	mux.Handle("/admin/plans", auth.Middleware(http.HandlerFunc(handleAdminListPlans)))

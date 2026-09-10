@@ -87,10 +87,11 @@ func processWalletSubscription(w http.ResponseWriter, ctx context.Context, req S
 	finalPrice := req.FinalPrice
 	if !auth.CheckWalletBalance(ctx, tenantID, finalPrice) {
 		var balance int64
-		_ = DB.QueryRow(ctx, "SELECT COALESCE(balance_cents,0) FROM wallet_credits WHERE tenant_id=$1", tenantID).Scan(&balance)
+		_ = DB.QueryRow(ctx, "SELECT COALESCE(balance_rupiah,0) FROM wallet_credits WHERE tenant_id=$1", tenantID).Scan(&balance)
 		response.JSON(w, http.StatusPaymentRequired, "Saldo wallet tidak cukup", map[string]interface{}{
 			"required_cents": finalPrice,
 			"balance_cents":  balance,
+			"balance_rupiah": balance,
 			"topup_url":      walletEndpoint,
 		})
 		return true
@@ -179,21 +180,25 @@ func createXenditInvoice(ctx context.Context, _ *http.Request, req InvoiceReques
 	createReq.Description = &desc
 	createReq.PaymentMethods = []string{"BANK_TRANSFER", "EWALLET", "QRIS"}
 
-	xClient, errXc := getTenantXenditClient(ctx, req.TenantID)
+	var paymentURL string
+	xClient, errXc := getPlatformXenditClient()
 	if errXc != nil {
-		slog.Error("Failed to get xendit client for tenant", "tenant_id", req.TenantID, "error", errXc)
+		slog.Error("Failed to get platform xendit client", "error", errXc)
+		if Cfg.Env == "development" && os.Getenv("XENDIT_API_KEY") == "" {
+			paymentURL = handleDevMockInvoice(ctx, req.ExternalID, req.TenantID, req.PlanID, req.FinalPrice, req.VoucherCode)
+			return paymentURL, nil
+		}
 		return "", errXc
 	}
 
 	resp, _, invoiceErr := xClient.InvoiceApi.CreateInvoice(ctx).CreateInvoiceRequest(*createReq).Execute()
-	var paymentURL string
 
 	if invoiceErr != nil {
 		slog.Error("Failed to create xendit invoice", "error", invoiceErr)
-		if Cfg.Env == "development" {
+		if Cfg.Env == "development" && os.Getenv("XENDIT_API_KEY") == "" {
 			paymentURL = handleDevMockInvoice(ctx, req.ExternalID, req.TenantID, req.PlanID, req.FinalPrice, req.VoucherCode)
 		} else {
-			return "", invoiceErr
+			return "", fmt.Errorf("%s", formatXenditInvoiceError(invoiceErr))
 		}
 	} else {
 		paymentURL = resp.InvoiceUrl

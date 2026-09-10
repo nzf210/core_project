@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -145,29 +146,33 @@ func handleWallet(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	var balance int64
-	err := DB.QueryRow(ctx, `SELECT balance_cents FROM wallet_credits WHERE tenant_id = $1`, tenantID).Scan(&balance)
+	err := DB.QueryRow(ctx, `SELECT balance_rupiah FROM wallet_credits WHERE tenant_id = $1`, tenantID).Scan(&balance)
 	if err != nil {
 		balance = 0
 	}
-	rows, err := DB.Query(ctx, `SELECT id, amount_cents, transaction_type, reference, description, created_at FROM wallet_transactions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 20`, tenantID)
+	rows, err := DB.Query(ctx, `SELECT id, amount_rupiah, transaction_type, reference, description, created_at FROM wallet_transactions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 20`, tenantID)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to query transactions", err)
 		return
 	}
 	defer rows.Close()
 	type tx struct {
-		ID     int    `json:"id"`
-		Amount int64  `json:"amount_cents"`
-		Type   string `json:"transaction_type"`
-		Ref    string `json:"reference"`
-		Desc   string `json:"description,omitempty"`
-		Time   string `json:"created_at"`
+		ID           int    `json:"id"`
+		AmountRupiah int64  `json:"amount_rupiah"`
+		AmountCents  int64  `json:"amount_cents"`
+		Amount       int64  `json:"amount"`
+		Type         string `json:"transaction_type"`
+		Ref          string `json:"reference"`
+		Desc         string `json:"description,omitempty"`
+		Time         string `json:"created_at"`
 	}
 	var txs []tx
 	for rows.Next() {
 		var t tx
 		var t2 time.Time
-		if rows.Scan(&t.ID, &t.Amount, &t.Type, &t.Ref, &t.Desc, &t2) == nil {
+		if rows.Scan(&t.ID, &t.AmountRupiah, &t.Type, &t.Ref, &t.Desc, &t2) == nil {
+			t.AmountCents = t.AmountRupiah
+			t.Amount = t.AmountRupiah
 			t.Time = t2.Format(time.RFC3339)
 			txs = append(txs, t)
 		}
@@ -177,8 +182,9 @@ func handleWallet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, "Wallet retrieved", map[string]interface{}{
-		"balance_cents": balance,
-		"transactions":  txs,
+		"balance_rupiah": balance,
+		"balance_cents":  balance,
+		"transactions":   txs,
 	})
 }
 
@@ -195,33 +201,70 @@ func handleWalletTopup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		AmountCents int64 `json:"amount_cents"`
+		AmountRupiah int64 `json:"amount_rupiah"`
+		AmountCents  int64 `json:"amount_cents"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.AmountCents < 10000 {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid request", nil)
+		return
+	}
+	amount := req.AmountRupiah
+	if amount == 0 {
+		amount = req.AmountCents
+	}
+	if amount < 10000 {
 		response.Error(w, http.StatusBadRequest, "Invalid amount (min Rp 10.000)", nil)
 		return
 	}
 	desc := "Top-up Wallet Credit"
 	curr := "IDR"
 	ctx := r.Context()
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3201"
+	}
+	successRedirect := fmt.Sprintf("%s/wallet?status=success", frontendURL)
+	failureRedirect := fmt.Sprintf("%s/wallet?status=failed", frontendURL)
+
 	// FIX #4: Use UUID for external_id (unpredictable, not UnixNano)
+	// Omit PaymentMethods so Xendit activates all enabled channels (VA, QRIS, EWALLET, Retail)
 	invoiceReq := invoice.CreateInvoiceRequest{
-		ExternalId:  uuid.NewString() + keyWalletTopup + tenantID,
-		Amount:      float64(req.AmountCents),
-		Description: &desc,
-		Currency:    &curr,
+		ExternalId:         uuid.NewString() + keyWalletTopup + tenantID,
+		Amount:             float64(amount),
+		Description:        &desc,
+		Currency:           &curr,
+		SuccessRedirectUrl: &successRedirect,
+		FailureRedirectUrl: &failureRedirect,
 	}
-	xClient, errXc := getTenantXenditClient(ctx, tenantID)
+	xClient, errXc := getPlatformXenditClient()
 	if errXc != nil {
-		slog.Error("Failed to get xendit client for tenant", "tenant_id", tenantID, "error", errXc)
-		response.Error(w, http.StatusInternalServerError, "Payment provider not configured", nil)
+		slog.Error("Failed to get platform xendit client", "error", errXc)
+		if Cfg.Env == "development" && os.Getenv("XENDIT_API_KEY") == "" {
+			mockInvoiceUrl := fmt.Sprintf("https://checkout.xendit.co/web/%s", invoiceReq.ExternalId)
+			response.JSON(w, http.StatusOK, "Topup invoice created (DEV mode)", map[string]interface{}{
+				"invoice_url": mockInvoiceUrl,
+				"external_id": invoiceReq.ExternalId,
+			})
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "Payment provider not configured: "+errXc.Error(), nil)
 		return
 	}
-	invoiceResp, _, err := xClient.InvoiceApi.CreateInvoice(context.Background()).CreateInvoiceRequest(invoiceReq).Execute()
+	invoiceResp, _, err := xClient.InvoiceApi.CreateInvoice(ctx).CreateInvoiceRequest(invoiceReq).Execute()
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, "Failed to create invoice", err)
+		slog.Error("Failed to create xendit invoice", "error", err)
+		if Cfg.Env == "development" && os.Getenv("XENDIT_API_KEY") == "" {
+			mockInvoiceUrl := fmt.Sprintf("https://checkout.xendit.co/web/%s", invoiceReq.ExternalId)
+			response.JSON(w, http.StatusOK, "Topup invoice created (DEV mode)", map[string]interface{}{
+				"invoice_url": mockInvoiceUrl,
+				"external_id": invoiceReq.ExternalId,
+			})
+			return
+		}
+		response.Error(w, http.StatusBadRequest, "Gagal membuat invoice Xendit: "+formatXenditInvoiceError(err), err)
 		return
 	}
+	slog.Info("Topup invoice successfully created", "external_id", invoiceResp.ExternalId, "invoice_url", invoiceResp.InvoiceUrl)
 	response.JSON(w, http.StatusOK, "Topup invoice created", map[string]interface{}{
 		"invoice_url": invoiceResp.InvoiceUrl,
 		"external_id": invoiceResp.ExternalId,

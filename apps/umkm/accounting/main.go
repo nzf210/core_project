@@ -123,6 +123,7 @@ func main() {
 	mux.HandleFunc("/products/export", handleProductsExport)
 	mux.HandleFunc("/products/import", handleProductsImport)
 	mux.HandleFunc("/checkout", handleCheckout)
+	mux.HandleFunc("/checkout/confirm", handleCheckoutConfirm)
 	mux.HandleFunc("/webhook/store-payment", handleStorePaymentWebhook)
 	mux.HandleFunc("/transactions/status", handleTransactionStatus)
 	mux.HandleFunc("/webhook/payment", handlePaymentWebhook)
@@ -193,11 +194,11 @@ func CRC16CCITT(data []byte) string {
 }
 
 func generateDynamicQRIS(staticQRIS string, amount float64) string {
-	if !strings.Contains(staticQRIS, "6304") {
-		return staticQRIS
+	base := staticQRIS
+	if strings.Contains(staticQRIS, "6304") {
+		parts := strings.Split(staticQRIS, "6304")
+		base = parts[0]
 	}
-	parts := strings.Split(staticQRIS, "6304")
-	base := parts[0]
 	amtStr := strconv.FormatFloat(amount, 'f', 0, 64)
 	amtTag := fmt.Sprintf("54%02d%s", len(amtStr), amtStr)
 	newBase := strings.Replace(base, "010211", "010212", 1)

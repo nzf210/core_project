@@ -186,6 +186,7 @@
 import { ref, onMounted } from 'vue'
 import { api, sanitizeText, sanitizeBoolean } from '../api'
 import { useRouter } from 'vue-router'
+import { clearMeCache, fetchAndSyncMe } from '../router'
 import { formatRupiah } from '../composables/useCurrency'
 
 const router = useRouter()
@@ -332,6 +333,7 @@ const buyPackage = async () => {
     if (data.data?.payment_url) {
       paymentInfo.value = data.data.payment_url
       activationError.value = ''
+      window.location.href = data.data.payment_url
     } else {
       // Dev mode atau lite plan: langsung aktif
       activationSuccess.value = 'Langganan berhasil diaktifkan!'
@@ -390,6 +392,10 @@ const redeemVoucher = async () => {
       isActivated.value = true
       localStorage.setItem('onboarding_completed', 'true')
       if (data.data?.plan_id) localStorage.setItem('plan', data.data.plan_id)
+      sessionStorage.setItem('subscription_status', 'active')
+      clearMeCache()
+      fetchAndSyncMe()
+      window.dispatchEvent(new Event('auth-change'))
       sessionStorage.setItem('chatbot_wizard_pending', '1')
     }
     voucherCode.value = ''

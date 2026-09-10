@@ -2,10 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 )
 
 // TestRestoreSingleSession_NilContainer verifies graceful handling when globalContainer is nil
@@ -205,4 +210,52 @@ func TestSessionLockAcquisition_Concurrency(t *testing.T) {
 	}
 
 	ReleaseSessionLock(ctx, tenantID)
+}
+
+func TestHandlePairSuccessEvent_NilDB(t *testing.T) {
+	db = nil
+	tenantID := "pair-success-tenant"
+	jid, _ := types.ParseJID("628123456789@s.whatsapp.net")
+	evt := &events.PairSuccess{
+		ID:           jid,
+		BusinessName: "Toko Test",
+		Platform:     "smba",
+	}
+
+	// Should not panic even with db = nil
+	handlePairSuccessEvent(tenantID, evt)
+}
+
+func TestHandleStatusRequest_MissingTenant(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/wa/status", nil)
+	w := httptest.NewRecorder()
+	handleStatusRequest(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["status"] != "disconnected" {
+		t.Errorf("expected disconnected, got %v", resp["status"])
+	}
+}
+
+func TestHandleStatusRequest_QueryParamTenant(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/wa/status?tenant_id=test-query-tenant", nil)
+	w := httptest.NewRecorder()
+	handleStatusRequest(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["status"] != "disconnected" {
+		t.Errorf("expected disconnected for unknown tenant, got %v", resp["status"])
+	}
 }

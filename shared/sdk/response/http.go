@@ -22,6 +22,7 @@ const (
 )
 
 type APIResponse struct {
+	Success bool        `json:"success"`
 	Status  int         `json:"status"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
@@ -33,6 +34,7 @@ func JSON(w http.ResponseWriter, status int, message string, data interface{}) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(APIResponse{
+		Success: status >= 200 && status < 300,
 		Status:  status,
 		Message: message,
 		Data:    data,
@@ -43,13 +45,14 @@ func Error(w http.ResponseWriter, status int, message string, err error) {
 	w.Header().Set(ContentType, ApplicationJSON)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
-	
+
 	errStr := ""
 	if err != nil {
 		errStr = err.Error()
 	}
 
 	_ = json.NewEncoder(w).Encode(APIResponse{
+		Success: false,
 		Status:  status,
 		Message: message,
 		Error:   errStr,

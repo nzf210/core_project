@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"core_project/shared/sdk/auth"
@@ -65,7 +64,7 @@ func calculateEffectivePlan(ctx context.Context, tenantID string) (planID string
 func upsertTenantSubscription(ctx context.Context, tenantID, planID string, validityDays int, activatedBy string, voucherCodeID *string, systemVoucherCode string) error {
 	_, err := DB.Exec(ctx, `
 		INSERT INTO tenant_subscriptions (tenant_id, plan_id, plan_tier, status, period_days, remaining_days, current_period_end, activated_by, voucher_code_id, system_voucher_code, updated_at)
-		VALUES ($1, $2, $2, 'active', $3, $3, NOW() + ($3 || ' days')::interval, $4, $5, $6, NOW())
+		VALUES ($1, $2, $2, 'active', $3, $3, NOW() + ($3::integer * INTERVAL '1 day'), $4, $5, $6, NOW())
 		ON CONFLICT (tenant_id)
 		DO UPDATE SET
 			plan_id = $2,
@@ -73,7 +72,7 @@ func upsertTenantSubscription(ctx context.Context, tenantID, planID string, vali
 			status = 'active',
 			period_days = tenant_subscriptions.period_days + $3,
 			remaining_days = tenant_subscriptions.remaining_days + $3,
-			current_period_end = GREATEST(COALESCE(tenant_subscriptions.current_period_end, NOW()), NOW()) + ($3 || ' days')::interval,
+			current_period_end = GREATEST(COALESCE(tenant_subscriptions.current_period_end, NOW()), NOW()) + ($3::integer * INTERVAL '1 day'),
 			activated_by = $4,
 			voucher_code_id = COALESCE($5, tenant_subscriptions.voucher_code_id),
 			system_voucher_code = COALESCE($6, tenant_subscriptions.system_voucher_code),
@@ -86,34 +85,29 @@ func upsertTenantSubscription(ctx context.Context, tenantID, planID string, vali
 }
 
 func updateTenantPlanAndCache(ctx context.Context, tenantID, planID string, priority int, validityDays int) {
-	DB.Exec(ctx, `
+	_, err := DB.Exec(ctx, `
 		UPDATE tenants SET
 			plan = $1,
 			plan_priority = $2,
 			is_frozen = false,
 			frozen_at = NULL,
 			onboarding_completed = true,
-			current_plan_expires_at = GREATEST(COALESCE(current_plan_expires_at, NOW()), NOW()) + ($4 || ' days')::interval
+			current_plan_expires_at = GREATEST(COALESCE(current_plan_expires_at, NOW()), NOW()) + ($4::integer * INTERVAL '1 day')
 		WHERE id = $3
 	`, planID, priority, tenantID, validityDays)
+	if err != nil {
+		slog.Error("Failed to update tenant plan and cache", "error", err, "tenant_id", tenantID)
+	}
 	auth.SetTenantPlan(ctx, tenantID, planID)
 }
 
 func createSubscriptionTicket(ctx context.Context, tenantID, planID, planName, ticketNumber string, validityDays int, activatedBy string) (string, error) {
 	var ticketID string
 	err := DB.QueryRow(ctx, `
-		INSERT INTO subscription_tickets (tenant_id, plan_id, plan_name, ticket_number, expires_at, activated_by, notify_wa, notify_telegram, notify_email)
-		VALUES ($1, $2, $3, $4, GREATEST(COALESCE((SELECT expires_at FROM subscription_tickets WHERE tenant_id = $1), NOW()), NOW()) + ($5 || ' days')::interval, $6, true, true, true)
-		ON CONFLICT (tenant_id) DO UPDATE SET
-			plan_id = EXCLUDED.plan_id,
-			plan_name = EXCLUDED.plan_name,
-			ticket_number = EXCLUDED.ticket_number,
-			status = 'active',
-			expires_at = GREATEST(COALESCE(subscription_tickets.expires_at, NOW()), NOW()) + ($5 || ' days')::interval,
-			activated_at = NOW(),
-			updated_at = NOW()
+		INSERT INTO subscription_tickets (tenant_id, plan_id, plan_name, ticket_number, expires_at, notify_wa, notify_telegram, notify_email)
+		VALUES ($1, $2, $3, $4, GREATEST(COALESCE((SELECT expires_at FROM subscription_tickets WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1), NOW()), NOW()) + ($5::integer * INTERVAL '1 day'), true, true, true)
 		RETURNING id
-	`, tenantID, planID, planName, ticketNumber, fmt.Sprintf("%d", validityDays), activatedBy).Scan(&ticketID)
+	`, tenantID, planID, planName, ticketNumber, validityDays).Scan(&ticketID)
 	if err != nil {
 		slog.Error("Failed to create ticket", "error", err)
 		return "", err

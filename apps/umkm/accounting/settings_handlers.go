@@ -31,12 +31,12 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func settingsGet(w http.ResponseWriter, r *http.Request, tenantID string) {
-	var waNumber, xenditApiKey, xenditWebhookToken, xenditMerchantID, reportTime *string
+	var waNumber, xenditApiKey, xenditWebhookToken, xenditMerchantID, reportTime, staticQRIS *string
 	var qrisEnabled, reportEnabled *bool
 	err := DB.QueryRow(r.Context(),
 		`SELECT wa_number, xendit_api_key, xendit_webhook_token, xendit_merchant_id,
-		 qris_enabled, report_enabled, report_time FROM tenants WHERE id = $1`,
-		tenantID).Scan(&waNumber, &xenditApiKey, &xenditWebhookToken, &xenditMerchantID, &qrisEnabled, &reportEnabled, &reportTime)
+		 qris_enabled, report_enabled, report_time, static_qris_payload FROM tenants WHERE id = $1`,
+		tenantID).Scan(&waNumber, &xenditApiKey, &xenditWebhookToken, &xenditMerchantID, &qrisEnabled, &reportEnabled, &reportTime, &staticQRIS)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
@@ -59,12 +59,13 @@ func settingsGet(w http.ResponseWriter, r *http.Request, tenantID string) {
 		Success: true,
 		Data: map[string]any{
 			"wa_number":            ptrOr(waNumber, ""),
-			"xendit_api_key":      ptrOr(xenditApiKey, ""),
+			"xendit_api_key":       ptrOr(xenditApiKey, ""),
 			"xendit_webhook_token": ptrOr(xenditWebhookToken, ""),
-			"xendit_merchant_id":  ptrOr(xenditMerchantID, ""),
+			"xendit_merchant_id":   ptrOr(xenditMerchantID, ""),
 			"qris_enabled":         ptrOrBool(qrisEnabled, false),
 			"report_enabled":       ptrOrBool(reportEnabled, false),
-			"report_time":         ptrOr(reportTime, "07:00"),
+			"report_time":          ptrOr(reportTime, "07:00"),
+			"static_qris_payload":  ptrOr(staticQRIS, ""),
 		},
 	})
 }
@@ -78,6 +79,7 @@ func settingsPut(w http.ResponseWriter, r *http.Request, tenantID string) {
 		QrisEnabled        bool   `json:"qris_enabled"`
 		ReportEnabled      bool   `json:"report_enabled"`
 		ReportTime         string `json:"report_time"`
+		StaticQRISPayload  string `json:"static_qris_payload"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Invalid body"})
@@ -92,10 +94,11 @@ func settingsPut(w http.ResponseWriter, r *http.Request, tenantID string) {
 
 	_, err := DB.Exec(r.Context(),
 		`UPDATE tenants SET wa_number = $1, xendit_api_key = $2, xendit_webhook_token = $3,
-		 xendit_merchant_id = $4, qris_enabled = $5, report_enabled = $6, report_time = $7, updated_at = NOW()
-		 WHERE id = $8`,
+		 xendit_merchant_id = $4, qris_enabled = $5, report_enabled = $6, report_time = $7,
+		 static_qris_payload = $8, updated_at = NOW()
+		 WHERE id = $9`,
 		req.WaNumber, req.XenditApiKey, req.XenditWebhookToken, req.XenditMerchantID,
-		req.QrisEnabled, req.ReportEnabled, req.ReportTime, tenantID)
+		req.QrisEnabled, req.ReportEnabled, req.ReportTime, req.StaticQRISPayload, tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to update settings"})
 		return

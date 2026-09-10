@@ -58,7 +58,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { sanitizeJWT, sanitizeRole, sanitizeText, api } from './api'
 import Chatbot from './components/Chatbot.vue'
@@ -151,6 +151,11 @@ watch(() => route.path, () => {
 
 onMounted(() => {
   checkAuth()
+  window.addEventListener('auth-change', checkAuth)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('auth-change', checkAuth)
 })
 </script>
 

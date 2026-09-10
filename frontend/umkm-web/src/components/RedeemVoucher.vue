@@ -107,6 +107,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
+import { clearMeCache, fetchAndSyncMe } from '../router'
 
 const route = useRoute()
 const router = useRouter()
@@ -160,6 +161,10 @@ async function redeemToken(token: string) {
       success.value = true
       localStorage.setItem('onboarding_completed', 'true')
       if (res.data.plan_id) localStorage.setItem('plan', res.data.plan_id)
+      sessionStorage.setItem('subscription_status', 'active')
+      clearMeCache()
+      fetchAndSyncMe()
+      window.dispatchEvent(new Event('auth-change'))
       localStorage.removeItem('pending_voucher_token')
     } else {
       errorMessage.value = res.message || 'Voucher link tidak valid atau sudah pernah digunakan.'
@@ -200,6 +205,10 @@ async function handleManualRedeem() {
         success.value = true
         localStorage.setItem('onboarding_completed', 'true')
         if (res.data.plan_id) localStorage.setItem('plan', res.data.plan_id)
+        sessionStorage.setItem('subscription_status', 'active')
+        clearMeCache()
+        fetchAndSyncMe()
+        window.dispatchEvent(new Event('auth-change'))
       } else {
         errorMessage.value = res.message || 'Kode voucher tidak valid atau sudah digunakan.'
       }

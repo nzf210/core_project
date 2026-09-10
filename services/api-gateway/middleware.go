@@ -171,7 +171,7 @@ func tenantRateLimitMiddleware(next http.Handler) http.Handler {
 		limits := map[string]int{"lite": 300, "pro": 1000, "enterprise": 999999, "ultimate": 999999}
 		limit := limits[plan.Tier]
 		if limit == 0 {
-			limit = 60
+			limit = 120
 		}
 
 		key := "rate_limit:tenant:" + tenantID

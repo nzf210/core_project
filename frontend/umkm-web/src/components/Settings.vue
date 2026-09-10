@@ -94,18 +94,30 @@
         </label>
       </div>
       <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-        Aktifkan pembayaran QRIS di halaman Kasir secara otomatis via Xendit.
-        Masukkan API Key dan Webhook Token akun Xendit Anda agar sistem bisa meng-generate invoice.
+        Aktifkan pembayaran QRIS di kasir POS. Anda dapat menggunakan <strong>QRIS Statik Toko Anda sendiri</strong> (BCA/Mandiri/GoBiz/ShopeePay) untuk nominal dinamis otomatis tanpa biaya transaksi (0%), atau menggunakan <strong>Xendit Gateway</strong> jika telah memiliki akun Xendit terverifikasi.
       </p>
 
       <div v-if="qrisEnabled" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem;">
-        <!-- ponytail: QRIS fields have implicit label from surrounding text -->
-        <input type="password" aria-label="Xendit Secret API Key" v-model="xenditApiKey" class="form-control"
-          placeholder="Xendit Secret API Key (xnd_...)" />
-        <input type="text" aria-label="Xendit Merchant ID" v-model="xenditMerchantID" class="form-control"
-          placeholder="Xendit Merchant ID (opsional, untuk routing pembayaran ke akun Anda)" />
-        <input type="password" aria-label="Xendit Webhook Token" v-model="xenditWebhookToken" class="form-control"
-          placeholder="Xendit Webhook Verification Token" />
+        <div style="background: rgba(59, 130, 246, 0.08); padding: 1rem; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2);">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.3rem;">⚡ QRIS Statik Toko (Rekomendasi - 0% Fee)</label>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+            Tempel string/payload hasil scan QRIS toko Anda (dari BCA Merchant, Mandiri Livin Usaha, GoBiz, OVO, dll). Sistem akan otomatis menambahkan nominal transaksi (Tag 54) secara dinamis!
+          </p>
+          <textarea aria-label="Payload QRIS Statik Toko" v-model="staticQRISPayload" class="form-control" rows="3"
+            placeholder="00020101021126600016ID.CO.SHOPEE.WWW0118936009180000000000520458125802ID5913NAMA TOKO..."></textarea>
+        </div>
+
+        <div style="border-top: 1px dashed var(--border-color); padding-top: 1rem;">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.3rem;">🌐 Xendit Payment Gateway (Alternatif)</label>
+          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <input type="password" aria-label="Xendit Secret API Key" v-model="xenditApiKey" class="form-control"
+              placeholder="Xendit Secret API Key (xnd_...)" />
+            <input type="text" aria-label="Xendit Merchant ID" v-model="xenditMerchantID" class="form-control"
+              placeholder="Xendit Merchant ID (opsional)" />
+            <input type="password" aria-label="Xendit Webhook Token" v-model="xenditWebhookToken" class="form-control"
+              placeholder="Xendit Webhook Verification Token" />
+          </div>
+        </div>
       </div>
 
       <button class="btn btn-primary" @click="saveQrisSettings" :disabled="loadingQris">
@@ -386,6 +398,7 @@ import { api, API_BASE, getQuotaUsage, type QuotaUsage, sanitizeText } from '../
 import { authApi } from '../api'
 
 const qrisEnabled = ref(false)
+const staticQRISPayload = ref('')
 const xenditApiKey = ref('')
 const xenditWebhookToken = ref('')
 const xenditMerchantID = ref('')
@@ -643,6 +656,7 @@ const loadSettings = async () => {
     const data = await api.get('/api/umkm/settings')
     if (data.success && data.data) {
       qrisEnabled.value = data.data.qris_enabled || false
+      staticQRISPayload.value = data.data.static_qris_payload || ''
       xenditApiKey.value = data.data.xendit_api_key || ''
       xenditMerchantID.value = data.data.xendit_merchant_id || ''
       xenditWebhookToken.value = data.data.xendit_webhook_token || ''
@@ -659,6 +673,7 @@ const saveQrisSettings = async () => {
   try {
     const payload = {
       qris_enabled: qrisEnabled.value,
+      static_qris_payload: staticQRISPayload.value,
       xendit_api_key: xenditApiKey.value,
       xendit_merchant_id: xenditMerchantID.value,
       xendit_webhook_token: xenditWebhookToken.value,

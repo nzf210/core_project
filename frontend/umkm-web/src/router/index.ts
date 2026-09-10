@@ -96,6 +96,10 @@ const router = createRouter({
 let _meCache: MeCache | null = null
 const ME_CACHE_TTL_MS = 30_000 // 30s
 
+export function clearMeCache() {
+  _meCache = null
+}
+
 function syncOnboardingFlag(value: boolean | undefined) {
   const flag = sanitizeBoolean(value ? 'true' : 'false')
   // Always write flag to localStorage, even when false — prevents redirect loop on reload
@@ -139,7 +143,7 @@ function syncUserDataToStorage(data: UserData) {
   if (data.must_change_password !== undefined) syncPasswordFlag(data.must_change_password)
 }
 
-async function fetchAndSyncMe(): Promise<UserData | null> {
+export async function fetchAndSyncMe(): Promise<UserData | null> {
   const token = localStorage.getItem('access_token')
   const tenantId = localStorage.getItem('tenant_id')
   if (!token || !tenantId) return null

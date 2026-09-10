@@ -10,7 +10,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -147,6 +149,42 @@ func checkVoucherUsageQuota(ctx context.Context, programID, tenantID string, max
 	}
 	return nil
 }
+
+func extractClientIP(r *http.Request) *string {
+	if r == nil {
+		return nil
+	}
+
+	var rawIP string
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if before, _, found := strings.Cut(xff, ","); found {
+			rawIP = strings.TrimSpace(before)
+		} else {
+			rawIP = strings.TrimSpace(xff)
+		}
+	} else if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		rawIP = strings.TrimSpace(xri)
+	} else if r.RemoteAddr != "" {
+		rawIP = strings.TrimSpace(r.RemoteAddr)
+	}
+
+	if rawIP == "" {
+		return nil
+	}
+
+	if host, _, err := net.SplitHostPort(rawIP); err == nil {
+		rawIP = host
+	}
+
+	ip := net.ParseIP(rawIP)
+	if ip == nil {
+		return nil
+	}
+
+	ipStr := ip.String()
+	return &ipStr
+}
+
 func processVoucherRedemptionTx(ctx context.Context, req VoucherLinkRedeemReq, linkDB voucherLinkDB, claims *voucherLinkClaims, progInfo voucherProgramInfo, durationMonths int, r *http.Request) (time.Time, string, error) {
 	tx, err := DB.Begin(ctx)
 	if err != nil {
@@ -154,11 +192,17 @@ func processVoucherRedemptionTx(ctx context.Context, req VoucherLinkRedeemReq, l
 	}
 	defer tx.Rollback(ctx)
 
+	clientIP := extractClientIP(r)
+	var userAgent string
+	if r != nil {
+		userAgent = r.UserAgent()
+	}
+
 	_, err = tx.Exec(ctx, `
 		UPDATE voucher_links
 		SET redeemed_by = $1, redeemed_at = NOW(), is_active = false, ip_address = $2, user_agent = $3
 		WHERE id = $4 AND is_active = true AND redeemed_by IS NULL
-	`, req.TenantID, r.RemoteAddr, r.UserAgent(), linkDB.ID)
+	`, req.TenantID, clientIP, userAgent, linkDB.ID)
 	if err != nil {
 		return time.Time{}, "", fmt.Errorf("failed to redeem link: %w", err)
 	}
@@ -196,7 +240,7 @@ func processVoucherRedemptionTx(ctx context.Context, req VoucherLinkRedeemReq, l
 	}
 
 	_, err = tx.Exec(ctx, `
-		UPDATE tenants SET plan = $1, is_frozen = false, frozen_at = NULL, current_plan_expires_at = $2
+		UPDATE tenants SET plan = $1, is_frozen = false, frozen_at = NULL, onboarding_completed = true, current_plan_expires_at = $2
 		WHERE id = $3
 	`, claims.PlanID, newPeriodEnd, req.TenantID)
 	if err != nil {
@@ -206,16 +250,8 @@ func processVoucherRedemptionTx(ctx context.Context, req VoucherLinkRedeemReq, l
 	ticketNumber := generateTicketNumber()
 	var ticketID string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO subscription_tickets (tenant_id, plan_id, plan_name, ticket_number, expires_at, activated_by, notify_wa, notify_telegram, notify_email)
-		VALUES ($1, $2, $3, $4, $5, 'voucher', true, true, true)
-		ON CONFLICT (tenant_id) DO UPDATE SET
-			plan_id = EXCLUDED.plan_id,
-			plan_name = EXCLUDED.plan_name,
-			ticket_number = EXCLUDED.ticket_number,
-			status = 'active',
-			expires_at = EXCLUDED.expires_at,
-			activated_at = NOW(),
-			updated_at = NOW()
+		INSERT INTO subscription_tickets (tenant_id, plan_id, plan_name, ticket_number, expires_at, notify_wa, notify_telegram, notify_email)
+		VALUES ($1, $2, $3, $4, $5, true, true, true)
 		RETURNING id
 	`, req.TenantID, claims.PlanID, progInfo.PlanName, ticketNumber, newPeriodEnd).Scan(&ticketID)
 	if err != nil {

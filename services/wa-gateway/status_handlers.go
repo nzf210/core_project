@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"go.mau.fi/whatsmeow"
-	"core_project/shared/sdk/response"
 )
 
 func setupStatusHandler() {
@@ -14,8 +13,13 @@ func setupStatusHandler() {
 }
 
 func handleStatusRequest(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get(response.XTenantID)
+	tenantID := extractTenantID(r)
 	w.Header().Set(headerContentType, contentTypeJSON)
+
+	if tenantID == "" {
+		writeStatus(w, "disconnected", "", "", "Missing tenant ID")
+		return
+	}
 
 	if owner, isOther := checkOtherInstanceOwner(tenantID); isOther {
 		jid := getSessionJIDFromDB(tenantID)
@@ -28,7 +32,18 @@ func handleStatusRequest(w http.ResponseWriter, r *http.Request) {
 			writeStatus(w, "connected", client.Store.ID.String(), "", "")
 			return
 		}
+		// If client is reconnecting right after pair success, check DB
+		if jid := getSessionJIDFromDB(tenantID); jid != "" {
+			writeStatus(w, "connected", jid, "", "Session paired and reconnecting")
+			return
+		}
 		writeStatus(w, "connecting", client.Store.ID.String(), "", "Session reconnecting")
+		return
+	}
+
+	// Fallback: check if session is recorded in DB (e.g. freshly paired or restored)
+	if jid := getSessionJIDFromDB(tenantID); jid != "" {
+		writeStatus(w, "connected", jid, "", "Session active")
 		return
 	}
 
@@ -55,15 +70,21 @@ func getClientByTenant(tenantID string) (*whatsmeow.Client, bool) {
 }
 
 func getSessionJIDFromDB(tenantID string) string {
-	if db == nil {
+	if db == nil || tenantID == "" {
 		return ""
 	}
 	var jid string
 	err := db.QueryRow("SELECT jid FROM wa_tenant_sessions WHERE tenant_id = $1", tenantID).Scan(&jid)
-	if err != nil || jid == "" {
-		return ""
+	if err == nil && jid != "" {
+		return jid
 	}
-	return jid
+	// Fallback to wa_sessions if status is connected
+	var waNum string
+	err = db.QueryRow("SELECT wa_number FROM wa_sessions WHERE tenant_id = $1::uuid AND status = 'connected' LIMIT 1", tenantID).Scan(&waNum)
+	if err == nil && waNum != "" {
+		return waNum + "@s.whatsapp.net"
+	}
+	return ""
 }
 
 func writeStatus(w http.ResponseWriter, status, jid, owner, msg string) {

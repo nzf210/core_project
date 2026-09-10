@@ -85,7 +85,7 @@ func handleWalletTopupWebhook(ctx context.Context, externalID, status string, pa
 
 	// Insert transaction log first — if reference already exists, constraint triggers CONFLICT.
 	result, err := tx.Exec(ctx, `
-		INSERT INTO wallet_transactions (tenant_id, amount_cents, transaction_type, reference, description)
+		INSERT INTO wallet_transactions (tenant_id, amount_rupiah, transaction_type, reference, description)
 		VALUES ($1, $2, 'topup', $3, 'Top-up via Xendit invoice')
 		ON CONFLICT (reference) DO NOTHING
 	`, tenantID, amountCents, externalID)
@@ -100,10 +100,10 @@ func handleWalletTopupWebhook(ctx context.Context, externalID, status string, pa
 
 	// Credit wallet only if transaction insert succeeded (not a duplicate).
 	_, err = tx.Exec(ctx, `
-		INSERT INTO wallet_credits (tenant_id, balance_cents, updated_at)
+		INSERT INTO wallet_credits (tenant_id, balance_rupiah, updated_at)
 		VALUES ($1, $2, NOW())
 		ON CONFLICT (tenant_id)
-		DO UPDATE SET balance_cents = wallet_credits.balance_cents + $2, updated_at = NOW()
+		DO UPDATE SET balance_rupiah = wallet_credits.balance_rupiah + $2, updated_at = NOW()
 	`, tenantID, amountCents)
 	if err != nil {
 		slog.Error("Topup: Failed to update wallet_credits", "tenant", tenantID, "err", err)

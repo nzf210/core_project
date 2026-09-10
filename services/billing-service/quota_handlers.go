@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -99,12 +100,14 @@ func handleAddonMarketplace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	tenantTier := auth.GetTenantPlan(ctx, tenantID)
 
 	// Get all addon features
 	rows, err := DB.Query(ctx,
 		`SELECT af.feature_key, af.feature_name, af.description, af.category,
 		        af.addon_price_cents, af.addon_unit, af.is_addon,
-		        ta.status, ta.expires_at, ta.purchase_price_cents
+		        ta.status, ta.expires_at, ta.purchase_price_cents,
+		        (SELECT min_tier FROM plan_features pf WHERE pf.feature_key = af.feature_key AND pf.min_tier IS NOT NULL LIMIT 1) AS min_tier
 		 FROM available_features af
 		 LEFT JOIN tenant_addons ta ON ta.addon_key = af.feature_key
 		        AND ta.tenant_id = $1
@@ -122,11 +125,15 @@ func handleAddonMarketplace(w http.ResponseWriter, r *http.Request) {
 		Description        string  `json:"description"`
 		Category           string  `json:"category"`
 		PriceCents         int64   `json:"price_cents"`
+		PriceRupiah        int64   `json:"price_rupiah"`
 		Unit               string  `json:"addon_unit"`
 		HasAddon           bool    `json:"has_addon"`
 		AddonStatus        *string `json:"addon_status,omitempty"`
 		ExpiresAt          *string `json:"expires_at,omitempty"`
 		PurchasePriceCents *int64  `json:"purchase_price_cents,omitempty"`
+		MinTier            *string `json:"min_tier,omitempty"`
+		CanPurchase        bool    `json:"can_purchase"`
+		TierWarning        string  `json:"tier_warning,omitempty"`
 	}
 
 	var items []marketplaceItem
@@ -135,10 +142,23 @@ func handleAddonMarketplace(w http.ResponseWriter, r *http.Request) {
 		var expiresAt *time.Time
 		var addonStatus *string
 		var purchasePrice *int64
+		var minTier *string
 		if err := rows.Scan(&m.Key, &m.Name, &m.Description, &m.Category,
 			&m.PriceCents, &m.Unit, &m.HasAddon,
-			&addonStatus, &expiresAt, &purchasePrice); err != nil {
+			&addonStatus, &expiresAt, &purchasePrice, &minTier); err != nil {
 			continue
+		}
+		m.PriceRupiah = m.PriceCents / 100
+		if m.PriceRupiah == 0 && m.PriceCents > 0 {
+			m.PriceRupiah = m.PriceCents
+		}
+		m.MinTier = minTier
+		m.CanPurchase = true
+		if minTier != nil && *minTier != "" {
+			if auth.TierPriority(tenantTier) < auth.TierPriority(*minTier) {
+				m.CanPurchase = false
+				m.TierWarning = fmt.Sprintf("Addon ini memerlukan paket minimal %s (Paket aktif: %s)", strings.ToUpper(*minTier), strings.ToUpper(tenantTier))
+			}
 		}
 		if addonStatus != nil && *addonStatus != "" {
 			m.HasAddon = true
@@ -240,6 +260,20 @@ func handlePurchaseAddon(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Error(w, http.StatusNotFound, "Addon not found", nil)
 		return
+	}
+
+	// 1b. Check min_tier requirement
+	tenantTier := auth.GetTenantPlan(ctx, tenantID)
+	var minTier *string
+	_ = DB.QueryRow(ctx,
+		`SELECT min_tier FROM plan_features
+		 WHERE feature_key = $1 AND min_tier IS NOT NULL LIMIT 1`,
+		req.AddonKey).Scan(&minTier)
+	if minTier != nil && *minTier != "" {
+		if auth.TierPriority(tenantTier) < auth.TierPriority(*minTier) {
+			response.Error(w, http.StatusForbidden, fmt.Sprintf("Addon ini memerlukan paket minimal %s. Paket Anda saat ini: %s. Silakan upgrade paket terlebih dahulu.", strings.ToUpper(*minTier), strings.ToUpper(tenantTier)), nil)
+			return
+		}
 	}
 
 	// 2. Check if already has active addon

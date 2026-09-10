@@ -3,6 +3,13 @@
     <h2>💳 Wallet</h2>
     <p class="subtitle">Kelola saldo wallet dan top-up via Xendit</p>
 
+    <div v-if="paymentStatus === 'success'" class="success-banner animate-fade-in" style="margin-top: 1rem; padding: 0.75rem 1rem; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px; color: #10b981; font-weight: 500;">
+      ✅ Pembayaran berhasil! Saldo wallet telah masuk.
+    </div>
+    <div v-if="paymentStatus === 'failed'" class="error-banner animate-fade-in" style="margin-top: 1rem; padding: 0.75rem 1rem; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 8px; color: #ef4444; font-weight: 500;">
+      ⚠️ Pembayaran belum selesai atau dibatalkan.
+    </div>
+
     <div class="wallet-balance-card glass-card animate-fade-in">
       <div class="balance-label">Saldo Tersedia</div>
       <div class="balance-amount">
@@ -45,13 +52,13 @@
 
       <div v-if="topupInvoiceUrl" class="topup-result">
         <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-          Invoice dibuat! Silakan lanjutkan pembayaran:
+          Mengalihkan ke pembayaran Xendit... Jika browser tidak mengalihkan otomatis:
         </p>
-        <a :href="topupInvoiceUrl" target="_blank" rel="noopener" class="btn btn-secondary" style="width: 100%; text-align: center;">
-          🔗 Bayar Sekarang
+        <a :href="topupInvoiceUrl" class="btn btn-secondary" style="width: 100%; text-align: center; display: block;">
+          🔗 Klik di Sini untuk Menuju Pembayaran (Xendit)
         </a>
         <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
-          Invoice akan terverifikasi otomatis setelah pembayaran. Halaman akan refresh dalam beberapa detik.
+          Pilih metode bayar (QRIS, Virtual Account, E-Wallet, atau Retail) pada halaman Xendit. Setelah pembayaran selesai, saldo akan terupdate secara otomatis.
         </p>
       </div>
     </div>
@@ -91,9 +98,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { api } from '../api'
 import { formatRupiah } from '../composables/useCurrency'
 
+const route = useRoute()
 const walletData = ref<any>({ balance_rupiah: 0, transactions: [] })
 const loadingWallet = ref(false)
 const loadingTopup = ref(false)
@@ -101,6 +110,7 @@ const loadingMore = ref(false)
 const topupAmount = ref<number | null>(null)
 const topupError = ref('')
 const topupInvoiceUrl = ref('')
+const paymentStatus = ref('')
 
 const formattedBalance = computed(() => {
   return formatRupiah(walletData.value.balance_rupiah || 0)
@@ -108,7 +118,6 @@ const formattedBalance = computed(() => {
 
 const loadWallet = async () => {
   loadingWallet.value = true
-  topupInvoiceUrl.value = ''
   try {
     const data = await api.getWallet()
     if (data.success && data.data) {
@@ -133,15 +142,17 @@ const handleTopup = async () => {
   loadingTopup.value = true
   try {
     const data = await api.topupWallet(topupAmount.value)
-    if (data.success && data.data?.invoice_url) {
-      topupInvoiceUrl.value = data.data.invoice_url
-      // Auto-refresh after 5 seconds to pick up payment confirmation
-      setTimeout(() => loadWallet(), 5000)
-    } else if (data.success && data.data?.status === 'free') {
+    const invoiceUrl = data?.data?.invoice_url || data?.invoice_url
+    const isSuccess = data?.success === true || data?.status === 200 || (!data?.status && !!invoiceUrl)
+    if (isSuccess && invoiceUrl) {
+      topupInvoiceUrl.value = invoiceUrl
+      // Direct redirect ke payment checkout Xendit
+      window.location.href = invoiceUrl
+    } else if (data?.data?.status === 'free' || data?.status === 'free') {
       // Free transaction
       loadWallet()
     } else {
-      topupError.value = data.message || 'Gagal membuat invoice'
+      topupError.value = data?.message || data?.error || 'Gagal membuat invoice'
     }
   } catch (e: any) {
     topupError.value = e.message || 'Gagal memproses top-up'
@@ -169,6 +180,11 @@ const loadMore = async () => {
 }
 
 onMounted(() => {
+  if (route.query.status === 'success') {
+    paymentStatus.value = 'success'
+  } else if (route.query.status === 'failed') {
+    paymentStatus.value = 'failed'
+  }
   loadWallet()
 })
 </script>

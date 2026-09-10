@@ -327,7 +327,7 @@
     </div>
 
     <!-- QR Modal -->
-    <div v-if="qrModal" class="modal-backdrop" @click.self="qrModal = false; stopQRPolling()">
+    <div v-if="qrModal" class="modal-backdrop" @click.self="closeQRModal()">
       <div class="modal-content surface-card" style="max-width: 360px; padding: 1.5rem; text-align: center;">
         <h3 style="margin-bottom: 0.75rem;">📱 Scan QR Code</h3>
         <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
@@ -349,7 +349,7 @@
           {{ qrError }}
         </div>
         <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
-          <button class="btn btn-secondary" @click="qrModal = false; stopQRPolling()">Tutup</button>
+          <button class="btn btn-secondary" @click="closeQRModal()">Tutup</button>
           <button v-if="qrStatus === 'qr'" class="btn btn-primary" @click="requestQR">🔄 Refresh QR</button>
         </div>
       </div>
@@ -717,6 +717,12 @@ function stopQRPolling() {
   if (qrPollInterval) { clearInterval(qrPollInterval); qrPollInterval = null }
 }
 
+function closeQRModal() {
+  qrModal.value = false
+  stopQRPolling()
+  loadData()
+}
+
 async function requestQR() {
   qrModal.value = true
   qrImage.value = ''
@@ -724,42 +730,63 @@ async function requestQR() {
   qrError.value = ''
   stopQRPolling()
 
-  const poll = async () => {
-    try {
-      const res = await api.wa('qr')
-      if (res.status === 'qr' && res.qr_code) {
-        qrImage.value = res.qr_code
-        qrStatus.value = 'qr'
-        // Poll every 3s until connected or error
-        qrPollInterval = setInterval(poll, 3000)
-      } else if (res.status === 'connected') {
-        qrStatus.value = 'connected'
-        qrImage.value = ''
-        stopQRPolling()
-        // Auto-close after 2s
-        setTimeout(() => { qrModal.value = false }, 2000)
-        // Refresh WA status
-        const resWA = await api.getWASetup()
-        if (resWA.success) waSetupState.value = resWA.data
-      } else if (res.status === 'busy') {
-        qrStatus.value = 'error'
-        qrError.value = res.message || 'Gateway sibuk, coba lagi sebentar.'
-        stopQRPolling()
-      } else if (res.error) {
-        qrStatus.value = 'error'
-        qrError.value = res.error
-        stopQRPolling()
-      }
-    } catch (e: any) {
+  try {
+    const res = await api.wa('qr')
+    if (res.status === 'qr' && res.qr_code) {
+      qrImage.value = res.qr_code
+      qrStatus.value = 'qr'
+
+      // Poll status (bukan 'qr') setiap 2 detik sampai connected atau timeout
+      qrPollInterval = setInterval(async () => {
+        try {
+          const statusRes = await api.wa('status')
+          if (statusRes.status === 'connected') {
+            qrStatus.value = 'connected'
+            qrImage.value = ''
+            stopQRPolling()
+            const resWA = await api.getWASetup()
+            if (resWA.success) waSetupState.value = resWA.data
+            setTimeout(() => { qrModal.value = false }, 1500)
+            return
+          }
+
+          // Fallback: cek endpoint setup langsung jika wa status sedang lag
+          const resWA = await api.getWASetup()
+          if (resWA.success && resWA.data?.whatsmeow?.connected) {
+            qrStatus.value = 'connected'
+            qrImage.value = ''
+            stopQRPolling()
+            waSetupState.value = resWA.data
+            setTimeout(() => { qrModal.value = false }, 1500)
+          }
+        } catch {
+          // ignore transient poll error
+        }
+      }, 2000)
+    } else if (res.status === 'connected') {
+      qrStatus.value = 'connected'
+      qrImage.value = ''
+      stopQRPolling()
+      setTimeout(() => { qrModal.value = false }, 2000)
+      const resWA = await api.getWASetup()
+      if (resWA.success) waSetupState.value = resWA.data
+    } else if (res.status === 'busy') {
       qrStatus.value = 'error'
-      qrError.value = e?.message || 'Gagal mengambil QR code'
+      qrError.value = res.message || 'Gateway sibuk, coba lagi sebentar.'
+      stopQRPolling()
+    } else if (res.error) {
+      qrStatus.value = 'error'
+      qrError.value = res.error
       stopQRPolling()
     }
+  } catch (e: any) {
+    qrStatus.value = 'error'
+    qrError.value = e?.message || 'Gagal mengambil QR code'
+    stopQRPolling()
   }
 
   // Stop after 5 minutes to avoid infinite polling
   setTimeout(() => { stopQRPolling() }, 5 * 60 * 1000)
-  await poll()
 }
 
 // AI Config Actions

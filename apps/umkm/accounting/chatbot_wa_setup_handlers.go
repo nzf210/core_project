@@ -37,7 +37,14 @@ func handleWASetup(w http.ResponseWriter, r *http.Request) {
 		Status    string `json:"status"`
 	}
 	var wmStatus string
-	_ = DB.QueryRow(ctx, "SELECT status FROM wa_sessions WHERE tenant_id = $1", tenantID).Scan(&wmStatus)
+	_ = DB.QueryRow(ctx, "SELECT status FROM wa_sessions WHERE tenant_id = $1 ORDER BY updated_at DESC LIMIT 1", tenantID).Scan(&wmStatus)
+	if wmStatus == "" || wmStatus == "disconnected" {
+		var jid string
+		_ = DB.QueryRow(ctx, "SELECT jid FROM wa_tenant_sessions WHERE tenant_id = $1", tenantID).Scan(&jid)
+		if jid != "" {
+			wmStatus = "connected"
+		}
+	}
 	switch wmStatus {
 	case "connected":
 		whatsmeowStatus.Connected = true

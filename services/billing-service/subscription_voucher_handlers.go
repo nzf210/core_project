@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"core_project/shared/sdk/auth"
 	"core_project/shared/sdk/response"
+	"github.com/google/uuid"
 )
 
 func extractTokenFromVoucherInput(input string) string {
@@ -110,19 +112,27 @@ func resolveVoucherValidityDays(codeValidityDays, programDurationMonths int) int
 	return 30
 }
 
+func getTenantProgramUses(ctx context.Context, programID, tenantID string) int {
+	var countCodes, countLinks int
+	_ = DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_codes WHERE program_id = $1 AND used_by = $2`, programID, tenantID).Scan(&countCodes)
+	_ = DB.QueryRow(ctx, `SELECT COUNT(*) FROM voucher_links WHERE program_id = $1 AND redeemed_by = $2`, programID, tenantID).Scan(&countLinks)
+	return countCodes + countLinks
+}
+
 func handleRedeemCodeVoucher(w http.ResponseWriter, ctx context.Context, cleanInput, tenantID string) {
 	var programID, programName, voucherType string
 	var discountValue, programDurationMonths int
 	var targetPlanID *string
 	var expiresAt *time.Time
-	var maxUses, usesCount int
+	var maxUses, usesCount, maxUsesPerTenant int
 	var codeValidityDays int
 	var isDirectProgramRedeem bool
+	var voucherCodeID *string
 
 	err := DB.QueryRow(ctx, `
 		SELECT vp.id, vp.name, vp.voucher_type, vp.discount_value, vp.duration_months,
-		       vp.target_plan_id, vp.expires_at, vp.max_uses, vp.uses_count,
-		       vc.validity_days
+		       vp.target_plan_id, vp.expires_at, vp.max_uses, vp.uses_count, COALESCE(vp.max_uses_per_tenant, 1),
+		       vc.id, vc.validity_days
 		FROM voucher_programs vp
 		JOIN voucher_codes vc ON vc.program_id = vp.id
 		WHERE UPPER(TRIM(vc.code)) = UPPER(TRIM($1)) AND vc.is_redeemed = false
@@ -130,13 +140,22 @@ func handleRedeemCodeVoucher(w http.ResponseWriter, ctx context.Context, cleanIn
 		  AND (vp.expires_at IS NULL OR vp.expires_at > NOW())
 		LIMIT 1
 	`, cleanInput).Scan(&programID, &programName, &voucherType, &discountValue, &programDurationMonths,
-		&targetPlanID, &expiresAt, &maxUses, &usesCount, &codeValidityDays)
+		&targetPlanID, &expiresAt, &maxUses, &usesCount, &maxUsesPerTenant,
+		&voucherCodeID, &codeValidityDays)
 
 	if err != nil {
+		// If code exists in voucher_codes but was already used
+		var alreadyRedeemed bool
+		_ = DB.QueryRow(ctx, `SELECT is_redeemed FROM voucher_codes WHERE UPPER(TRIM(code)) = UPPER(TRIM($1))`, cleanInput).Scan(&alreadyRedeemed)
+		if alreadyRedeemed {
+			response.Error(w, http.StatusBadRequest, "Voucher sudah pernah digunakan", nil)
+			return
+		}
+
 		// Fallback: Check if cleanInput is directly a voucher_programs.id (UUID)
 		err = DB.QueryRow(ctx, `
 			SELECT vp.id, vp.name, vp.voucher_type, vp.discount_value, vp.duration_months,
-			       vp.target_plan_id, vp.expires_at, vp.max_uses, vp.uses_count,
+			       vp.target_plan_id, vp.expires_at, vp.max_uses, vp.uses_count, COALESCE(vp.max_uses_per_tenant, 1),
 			       (vp.duration_months * 30) AS validity_days
 			FROM voucher_programs vp
 			WHERE LOWER(vp.id::text) = LOWER(TRIM($1))
@@ -144,7 +163,7 @@ func handleRedeemCodeVoucher(w http.ResponseWriter, ctx context.Context, cleanIn
 			  AND (vp.expires_at IS NULL OR vp.expires_at > NOW())
 			LIMIT 1
 		`, cleanInput).Scan(&programID, &programName, &voucherType, &discountValue, &programDurationMonths,
-			&targetPlanID, &expiresAt, &maxUses, &usesCount, &codeValidityDays)
+			&targetPlanID, &expiresAt, &maxUses, &usesCount, &maxUsesPerTenant, &codeValidityDays)
 
 		if err == nil {
 			isDirectProgramRedeem = true
@@ -153,6 +172,12 @@ func handleRedeemCodeVoucher(w http.ResponseWriter, ctx context.Context, cleanIn
 
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, "Voucher invalid or already used", nil)
+		return
+	}
+
+	tenantUses := getTenantProgramUses(ctx, programID, tenantID)
+	if maxUsesPerTenant > 0 && tenantUses >= maxUsesPerTenant {
+		response.Error(w, http.StatusBadRequest, "Voucher sudah pernah digunakan oleh akun ini", nil)
 		return
 	}
 
@@ -181,11 +206,21 @@ func handleRedeemCodeVoucher(w http.ResponseWriter, ctx context.Context, cleanIn
 		if err != nil {
 			slog.Warn("Failed to mark voucher redeemed", "error", err)
 		}
+	} else {
+		directCode := fmt.Sprintf("DIRECT-%s-%s", tenantID[:8], uuid.NewString()[:8])
+		_, err = DB.Exec(ctx, `
+			INSERT INTO voucher_codes (program_id, code, used_by, used_at, is_redeemed, validity_days)
+			VALUES ($1, $2, $3, NOW(), true, $4)
+		`, programID, directCode, tenantID, finalValidityDays)
+		if err != nil {
+			slog.Warn("Failed to record direct program redemption", "error", err)
+		}
 	}
 
 	_, _ = DB.Exec(ctx, `UPDATE voucher_programs SET uses_count = uses_count + 1 WHERE id = $1`, programID)
 
 	ticketID := activateSubscription(ctx, tenantID, planID, planName, finalValidityDays, "voucher", voucherActivationOpts{
+		VoucherCodeID:     voucherCodeID,
 		SystemVoucherCode: cleanInput,
 	})
 

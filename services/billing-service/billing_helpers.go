@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,12 +50,15 @@ func getTenantXenditClient(ctx context.Context, tenantID string) (*xendit.APICli
 	}
 
 	var apiKey string
-	err := DB.QueryRow(ctx, "SELECT xendit_api_key FROM tenants WHERE id = $1", tenantID).Scan(&apiKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get xendit_api_key for tenant %s: %w", tenantID, err)
+	if tenantID != "" {
+		_ = DB.QueryRow(ctx, "SELECT xendit_api_key FROM tenants WHERE id = $1", tenantID).Scan(&apiKey)
+	}
+	// Fallback to platform-level XENDIT_API_KEY (for SaaS subscriptions & platform wallet topup)
+	if apiKey == "" {
+		apiKey = os.Getenv("XENDIT_API_KEY")
 	}
 	if apiKey == "" {
-		return nil, fmt.Errorf("tenant %s has no xendit_api_key configured", tenantID)
+		return nil, fmt.Errorf("tenant %s has no xendit_api_key configured and no platform XENDIT_API_KEY", tenantID)
 	}
 
 	client := xendit.NewClient(apiKey)
@@ -72,6 +77,21 @@ func getTenantXenditClient(ctx context.Context, tenantID string) (*xendit.APICli
 	xenditClientMu.Unlock()
 
 	return client, nil
+}
+
+func getPlatformXenditClient() (*xendit.APIClient, error) {
+	return getTenantXenditClient(context.Background(), "")
+}
+
+func formatXenditInvoiceError(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if strings.Contains(strings.ToLower(msg), "forbidden") || strings.Contains(strings.ToLower(msg), "permission") {
+		return "API Key Xendit tidak memiliki izin membuat invoice. Buka Xendit Dashboard > Settings > API Keys, lalu pastikan izin 'Money-in: Invoices' diatur ke 'Write'."
+	}
+	return msg
 }
 
 func getTenantXenditWebhookToken(ctx context.Context, tenantID string) (string, error) {

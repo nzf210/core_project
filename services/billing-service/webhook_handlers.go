@@ -173,15 +173,15 @@ func handleOverpayment(ctx context.Context, tenantID, externalID string, paidAmo
 	slog.Info("Overpayment detected, crediting wallet", "tenant_id", tenantID, "excess_cents", excess)
 
 	_, errW := DB.Exec(ctx, `
-		INSERT INTO wallet_credits (tenant_id, balance_cents, updated_at)
+		INSERT INTO wallet_credits (tenant_id, balance_rupiah, updated_at)
 		VALUES ($1, $2, NOW())
 		ON CONFLICT (tenant_id)
-		DO UPDATE SET balance_cents = wallet_credits.balance_cents + $2, updated_at = NOW()
+		DO UPDATE SET balance_rupiah = wallet_credits.balance_rupiah + $2, updated_at = NOW()
 	`, tenantID, excess)
 
 	if errW == nil {
 		DB.Exec(ctx, `
-			INSERT INTO wallet_transactions (tenant_id, amount_cents, transaction_type, reference, description)
+			INSERT INTO wallet_transactions (tenant_id, amount_rupiah, transaction_type, reference, description)
 			VALUES ($1, $2, 'topup', $3, 'Excess payment from invoice')
 		`, tenantID, excess, externalID)
 	}

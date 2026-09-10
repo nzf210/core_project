@@ -53,6 +53,11 @@
         :class="['addon-card', { active: addon.has_addon }]"
         :style="{ animationDelay: `${idx * 60}ms` }"
       >
+        <!-- Min Tier Requirement Badge -->
+        <div v-if="addon.min_tier" class="min-tier-badge">
+          Min. {{ addon.min_tier.toUpperCase() }}
+        </div>
+
         <!-- Active Badge -->
         <div v-if="addon.has_addon" class="active-badge">
           <span class="badge-dot"></span>
@@ -80,6 +85,9 @@
           <div v-if="addon.has_addon && addon.expires_at" class="expires-info">
             Aktif hingga {{ formatDate(addon.expires_at) }}
           </div>
+          <div v-else-if="addon.can_purchase === false" class="tier-warning-box">
+            ⚠️ {{ addon.tier_warning || `Memerlukan paket minimal ${addon.min_tier?.toUpperCase()}` }}
+          </div>
         </div>
 
         <!-- Action -->
@@ -93,6 +101,14 @@
             <button class="btn btn-primary btn-sm" disabled>
               <span class="spinner"></span>
               Memproses...
+            </button>
+          </template>
+          <template v-else-if="addon.can_purchase === false">
+            <button
+              class="btn btn-secondary btn-sm"
+              @click="handlePurchase(addon)"
+            >
+              ⚠️ Perlu Upgrade
             </button>
           </template>
           <template v-else>
@@ -123,22 +139,37 @@
             <span class="confirm-name">{{ confirmAddon.feature_name }}</span>
             <span class="confirm-price">{{ formatRupiah(confirmAddon.price_rupiah) }}</span>
           </div>
-          <p class="confirm-subtitle">
-            Saldo wallet Anda: <strong>Rp {{ formattedWalletBalance }}</strong>
-          </p>
-          <div v-if="walletBalanceRupiah < confirmAddon.price_rupiah" class="balance-warning">
-            ⚠️ Saldo tidak cukup.
-            <button class="link-btn" @click="$router.push('/wallet'); confirmAddon = null">
-              Top-up wallet →
+
+          <!-- Tier Incompatible Notification -->
+          <div v-if="confirmAddon.can_purchase === false" class="balance-warning">
+            <div style="font-weight: 600; margin-bottom: 0.25rem;">⚠️ Paket Tidak Memenuhi Syarat</div>
+            <p style="margin: 0 0 0.5rem 0; font-size: 0.85rem;">
+              {{ confirmAddon.tier_warning || `Addon ini hanya tersedia untuk paket minimal ${confirmAddon.min_tier?.toUpperCase()}.` }}
+            </p>
+            <button class="link-btn" @click="$router.push('/settings'); confirmAddon = null">
+              Upgrade Paket di Pengaturan →
             </button>
           </div>
-          <div v-else class="confirm-note">
-            Saldo akan langsung deducted dari wallet Anda.
-          </div>
+
+          <template v-else>
+            <p class="confirm-subtitle">
+              Saldo wallet Anda: <strong>Rp {{ formattedWalletBalance }}</strong>
+            </p>
+            <div v-if="walletBalanceRupiah < confirmAddon.price_rupiah" class="balance-warning">
+              ⚠️ Saldo tidak cukup.
+              <button class="link-btn" @click="$router.push('/wallet'); confirmAddon = null">
+                Top-up wallet →
+              </button>
+            </div>
+            <div v-else class="confirm-note">
+              Saldo akan langsung deducted dari wallet Anda.
+            </div>
+          </template>
+
           <div class="modal-actions">
-            <button class="btn btn-ghost" @click="confirmAddon = null">Batal</button>
+            <button class="btn btn-ghost" @click="confirmAddon = null">Tutup</button>
             <button
-              v-if="walletBalanceRupiah >= confirmAddon.price_rupiah"
+              v-if="confirmAddon.can_purchase !== false && walletBalanceRupiah >= confirmAddon.price_rupiah"
               class="btn btn-primary"
               @click="executePurchase"
               :disabled="purchasing === confirmAddon.addon_key"
@@ -163,11 +194,15 @@ interface AddonItem {
   description: string
   category: string
   price_rupiah: number
+  price_cents?: number
   addon_unit: string
   has_addon: boolean
   addon_status?: string
   expires_at?: string
   purchase_price_rupiah?: number
+  min_tier?: string
+  can_purchase?: boolean
+  tier_warning?: string
 }
 
 const marketplace = ref<AddonItem[]>([])
@@ -247,7 +282,10 @@ const loadMarketplace = async () => {
     })
     const data = await res.json()
     if (data.success && data.data && Array.isArray(data.data.addons)) {
-      marketplace.value = data.data.addons
+      marketplace.value = data.data.addons.map((a: any) => ({
+        ...a,
+        price_rupiah: a.price_rupiah ?? (a.price_cents ? Math.floor(a.price_cents / 100) : 0),
+      }))
     } else {
       marketplace.value = []
     }
