@@ -130,9 +130,18 @@ func mergeChatbotConfig(current, body *ChatbotConfig) ChatbotConfig {
 }
 
 func saveChatbotConfig(ctx context.Context, tenantID string, cfg *ChatbotConfig) error {
-	kwJSON, _ := json.Marshal(cfg.EscalationKeywords)
-	daysJSON, _ := json.Marshal(cfg.BusinessDays)
-	channelsJSON, _ := json.Marshal(cfg.ChannelsEnabled)
+	businessDays := cfg.BusinessDays
+	if businessDays == nil {
+		businessDays = []int{}
+	}
+	escalationKeywords := cfg.EscalationKeywords
+	if escalationKeywords == nil {
+		escalationKeywords = []string{}
+	}
+	channelsEnabled := cfg.ChannelsEnabled
+	if channelsEnabled == nil {
+		channelsEnabled = []string{}
+	}
 
 	_, err := DB.Exec(ctx, `
 		UPDATE tenant_chatbot_configs SET
@@ -149,10 +158,10 @@ func saveChatbotConfig(ctx context.Context, tenantID string, cfg *ChatbotConfig)
 	`, cfg.LLMProvider, cfg.LLMModel, cfg.Temperature, cfg.MaxTokens,
 		nullString(cfg.SystemPrompt), cfg.Tone, cfg.Language, cfg.MaxContextMessages,
 		cfg.WelcomeMessage, cfg.FallbackMessage, cfg.OutsideHoursMessage,
-		cfg.BusinessHoursStart, cfg.BusinessHoursEnd, daysJSON,
-		cfg.EscalationEnabled, kwJSON, cfg.EscalationConfidenceThreshold,
+		cfg.BusinessHoursStart, cfg.BusinessHoursEnd, businessDays,
+		cfg.EscalationEnabled, escalationKeywords, cfg.EscalationConfidenceThreshold,
 		cfg.AutoEscalateAfterMinutes, cfg.RAGEnabled, cfg.RAGTopK, cfg.RAGSimilarityThreshold,
-		channelsJSON, cfg.IsActive, cfg.EnableVision, cfg.EnableVoiceReply, cfg.VoiceModel,
+		channelsEnabled, cfg.IsActive, cfg.EnableVision, cfg.EnableVoiceReply, cfg.VoiceModel,
 		cfg.WAProviderPreference, tenantID)
 	return err
 }

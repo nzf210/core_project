@@ -69,6 +69,33 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func isTransactionalRequest(r *http.Request) bool {
+	if r.Method == http.MethodGet || r.Method == http.MethodOptions || r.Method == http.MethodHead {
+		return false
+	}
+	path := strings.ToLower(r.URL.Path)
+
+	// Explicitly exempt non-transactional management paths (settings, chatbot, faqs, wa, products, etc.)
+	if strings.Contains(path, "/chatbot") ||
+		strings.Contains(path, "/settings") ||
+		strings.Contains(path, "/faqs") ||
+		strings.Contains(path, "/wa") ||
+		strings.Contains(path, "/products") ||
+		strings.Contains(path, "/accounts") ||
+		strings.Contains(path, "/clinic") ||
+		strings.Contains(path, "/automations") ||
+		strings.Contains(path, "/ai") ||
+		strings.Contains(path, "/chat") ||
+		strings.Contains(path, "/campaign") {
+		return false
+	}
+
+	return strings.Contains(path, "/transactions") ||
+		strings.Contains(path, "/expenses") ||
+		strings.Contains(path, "/checkout") ||
+		strings.Contains(path, "/import/journal")
+}
+
 func quotaMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tenantID, ok := r.Context().Value(auth.TenantIDKey).(string)
@@ -79,7 +106,7 @@ func quotaMiddleware(next http.Handler) http.Handler {
 
 		plan := auth.GetPlan(tenantID)
 
-		if plan.Tier == "lite" && r.Method != http.MethodGet && r.Method != http.MethodOptions {
+		if plan.Tier == "lite" && isTransactionalRequest(r) {
 			ok, used := auth.CheckQuota(tenantID, "transactions")
 			if !ok {
 				response.Error(w, http.StatusPaymentRequired,

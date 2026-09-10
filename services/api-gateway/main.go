@@ -41,7 +41,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	getTarget := func(service string, port string) string {
-		if cfg.Env == "production" {
+		if cfg.Env == "production" || cfg.Env == "staging" {
 			return "http://" + service + ":" + port
 		}
 		return "http://localhost:" + port
@@ -98,10 +98,10 @@ func main() {
 	mux.Handle("/api/me", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api", newTenantProxy(getTarget(svcAuth, "8001"))))))
 	// Job Status API — async job tracking
 	mux.Handle("/api/jobs/", auth.Middleware(tenantRateLimitMiddleware(handleJobStatus(db.Pool))))
-	mux.Handle("/api/ai/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(auth.RequireFeature("ai")(http.StripPrefix("/api/ai", newTenantProxy(getTarget("ai-gateway", "8002"))))))))
+	mux.Handle("/api/ai/", auth.Middleware(tenantRateLimitMiddleware(auth.RequireFeature("ai")(http.StripPrefix("/api/ai", newTenantProxy(getTarget("ai-gateway", "8002")))))))
 	mux.Handle("/api/umkm/business/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/umkm/business", newTenantProxy(getTarget("umkm-business", "9005"))))))
 	mux.Handle("/api/umkm/automation/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/umkm/automation", newTenantProxy(getTarget("umkm-automation", "8203"))))))
-	mux.Handle("/api/umkm/chat", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/umkm", newTenantProxy(getTarget("umkm-chatbot", "8203")))))))
+	mux.Handle("/api/umkm/chat", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/umkm", newTenantProxy(getTarget("umkm-chatbot", "8203"))))))
 	// F053: Addon marketplace & purchase — proxied to billing-service (handlers at root level)
 	mux.Handle("/api/umkm/addon-marketplace", auth.Middleware(tenantRateLimitMiddleware(
 		http.StripPrefix("/api/umkm", newTenantProxy(getTarget(svcBilling, "8003"))),
@@ -114,7 +114,7 @@ func main() {
 	)))
 
 	mux.Handle("/api/umkm/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/umkm", newTenantProxy(getTarget("umkm-accounting", "8201")))))))
-	mux.Handle("/api/campaign/", auth.Middleware(tenantRateLimitMiddleware(quotaMiddleware(http.StripPrefix("/api/campaign", newTenantProxy(getTarget(svcCampaign, "9002")))))))
+	mux.Handle("/api/campaign/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/campaign", newTenantProxy(getTarget(svcCampaign, "9002"))))))
 	mux.Handle("/api/billing/", auth.Middleware(tenantRateLimitMiddleware(http.StripPrefix("/api/billing", newTenantProxy(getTarget(svcBilling, "8003"))))))
 	mux.Handle("/plans", http.StripPrefix("", newProxy(getTarget(svcBilling, "8003"))))
 	// F060: Landing page dynamic content (public)

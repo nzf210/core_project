@@ -80,17 +80,28 @@ func handleMessageEvent(tenantID string, v *events.Message) {
 	}
 	upperText := strings.ToUpper(rawText)
 
-	if handleActiveSession(tenantID, senderJID, rawText, upperText) {
-		return
-	}
+	// Isolasi jalur: Perintah registrasi, OTP, reset password, dan menu platform
+	// HANYA diproses jika pesan masuk ke nomor WA System / Platform ("system", "platform", atau kosong).
+	// Untuk nomor WA tenant UMKM (UUID), semua pesan adalah percakapan dengan pelanggan toko/klinik
+	// dan harus ditangani langsung oleh AI CS Toko (tidak boleh di-intercept menu WCH Platform).
+	if isSystemTenant(tenantID) {
+		if handleActiveSession(tenantID, senderJID, rawText, upperText) {
+			return
+		}
 
-	if handleCommandMessage(tenantID, senderJID, senderPhone, upperText) {
-		return
+		if handleCommandMessage(tenantID, senderJID, senderPhone, upperText) {
+			return
+		}
 	}
 
 	// Dispatch asynchronous to avoid blocking the whatsmeow message receiving loop
 	// while waiting for N8N and LLM inference response.
 	go forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText)
+}
+
+func isSystemTenant(tenantID string) bool {
+	t := strings.ToLower(strings.TrimSpace(tenantID))
+	return t == "" || t == "system" || t == "platform" || t == "wch"
 }
 
 func extractMessageText(v *events.Message) string {

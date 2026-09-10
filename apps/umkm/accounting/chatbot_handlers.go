@@ -17,58 +17,11 @@ func handleInternalChatbotConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := DB.Query(r.Context(),
-		`SELECT llm_provider, llm_model, temperature, max_tokens, system_prompt,
-		        tone, language, max_context_messages, welcome_message, fallback_message,
-			outside_hours_message, business_hours_start, business_hours_end, business_days,
-			escalation_enabled, escalation_keywords, escalation_confidence_threshold,
-			auto_escalate_after_minutes, rag_enabled, rag_top_k, rag_similarity_threshold,
-			channels_enabled, is_active, enable_vision, enable_voice_reply, voice_model, wa_provider_preference
-		 FROM tenant_chatbot_configs WHERE tenant_id = $1`, tenantID)
+	cfg, err := loadChatbotConfigByTenant(r.Context(), tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: response.DBError})
 		return
 	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		writeJSON(w, http.StatusNotFound, APIResponse{Message: "Chatbot config not found"})
-		return
-	}
-
-	var cfg ChatbotConfig
-	var sysPrompt, welcome, fallback, outsideHrs *string
-	var escalationKW []string
-	var bizHoursStart, bizHoursEnd time.Time
-	if err := rows.Scan(
-		&cfg.LLMProvider, &cfg.LLMModel, &cfg.Temperature, &cfg.MaxTokens,
-		&sysPrompt, &cfg.Tone, &cfg.Language, &cfg.MaxContextMessages,
-		&welcome, &fallback, &outsideHrs,
-		&bizHoursStart, &bizHoursEnd, &cfg.BusinessDays,
-		&cfg.EscalationEnabled, &escalationKW, &cfg.EscalationConfidenceThreshold,
-		&cfg.AutoEscalateAfterMinutes, &cfg.RAGEnabled, &cfg.RAGTopK, &cfg.RAGSimilarityThreshold,
-		&cfg.ChannelsEnabled, &cfg.IsActive, &cfg.EnableVision, &cfg.EnableVoiceReply, &cfg.VoiceModel,
-		&cfg.WAProviderPreference,
-	); err != nil {
-		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Scan error"})
-		return
-	}
-	cfg.BusinessHoursStart = bizHoursStart.Format("15:04:05")
-	cfg.BusinessHoursEnd = bizHoursEnd.Format("15:04:05")
-
-	if sysPrompt != nil {
-		cfg.SystemPrompt = *sysPrompt
-	}
-	if welcome != nil {
-		cfg.WelcomeMessage = *welcome
-	}
-	if fallback != nil {
-		cfg.FallbackMessage = *fallback
-	}
-	if outsideHrs != nil {
-		cfg.OutsideHoursMessage = *outsideHrs
-	}
-	cfg.EscalationKeywords = escalationKW
 
 	writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: cfg})
 }

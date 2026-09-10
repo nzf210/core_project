@@ -39,7 +39,7 @@ func restoreSingleSession(tenantID string) {
 	}
 
 	client := whatsmeow.NewClient(device, waLog.Stdout("Client-"+tenantID, "INFO", true))
-	client.AddEventHandler(func(evt interface{}) { eventHandler(tenantID, evt) })
+	client.AddEventHandler(func(evt any) { eventHandler(tenantID, evt) })
 	if err := client.Connect(); err == nil {
 		clientMu.Lock()
 		clientMap[tenantID] = client

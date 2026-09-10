@@ -14,7 +14,7 @@ func setContainer(c *sqlstore.Container) {
 }
 
 // eventHandler handles WhatsApp events for a tenant
-func eventHandler(tenantID string, evt interface{}) {
+func eventHandler(tenantID string, evt any) {
 	switch v := evt.(type) {
 	case *events.Message:
 		handleMessageEvent(tenantID, v)

@@ -150,8 +150,23 @@ services:
   n8n-main:
     container_name: wch-stg-n8n-main
     env_file: .env.staging
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "umkm-accounting:host-gateway"
+      - "ai-gateway:host-gateway"
+      - "wa-gateway:host-gateway"
+      - "api-gateway:host-gateway"
     ports:
       - "23678:5678"  # STG: 2=stg, 3=tools, 678=n8n
+
+  n8n-worker:
+    env_file: .env.staging
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "umkm-accounting:host-gateway"
+      - "ai-gateway:host-gateway"
+      - "wa-gateway:host-gateway"
+      - "api-gateway:host-gateway"
 
   chatwoot:
     container_name: wch-stg-chatwoot

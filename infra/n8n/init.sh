@@ -33,18 +33,24 @@ else
   echo "Execution Mode: ${EXECUTIONS_MODE:-regular}"
 
   # Import workflows hanya di main instance
-  if [[ ! -f "$MARKER" ]]; then
-    echo "Importing n8n workflows from $IMPORT_DIR ..."
+  HASH_FILE="/home/node/.n8n/.workflows_hash"
+  CURRENT_HASH=$(cat "$IMPORT_DIR"/*.json 2>/dev/null | md5sum | awk '{print $1}')
+  STORED_HASH=""
+  [[ -f "$HASH_FILE" ]] && STORED_HASH=$(cat "$HASH_FILE" 2>/dev/null)
+
+  if [[ ! -f "$MARKER" || "$CURRENT_HASH" != "$STORED_HASH" ]]; then
+    echo "Importing/updating n8n workflows from $IMPORT_DIR (hash: ${CURRENT_HASH:-new}) ..."
     for wf in "$IMPORT_DIR"/*.json; do
       [[ -e "$wf" ]] || continue
       name=$(basename "$wf")
       echo "  → $name"
-      n8n import:workflow --input="$wf" --active=true || echo "    failed: $name"
+      n8n import:workflow --input="$wf" --activeState=fromJson || echo "    failed: $name"
     done
     touch "$MARKER"
-    echo "All workflows imported."
+    [[ -n "$CURRENT_HASH" ]] && echo "$CURRENT_HASH" > "$HASH_FILE"
+    echo "All workflows imported and activated."
   else
-    echo "Workflows already imported, skipping. Delete $MARKER to force re-import."
+    echo "Workflows up to date (hash: $CURRENT_HASH). Skipping re-import."
   fi
 
   echo "Starting n8n main..."

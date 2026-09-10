@@ -185,3 +185,28 @@ func TestExtractMessageText_NilAndEmpty(t *testing.T) {
 		t.Errorf("expected empty string for empty message, got %q", got)
 	}
 }
+
+func TestIsSystemTenant(t *testing.T) {
+	tests := []struct {
+		tenantID string
+		expected bool
+	}{
+		{"system", true},
+		{"SYSTEM", true},
+		{"platform", true},
+		{"Platform", true},
+		{"wch", true},
+		{"", true},
+		{"   ", true},
+		{"11111111-1111-1111-1111-111111111111", false},
+		{"umkm-toko-berkah", false},
+		{"tenant-123", false},
+	}
+
+	for _, tt := range tests {
+		got := isSystemTenant(tt.tenantID)
+		if got != tt.expected {
+			t.Errorf("isSystemTenant(%q) = %v, want %v", tt.tenantID, got, tt.expected)
+		}
+	}
+}

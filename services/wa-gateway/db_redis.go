@@ -11,13 +11,21 @@ import (
 )
 
 func getDBURI() string {
-	host := os.Getenv("DB_HOST")
+	// Bypass PgBouncer transaction pooling: Whatsmeow sqlstore uses prepared statements
+	// which are incompatible with PgBouncer transaction mode.
+	host := os.Getenv("DB_DIRECT_HOST")
 	if host == "" {
-		host = "127.0.0.1"
+		host = os.Getenv("DB_HOST")
+		if host == "" {
+			host = "127.0.0.1"
+		}
 	}
-	port := os.Getenv("DB_PORT")
+	port := os.Getenv("DB_DIRECT_PORT")
 	if port == "" {
-		port = "5432"
+		port = os.Getenv("DB_PORT")
+		if port == "" {
+			port = "5432"
+		}
 	}
 	user := os.Getenv("DB_USER")
 	if user == "" {

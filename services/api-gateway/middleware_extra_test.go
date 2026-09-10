@@ -157,3 +157,61 @@ func TestRateLimitMiddleware_NilCache(t *testing.T) {
 		t.Error("next should be called when cache is nil")
 	}
 }
+
+func TestIsTransactionalRequest(t *testing.T) {
+	tests := []struct {
+		method   string
+		path     string
+		expected bool
+	}{
+		{http.MethodGet, "/api/umkm/transactions", false},
+		{http.MethodOptions, "/api/umkm/transactions", false},
+		{http.MethodHead, "/api/umkm/transactions", false},
+		// Management & setup routes must be exempt
+		{http.MethodPost, "/api/umkm/chatbot/config", false},
+		{http.MethodPut, "/api/umkm/chatbot/config", false},
+		{http.MethodPut, "/api/umkm/settings", false},
+		{http.MethodPost, "/api/umkm/faqs", false},
+		{http.MethodPost, "/api/umkm/wa/setup", false},
+		{http.MethodPost, "/api/umkm/products", false},
+		{http.MethodPost, "/api/umkm/accounts", false},
+		{http.MethodPost, "/api/umkm/clinic/settings", false},
+		{http.MethodPost, "/api/ai/chat", false},
+		{http.MethodPost, "/api/campaign/volunteers", false},
+		// Actual financial transaction routes must return true
+		{http.MethodPost, "/api/umkm/transactions", true},
+		{http.MethodPost, "/api/umkm/expenses", true},
+		{http.MethodPost, "/api/umkm/checkout", true},
+		{http.MethodPost, "/api/umkm/import/journal", true},
+	}
+
+	for _, tt := range tests {
+		req := httptest.NewRequest(tt.method, tt.path, nil)
+		got := isTransactionalRequest(req)
+		if got != tt.expected {
+			t.Errorf("isTransactionalRequest(%s %s) = %v, expected %v", tt.method, tt.path, got, tt.expected)
+		}
+	}
+}
+
+func TestQuotaMiddleware_ExemptNonTransactionalRequests(t *testing.T) {
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := quotaMiddleware(next)
+
+	req := httptest.NewRequest(http.MethodPut, "/api/umkm/chatbot/config", nil)
+	ctx := context.WithValue(req.Context(), auth.TenantIDKey, "test-tenant-lite")
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if !called {
+		t.Error("expected non-transactional chatbot config request to pass through quotaMiddleware")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+}

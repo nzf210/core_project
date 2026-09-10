@@ -250,10 +250,18 @@ services:
       # ── Telegram ──────────────────────────────────────────────────────
       - OWNER_TELEGRAM_CHAT_ID=${OWNER_TELEGRAM_CHAT_ID:-}
       # ── Dynamic API Pointers ──────────────────────────────────────────
-      - UMKM_API_URL=${UMKM_API_URL:-http://api-gateway:8000/api/umkm}
-      - CAMPAIGN_API_URL=${CAMPAIGN_API_URL:-http://api-gateway:8000/api/campaign}
-      - WA_GATEWAY_URL=${WA_GATEWAY_URL:-http://wa-gateway:8202}
-      - AI_GATEWAY_URL=${AI_GATEWAY_URL:-http://ai-gateway:8002}
+      - UMKM_API_URL=${N8N_UMKM_API_URL:-http://api-gateway:8000/api/umkm}
+      - UMKM_ACCOUNTING_URL=${N8N_UMKM_ACCOUNTING_URL:-http://umkm-accounting:8201}
+      - CAMPAIGN_API_URL=${N8N_CAMPAIGN_API_URL:-http://api-gateway:8000/api/campaign}
+      - WA_GATEWAY_URL=${N8N_WA_GATEWAY_URL:-http://wa-gateway:8202}
+      - AI_GATEWAY_URL=${N8N_AI_GATEWAY_URL:-http://ai-gateway:8002}
+      - CHATWOOT_URL=${CHATWOOT_URL:-http://chatwoot:3000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "umkm-accounting:host-gateway"
+      - "ai-gateway:host-gateway"
+      - "wa-gateway:host-gateway"
+      - "api-gateway:host-gateway"
     entrypoint:
       - /bin/sh
       - /infra/n8n/init.sh
@@ -298,12 +306,20 @@ services:
       # ── Performance ───────────────────────────────────────────────────
       - N8N_CONCURRENCY_PRODUCTION_LIMIT=${N8N_WORKER_CONCURRENCY:-10}
       # ── Dynamic API Pointers ──────────────────────────────────────────
-      - UMKM_API_URL=${UMKM_API_URL:-http://api-gateway:8000/api/umkm}
-      - CAMPAIGN_API_URL=${CAMPAIGN_API_URL:-http://api-gateway:8000/api/campaign}
-      - WA_GATEWAY_URL=${WA_GATEWAY_URL:-http://wa-gateway:8202}
-      - AI_GATEWAY_URL=${AI_GATEWAY_URL:-http://ai-gateway:8002}
+      - UMKM_API_URL=${N8N_UMKM_API_URL:-http://api-gateway:8000/api/umkm}
+      - UMKM_ACCOUNTING_URL=${N8N_UMKM_ACCOUNTING_URL:-http://umkm-accounting:8201}
+      - CAMPAIGN_API_URL=${N8N_CAMPAIGN_API_URL:-http://api-gateway:8000/api/campaign}
+      - WA_GATEWAY_URL=${N8N_WA_GATEWAY_URL:-http://wa-gateway:8202}
+      - AI_GATEWAY_URL=${N8N_AI_GATEWAY_URL:-http://ai-gateway:8002}
+      - CHATWOOT_URL=${CHATWOOT_URL:-http://chatwoot:3000}
       - GENERIC_TIMEZONE=Asia/Jakarta
       - NODE_OPTIONS=--max-old-space-size=512
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "umkm-accounting:host-gateway"
+      - "ai-gateway:host-gateway"
+      - "wa-gateway:host-gateway"
+      - "api-gateway:host-gateway"
     volumes:
       - n8n_data:/home/node/.n8n
     depends_on:
@@ -381,6 +397,8 @@ services:
       - WA_SYSTEM_TENANT_ID=${WA_SYSTEM_TENANT_ID:-system}
       - DB_HOST=pgbouncer
       - DB_PORT=6432
+      - DB_DIRECT_HOST=${DB_DIRECT_HOST:-postgres}
+      - DB_DIRECT_PORT=${DB_DIRECT_PORT:-5432}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-wch_core}
