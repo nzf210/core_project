@@ -53,7 +53,7 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	if DB != nil {
 		DB.QueryRow(ctx, "SELECT name FROM tenants WHERE id = $1", tenantID).Scan(&tenantName)
 	}
-	systemPrompt := buildSystemPrompt(ctx, tenantID, tenantName, req.Message, "owner", loadChatbotConfig(ctx, tenantID))
+	systemPrompt := buildSystemPrompt(ctx, tenantID, tenantName, req.Message, "owner", "", loadChatbotConfig(ctx, tenantID))
 	// Call AI Gateway
 	aiReqBody := map[string]interface{}{
 		"provider":   "minimax",

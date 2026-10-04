@@ -43,6 +43,8 @@ import Reports from '../components/Reports.vue'
 import ClinicQueue from '../components/ClinicQueue.vue'
 import ClinicFrontdesk from '../components/ClinicFrontdesk.vue'
 import LaundryTracking from '../components/LaundryTracking.vue'
+import RestaurantKOT from '../components/RestaurantKOT.vue'
+import ServiceTracking from '../components/ServiceTracking.vue'
 import AffiliateDashboard from '../components/AffiliateDashboard.vue'
 import AffiliateLeaderboard from '../components/AffiliateLeaderboard.vue'
 import Wallet from '../components/Wallet.vue'
@@ -74,6 +76,12 @@ const routes = [
   // F071: Laundry Tracking
   { path: '/laundry', redirect: '/laundry/tracking' },
   { path: '/laundry/tracking', component: LaundryTracking, name: 'LaundryTracking' },
+  // F072: Restaurant KOT & Table Orders
+  { path: '/restaurant', redirect: '/restaurant/kot' },
+  { path: '/restaurant/kot', component: RestaurantKOT, name: 'RestaurantKOT' },
+  // F073: Bengkel & Servis (SPK Tracking)
+  { path: '/service', redirect: '/service/tracking' },
+  { path: '/service/tracking', component: ServiceTracking, name: 'ServiceTracking' },
   // F047: Rekam Medis + Jadwal Dokter + Notifikasi WA Klinik — all use the same component with tabs
   { path: '/clinic/medical-record', redirect: '/clinic/frontdesk?tab=records' },
   { path: '/clinic/schedule', redirect: '/clinic/frontdesk?tab=doctors' },

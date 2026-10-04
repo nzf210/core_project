@@ -217,9 +217,7 @@ func sendLaundryReadyWANotification(o LaundryOrder) {
 		toko, o.CustomerName, o.OrderNo, capitalizeWord(o.ServiceType), o.RackLocation, formatRupiah(o.TotalAmount), statusBayar, toko)
 
 	target := strings.TrimSpace(o.CustomerPhone)
-	if strings.HasPrefix(target, "+") {
-		target = target[1:]
-	}
+	target = strings.TrimPrefix(target, "+")
 	if strings.HasPrefix(target, "0") {
 		target = "62" + target[1:]
 	}

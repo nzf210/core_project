@@ -164,7 +164,7 @@ func sendOutsideHoursReply(ctx context.Context, tenantID, sender string, chatCfg
 }
 
 func callAIAndSendReply(ctx context.Context, tenantID, sender, message, userRole, tenantName string, chatCfg *chatConfigCache) {
-	systemPrompt := buildSystemPrompt(ctx, tenantID, tenantName, message, userRole, chatCfg)
+	systemPrompt := buildSystemPrompt(ctx, tenantID, tenantName, message, userRole, sender, chatCfg)
 	provider := "minimax"
 	if chatCfg != nil && chatCfg.LLMProvider != "" {
 		provider = chatCfg.LLMProvider

@@ -28,6 +28,10 @@ export const menuConfig: MenuGroup[] = [
       { label: 'Impor / Ekspor', to: '/data-transfer', icon: '📥', roles: ['owner', 'admin', 'superadmin'] },
       // ===== Laundry-only modules (F071) =====
       { label: 'Tracking Laundry', to: '/laundry/tracking', icon: '🧺', businessTypes: ['laundry'], roles: ['owner', 'admin', 'superadmin', 'kasir'] },
+      // ===== Restoran-only modules (F072) =====
+      { label: 'Dapur & Meja (KOT)', to: '/restaurant/kot', icon: '🍽️', businessTypes: ['restoran'], roles: ['owner', 'admin', 'superadmin', 'kasir'] },
+      // ===== Bengkel / Jasa-only modules (F073) =====
+      { label: 'SPK Servis & Bengkel', to: '/service/tracking', icon: '🔧', businessTypes: ['jasa'], roles: ['owner', 'admin', 'superadmin', 'kasir'] },
       // ===== Klinik-only modules (F047) =====
       { label: 'Antrean Klinik', to: '/clinic/frontdesk', icon: '🏥', businessTypes: ['clinic'], roles: ['owner', 'admin', 'superadmin'] },
       { label: 'Rekam Medis', to: '/clinic/medical-record', icon: '📋', businessTypes: ['clinic'], roles: ['owner', 'admin', 'superadmin'] },

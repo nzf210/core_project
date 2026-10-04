@@ -16,7 +16,7 @@ const (
 	headerContentTypeConst = "Content-Type"
 )
 
-func buildSystemPrompt(ctx context.Context, tenantID, tenantName, message, role string, cfg *chatConfigCache) string {
+func buildSystemPrompt(ctx context.Context, tenantID, tenantName, message, role, sender string, cfg *chatConfigCache) string {
 	systemPrompt := baseSystemPrompt(tenantName, role)
 
 	if cfg != nil {
@@ -26,6 +26,7 @@ func buildSystemPrompt(ctx context.Context, tenantID, tenantName, message, role 
 	systemPrompt = enrichWithCOA(ctx, tenantID, role, systemPrompt)
 	systemPrompt = enrichWithProducts(ctx, tenantID, systemPrompt)
 	systemPrompt = enrichWithFAQs(ctx, tenantID, systemPrompt)
+	systemPrompt = enrichWithBusinessSkills(ctx, tenantID, sender, systemPrompt)
 	systemPrompt += instructionBlock()
 
 	msgLower := strings.ToLower(message)

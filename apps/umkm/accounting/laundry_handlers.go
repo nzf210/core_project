@@ -118,7 +118,7 @@ func listLaundryOrders(w http.ResponseWriter, r *http.Request, tenantID string) 
 		       payment_method, estimated_completion_at, completed_at, notes, created_at, updated_at
 		FROM laundry_orders
 		WHERE tenant_id = $1`
-	args := []interface{}{tenantID}
+	args := []any{tenantID}
 	argIdx := 2
 
 	if status != "" {

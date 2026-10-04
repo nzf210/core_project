@@ -748,3 +748,152 @@ export const laundryApi = {
   },
 }
 
+// F072: Modular Business Workflow — Restaurant KOT & Table Management API
+export interface RestaurantOrderItem {
+  name: string
+  qty: number
+  price: number // in sen
+  notes?: string
+}
+
+export interface RestaurantOrder {
+  id: string
+  tenant_id: string
+  order_no: string
+  table_number: string
+  customer_name: string
+  customer_phone: string
+  status: 'pending' | 'cooking' | 'ready_to_serve' | 'served' | 'completed' | 'cancelled'
+  items: RestaurantOrderItem[]
+  total_amount: number // dalam sen (1 IDR = 100 sen)
+  is_paid: boolean
+  payment_method: string
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateRestaurantOrderPayload {
+  table_number: string
+  customer_name?: string
+  customer_phone?: string
+  items: RestaurantOrderItem[]
+  notes?: string
+}
+
+export const restaurantApi = {
+  async getOrders(params?: { status?: string; search?: string; limit?: number }) {
+    const q = new URLSearchParams()
+    if (params?.status) q.set('status', params.status)
+    if (params?.search) q.set('search', params.search)
+    if (params?.limit) q.set('limit', String(params.limit))
+    const res = await fetch(`${API_BASE}/api/umkm/restaurant/orders?${q.toString()}`, { headers: headers() })
+    return res.json()
+  },
+  async createOrder(payload: CreateRestaurantOrderPayload) {
+    const res = await fetch(`${API_BASE}/api/umkm/restaurant/orders`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(payload),
+    })
+    return res.json()
+  },
+  async getOrder(id: string) {
+    const res = await fetch(`${API_BASE}/api/umkm/restaurant/orders/${id}`, { headers: headers() })
+    return res.json()
+  },
+  async updateStatus(id: string, status: string) {
+    const res = await fetch(`${API_BASE}/api/umkm/restaurant/orders/${id}/status`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({ status }),
+    })
+    return res.json()
+  },
+  async payOrder(id: string, paymentMethod = 'cash') {
+    const res = await fetch(`${API_BASE}/api/umkm/restaurant/orders/${id}/pay`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ payment_method: paymentMethod }),
+    })
+    return res.json()
+  },
+}
+
+// F073: Modular Business Workflow — Bengkel & Servis (SPK Tracking) API
+export interface ServiceOrder {
+  id: string
+  tenant_id: string
+  order_no: string
+  customer_name: string
+  customer_phone: string
+  unit_name: string
+  unit_identifier: string
+  complaint: string
+  technician_name: string
+  status: 'received' | 'diagnosing' | 'working' | 'testing' | 'ready' | 'completed' | 'cancelled'
+  estimated_cost: number // in sen
+  final_cost: number // in sen
+  is_paid: boolean
+  payment_method: string
+  notes?: string
+  completed_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateServiceOrderPayload {
+  customer_name: string
+  customer_phone: string
+  unit_name: string
+  unit_identifier?: string
+  complaint: string
+  technician_name?: string
+  estimated_cost?: number
+  notes?: string
+}
+
+export const serviceApi = {
+  async getOrders(params?: { status?: string; search?: string; limit?: number }) {
+    const q = new URLSearchParams()
+    if (params?.status) q.set('status', params.status)
+    if (params?.search) q.set('search', params.search)
+    if (params?.limit) q.set('limit', String(params.limit))
+    const res = await fetch(`${API_BASE}/api/umkm/service/orders?${q.toString()}`, { headers: headers() })
+    return res.json()
+  },
+  async createOrder(payload: CreateServiceOrderPayload) {
+    const res = await fetch(`${API_BASE}/api/umkm/service/orders`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(payload),
+    })
+    return res.json()
+  },
+  async getOrder(id: string) {
+    const res = await fetch(`${API_BASE}/api/umkm/service/orders/${id}`, { headers: headers() })
+    return res.json()
+  },
+  async updateStatus(id: string, status: string, finalCost?: number) {
+    const body: Record<string, any> = { status }
+    if (finalCost !== undefined) {
+      body.final_cost = finalCost
+    }
+    const res = await fetch(`${API_BASE}/api/umkm/service/orders/${id}/status`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify(body),
+    })
+    return res.json()
+  },
+  async payOrder(id: string, paymentMethod = 'cash') {
+    const res = await fetch(`${API_BASE}/api/umkm/service/orders/${id}/pay`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ payment_method: paymentMethod }),
+    })
+    return res.json()
+  },
+}
+
+

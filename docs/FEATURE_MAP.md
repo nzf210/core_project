@@ -138,6 +138,9 @@ Format per feature:
 | F069 | Redis-Backed WA Registration Session Persistence | ✅ Approved | ✅ Done | 2026-08-18 |
 | F070 | Smart Dynamic QRIS (0% Fee) & Struk Digital WhatsApp POS | ✅ Approved | ✅ Done | 2026-09-09 |
 | F071 | Modular Business Workflow — Laundry Order & Wash Tracking | ✅ Approved | ✅ Done | 2026-10-04 |
+| F072 | Modular Business Workflow — Restaurant KOT & Table Management | ✅ Approved | ✅ Done | 2026-10-04 |
+| F073 | Modular Business Workflow — Bengkel & Servis SPK Tracking | ✅ Approved | ✅ Done | 2026-10-04 |
+| F074 | Dynamic Business Type Chatbot Skills & Context Enrichment | ✅ Approved | ✅ Done | 2026-10-04 |
 
 ---
 
@@ -3594,6 +3597,175 @@ Menyediakan modul alur operasional khusus untuk tenant UMKM berjenis usaha Laund
 - `apps/umkm/accounting/laundry_handlers.go`
 - `apps/umkm/accounting/laundry_detail_handlers.go`
 - `apps/umkm/accounting/laundry_test.go`
+
+---
+
+## F072: Modular Business Workflow — Restaurant KOT & Table Management
+
+**Spec Status:** ✅ Approved  
+**Implementation:** ✅ Done  
+**Last Updated:** 2026-10-04
+
+### 🎯 Objectives & Background
+Menyediakan modul alur operasional khusus untuk tenant UMKM berjenis usaha F&B/Restoran/Cafe (`tenants.business_type = 'restoran'`). Modul ini mengotomatiskan pesanan meja makan, tiket pesanan dapur (Kitchen Order Ticket / KOT), antrean memasak koki, status penyajian hidangan, serta penutupan meja dan pembayaran kasir.
+
+### 📝 Spec & Business Rules
+1. **Gating Jenis Usaha:**
+   - Endpoint backend `/restaurant/orders/*` diproteksi middleware `requireRestaurantType` (hanya tenant dengan `business_type = 'restoran'` yang diizinkan, selain itu 403 Forbidden).
+   - Menu navigasi "Dapur & Meja (KOT)" di frontend hanya tampil untuk tenant berjenis `restoran`.
+2. **Tahapan Status Pesanan Resto (State Machine):**
+   - `pending` (Pesanan Masuk / Diterima)
+   - `cooking` (Sedang Dimasak oleh Koki Dapur)
+   - `ready_to_serve` (Makanan Siap Disajikan)
+   - `served` (Telah Disajikan di Meja Tamu)
+   - `completed` (Selesai / Meja Ditutup & Lunas)
+   - `cancelled` (Dibatalkan)
+3. **Data Model (`restaurant_orders`):**
+   - `id`: UUID (Primary Key)
+   - `tenant_id`: UUID (Foreign Key ke `tenants.id`, On Delete Cascade)
+   - `order_no`: VARCHAR(50) (Format: `KOT-YYYYMMDD-XXXX`, Unik per tenant)
+   - `table_number`: VARCHAR(50) NOT NULL (Contoh: "Meja 05", "VIP-1")
+   - `customer_name`: VARCHAR(255)
+   - `customer_phone`: VARCHAR(50)
+   - `status`: VARCHAR(50) DEFAULT 'pending'
+   - `items`: JSONB NOT NULL (Array of `{name, qty, price, notes}`)
+   - `total_amount`: BIGINT NOT NULL (satuan sen)
+   - `is_paid`: BOOLEAN DEFAULT FALSE
+   - `payment_method`: VARCHAR(50) ('cash', 'qris', 'transfer', 'unpaid')
+   - `notes`: TEXT
+   - `created_at`, `updated_at`: TIMESTAMPTZ
+
+### 📋 Acceptance Criteria
+- [x] AC-1: Migrasi skema database `000089_restaurant_orders.up.sql` dan `.down.sql` membuat tabel `restaurant_orders` dengan indeks multi-tenant pada `tenant_id`, `status`, dan `order_no`.
+- [x] AC-2: Backend middleware `requireRestaurantType` memvalidasi `tenants.business_type = 'restoran'` dan menolak jenis usaha lain dengan HTTP 403.
+- [x] AC-3: Endpoint CRUD Resto di `apps/umkm/accounting/restaurant_handlers.go` & `restaurant_detail_handlers.go`:
+  - `GET /api/umkm/restaurant/orders` (filtering status, pagination, search nama/meja/no nota)
+  - `POST /api/umkm/restaurant/orders` (tiket pesanan dapur baru & auto-generate order_no)
+  - `GET /api/umkm/restaurant/orders/{id}` (detail tiket KOT)
+  - `PATCH /api/umkm/restaurant/orders/{id}/status` (update tahapan status memasak & saji)
+  - `POST /api/umkm/restaurant/orders/{id}/pay` (konfirmasi pelunasan kasir & jurnal akuntansi)
+- [x] AC-4: Menu sidebar `menu.ts` menampilkan "Dapur & Meja (KOT)" (icon 🍽️) khusus tenant berjenis usaha `restoran`.
+- [x] AC-5: Frontend `RestaurantKOT.vue` & `RestaurantOrderModal.vue` menyediakan Kitchen Display System, rincian pesanan meja, dan alur masak-saji.
+- [x] AC-6: Unit testing komprehensif di `apps/umkm/accounting/restaurant_test.go` lulus semua uji kasus.
+
+**Files Created / Changed:**
+- `shared/migrations/000089_restaurant_orders.up.sql` & `.down.sql`
+- `apps/umkm/accounting/restaurant_middleware.go`
+- `apps/umkm/accounting/restaurant_handlers.go`
+- `apps/umkm/accounting/restaurant_detail_handlers.go`
+- `apps/umkm/accounting/restaurant_test.go`
+- `frontend/umkm-web/src/components/RestaurantKOT.vue`
+- `frontend/umkm-web/src/components/RestaurantOrderModal.vue`
+- `frontend/umkm-web/src/config/menu.ts`
+- `frontend/umkm-web/src/router/index.ts`
+- `frontend/umkm-web/src/api.ts`
+
+---
+
+## F073: Modular Business Workflow — Bengkel & Servis SPK Tracking
+
+**Spec Status:** ✅ Approved  
+**Implementation:** ✅ Done  
+**Last Updated:** 2026-10-04
+
+### 🎯 Objectives & Background
+Menyediakan modul alur operasional khusus untuk tenant UMKM berjenis usaha Jasa Perbaikan / Bengkel / Elektronik / Reparasi (`tenants.business_type = 'jasa'`). Modul ini mengotomatiskan penerbitan Surat Perintah Kerja (SPK), penugasan teknisi, pelacakan proses diagnosa, penyesuaian biaya akhir, serta notifikasi WhatsApp otomatis saat unit selesai diperbaiki.
+
+### 📝 Spec & Business Rules
+1. **Gating Jenis Usaha:**
+   - Endpoint backend `/service/orders/*` diproteksi middleware `requireServiceType` (hanya tenant dengan `business_type = 'jasa'` yang diizinkan, selain itu 403 Forbidden).
+   - Menu navigasi "SPK Servis & Bengkel" di frontend hanya tampil untuk tenant berjenis `jasa`.
+2. **Tahapan Status Pengerjaan Unit (State Machine):**
+   - `received` (Unit Diterima / Antre)
+   - `diagnosing` (Proses Diagnosa & Pengecekan)
+   - `working` (Sedang Dikerjakan / Diganti Suku Cadang)
+   - `testing` (Uji Coba Kelayakan / QC)
+   - `ready` (Unit Siap Diambil) ➔ **Trigger kirim notifikasi WhatsApp otomatis ke pelanggan**
+   - `completed` (Diserahkan ke Pemilik / Selesai)
+   - `cancelled` (Dibatalkan)
+3. **Data Model (`service_orders`):**
+   - `id`: UUID (Primary Key)
+   - `tenant_id`: UUID (Foreign Key ke `tenants.id`, On Delete Cascade)
+   - `order_no`: VARCHAR(50) (Format: `SPK-YYYYMMDD-XXXX`, Unik per tenant)
+   - `customer_name`: VARCHAR(255) NOT NULL
+   - `customer_phone`: VARCHAR(50) NOT NULL
+   - `unit_name`: VARCHAR(255) NOT NULL (Contoh: "Honda Vario 125", "Laptop Asus ROG")
+   - `unit_identifier`: VARCHAR(100) (No. Polisi atau Serial Number)
+   - `complaint`: TEXT NOT NULL (Gejala atau kerusakan yang dikeluhkan)
+   - `technician_name`: VARCHAR(255) (Teknisi penanggung jawab)
+   - `status`: VARCHAR(50) DEFAULT 'received'
+   - `estimated_cost`: BIGINT DEFAULT 0 (satuan sen)
+   - `final_cost`: BIGINT DEFAULT 0 (satuan sen)
+   - `is_paid`: BOOLEAN DEFAULT FALSE
+   - `payment_method`: VARCHAR(50)
+   - `notes`: TEXT
+   - `completed_at`, `created_at`, `updated_at`: TIMESTAMPTZ
+
+### 📋 Acceptance Criteria
+- [x] AC-1: Migrasi skema database `000090_service_orders.up.sql` dan `.down.sql` membuat tabel `service_orders` dengan indeks multi-tenant pada `tenant_id`, `status`, dan `order_no`.
+- [x] AC-2: Backend middleware `requireServiceType` memvalidasi `tenants.business_type = 'jasa'` dan menolak jenis usaha lain dengan HTTP 403.
+- [x] AC-3: Endpoint CRUD Servis di `apps/umkm/accounting/service_handlers.go` & `service_detail_handlers.go`:
+  - `GET /api/umkm/service/orders` (filtering status, pagination, search unit/nama/no SPK)
+  - `POST /api/umkm/service/orders` (penerbitan SPK baru & auto-generate order_no)
+  - `GET /api/umkm/service/orders/{id}` (detail SPK)
+  - `PATCH /api/umkm/service/orders/{id}/status` (update tahapan status servis & biaya akhir)
+  - `POST /api/umkm/service/orders/{id}/pay` (konfirmasi pelunasan kasir & jurnal akuntansi)
+- [x] AC-4: Transisi status ke `ready` otomatis men-trigger pengiriman notifikasi WhatsApp ke `customer_phone` dengan rincian unit dan biaya.
+- [x] AC-5: Menu sidebar `menu.ts` menampilkan "SPK Servis & Bengkel" (icon 🔧) khusus tenant berjenis usaha `jasa`.
+- [x] AC-6: Frontend `ServiceTracking.vue` & `ServiceOrderModal.vue` menyediakan papan pantau SPK, modal penerbitan SPK baru, dan tombol update status perbaikan.
+- [x] AC-7: Unit testing komprehensif di `apps/umkm/accounting/service_test.go` lulus semua uji kasus.
+
+**Files Created / Changed:**
+- `shared/migrations/000090_service_orders.up.sql` & `.down.sql`
+- `apps/umkm/accounting/service_middleware.go`
+- `apps/umkm/accounting/service_handlers.go`
+- `apps/umkm/accounting/service_detail_handlers.go`
+- `apps/umkm/accounting/service_test.go`
+- `frontend/umkm-web/src/components/ServiceTracking.vue`
+- `frontend/umkm-web/src/components/ServiceOrderModal.vue`
+- `frontend/umkm-web/src/config/menu.ts`
+- `frontend/umkm-web/src/router/index.ts`
+- `frontend/umkm-web/src/api.ts`
+
+---
+
+## F074: Dynamic Business Type Chatbot Skills & Context Enrichment
+
+**Spec Status:** ✅ Approved  
+**Implementation:** ✅ Done  
+**Last Updated:** 2026-10-04
+
+### 🎯 Objectives & Background
+Menjawab kebutuhan chatbot AI WhatsApp agar memiliki spesialisasi dan "keterampilan" (domain skills) yang menyesuaikan jenis usaha toko masing-masing (`tenants.business_type`), serta mampu membaca status operasional real-time pelanggan secara akurat tanpa halusinasi.
+
+### 📝 Spec & Architecture
+1. **Dynamic Domain Skills Injection (`business_skills.go`):**
+   - Sistem membaca `tenants.business_type` saat chat masuk.
+   - Menyuntikkan prompt spesialisasi peran:
+     - `laundry`: Ahli operasional cuci baju, kiloan, satuan, dry clean, dan lokasi rak.
+     - `jasa`: Ahli penanganan servis bengkel/reparasi, keluhan kerusakan, dan teknisi.
+     - `clinic`: Asisten klinik empati untuk pendaftaran dan antrean pasien.
+     - `restoran`: Ahli kuliner/F&B untuk rekomendasi menu, ketersediaan makanan, dan reservasi meja.
+2. **Live Customer Order & Queue Retrieval:**
+   - Sistem mengekstrak nomor telepon pelanggan dari WhatsApp sender JID.
+   - Melakukan query real-time ke data operasional aktif toko:
+     - Jika `laundry`: Ambil order nota terakhir dari `laundry_orders` (status cucian, lokasi rak, total bayar).
+     - Jika `jasa`: Ambil SPK perbaikan terakhir dari `service_orders` (nama unit, keluhan, teknisi, progres kerja, biaya).
+     - Jika `clinic`: Ambil antrean terakhir dari `clinic_appointments` (nomor antrean, status).
+   - Data aktual tersebut disuntikkan secara dinamis ke system prompt LLM, sehingga jika pelanggan menanyakan "Sudah sampai mana cucian saya?" atau "Motor saya sudah selesai diservis belum?", AI dapat menjawab data faktual dengan 100% presisi.
+
+### 📋 Acceptance Criteria
+- [x] AC-1: `enrichWithBusinessSkills()` di `apps/umkm/chatbot/business_skills.go` mendukung adaptasi domain untuk `laundry`, `jasa`, `clinic`, dan `restoran`.
+- [x] AC-2: Ekstraksi nomor telepon pengirim WhatsApp dan query real-time ke tabel transaksi operasional masing-masing jenis usaha.
+- [x] AC-3: Terintegrasi mulus ke `prompt_handlers.go` (`buildSystemPrompt`) dan `process_handlers.go` (`callAIAndSendReply`).
+- [x] AC-4: Clean compiler diagnostics (0 warnings/errors) dan patuh SonarQube (<450 baris per file).
+
+**Files Created / Changed:**
+- `apps/umkm/chatbot/business_skills.go` (NEW)
+- `apps/umkm/chatbot/prompt_handlers.go` (MODIFIED)
+- `apps/umkm/chatbot/process_handlers.go` (MODIFIED)
+- `apps/umkm/chatbot/chat_handlers.go` (MODIFIED)
+
 - `apps/umkm/accounting/main.go`
 - `frontend/umkm-web/src/config/menu.ts`
 - `frontend/umkm-web/src/router/index.ts`
