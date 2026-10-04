@@ -14,6 +14,14 @@ import (
 	"core_project/shared/sdk/response"
 )
 
+func capitalizeWord(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+}
+
 // handleLaundryOrderDetail dispatches /laundry/orders/{id}[/status|/pay]
 func handleLaundryOrderDetail(w http.ResponseWriter, r *http.Request) {
 	tenantID := getTenantID(r)
@@ -38,7 +46,7 @@ func handleLaundryOrderDetail(w http.ResponseWriter, r *http.Request) {
 			getLaundryOrderDetail(w, r, tenantID, orderID)
 			return
 		}
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 		return
 	}
 
@@ -49,13 +57,13 @@ func handleLaundryOrderDetail(w http.ResponseWriter, r *http.Request) {
 			updateLaundryOrderStatus(w, r, tenantID, orderID)
 			return
 		}
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 	case "pay":
 		if r.Method == http.MethodPost {
 			payLaundryOrder(w, r, tenantID, orderID)
 			return
 		}
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 	default:
 		response.Error(w, http.StatusNotFound, "Endpoint tidak ditemukan", nil)
 	}
@@ -84,7 +92,7 @@ func getLaundryOrderDetail(w http.ResponseWriter, r *http.Request, tenantID, ord
 		return
 	}
 
-	response.Success(w, "Detail order laundry berhasil dimuat", o)
+	response.JSON(w, http.StatusOK, "Detail order laundry berhasil dimuat", o)
 }
 
 func updateLaundryOrderStatus(w http.ResponseWriter, r *http.Request, tenantID, orderID string) {
@@ -137,7 +145,7 @@ func updateLaundryOrderStatus(w http.ResponseWriter, r *http.Request, tenantID, 
 		go sendLaundryReadyWANotification(o)
 	}
 
-	response.Success(w, "Status order laundry berhasil diupdate", o)
+	response.JSON(w, http.StatusOK, "Status order laundry berhasil diupdate", o)
 }
 
 func payLaundryOrder(w http.ResponseWriter, r *http.Request, tenantID, orderID string) {
@@ -179,7 +187,7 @@ func payLaundryOrder(w http.ResponseWriter, r *http.Request, tenantID, orderID s
 		createPaymentJournal(ctx, tenantID, o.OrderNo, float64(o.TotalAmount)/100, itemsDesc)
 	}
 
-	response.Success(w, "Pembayaran order laundry berhasil dikonfirmasi", o)
+	response.JSON(w, http.StatusOK, "Pembayaran order laundry berhasil dikonfirmasi", o)
 }
 
 func sendLaundryReadyWANotification(o LaundryOrder) {
@@ -206,7 +214,7 @@ func sendLaundryReadyWANotification(o LaundryOrder) {
 		"📦 Rak/Keranjang: *%s*\n"+
 		"💰 Total: *Rp %s* (%s)\n\n"+
 		"Silakan tunjukkan nomor nota ini kepada kasir saat pengambilan. Terima kasih telah mempercayakan cucian Anda kepada %s! ✨",
-		toko, o.CustomerName, o.OrderNo, strings.Title(o.ServiceType), o.RackLocation, formatRupiah(o.TotalAmount), statusBayar, toko)
+		toko, o.CustomerName, o.OrderNo, capitalizeWord(o.ServiceType), o.RackLocation, formatRupiah(o.TotalAmount), statusBayar, toko)
 
 	target := strings.TrimSpace(o.CustomerPhone)
 	if strings.HasPrefix(target, "+") {

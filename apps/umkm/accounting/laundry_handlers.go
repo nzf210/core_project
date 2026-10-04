@@ -87,7 +87,7 @@ func handleLaundryOrders(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		createLaundryOrder(w, r, tenantID)
 	default:
-		response.Error(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		response.Error(w, http.StatusMethodNotAllowed, response.MethodNotAllowed, nil)
 	}
 }
 
@@ -159,7 +159,7 @@ func listLaundryOrders(w http.ResponseWriter, r *http.Request, tenantID string) 
 		orders = append(orders, o)
 	}
 
-	response.Success(w, "Daftar order laundry berhasil dimuat", orders)
+	response.JSON(w, http.StatusOK, "Daftar order laundry berhasil dimuat", orders)
 }
 
 func createLaundryOrder(w http.ResponseWriter, r *http.Request, tenantID string) {
@@ -226,9 +226,5 @@ func createLaundryOrder(w http.ResponseWriter, r *http.Request, tenantID string)
 		createPaymentJournal(ctx, tenantID, newOrder.OrderNo, float64(newOrder.TotalAmount)/100, itemsDesc)
 	}
 
-	writeJSON(w, http.StatusCreated, APIResponse{
-		Success: true,
-		Message: "Order laundry berhasil dibuat",
-		Data:    newOrder,
-	})
+	response.JSON(w, http.StatusCreated, "Order laundry berhasil dibuat", newOrder)
 }

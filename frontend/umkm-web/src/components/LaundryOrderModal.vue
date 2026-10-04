@@ -10,8 +10,9 @@
 
       <form @submit.prevent="handleSubmit" class="space-y-4">
         <div>
-          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Nama Pelanggan *</label>
+          <label for="lndCustomerName" class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Nama Pelanggan *</label>
           <input
+            id="lndCustomerName"
             v-model="form.customer_name"
             type="text"
             required
@@ -21,8 +22,9 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">No. WhatsApp Pelanggan *</label>
+          <label for="lndCustomerPhone" class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">No. WhatsApp Pelanggan *</label>
           <input
+            id="lndCustomerPhone"
             v-model="form.customer_phone"
             type="tel"
             required
@@ -33,8 +35,9 @@
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Jenis Layanan</label>
+            <label for="lndServiceType" class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Jenis Layanan</label>
             <select
+              id="lndServiceType"
               v-model="form.service_type"
               class="w-full px-3 py-2 border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             >
@@ -44,11 +47,12 @@
             </select>
           </div>
           <div>
-            <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+            <label for="lndServiceAmount" class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
               {{ form.service_type === 'kiloan' ? 'Berat (kg)' : 'Jumlah (pcs)' }}
             </label>
             <input
               v-if="form.service_type === 'kiloan'"
+              id="lndServiceAmount"
               v-model.number="tempWeightKg"
               type="number"
               step="0.1"
@@ -58,6 +62,7 @@
             />
             <input
               v-else
+              id="lndServiceAmount"
               v-model.number="form.item_count"
               type="number"
               min="1"
@@ -69,8 +74,9 @@
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Nomor Rak/Keranjang</label>
+            <label for="lndRackLocation" class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Nomor Rak/Keranjang</label>
             <input
+              id="lndRackLocation"
               v-model="form.rack_location"
               type="text"
               placeholder="Contoh: Rak A-02"
@@ -78,8 +84,9 @@
             />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Total Biaya (Rupiah) *</label>
+            <label for="lndTotalAmount" class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Total Biaya (Rupiah) *</label>
             <input
+              id="lndTotalAmount"
               v-model.number="tempRupiahAmount"
               type="number"
               required
@@ -103,8 +110,9 @@
             </label>
           </div>
           <div v-if="form.is_paid" class="pt-2">
-            <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Metode Pembayaran</label>
+            <label for="lndPaymentMethod" class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Metode Pembayaran</label>
             <select
+              id="lndPaymentMethod"
               v-model="form.payment_method"
               class="w-full px-3 py-1.5 border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs outline-none"
             >
@@ -116,8 +124,9 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Catatan Tambahan (Opsional)</label>
+          <label for="lndNotes" class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Catatan Tambahan (Opsional)</label>
           <textarea
+            id="lndNotes"
             v-model="form.notes"
             rows="2"
             placeholder="Contoh: Pisahkan pakaian putih, parfum lavender"

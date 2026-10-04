@@ -680,7 +680,7 @@ export interface LaundryOrder {
   order_no: string
   customer_name: string
   customer_phone: string
-  service_type: 'kiloan' | 'satuan' | 'dry_clean' | string
+  service_type: 'kiloan' | 'satuan' | 'dry_clean'
   weight_grams: number
   item_count: number
   rack_location: string

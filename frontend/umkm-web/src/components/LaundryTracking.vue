@@ -44,8 +44,10 @@
     <!-- Search & Filter Bar -->
     <div class="flex flex-col sm:flex-row gap-3 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
       <div class="relative flex-1">
+        <label for="lndSearchInput" class="sr-only">Cari Order Laundry</label>
         <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">🔍</span>
         <input
+          id="lndSearchInput"
           v-model="searchQuery"
           @input="debounceSearch"
           type="text"
