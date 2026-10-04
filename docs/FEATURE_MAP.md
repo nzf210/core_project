@@ -114,7 +114,7 @@ Format per feature:
 | F045 | UMKM Healthcare Clinic Queue System | ✅ Approved | ✅ Done | 2026-06-17 |
 | F046 | Hierarchical Coordinator Assignment | ✅ Approved | ✅ Done | 2026-06-20 |
 | F047 | Hardening Migration (F024 cleanup) | ✅ Approved | ✅ Done | 2026-06-17 |
-| F048 | WA Provider Preferences & Activation Guard | ✅ Approved | ✅ Done (v2) | 2026-06-20 |
+| F048 | WA Provider Preferences & Activation Guard | ✅ Approved | ✅ Done (v3) | 2026-06-20 |
 | F049 | Container Overhaul & Infrastructure Optimization | ✅ Approved | ✅ Done | 2026-06-17 |
 | F050 | WCH E2E MCP Server (UI Testing & Browser Automation) | ✅ Approved | ✅ Done | 2026-06-20 |
 | F051 | AI Quota Per-Modalitas (Text/Vision/Image) | ✅ Approved | ✅ Done | 2026-06-20 |
@@ -137,6 +137,7 @@ Format per feature:
 | F068 | Standardisasi Format Rupiah — `formatRupiah()` & `formatRupiahShort()` | ✅ Approved | ✅ Done | 2026-06-29 |
 | F069 | Redis-Backed WA Registration Session Persistence | ✅ Approved | ✅ Done | 2026-08-18 |
 | F070 | Smart Dynamic QRIS (0% Fee) & Struk Digital WhatsApp POS | ✅ Approved | ✅ Done | 2026-09-09 |
+| F071 | Modular Business Workflow — Laundry Order & Wash Tracking | ✅ Approved | ✅ Done | 2026-10-04 |
 
 ---
 
@@ -3501,4 +3502,104 @@ CanUseFeature(ctx, tenantID, "feature_key")
 - `apps/umkm/accounting/checkout_test.go` — unit test suite
 - `frontend/umkm-web/src/components/POS.vue` — UI POS, QR dinamis, nomor telepon pelanggan, tombol konfirmasi kasir
 - `frontend/umkm-web/src/components/Settings.vue` — formulir simpan QRIS Statik Toko
+
+---
+
+## F048: WA Provider Preferences & Activation Guard (v3 Update)
+
+**Spec Status:** ✅ Approved  
+**Implementation:** ✅ Done (v3)  
+**Last Updated:** 2026-09-15
+
+### 🎯 Objectives & Background (v3)
+Menampilkan nomor WhatsApp yang terhubung di halaman `/wa-setup` untuk kedua provider (whatsmeow dan Meta Cloud API), sehingga merchant/owner UMKM dapat memverifikasi nomor bisnis mana yang aktif melayani chatbot AI dan pesan keluar:
+1. **whatsmeow (Unofficial)**: Mengambil nomor dari `wa_sessions.wa_number` atau fallback parsing user JID dari `wa_tenant_sessions.jid` (contoh: `6281234567890`).
+2. **Meta Cloud API (Official)**: Menyimpan `display_phone_number` yang diperoleh dari validasi Meta Graph API (`/validate`) ke tabel `wa_cloud_api_credentials`, serta menampilkan `display_phone_number` (atau fallback `phone_number_id`) pada kartu status Cloud API di `/wa-setup`.
+
+### Acceptance Criteria (v3 Extension)
+- [x] AC-9: Display connected WhatsApp number(s) on `/wa-setup` for both whatsmeow (`wa_sessions.wa_number` / JID fallback) and Meta Cloud API (`display_phone_number` / `phone_number_id`).
+- [x] AC-10: Database migration `000087_wa_cloud_api_display_phone_number` adds `display_phone_number TEXT` to `wa_cloud_api_credentials`.
+- [x] AC-11: Backend endpoint `GET /wa/setup` returns `whatsmeow.wa_number`, `cloud_api.phone_number_id`, and `cloud_api.display_phone_number`.
+- [x] AC-12: Meta credential validation saves verified `phone_number` as `display_phone_number` in `wa_cloud_api_credentials`.
+
+**Files Changed:**
+- `shared/migrations/000087_wa_cloud_api_display_phone_number.up.sql` & `.down.sql`
+- `apps/umkm/accounting/chatbot_wa_setup_handlers.go`
+- `apps/umkm/accounting/chatbot_wa_setup_handlers_test.go`
+- `frontend/umkm-web/src/components/WASetup.vue`
+
+---
+
+## F071: Modular Business Workflow — Laundry Order & Wash Tracking
+
+**Spec Status:** ✅ Approved  
+**Implementation:** ✅ Done  
+**Last Updated:** 2026-10-04
+
+### 🎯 Objectives & Background
+Menyediakan modul alur operasional khusus untuk tenant UMKM berjenis usaha Laundry (`tenants.business_type = 'laundry'`). Modul ini mengotomatiskan siklus hidup cucian pelanggan mulai dari pencatatan nota order masuk (kiloan/satuan), pelacakan tahapan pencucian secara visual (Kanban), rak/keranjang penyimpanan, hingga pengiriman notifikasi WhatsApp otomatis saat cucian siap diambil.
+
+### 📝 Spec & Business Rules
+1. **Gating Jenis Usaha:**
+   - Endpoint backend `/api/umkm/laundry/*` diproteksi middleware `requireLaundryType` (hanya tenant dengan `business_type = 'laundry'` yang diizinkan, selain itu 403 Forbidden).
+   - Menu navigasi "Tracking Laundry" di frontend hanya muncul jika tenant berjenis `laundry`.
+2. **Tahapan Status Cucian (Status State Machine):**
+   - `received` (Diterima / Antre)
+   - `washing` (Sedang Dicuci)
+   - `drying` (Proses Pengeringan)
+   - `ironing` (Setrika / Packing)
+   - `ready` (Siap Diambil) ➔ **Trigger kirim notifikasi WhatsApp otomatis ke pelanggan**
+   - `completed` (Sudah Diambil / Selesai)
+   - `cancelled` (Dibatalkan)
+3. **Data Model (`laundry_orders`):**
+   - `id`: UUID (Primary Key)
+   - `tenant_id`: UUID (Foreign Key ke `tenants.id`, On Delete Cascade)
+   - `order_no`: VARCHAR(50) (Format: `LND-YYYYMMDD-XXXX`, Unik per tenant)
+   - `customer_name`: VARCHAR(255) NOT NULL
+   - `customer_phone`: VARCHAR(50) NOT NULL
+   - `service_type`: VARCHAR(50) ('kiloan', 'satuan', 'dry_clean')
+   - `weight_grams`: INT DEFAULT 0 (satuan gram untuk presisi)
+   - `item_count`: INT DEFAULT 0 (jumlah potong pakaian untuk satuan)
+   - `rack_location`: VARCHAR(50) (lokasi rak/keranjang, misal: 'Rak A-03')
+   - `status`: VARCHAR(50) DEFAULT 'received'
+   - `total_amount`: BIGINT NOT NULL (satuan sen, 1 rupiah = 100 sen)
+   - `is_paid`: BOOLEAN DEFAULT FALSE
+   - `payment_method`: VARCHAR(50) ('cash', 'qris', 'transfer', 'unpaid')
+   - `estimated_completion_at`: TIMESTAMPTZ
+   - `completed_at`: TIMESTAMPTZ
+   - `notes`: TEXT
+   - `created_at`, `updated_at`: TIMESTAMPTZ
+4. **Integrasi WhatsApp & Keuangan:**
+   - Saat status berpindah ke `ready`, sistem memanggil helper notifikasi WA untuk mengirim pesan kesiapan pengambilan cucian kepada pelanggan.
+   - Saat order dibayar lunas (`is_paid = true`), sistem mengintegrasikan pencatatan mutasi kas ke modul Accounting.
+
+### 📋 Acceptance Criteria
+- [x] AC-1: Migrasi skema database `000088_laundry_orders.up.sql` dan `.down.sql` membuat tabel `laundry_orders` dengan indeks multi-tenant pada `tenant_id`, `status`, dan `order_no`.
+- [x] AC-2: Backend middleware `requireLaundryType` memvalidasi `tenants.business_type = 'laundry'` dan menolak jenis usaha lain dengan HTTP 403.
+- [x] AC-3: Endpoint CRUD Laundry di `apps/umkm/accounting/laundry_handlers.go` & `laundry_detail_handlers.go`:
+  - `GET /api/umkm/laundry/orders` (filtering status, pagination, search nama/no nota)
+  - `POST /api/umkm/laundry/orders` (pencatatan order baru & auto-generate order_no)
+  - `GET /api/umkm/laundry/orders/{id}` (detail order)
+  - `PATCH /api/umkm/laundry/orders/{id}/status` (update tahapan status cucian)
+  - `POST /api/umkm/laundry/orders/{id}/pay` (konfirmasi pelunasan kasir)
+- [x] AC-4: Transisi status ke `ready` otomatis men-trigger pengiriman pesan WhatsApp ke `customer_phone`.
+- [x] AC-5: Menu sidebar `menu.ts` menampilkan "Tracking Laundry" (icon 🧺) hanya untuk tenant dengan `business_type = 'laundry'`.
+- [x] AC-6: Frontend `LaundryTracking.vue` & `LaundryOrderModal.vue` menyediakan antarmuka papan status (Kanban), modal penerimaan order laundry baru, filter status, dan tombol update status cepat.
+- [x] AC-7: Unit testing komprehensif di `apps/umkm/accounting/laundry_test.go` lulus semua uji kasus (validasi payload, state machine status, gating middleware).
+- [x] AC-8: `make check` (go vet, build, unit test) lulus 100% dan batas SonarQube (<450 baris BE, <500 baris FE) terpenuhi.
+
+**Files Created / Changed:**
+- `shared/migrations/000088_laundry_orders.up.sql` & `.down.sql`
+- `apps/umkm/accounting/laundry_middleware.go`
+- `apps/umkm/accounting/laundry_handlers.go`
+- `apps/umkm/accounting/laundry_detail_handlers.go`
+- `apps/umkm/accounting/laundry_test.go`
+- `apps/umkm/accounting/main.go`
+- `frontend/umkm-web/src/config/menu.ts`
+- `frontend/umkm-web/src/router/index.ts`
+- `frontend/umkm-web/src/components/LaundryTracking.vue`
+- `frontend/umkm-web/src/components/LaundryOrderModal.vue`
+- `frontend/umkm-web/src/api.ts`
+
+
 

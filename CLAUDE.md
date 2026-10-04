@@ -249,11 +249,13 @@ Tenant dapat meng-override hybrid routing dengan preferensi eksplisit di `tenant
 
 **Addon Gate untuk Cloud API:** Cloud API option di-lock di UI kecuali tenant punya `plan_features.feature_key = 'wa_cloud_api' AND is_enabled = true` untuk plan-nya. Cek via endpoint `GET /api/umkm/chatbot/permissions`.
 
-**Hybrid WA Setup Wizard (v2):**
+**Hybrid WA Setup Wizard (v2/v3):**
 - Frontend `WASetup.vue` menyediakan halaman setup WA terpadu dengan 2 tab: Koneksi & Provider, Pengaturan AI CS
 - Flow validasi 2-step: Validate credential via Meta Graph API → Baru simpan ke DB
 - Backend `POST /api/wa/validate` (via api-gateway → wa-cloud-api) untuk validasi real-time access token + phone number ID
-- Migration `000070` menambah kolom `verification_status`, `verified_at`, `last_checked_at`, `check_error` ke `wa_cloud_api_credentials`
+- Migration `000070`/`000075` menambah kolom `verification_status`, `verified_at`, `last_checked_at`, `check_error` ke `wa_cloud_api_credentials`
+- Migration `000087` menambah kolom `display_phone_number` ke `wa_cloud_api_credentials`
+- F048 AC-9: Menampilkan nomor WhatsApp terhubung pada kartu Whatsmeow (`wa_sessions.wa_number` / fallback JID) dan Meta Cloud API (`display_phone_number` / fallback `phone_number_id`) di `/wa-setup`
 
 **Files involved:**
 - `services/wa-gateway/main.go` → `getTenantWAProviderPreference()` (line ~172), override routing (line ~835)

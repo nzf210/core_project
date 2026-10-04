@@ -660,12 +660,91 @@ export interface RecentTransaction {
 
 export const reportsApi = {
   async getSalesChart(period: 'week' | 'month' | 'year' = 'week') {
-    return api.get(`/api/umkm/reports/sales-chart?period=${period}`)
+    const res = await fetch(`${API_BASE}/api/umkm/reports/sales-chart?period=${period}`, { headers: headers() })
+    return res.json()
   },
   async getTopProducts(limit = 5) {
-    return api.get(`/api/umkm/reports/top-products?limit=${limit}`)
+    const res = await fetch(`${API_BASE}/api/umkm/reports/top-products?limit=${limit}`, { headers: headers() })
+    return res.json()
   },
   async getRecentTransactions(limit = 5) {
-    return api.get(`/api/umkm/reports/recent-transactions?limit=${limit}`)
+    const res = await fetch(`${API_BASE}/api/umkm/reports/recent-transactions?limit=${limit}`, { headers: headers() })
+    return res.json()
   },
 }
+
+// F071: Modular Business Workflow — Laundry Order & Wash Tracking API
+export interface LaundryOrder {
+  id: string
+  tenant_id: string
+  order_no: string
+  customer_name: string
+  customer_phone: string
+  service_type: 'kiloan' | 'satuan' | 'dry_clean' | string
+  weight_grams: number
+  item_count: number
+  rack_location: string
+  status: 'received' | 'washing' | 'drying' | 'ironing' | 'ready' | 'completed' | 'cancelled'
+  total_amount: number // dalam sen (1 IDR = 100 sen)
+  is_paid: boolean
+  payment_method: string
+  estimated_completion_at?: string
+  completed_at?: string
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateLaundryOrderPayload {
+  customer_name: string
+  customer_phone: string
+  service_type: string
+  weight_grams?: number
+  item_count?: number
+  rack_location?: string
+  total_amount: number
+  is_paid?: boolean
+  payment_method?: string
+  estimated_completion_at?: string
+  notes?: string
+}
+
+export const laundryApi = {
+  async getOrders(params?: { status?: string; search?: string; limit?: number }) {
+    const q = new URLSearchParams()
+    if (params?.status) q.set('status', params.status)
+    if (params?.search) q.set('search', params.search)
+    if (params?.limit) q.set('limit', String(params.limit))
+    const res = await fetch(`${API_BASE}/api/umkm/laundry/orders?${q.toString()}`, { headers: headers() })
+    return res.json()
+  },
+  async createOrder(payload: CreateLaundryOrderPayload) {
+    const res = await fetch(`${API_BASE}/api/umkm/laundry/orders`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(payload),
+    })
+    return res.json()
+  },
+  async getOrder(id: string) {
+    const res = await fetch(`${API_BASE}/api/umkm/laundry/orders/${id}`, { headers: headers() })
+    return res.json()
+  },
+  async updateStatus(id: string, status: string) {
+    const res = await fetch(`${API_BASE}/api/umkm/laundry/orders/${id}/status`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({ status }),
+    })
+    return res.json()
+  },
+  async payOrder(id: string, paymentMethod = 'cash') {
+    const res = await fetch(`${API_BASE}/api/umkm/laundry/orders/${id}/pay`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ payment_method: paymentMethod }),
+    })
+    return res.json()
+  },
+}
+

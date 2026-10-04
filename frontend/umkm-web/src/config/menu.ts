@@ -26,6 +26,8 @@ export const menuConfig: MenuGroup[] = [
       { label: 'Katalog Produk', to: '/catalog', icon: '📦' },
       // Impor/Ekspor: admin-only (risiko data besar; kasir tidak perlu)
       { label: 'Impor / Ekspor', to: '/data-transfer', icon: '📥', roles: ['owner', 'admin', 'superadmin'] },
+      // ===== Laundry-only modules (F071) =====
+      { label: 'Tracking Laundry', to: '/laundry/tracking', icon: '🧺', businessTypes: ['laundry'], roles: ['owner', 'admin', 'superadmin', 'kasir'] },
       // ===== Klinik-only modules (F047) =====
       { label: 'Antrean Klinik', to: '/clinic/frontdesk', icon: '🏥', businessTypes: ['clinic'], roles: ['owner', 'admin', 'superadmin'] },
       { label: 'Rekam Medis', to: '/clinic/medical-record', icon: '📋', businessTypes: ['clinic'], roles: ['owner', 'admin', 'superadmin'] },

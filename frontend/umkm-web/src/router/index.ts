@@ -42,6 +42,7 @@ import DataTransfer from '../components/DataTransfer.vue'
 import Reports from '../components/Reports.vue'
 import ClinicQueue from '../components/ClinicQueue.vue'
 import ClinicFrontdesk from '../components/ClinicFrontdesk.vue'
+import LaundryTracking from '../components/LaundryTracking.vue'
 import AffiliateDashboard from '../components/AffiliateDashboard.vue'
 import AffiliateLeaderboard from '../components/AffiliateLeaderboard.vue'
 import Wallet from '../components/Wallet.vue'
@@ -70,6 +71,9 @@ const routes = [
   { path: '/register', component: Register, name: 'Register', meta: { requiresGuest: true } },
   { path: '/clinic', component: ClinicQueue, name: 'ClinicQueue' },
   { path: '/clinic/frontdesk', component: ClinicFrontdesk, name: 'ClinicFrontdesk' },
+  // F071: Laundry Tracking
+  { path: '/laundry', redirect: '/laundry/tracking' },
+  { path: '/laundry/tracking', component: LaundryTracking, name: 'LaundryTracking' },
   // F047: Rekam Medis + Jadwal Dokter + Notifikasi WA Klinik — all use the same component with tabs
   { path: '/clinic/medical-record', redirect: '/clinic/frontdesk?tab=records' },
   { path: '/clinic/schedule', redirect: '/clinic/frontdesk?tab=doctors' },

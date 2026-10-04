@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"core_project/shared/sdk/config"
 	"core_project/shared/sdk/encryption"
@@ -18,13 +19,29 @@ const (
 	errMissingTenantID = "Missing X-Tenant-ID"
 )
 
+// extractPhoneFromJID extracts the phone number from a WhatsApp JID string.
+// Formats handled:
+// - "6281234567890:12@s.whatsapp.net" -> "6281234567890"
+// - "6281234567890@s.whatsapp.net"    -> "6281234567890"
+// - "6281234567890"                   -> "6281234567890"
+func extractPhoneFromJID(jid string) string {
+	jid = strings.TrimSpace(jid)
+	if jid == "" {
+		return ""
+	}
+	parts := strings.Split(jid, "@")
+	userPart := parts[0]
+	userParts := strings.Split(userPart, ":")
+	return userParts[0]
+}
+
 func handleWASetup(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get(headerTenantID)
 	if tenantID == "" {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: errMissingTenantID})
 		return
-		}
-		ctx := r.Context()
+	}
+	ctx := r.Context()
 
 	var waProviderPref string
 	_ = DB.QueryRow(ctx, "SELECT wa_provider_preference FROM tenant_chatbot_configs WHERE tenant_id = $1", tenantID).Scan(&waProviderPref)
@@ -35,20 +52,59 @@ func handleWASetup(w http.ResponseWriter, r *http.Request) {
 	var whatsmeowStatus struct {
 		Connected bool   `json:"connected"`
 		Status    string `json:"status"`
+		WANumber  string `json:"wa_number,omitempty"`
 	}
 	var wmStatus string
-	_ = DB.QueryRow(ctx, "SELECT status FROM wa_sessions WHERE tenant_id = $1 ORDER BY updated_at DESC LIMIT 1", tenantID).Scan(&wmStatus)
-	if wmStatus == "" || wmStatus == "disconnected" {
+	var wmNumber string
+	_ = DB.QueryRow(ctx, "SELECT status, COALESCE(wa_number, '') FROM wa_sessions WHERE tenant_id = $1 ORDER BY updated_at DESC LIMIT 1", tenantID).Scan(&wmStatus, &wmNumber)
+	if wmStatus == "" {
 		var jid string
 		_ = DB.QueryRow(ctx, "SELECT jid FROM wa_tenant_sessions WHERE tenant_id = $1", tenantID).Scan(&jid)
 		if jid != "" {
 			wmStatus = "connected"
+			if wmNumber == "" {
+				wmNumber = extractPhoneFromJID(jid)
+			}
+		}
+	} else if wmNumber == "" {
+		var jid string
+		_ = DB.QueryRow(ctx, "SELECT jid FROM wa_tenant_sessions WHERE tenant_id = $1", tenantID).Scan(&jid)
+		if jid != "" {
+			wmNumber = extractPhoneFromJID(jid)
 		}
 	}
+
+	// Reconcile with live socket in wa-gateway if DB still reports disconnected/qr_pending
+	if wmStatus != "connected" && config.GlobalConfig != nil && config.GlobalConfig.WhatsApp.GatewayURL != "" {
+		gwClient := &http.Client{Timeout: 1500 * time.Millisecond}
+		gwReq, err := http.NewRequestWithContext(ctx, http.MethodGet, config.GlobalConfig.WhatsApp.GatewayURL+"/api/wa/status?tenant_id="+tenantID, nil)
+		if err == nil {
+			if gwResp, err := gwClient.Do(gwReq); err == nil {
+				var statusPayload struct {
+					Status string `json:"status"`
+					JID    string `json:"jid"`
+				}
+				if json.NewDecoder(gwResp.Body).Decode(&statusPayload) == nil && statusPayload.Status == "connected" {
+					wmStatus = "connected"
+					if statusPayload.JID != "" && wmNumber == "" {
+						wmNumber = extractPhoneFromJID(statusPayload.JID)
+					}
+					if wmNumber != "" {
+						_, _ = DB.Exec(ctx, `UPDATE wa_sessions SET status = 'connected', wa_number = $1, last_seen = NOW(), updated_at = NOW() WHERE tenant_id = $2`, wmNumber, tenantID)
+					} else {
+						_, _ = DB.Exec(ctx, `UPDATE wa_sessions SET status = 'connected', last_seen = NOW(), updated_at = NOW() WHERE tenant_id = $1`, tenantID)
+					}
+				}
+				gwResp.Body.Close()
+			}
+		}
+	}
+
 	switch wmStatus {
 	case "connected":
 		whatsmeowStatus.Connected = true
 		whatsmeowStatus.Status = "connected"
+		whatsmeowStatus.WANumber = wmNumber
 	case "qr_pending":
 		whatsmeowStatus.Status = "qr_pending"
 	default:
@@ -56,14 +112,20 @@ func handleWASetup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var cloudAPIStatus struct {
-		Active    bool   `json:"active"`
-		CreditBal int64  `json:"credit_balance_rupiah"`
-		LastSync  string `json:"last_sync_at"`
+		Active             bool   `json:"active"`
+		CreditBal          int64  `json:"credit_balance_rupiah"`
+		LastSync           string `json:"last_sync_at"`
+		PhoneNumberID      string `json:"phone_number_id,omitempty"`
+		DisplayPhoneNumber string `json:"display_phone_number,omitempty"`
 	}
 	var hasCloudAPI bool
-	_ = DB.QueryRow(ctx, "SELECT is_active FROM wa_cloud_api_credentials WHERE tenant_id = $1", tenantID).Scan(&hasCloudAPI)
+	var cloudPhoneID string
+	var cloudDisplayPhone string
+	_ = DB.QueryRow(ctx, "SELECT is_active, COALESCE(phone_number_id, ''), COALESCE(display_phone_number, '') FROM wa_cloud_api_credentials WHERE tenant_id = $1", tenantID).Scan(&hasCloudAPI, &cloudPhoneID, &cloudDisplayPhone)
 	if hasCloudAPI {
 		cloudAPIStatus.Active = true
+		cloudAPIStatus.PhoneNumberID = cloudPhoneID
+		cloudAPIStatus.DisplayPhoneNumber = cloudDisplayPhone
 	}
 
 	var plan string
@@ -158,6 +220,7 @@ func handleWACloudAPICredentialGet(ctx context.Context, w http.ResponseWriter, t
 	var cred struct {
 		ID                 string `json:"id"`
 		PhoneNumberID      string `json:"phone_number_id"`
+		DisplayPhoneNumber string `json:"display_phone_number,omitempty"`
 		WABAID             string `json:"waba_id"`
 		VerifyToken        string `json:"verify_token"`
 		IsActive           bool   `json:"is_active"`
@@ -167,11 +230,11 @@ func handleWACloudAPICredentialGet(ctx context.Context, w http.ResponseWriter, t
 		UpdatedAt          string `json:"updated_at"`
 	}
 	err := DB.QueryRow(ctx, `
-		SELECT id, phone_number_id, COALESCE(waba_id,''), COALESCE(verify_token,''),
+		SELECT id, phone_number_id, COALESCE(display_phone_number,''), COALESCE(waba_id,''), COALESCE(verify_token,''),
 			   is_active, COALESCE(verification_status,'unverified'),
 			   COALESCE(verified_at::text,''), created_at::text, updated_at::text
 		FROM wa_cloud_api_credentials WHERE tenant_id = $1
-	`, tenantID).Scan(&cred.ID, &cred.PhoneNumberID, &cred.WABAID, &cred.VerifyToken,
+	`, tenantID).Scan(&cred.ID, &cred.PhoneNumberID, &cred.DisplayPhoneNumber, &cred.WABAID, &cred.VerifyToken,
 		&cred.IsActive, &cred.VerificationStatus, &cred.VerifiedAt, &cred.CreatedAt, &cred.UpdatedAt)
 	if err != nil {
 		writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: nil})
@@ -245,17 +308,30 @@ func validateCloudAPICredentialsAfterSave(ctx context.Context, w http.ResponseWr
 
 	vaResp, err := http.DefaultClient.Do(vaReq)
 	verificationStatus := "unverified"
+	var verifiedPhoneNumber string
 	if err == nil {
 		defer vaResp.Body.Close()
 		if vaResp.StatusCode == http.StatusOK {
 			verificationStatus = "verified"
+			var vaResult struct {
+				Data struct {
+					PhoneNumber string `json:"phone_number"`
+				} `json:"data"`
+			}
+			if errDecode := json.NewDecoder(vaResp.Body).Decode(&vaResult); errDecode == nil {
+				verifiedPhoneNumber = strings.TrimSpace(vaResult.Data.PhoneNumber)
+			}
 		} else {
 			verificationStatus = "error"
 		}
 	}
 
 	if verificationStatus == "verified" {
-		_, _ = DB.Exec(ctx, `UPDATE wa_cloud_api_credentials SET verification_status = $1, verified_at = NOW(), last_checked_at = NOW() WHERE tenant_id = $2`, verificationStatus, tenantID)
+		if verifiedPhoneNumber != "" {
+			_, _ = DB.Exec(ctx, `UPDATE wa_cloud_api_credentials SET verification_status = $1, display_phone_number = $2, verified_at = NOW(), last_checked_at = NOW() WHERE tenant_id = $3`, verificationStatus, verifiedPhoneNumber, tenantID)
+		} else {
+			_, _ = DB.Exec(ctx, `UPDATE wa_cloud_api_credentials SET verification_status = $1, verified_at = NOW(), last_checked_at = NOW() WHERE tenant_id = $2`, verificationStatus, tenantID)
+		}
 	} else {
 		_, _ = DB.Exec(ctx, `UPDATE wa_cloud_api_credentials SET verification_status = $1, last_checked_at = NOW(), check_error = $3 WHERE tenant_id = $2`, verificationStatus, tenantID, "Gagal terhubung ke Meta API untuk validasi")
 	}

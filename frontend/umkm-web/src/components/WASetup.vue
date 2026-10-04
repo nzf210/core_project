@@ -67,11 +67,20 @@
             <strong>{{ waSetupState.whatsmeow.connected ? 'Terhubung' : (waSetupState.whatsmeow.status === 'qr_pending'
               ? 'Menunggu Scan QR' : 'Terputus') }}</strong>
           </div>
+          <p v-if="waSetupState.whatsmeow.wa_number" class="status-phone" style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin: 0.35rem 0 0.25rem;">
+            📞 +{{ waSetupState.whatsmeow.wa_number.replace(/^\+/, '') }}
+            <span v-if="!waSetupState.whatsmeow.connected" style="font-size: 0.75rem; color: #ef4444; margin-left: 0.5rem; font-weight: 500;">(Terputus)</span>
+          </p>
           <p class="status-desc">
             Koneksi pihak ketiga ke WhatsApp Web. Harus terhubung agar chatbot bisa membalas.
           </p>
-          <div v-if="!waSetupState.whatsmeow.connected" class="action-row">
-            <button class="btn btn-primary" @click="requestQR">Generate QR Code</button>
+          <div class="action-row" style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+            <button v-if="!waSetupState.whatsmeow.connected" class="btn btn-primary" @click="requestQR(true)">
+              {{ waSetupState.whatsmeow.wa_number ? '🔄 Hubungkan Ulang' : 'Generate QR Code' }}
+            </button>
+            <button v-else class="btn btn-secondary" style="color: #ef4444; border-color: #fca5a5;" @click="disconnectWhatsmeow">
+              Putuskan Koneksi
+            </button>
           </div>
         </div>
 
@@ -81,6 +90,9 @@
             <span class="status-dot"></span>
             <strong>{{ waSetupState.cloud_api.active ? 'Aktif' : 'Belum Dikonfigurasi' }}</strong>
           </div>
+          <p v-if="waSetupState.cloud_api.active && (waSetupState.cloud_api.display_phone_number || waSetupState.cloud_api.phone_number_id)" class="status-phone" style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin: 0.35rem 0 0.25rem;">
+            📞 {{ waSetupState.cloud_api.display_phone_number || ('ID: ' + waSetupState.cloud_api.phone_number_id) }}
+          </p>
           <div v-if="waSetupState.cloud_api.active"
             style="margin-top: 1rem; background: var(--bg-primary); padding: 1rem; border-radius: 0.5rem;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
@@ -328,19 +340,47 @@
 
     <!-- QR Modal -->
     <div v-if="qrModal" class="modal-backdrop" @click.self="closeQRModal()">
-      <div class="modal-content surface-card" style="max-width: 360px; padding: 1.5rem; text-align: center;">
-        <h3 style="margin-bottom: 0.75rem;">📱 Scan QR Code</h3>
+      <div class="modal-content surface-card" style="max-width: 380px; padding: 1.5rem; text-align: center;">
+        <h3 style="margin-bottom: 0.75rem;">📱 Hubungkan WhatsApp</h3>
         <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-          Buka WhatsApp di HP Anda → Settings → Linked Devices → Link a Device
+          Pilih metode: Scan QR Code atau Gunakan Kode Pairing
         </p>
-        <div v-if="qrStatus === 'loading'" style="padding: 2rem; color: var(--text-secondary);">
+
+        <div style="display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 1rem;">
+          <button class="btn btn-sm" :class="qrMode === 'qr' ? 'btn-primary' : 'btn-secondary'" @click="switchQRMode('qr')">
+            Scan QR
+          </button>
+          <button class="btn btn-sm" :class="qrMode === 'pairing' ? 'btn-primary' : 'btn-secondary'" @click="switchQRMode('pairing')">
+            Kode Pairing
+          </button>
+        </div>
+
+        <div v-if="qrStatus === 'loading' && qrMode === 'qr'" style="padding: 2rem; color: var(--text-secondary);">
           Memuat QR Code...
         </div>
-        <div v-else-if="qrStatus === 'qr' && qrImage">
+        <div v-else-if="qrMode === 'qr' && qrStatus === 'qr' && qrImage">
           <img :src="qrImage" alt="QR Code"
             style="width: 220px; height: 220px; border: 1px solid var(--border-color); border-radius: 8px;" />
-          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">QR code berlaku 60 detik.
-            Refresh otomatis.</p>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+            Buka WA di HP → Perangkat Tertaut → Tautkan Perangkat → Scan QR
+          </p>
+        </div>
+        <div v-else-if="qrMode === 'pairing'">
+          <div v-if="pairingCode">
+            <div style="font-size: 1.6rem; font-weight: 700; letter-spacing: 3px; padding: 0.75rem; background: var(--bg-primary); border-radius: 8px; margin: 0.75rem 0; color: var(--text-primary);">
+              {{ pairingCode }}
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
+              Buka WhatsApp di HP → <b>Perangkat Tertaut</b> → <b>Tautkan Perangkat</b> → pilih <b>Tautkan dengan nomor telepon saja</b> → masukkan 8 digit kode di atas.
+            </p>
+          </div>
+          <div v-else style="display: flex; flex-direction: column; gap: 0.5rem; text-align: left;">
+            <label style="font-size: 0.85rem;">Nomor WhatsApp Toko:</label>
+            <input v-model="pairingPhone" type="text" class="form-control" placeholder="Contoh: 08123456789 atau 628123456789" />
+            <button class="btn btn-primary" style="margin-top: 0.5rem;" :disabled="!pairingPhone.trim() || pairingLoading" @click="requestPairingCode">
+              {{ pairingLoading ? 'Membuat Kode...' : 'Dapatkan Kode Pairing' }}
+            </button>
+          </div>
         </div>
         <div v-else-if="qrStatus === 'connected'" style="padding: 2rem; color: #10b981;">
           ✅ WhatsApp terhubung!
@@ -350,7 +390,7 @@
         </div>
         <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
           <button class="btn btn-secondary" @click="closeQRModal()">Tutup</button>
-          <button v-if="qrStatus === 'qr'" class="btn btn-primary" @click="requestQR">🔄 Refresh QR</button>
+          <button v-if="qrMode === 'qr' && qrStatus === 'qr'" class="btn btn-primary" @click="requestQR(true)">🔄 Refresh QR</button>
         </div>
       </div>
     </div>
@@ -460,8 +500,8 @@ const provider = ref('auto')
 const waSetupState = ref({
   wa_provider_preference: 'auto',
   can_use_cloud_api: false,
-  whatsmeow: { connected: false, status: 'disconnected' },
-  cloud_api: { active: false, credit_balance_rupiah: 0, credit_used_rupiah: 0 }
+  whatsmeow: { connected: false, status: 'disconnected', wa_number: '' },
+  cloud_api: { active: false, credit_balance_rupiah: 0, credit_used_rupiah: 0, phone_number_id: '', display_phone_number: '' }
 })
 
 const formatPrice = (sen: number) => {
@@ -536,11 +576,21 @@ const dayShortList = computed(() => {
 const loadData = async () => {
   loading.value = true
   try {
-    // 1. Load WA Setup
-    const resWA = await api.getWASetup()
-    if (resWA.success) {
-      waSetupState.value = resWA.data
-      provider.value = resWA.data.wa_provider_preference
+    // 1. Load WA Setup & reconcile with live gateway status
+    const [resWA, gwStatusRes] = await Promise.allSettled([
+      api.getWASetup(),
+      api.wa('status')
+    ])
+    if (resWA.status === 'fulfilled' && resWA.value.success) {
+      waSetupState.value = resWA.value.data
+      provider.value = resWA.value.data.wa_provider_preference
+      if (gwStatusRes.status === 'fulfilled' && gwStatusRes.value?.status === 'connected') {
+        waSetupState.value.whatsmeow.connected = true
+        waSetupState.value.whatsmeow.status = 'connected'
+        if (!waSetupState.value.whatsmeow.wa_number && gwStatusRes.value.jid) {
+          waSetupState.value.whatsmeow.wa_number = gwStatusRes.value.jid.split('@')[0].split(':')[0]
+        }
+      }
     }
     // 2. Load AI Config
     const resAI = await api.getChatbotConfig()
@@ -691,6 +741,10 @@ async function saveCloudApiCredential() {
 // --- QR STATE ---
 const qrModal = ref(false)
 const qrImage = ref('')
+const qrMode = ref<'qr' | 'pairing'>('qr')
+const pairingPhone = ref('')
+const pairingCode = ref('')
+const pairingLoading = ref(false)
 
 watch(qrModal, (v) => { if (v) openModal(); else closeModal(); });
 const qrStatus = ref<'loading' | 'qr' | 'connected' | 'error'>('loading')
@@ -723,60 +777,106 @@ function closeQRModal() {
   loadData()
 }
 
-async function requestQR() {
+function switchQRMode(mode: 'qr' | 'pairing') {
+  qrMode.value = mode
+  qrError.value = ''
+  if (mode === 'qr' && !qrImage.value) {
+    requestQR(false)
+  }
+}
+
+function startQRPolling() {
+  stopQRPolling()
+  qrPollInterval = setInterval(async () => {
+    try {
+      const statusRes = await api.wa('status')
+      if (statusRes.status === 'connected') {
+        qrStatus.value = 'connected'
+        qrImage.value = ''
+        pairingCode.value = ''
+        stopQRPolling()
+        waSetupState.value.whatsmeow.connected = true
+        waSetupState.value.whatsmeow.status = 'connected'
+        if (statusRes.jid && !waSetupState.value.whatsmeow.wa_number) {
+          waSetupState.value.whatsmeow.wa_number = statusRes.jid.split('@')[0].split(':')[0]
+        }
+        const resWA = await api.getWASetup()
+        if (resWA.success) {
+          waSetupState.value = resWA.data
+          waSetupState.value.whatsmeow.connected = true
+          waSetupState.value.whatsmeow.status = 'connected'
+        }
+        setTimeout(() => { qrModal.value = false }, 1500)
+        return
+      }
+
+      // Fallback: cek endpoint setup langsung jika wa status sedang lag
+      const resWA = await api.getWASetup()
+      if (resWA.success && resWA.data?.whatsmeow?.connected) {
+        qrStatus.value = 'connected'
+        qrImage.value = ''
+        pairingCode.value = ''
+        stopQRPolling()
+        waSetupState.value = resWA.data
+        setTimeout(() => { qrModal.value = false }, 1500)
+      }
+    } catch {
+      // ignore transient poll error
+    }
+  }, 2000)
+}
+
+async function requestQR(force = false) {
   qrModal.value = true
+  qrMode.value = 'qr'
   qrImage.value = ''
+  pairingCode.value = ''
   qrStatus.value = 'loading'
   qrError.value = ''
   stopQRPolling()
 
   try {
-    const res = await api.wa('qr')
+    const endpoint = force ? 'qr?force=true' : 'qr'
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Waktu permintaan habis (timeout). Server WhatsApp sedang sibuk, silakan coba lagi.')), 20000)
+    )
+    const res: any = await Promise.race([api.wa(endpoint), timeoutPromise])
     if (res.status === 'qr' && res.qr_code) {
       qrImage.value = res.qr_code
       qrStatus.value = 'qr'
-
-      // Poll status (bukan 'qr') setiap 2 detik sampai connected atau timeout
-      qrPollInterval = setInterval(async () => {
-        try {
-          const statusRes = await api.wa('status')
-          if (statusRes.status === 'connected') {
-            qrStatus.value = 'connected'
-            qrImage.value = ''
-            stopQRPolling()
-            const resWA = await api.getWASetup()
-            if (resWA.success) waSetupState.value = resWA.data
-            setTimeout(() => { qrModal.value = false }, 1500)
-            return
-          }
-
-          // Fallback: cek endpoint setup langsung jika wa status sedang lag
-          const resWA = await api.getWASetup()
-          if (resWA.success && resWA.data?.whatsmeow?.connected) {
-            qrStatus.value = 'connected'
-            qrImage.value = ''
-            stopQRPolling()
-            waSetupState.value = resWA.data
-            setTimeout(() => { qrModal.value = false }, 1500)
-          }
-        } catch {
-          // ignore transient poll error
-        }
-      }, 2000)
+      startQRPolling()
     } else if (res.status === 'connected') {
       qrStatus.value = 'connected'
       qrImage.value = ''
+      pairingCode.value = ''
       stopQRPolling()
-      setTimeout(() => { qrModal.value = false }, 2000)
+      waSetupState.value.whatsmeow.connected = true
+      waSetupState.value.whatsmeow.status = 'connected'
+      if (res.wa_number) {
+        waSetupState.value.whatsmeow.wa_number = res.wa_number
+      }
       const resWA = await api.getWASetup()
-      if (resWA.success) waSetupState.value = resWA.data
+      if (resWA.success) {
+        waSetupState.value = resWA.data
+        waSetupState.value.whatsmeow.connected = true
+        waSetupState.value.whatsmeow.status = 'connected'
+      }
+      setTimeout(() => { qrModal.value = false }, 1500)
     } else if (res.status === 'busy') {
       qrStatus.value = 'error'
       qrError.value = res.message || 'Gateway sibuk, coba lagi sebentar.'
       stopQRPolling()
+    } else if (res.status === 'timeout') {
+      qrStatus.value = 'error'
+      qrError.value = res.message || 'Waktu habis saat memuat QR Code. Silakan coba lagi.'
+      stopQRPolling()
     } else if (res.error) {
       qrStatus.value = 'error'
       qrError.value = res.error
+      stopQRPolling()
+    } else {
+      qrStatus.value = 'error'
+      qrError.value = res.message || 'Gagal memuat QR Code. Silakan coba lagi.'
       stopQRPolling()
     }
   } catch (e: any) {
@@ -787,6 +887,59 @@ async function requestQR() {
 
   // Stop after 5 minutes to avoid infinite polling
   setTimeout(() => { stopQRPolling() }, 5 * 60 * 1000)
+}
+
+async function requestPairingCode() {
+  const phone = pairingPhone.value.trim()
+  if (!phone) return
+  pairingLoading.value = true
+  qrError.value = ''
+  try {
+    const res = await api.wa(`qr?phone=${encodeURIComponent(phone)}&force=true`)
+    if (res.status === 'pairing' && res.pairing_code) {
+      pairingCode.value = res.pairing_code
+      startQRPolling()
+    } else if (res.status === 'connected') {
+      qrStatus.value = 'connected'
+      pairingCode.value = ''
+      stopQRPolling()
+      waSetupState.value.whatsmeow.connected = true
+      waSetupState.value.whatsmeow.status = 'connected'
+      if (res.wa_number) {
+        waSetupState.value.whatsmeow.wa_number = res.wa_number
+      }
+      const resWA = await api.getWASetup()
+      if (resWA.success) {
+        waSetupState.value = resWA.data
+        waSetupState.value.whatsmeow.connected = true
+        waSetupState.value.whatsmeow.status = 'connected'
+      }
+      setTimeout(() => { qrModal.value = false }, 1500)
+    } else if (res.error) {
+      qrStatus.value = 'error'
+      qrError.value = res.error
+    }
+  } catch (e: any) {
+    qrStatus.value = 'error'
+    qrError.value = e?.message || 'Gagal membuat kode pairing'
+  } finally {
+    pairingLoading.value = false
+  }
+}
+
+async function disconnectWhatsmeow() {
+  if (!confirm('Yakin ingin memutuskan koneksi WhatsApp toko? Chatbot tidak akan dapat membalas pesan saat terputus.')) {
+    return
+  }
+  try {
+    const res = await api.wa('logout', {})
+    if (res.success || res.status) {
+      const resWA = await api.getWASetup()
+      if (resWA.success) waSetupState.value = resWA.data
+    }
+  } catch (e: any) {
+    alert('Gagal memutuskan koneksi: ' + (e?.message || 'Error'))
+  }
 }
 
 // AI Config Actions

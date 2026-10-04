@@ -26,6 +26,9 @@ func handleLogoutRequest(w http.ResponseWriter, r *http.Request) {
 	client, exists := clientMap[tenantID]
 	if exists {
 		client.Disconnect()
+		if client.Store != nil && client.Store.ID != nil {
+			_ = client.Store.Delete(r.Context())
+		}
 		delete(clientMap, tenantID)
 	}
 	clientMu.Unlock()
@@ -34,6 +37,7 @@ func handleLogoutRequest(w http.ResponseWriter, r *http.Request) {
 		if _, err := db.Exec(`DELETE FROM wa_tenant_sessions WHERE tenant_id = $1`, tenantID); err != nil {
 			slog.Error("Failed to delete wa_tenant_sessions on logout", "tenant_id", tenantID, "error", err)
 		}
+		_, _ = db.Exec(`UPDATE wa_sessions SET status = 'disconnected', updated_at = NOW() WHERE tenant_id = $1::uuid`, tenantID)
 	}
 
 	invalidatePlatformWAProviderCache()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"go.mau.fi/whatsmeow"
 )
@@ -29,21 +30,32 @@ func handleStatusRequest(w http.ResponseWriter, r *http.Request) {
 
 	if client, ok := getClientByTenant(tenantID); ok && client.Store.ID != nil {
 		if client.IsConnected() {
+			handleConnectedEvent(tenantID)
 			writeStatus(w, "connected", client.Store.ID.String(), "", "")
 			return
 		}
-		// If client is reconnecting right after pair success, check DB
-		if jid := getSessionJIDFromDB(tenantID); jid != "" {
-			writeStatus(w, "connected", jid, "", "Session paired and reconnecting")
-			return
+		// Attempt reconnect
+		if err := client.Connect(); err == nil {
+			time.Sleep(200 * time.Millisecond)
+			if client.IsConnected() {
+				handleConnectedEvent(tenantID)
+				writeStatus(w, "connected", client.Store.ID.String(), "", "")
+				return
+			}
 		}
-		writeStatus(w, "connecting", client.Store.ID.String(), "", "Session reconnecting")
+		writeStatus(w, "disconnected", client.Store.ID.String(), "", "Session disconnected")
 		return
 	}
 
 	// Fallback: check if session is recorded in DB (e.g. freshly paired or restored)
 	if jid := getSessionJIDFromDB(tenantID); jid != "" {
-		writeStatus(w, "connected", jid, "", "Session active")
+		restoreSingleSession(tenantID)
+		if client, ok := getClientByTenant(tenantID); ok && client.IsConnected() {
+			handleConnectedEvent(tenantID)
+			writeStatus(w, "connected", jid, "", "")
+			return
+		}
+		writeStatus(w, "disconnected", jid, "", "Session inactive")
 		return
 	}
 

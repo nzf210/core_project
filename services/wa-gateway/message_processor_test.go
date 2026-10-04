@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -208,5 +209,69 @@ func TestIsSystemTenant(t *testing.T) {
 		if got != tt.expected {
 			t.Errorf("isSystemTenant(%q) = %v, want %v", tt.tenantID, got, tt.expected)
 		}
+	}
+}
+
+func TestGetChatbotServiceURL_EnvironmentOverrides(t *testing.T) {
+	origChatbot := os.Getenv("UMKM_CHATBOT_URL")
+	origAppEnv := os.Getenv("APP_ENV")
+	origDBHost := os.Getenv("DB_HOST")
+	defer func() {
+		os.Setenv("UMKM_CHATBOT_URL", origChatbot)
+		os.Setenv("APP_ENV", origAppEnv)
+		os.Setenv("DB_HOST", origDBHost)
+	}()
+
+	os.Setenv("UMKM_CHATBOT_URL", "http://my-chatbot:8203/")
+	if url := getChatbotServiceURL(); url != "http://my-chatbot:8203" {
+		t.Errorf("expected trimmed custom URL, got %s", url)
+	}
+
+	os.Unsetenv("UMKM_CHATBOT_URL")
+	os.Setenv("APP_ENV", "production")
+	if url := getChatbotServiceURL(); url != "http://umkm-chatbot:8203" {
+		t.Errorf("expected production default umkm-chatbot:8203, got %s", url)
+	}
+
+	os.Setenv("APP_ENV", "development")
+	os.Setenv("DB_HOST", "127.0.0.1")
+	if url := getChatbotServiceURL(); url != "http://localhost:8203" {
+		t.Errorf("expected dev default localhost:8203, got %s", url)
+	}
+}
+
+func TestFallbackToInternalChatbot(t *testing.T) {
+	var receivedBody map[string]string
+	var receivedTenant string
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/webhook/wa" {
+			http.NotFound(w, r)
+			return
+		}
+		receivedTenant = r.URL.Query().Get("tenant_id")
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":true,"message":"queued"}`))
+	}))
+	defer mockServer.Close()
+
+	origChatbot := os.Getenv("UMKM_CHATBOT_URL")
+	defer os.Setenv("UMKM_CHATBOT_URL", origChatbot)
+	os.Setenv("UMKM_CHATBOT_URL", mockServer.URL)
+
+	success := fallbackToInternalChatbot("tenant-123", "628111222@s.whatsapp.net", "628111222", "Halo CS")
+	if !success {
+		t.Fatalf("expected fallbackToInternalChatbot to succeed")
+	}
+
+	if receivedTenant != "tenant-123" {
+		t.Errorf("expected tenant_id 'tenant-123', got %q", receivedTenant)
+	}
+	if receivedBody["sender"] != "628111222@s.whatsapp.net" {
+		t.Errorf("expected sender '628111222@s.whatsapp.net', got %q", receivedBody["sender"])
+	}
+	if receivedBody["message"] != "Halo CS" {
+		t.Errorf("expected message 'Halo CS', got %q", receivedBody["message"])
 	}
 }

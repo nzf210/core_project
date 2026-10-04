@@ -13,6 +13,7 @@ import (
 // Defined inline to avoid coupling chatbot -> accounting types directly.
 type chatConfigCache struct {
 	IsActive            bool     `json:"is_active"`
+	LLMProvider         string   `json:"llm_provider,omitempty"`
 	Language            string   `json:"language"`
 	Tone                string   `json:"tone"`
 	SystemPrompt        string   `json:"system_prompt"`

@@ -3,20 +3,6 @@
 -- Creates wch_n8n_db database for N8N persistence (terpisah dari platform).
 -- Idempotent: aman dijalankan berkali-kali, tidak error jika database sudah ada.
 
-DROP FUNCTION IF EXISTS create_database_if_not_exists(text, text);
-
-CREATE FUNCTION create_database_if_not_exists(db_name text, db_owner text)
-RETURNS void AS $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = db_name) THEN
-        EXECUTE format('CREATE DATABASE %I OWNER %I', db_name, db_owner);
-        RAISE NOTICE 'Database % created.', db_name;
-    ELSE
-        RAISE NOTICE 'Database % already exists, skipping.', db_name;
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
 -- Step 1: Create role (inside DO $$ so we can use IF NOT EXISTS)
 DO $$
 BEGIN
@@ -28,6 +14,7 @@ BEGIN
     END IF;
 END $$;
 
--- Step 2: Create database (via helper function, outside transaction block)
--- CREATE DATABASE cannot run inside DO $$ transaction, so use a function
-SELECT create_database_if_not_exists('wch_n8n_db', 'wch_n8n');
+-- Step 2: Create database if not exists (using \gexec outside transaction)
+SELECT 'CREATE DATABASE wch_n8n_db OWNER wch_n8n'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'wch_n8n_db')\gexec
+GRANT ALL PRIVILEGES ON DATABASE wch_n8n_db TO wch_n8n;

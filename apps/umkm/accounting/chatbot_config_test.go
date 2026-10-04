@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -286,5 +288,16 @@ func TestValidateWAConnectionForChatbot_CloudAPIActive(t *testing.T) {
 	err = validateWAConnectionForChatbot(ctx, DB, mockTenantID)
 	if err != nil {
 		t.Errorf("expected no error when cloud_api active, got: %v", err)
+	}
+}
+
+func TestHandleInternalChatbotConfig_MissingTenantID(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/internal/tenant//chatbot-config", nil)
+	rec := httptest.NewRecorder()
+
+	handleInternalChatbotConfig(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 when tenant_id is missing, got %d", rec.Code)
 	}
 }

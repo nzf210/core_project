@@ -39,10 +39,50 @@ func handleQRRequest(w http.ResponseWriter, r *http.Request, container *sqlstore
 		return
 	}
 
+	force := r.URL.Query().Get("force") == "true"
+	syncWAVersion(r.Context())
 	client := getOrCreateClient(tenantID, container)
+
 	if client.Store.ID != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"status": "connected", "message": "Already connected"})
-		return
+		if force {
+			slog.Info("handleQRRequest: force re-pair requested, clearing stored session", "tenant_id", tenantID)
+			resetClientStore(r.Context(), tenantID, client)
+			client = getOrCreateClient(tenantID, container)
+		} else if client.IsConnected() {
+			handleConnectedEvent(tenantID)
+			writeJSON(w, http.StatusOK, map[string]any{
+				"status":    "connected",
+				"message":   "Already connected",
+				"wa_number": client.Store.ID.User,
+			})
+			return
+		} else {
+			// Disconnected client with existing store - attempt reconnect first
+			slog.Info("handleQRRequest: client disconnected with existing session, attempting reconnect", "tenant_id", tenantID)
+			reconnected := false
+			if err := client.Connect(); err == nil {
+				for i := 0; i < 5; i++ {
+					time.Sleep(150 * time.Millisecond)
+					if client.IsConnected() {
+						reconnected = true
+						break
+					}
+				}
+			}
+			if reconnected {
+				handleConnectedEvent(tenantID)
+				writeJSON(w, http.StatusOK, map[string]any{
+					"status":    "connected",
+					"message":   "Reconnected successfully",
+					"wa_number": client.Store.ID.User,
+				})
+				return
+			}
+			// Stale or dead session (revoked on phone or expired) - reset store so fresh QR/code can be generated
+			slog.Warn("handleQRRequest: reconnect failed for stale session, clearing store for new pairing", "tenant_id", tenantID)
+			resetClientStore(r.Context(), tenantID, client)
+			client = getOrCreateClient(tenantID, container)
+		}
 	}
 
 	// If phone param provided, use pairing code instead of QR
@@ -52,7 +92,7 @@ func handleQRRequest(w http.ResponseWriter, r *http.Request, container *sqlstore
 	}
 
 	qrChan, _ := client.GetQRChannel(context.Background())
-	if err := client.Connect(); err != nil {
+	if err := client.Connect(); err != nil && err != whatsmeow.ErrAlreadyConnected {
 		slog.Error("Failed to connect for QR", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to connect")
 		return
@@ -61,11 +101,32 @@ func handleQRRequest(w http.ResponseWriter, r *http.Request, container *sqlstore
 	handleQRChannel(w, client, tenantID, qrChan)
 }
 
+func resetClientStore(ctx context.Context, tenantID string, client *whatsmeow.Client) {
+	if client != nil {
+		client.Disconnect()
+		if client.Store != nil && client.Store.ID != nil {
+			_ = client.Store.Delete(ctx)
+		}
+	}
+	clientMu.Lock()
+	delete(clientMap, tenantID)
+	clientMu.Unlock()
+
+	if db != nil {
+		_, _ = db.Exec(`DELETE FROM wa_tenant_sessions WHERE tenant_id = $1`, tenantID)
+		_, _ = db.Exec(`UPDATE wa_sessions SET status = 'qr_pending', updated_at = NOW() WHERE tenant_id = $1::uuid`, tenantID)
+	}
+	invalidatePlatformWAProviderCache()
+	ReleaseSessionLock(ctx, tenantID)
+}
+
 func handlePairingCode(w http.ResponseWriter, client *whatsmeow.Client, tenantID, phone string) {
-	if err := client.Connect(); err != nil {
-		slog.Error("Failed to connect for pairing", "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to connect")
-		return
+	if !client.IsConnected() {
+		if err := client.Connect(); err != nil && err != whatsmeow.ErrAlreadyConnected {
+			slog.Error("Failed to connect for pairing", "error", err)
+			writeError(w, http.StatusInternalServerError, "failed to connect")
+			return
+		}
 	}
 
 	// Normalize: ensure 62 prefix for pairing code
@@ -99,14 +160,24 @@ func extractTenantID(r *http.Request) string {
 }
 
 func handleQRChannel(w http.ResponseWriter, client *whatsmeow.Client, tenantID string, qrChan <-chan whatsmeow.QRChannelItem) {
-	for evt := range qrChan {
+	select {
+	case evt, ok := <-qrChan:
+		if !ok {
+			writeError(w, http.StatusGatewayTimeout, "Koneksi WhatsApp tertutup sebelum menerima QR code")
+			return
+		}
 		if evt.Event == "code" {
 			handleQRCode(w, client, tenantID, evt.Code)
 			go drainQRChannel(tenantID, qrChan)
 			return
 		}
+		writeError(w, http.StatusInternalServerError, "Gagal mendapatkan QR code: event "+evt.Event)
+		return
+	case <-time.After(15 * time.Second):
+		slog.Warn("handleQRChannel: timeout waiting for QR code from WhatsApp", "tenant_id", tenantID)
+		writeError(w, http.StatusGatewayTimeout, "Waktu habis menunggu QR code dari server WhatsApp. Silakan coba lagi.")
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "timeout", "message": "Failed to get QR code"})
 }
 
 func drainQRChannel(tenantID string, qrChan <-chan whatsmeow.QRChannelItem) {

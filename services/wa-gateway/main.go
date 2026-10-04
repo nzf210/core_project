@@ -18,6 +18,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	waLog "go.mau.fi/whatsmeow/util/log"
 
@@ -149,6 +150,33 @@ func shouldReconnect(tenantID string) bool {
 	return true
 }
 
+var (
+	waVersionMu       sync.Mutex
+	lastWAVersionSync time.Time
+)
+
+// syncWAVersion fetches the latest WhatsApp web client version from WhatsApp servers
+// to prevent "Client outdated (405)" connection errors when WhatsApp updates its protocol.
+func syncWAVersion(ctx context.Context) {
+	waVersionMu.Lock()
+	defer waVersionMu.Unlock()
+	if time.Since(lastWAVersionSync) < 1*time.Hour && !lastWAVersionSync.IsZero() {
+		return
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	latest, err := whatsmeow.GetLatestVersion(ctx, client)
+	if err != nil {
+		slog.Warn("Failed to fetch latest WhatsApp version from server", "error", err)
+		return
+	}
+	current := store.GetWAVersion()
+	if current.LessThan(*latest) {
+		slog.Info("Updating WhatsApp client version", "from", current.String(), "to", latest.String())
+		store.SetWAVersion(*latest)
+	}
+	lastWAVersionSync = time.Now()
+}
+
 func main() {
 	_ = godotenv.Load(".env")
 	_ = godotenv.Load("../../.env")
@@ -177,7 +205,21 @@ func main() {
 	setupDB()
 
 	setContainer(container)
+	syncWAVersion(ctx)
 	restoreSessions(ctx, container)
+
+	go func() {
+		ticker := time.NewTicker(6 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				syncWAVersion(ctx)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	originalMux := http.NewServeMux()
 	http.DefaultServeMux = originalMux

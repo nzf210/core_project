@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -228,7 +229,10 @@ var n8nHTTPClient = &http.Client{
 func forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText string) {
 	n8nURL := getN8NWebhookURL()
 	if n8nURL == "" {
-		slog.Warn("N8N webhook URL not configured")
+		slog.Warn("N8N webhook URL not configured, falling back to internal chatbot")
+		if fallbackToInternalChatbot(tenantID, senderJID, senderPhone, messageText) {
+			return
+		}
 		sendWAMessage(tenantID, senderJID, "❌ Chatbot service tidak tersedia saat ini.")
 		return
 	}
@@ -248,14 +252,20 @@ func forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText string) {
 
 	resp, err := n8nHTTPClient.Do(req)
 	if err != nil {
-		slog.Error("Failed to forward message to N8N", "error", err)
+		slog.Error("Failed to forward message to N8N, falling back to internal chatbot", "error", err)
+		if fallbackToInternalChatbot(tenantID, senderJID, senderPhone, messageText) {
+			return
+		}
 		sendWAMessage(tenantID, senderJID, "❌ Maaf, terjadi kesalahan. Silakan coba lagi.")
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		slog.Error("N8N returned error", "status", resp.StatusCode)
+		slog.Error("N8N returned error, falling back to internal chatbot", "status", resp.StatusCode)
+		if fallbackToInternalChatbot(tenantID, senderJID, senderPhone, messageText) {
+			return
+		}
 		sendWAMessage(tenantID, senderJID, "❌ Maaf, layanan sedang sibuk. Silakan coba lagi.")
 		return
 	}
@@ -272,6 +282,57 @@ func forwardToN8NChatbot(tenantID, senderJID, senderPhone, messageText string) {
 	}
 
 	slog.Info("Message forwarded to N8N chatbot", "tenant_id", tenantID, "sender", senderJID)
+}
+
+func fallbackToInternalChatbot(tenantID, senderJID, senderPhone, messageText string) bool {
+	chatbotURL := getChatbotServiceURL()
+	if chatbotURL == "" {
+		return false
+	}
+
+	payload := map[string]interface{}{
+		"sender":  senderJID,
+		"message": messageText,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return false
+	}
+
+	reqURL := chatbotURL + "/webhook/wa?tenant_id=" + url.QueryEscape(tenantID)
+	req, err := http.NewRequestWithContext(context.Background(), "POST", reqURL, bytes.NewReader(body))
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", contentTypeJSON)
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Warn("Fallback to internal chatbot failed", "error", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		slog.Info("Successfully forwarded to internal chatbot fallback", "tenant_id", tenantID, "sender", senderJID)
+		return true
+	}
+	return false
+}
+
+func getChatbotServiceURL() string {
+	if u := os.Getenv("UMKM_CHATBOT_URL"); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	if u := os.Getenv("CHATBOT_SERVICE_URL"); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	dbHost := os.Getenv("DB_HOST")
+	if os.Getenv("APP_ENV") == "production" || dbHost == "postgres" || dbHost == "pgbouncer" {
+		return "http://umkm-chatbot:8203"
+	}
+	return "http://localhost:8203"
 }
 
 func getN8NWebhookURL() string {
