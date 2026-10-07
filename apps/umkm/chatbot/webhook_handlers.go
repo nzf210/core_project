@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -49,22 +50,26 @@ func handleWAWebhook(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Received WA Webhook", "sender", sender, "message", message)
 
 	tenantID := r.URL.Query().Get("tenant_id")
-
-	// Respond immediately to avoid timeout from webhook provider
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":true,"message":"queued"}`))
-
-	// Enqueue the job for async processing via Redis
 	job := ChatJob{Sender: sender, Message: message, TenantID: tenantID}
-	jobBytes, err := json.Marshal(job)
-	if err == nil {
-		errRedis := redisClient.LPush(r.Context(), redisQueueKey, jobBytes).Err()
-		if errRedis != nil {
-			slog.Error("Failed to enqueue job to Redis", "sender", sender, "error", errRedis)
-		} else {
-			slog.Info("Job queued to Redis successfully", "sender", sender)
-		}
-	} else {
-		slog.Error("Failed to marshal chat job", "error", err)
+	if redisClient == nil {
+		http.Error(w, "Chat queue unavailable", http.StatusServiceUnavailable)
+		return
 	}
+	if err := enqueueChatJob(r.Context(), job, func(ctx context.Context, payload []byte) error {
+		return redisClient.LPush(ctx, redisQueueKey, payload).Err()
+	}); err != nil {
+		slog.Error("Failed to enqueue chat job to Redis", "sender", sender, "error", err)
+		http.Error(w, "Chat queue unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, APIResponse{Success: true, Message: "queued"})
+}
+
+func enqueueChatJob(ctx context.Context, job ChatJob, push func(context.Context, []byte) error) error {
+	jobBytes, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
+	return push(ctx, jobBytes)
 }

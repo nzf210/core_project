@@ -86,6 +86,30 @@
     },
     {
       "parameters": {
+        "url": "={{ ($env.UMKM_ACCOUNTING_URL || $env.ACCOUNTING_URL || 'http://umkm-accounting:8201').replace(/\\/+$/, '') }}/internal/conversation/history?tenant_id={{ encodeURIComponent($('Prompt Builder').first().json.tenant_id) }}&customer_id={{ encodeURIComponent($('Prompt Builder').first().json.customer_id) }}&limit={{ $('Prompt Builder').first().json.config.max_context_messages || 10 }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "history-001",
+      "name": "Load Conversation History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1540, 460],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const promptData = $('Prompt Builder').first()?.json || {};\nconst historyResponse = $input.first()?.json || {};\nconst history = Array.isArray(historyResponse.data) ? historyResponse.data : [];\nconst maxMessages = Math.max(1, Number(promptData.config?.max_context_messages) || 10);\nconst recentHistory = history.slice(-maxMessages);\nconst historyText = recentHistory.length\n  ? '\\n\\n=== RIWAYAT PERCAKAPAN ===\\n' + recentHistory.map((message) => `${message.role}: ${message.content}`).join('\\n')\n  : '';\n\nreturn [{\n  json: {\n    ...promptData,\n    system_prompt: (promptData.system_prompt || '') + historyText,\n    conversation_history: recentHistory\n  }\n}];"
+      },
+      "id": "history-context-001",
+      "name": "Apply Conversation History",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 460]
+    },
+    {
+      "parameters": {
         "url": "={{ ($env.AI_GATEWAY_URL || 'http://ai-gateway:8002').replace(/\\/+$/, '').replace(/\\/v1\\/chat$/, '') }}/v1/chat",
         "method": "POST",
         "sendBody": true,
@@ -172,6 +196,43 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [2420, 200],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const escalation = $('Escalation Check').first()?.json || {};\nconst prompt = $('Prompt Builder').first()?.json || {};\nconst history = $('Apply Conversation History').first()?.json?.conversation_history || [];\nconst maxMessages = Math.max(1, Number(prompt.config?.max_context_messages) || 10);\nconst transcript = history.slice(-maxMessages);\ntranscript.push({ role: 'user', content: prompt.user_message || '' });\ntranscript.push({ role: 'assistant', content: escalation.response || '' });\nconst conversationContext = transcript\n  .map((message) => `${message.role}: ${message.content}`)\n  .join('\\n');\n\nreturn [{ json: { ...escalation, conversation_context: conversationContext } }];"
+      },
+      "id": "escalation-context-001",
+      "name": "Build Escalation Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 80]
+    },
+    {
+      "parameters": {
+        "url": "={{ ($env.CHATWOOT_URL || 'http://chatwoot:3000').replace(/\\/+$/, '') }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID || 1 }}/conversations/{{ $json.id }}/messages",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_KEY || '' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": {{ JSON.stringify($('Build Escalation Context').first().json.conversation_context) }},\n  \"message_type\": \"incoming\",\n  \"private\": true\n}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "context-note-001",
+      "name": "Attach Private Conversation Context",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2640, 80],
       "onError": "continueRegularOutput"
     },
     {
@@ -270,6 +331,28 @@
       "main": [
         [
           {
+            "node": "Load Conversation History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Conversation History": {
+      "main": [
+        [
+          {
+            "node": "Apply Conversation History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Conversation History": {
+      "main": [
+        [
+          {
             "node": "LLM Call",
             "type": "main",
             "index": 0
@@ -314,7 +397,7 @@
       "main": [
         [
           {
-            "node": "Create Chatwoot Ticket",
+            "node": "Build Escalation Context",
             "type": "main",
             "index": 0
           }
@@ -328,7 +411,29 @@
         ]
       ]
     },
+    "Build Escalation Context": {
+      "main": [
+        [
+          {
+            "node": "Create Chatwoot Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Create Chatwoot Ticket": {
+      "main": [
+        [
+          {
+            "node": "Attach Private Conversation Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Private Conversation Context": {
       "main": [
         [
           {

@@ -70,7 +70,7 @@ type ChatbotConfig struct {
 	RAGSimilarityThreshold        float64  `json:"rag_similarity_threshold"`
 	ChannelsEnabled               []string `json:"channels_enabled"`
 	IsActive                      bool     `json:"is_active"`
-	WAProviderPreference           string   `json:"wa_provider_preference"`
+	WAProviderPreference          string   `json:"wa_provider_preference"`
 }
 
 var AIGatewayURL = "http://localhost:8002/v1/chat"
@@ -165,6 +165,7 @@ func main() {
 	mux.HandleFunc("/internal/tenant/{tenant_id}/chatbot-config", handleInternalChatbotConfig)
 	mux.HandleFunc("/internal/tenant/{tenant_id}/rag/search", handleInternalRAGSearch)
 	mux.HandleFunc("/internal/conversation/log", handleInternalConversationLog)
+	mux.HandleFunc("/internal/conversation/history", handleInternalConversationHistory)
 	mux.HandleFunc("/internal/escalation/log", handleInternalEscalationLog)
 	mux.HandleFunc("/internal/tenant/{tenant_id}/faqs", handleInternalFAQs)
 	mux.HandleFunc("/internal/tenant/{tenant_id}/products", handleInternalProducts)
@@ -240,4 +241,3 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
 }
-

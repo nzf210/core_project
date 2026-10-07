@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"core_project/shared/sdk/response"
+
 	xendit "github.com/xendit/xendit-go/v6"
 	invoice "github.com/xendit/xendit-go/v6/invoice"
-	"core_project/shared/sdk/response"
 )
 
 type CheckoutItem struct {
@@ -65,25 +66,18 @@ func handleCheckout(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCheckoutPostRequest(w http.ResponseWriter, ctx context.Context, tenantID, paymentMethod string, items []CheckoutItem, customerPhone string) {
-	var xenditApiKey, staticQRIS *string
-	err := DB.QueryRow(ctx, "SELECT xendit_api_key, static_qris_payload FROM tenants WHERE id = $1", tenantID).Scan(&xenditApiKey, &staticQRIS)
+	tenantConfig, err := loadTenantCheckoutConfig(ctx, tenantID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Message: "Failed to read tenant config"})
 		return
 	}
 
-	hasStaticQRIS := staticQRIS != nil && strings.TrimSpace(*staticQRIS) != ""
-	hasXendit := xenditApiKey != nil && strings.TrimSpace(*xenditApiKey) != ""
-
-	if paymentMethod == "qris" && !hasStaticQRIS && !hasXendit {
+	if paymentMethod == "qris" && !tenantConfig.hasQRISProvider() {
 		writeJSON(w, http.StatusBadRequest, APIResponse{Message: "Tenant belum setup QRIS. Silakan masukkan QRIS Statik Toko atau API Key Xendit di menu Pengaturan."})
 		return
 	}
 
-	var totalAmount int64
-	for _, item := range items {
-		totalAmount += item.Price * int64(item.Quantity)
-	}
+	totalAmount := sumCheckoutAmount(items)
 	realTotalAmount := totalAmount * 100
 
 	if !validateCheckoutStock(w, ctx, tenantID, items) {
@@ -118,27 +112,8 @@ func handleCheckoutPostRequest(w http.ResponseWriter, ctx context.Context, tenan
 	}
 
 	if paymentMethod == "qris" {
-		// Priority 1: Merchant Static QRIS converted to Dynamic QRIS (0% fee, instant direct to merchant bank/e-wallet)
-		if hasStaticQRIS {
-			dynamicPayload := generateDynamicQRIS(*staticQRIS, float64(totalAmount))
-			writeJSON(w, http.StatusOK, map[string]any{
-				"success":        true,
-				"message":        "Dynamic QRIS berhasil dibuat",
-				"status":         "pending",
-				"type":           "dynamic_qris",
-				"reference":      reference,
-				"qris_content":   dynamicPayload,
-				"total_amount":   totalAmount,
-				"customer_phone": customerPhone,
-			})
-			return
-		}
-
-		// Priority 2: Xendit Payment Gateway
-		if hasXendit {
-			handleCheckoutXendit(w, ctx, *xenditApiKey, reference, realTotalAmount)
-			return
-		}
+		handleCheckoutQRIS(w, ctx, tenantConfig, reference, totalAmount, realTotalAmount, customerPhone)
+		return
 	}
 
 	handleCheckoutCash(w, ctx, cashCheckoutParams{
@@ -151,6 +126,61 @@ func handleCheckoutPostRequest(w http.ResponseWriter, ctx context.Context, tenan
 		items:           items,
 		customerPhone:   customerPhone,
 	})
+}
+
+type tenantCheckoutConfig struct {
+	staticQRIS   *string
+	xenditAPIKey *string
+}
+
+func loadTenantCheckoutConfig(ctx context.Context, tenantID string) (tenantCheckoutConfig, error) {
+	var cfg tenantCheckoutConfig
+	err := DB.QueryRow(ctx, "SELECT xendit_api_key, static_qris_payload FROM tenants WHERE id = $1", tenantID).Scan(&cfg.xenditAPIKey, &cfg.staticQRIS)
+	if err != nil {
+		return tenantCheckoutConfig{}, err
+	}
+	return cfg, nil
+}
+
+func (cfg tenantCheckoutConfig) hasStaticQRIS() bool {
+	return cfg.staticQRIS != nil && strings.TrimSpace(*cfg.staticQRIS) != ""
+}
+
+func (cfg tenantCheckoutConfig) hasXendit() bool {
+	return cfg.xenditAPIKey != nil && strings.TrimSpace(*cfg.xenditAPIKey) != ""
+}
+
+func (cfg tenantCheckoutConfig) hasQRISProvider() bool {
+	return cfg.hasStaticQRIS() || cfg.hasXendit()
+}
+
+func sumCheckoutAmount(items []CheckoutItem) int64 {
+	var total int64
+	for _, item := range items {
+		total += item.Price * int64(item.Quantity)
+	}
+	return total
+}
+
+func handleCheckoutQRIS(w http.ResponseWriter, ctx context.Context, cfg tenantCheckoutConfig, reference string, totalAmount, realTotalAmount int64, customerPhone string) {
+	if cfg.hasStaticQRIS() {
+		dynamicPayload := generateDynamicQRIS(*cfg.staticQRIS, float64(totalAmount))
+		writeJSON(w, http.StatusOK, map[string]any{
+			"success":        true,
+			"message":        "Dynamic QRIS berhasil dibuat",
+			"status":         "pending",
+			"type":           "dynamic_qris",
+			"reference":      reference,
+			"qris_content":   dynamicPayload,
+			"total_amount":   totalAmount,
+			"customer_phone": customerPhone,
+		})
+		return
+	}
+
+	if cfg.hasXendit() {
+		handleCheckoutXendit(w, ctx, *cfg.xenditAPIKey, reference, realTotalAmount)
+	}
 }
 
 func validateCheckoutStock(w http.ResponseWriter, ctx context.Context, tenantID string, items []CheckoutItem) bool {
@@ -368,11 +398,9 @@ func sendCustomerReceiptWANotification(tenantID, phone, reference string, totalA
 			sName, dateStr, ref, method, itemLines, formatRupiah(int64(amount)), sName)
 
 		target := strings.TrimSpace(targetPhone)
-		if strings.HasPrefix(target, "+") {
-			target = target[1:]
-		}
+		target = strings.TrimPrefix(target, "+")
 		if strings.HasPrefix(target, "0") {
-			target = "62" + target[1:]
+			target = "62" + strings.TrimPrefix(target, "0")
 		}
 		if !strings.Contains(target, "@") {
 			target = target + "@s.whatsapp.net"

@@ -1,0 +1,27 @@
+{
+  "planHash": "3c585d3b6d2ce36b7aee588ab81f4d55b91a23a50e03c8fb8a9098e356e62889",
+  "phase": "postupgrade",
+  "recordedAtUtc": "2026-10-06T15:13:32.5890736Z",
+  "retryCount": 0,
+  "resetBaseline": false,
+  "complete": true,
+  "result": {
+    "setupSucceeded": false,
+    "setupDurationMs": 3481,
+    "setupFailureOutput": "setup step 0 \u0027npm\u0027 failed (exit=1, timedOut=False)\nnpm error code EUSAGE\nnpm error\nnpm error \u0060npm ci\u0060 can only install packages when your package.json and package-lock.json are in sync. Please update your lock file with \u0060npm install\u0060 before continuing.\nnpm error\nnpm error Missing: @emnapi/core@1.11.3 from lock file\nnpm error Missing: @emnapi/runtime@1.11.3 from lock file\nnpm error Missing: @emnapi/wasi-threads@1.2.3 from lock file\nnpm error\nnpm error Clean install a project\nnpm error\nnpm error Usage:\nnpm error npm ci\nnpm error\nnpm error Options:\nnpm error [--install-strategy \u003Choisted|nested|shallow|linked\u003E] [--legacy-bundling]\nnpm error [--global-style] [--omit \u003Cdev|optional|peer\u003E [--omit \u003Cdev|optional|peer\u003E ...]]\nnpm error [--include \u003Cprod|dev|optional|peer\u003E [--include \u003Cprod|dev|optional|peer\u003E ...]]\nnpm error [--strict-peer-deps] [--foreground-scripts] [--ignore-scripts]\nnpm error [--allow-directory \u003Call|none|root\u003E] [--allow-file \u003Call|none|root\u003E]\nnpm error [--allow-git \u003Call|none|root\u003E] [--allow-remote \u003Call|none|root\u003E]\nnpm error [--allow-scripts \u003Cpackage-list\u003E [--allow-scripts \u003Cpackage-list\u003E ...]]\nnpm error [--strict-allow-scripts] [--dangerously-allow-all-scripts] [--no-audit]\nnpm error [--no-bin-links] [--no-fund] [--dry-run]\nnpm error [-w|--workspace \u003Cworkspace-name\u003E [-w|--workspace \u003Cworkspace-name\u003E ...]]\nnpm error [--workspaces] [--include-workspace-root] [--install-links]\nnpm error\nnpm error   --install-strategy\nnpm error     Sets the strategy for installing packages in node_modules.\nnpm error\nnpm error   --legacy-bundling\nnpm error     Instead of hoisting package installs in \u0060node_modules\u0060, install packages\nnpm error\nnpm error   --global-style\nnpm error     Only install direct dependencies in the top level \u0060node_modules\u0060,\nnpm error\nnpm error   --omit\nnpm error     Dependency types to omit from the installation tree on disk.\nnpm error\nnpm error   --include\nnpm error     Option that allows for defining which types of dependencies to install.\nnpm error\nnpm error   --strict-peer-deps\nnpm error     If set to \u0060true\u0060, and \u0060--legacy-peer-deps\u0060 is not set, then _any_\nnpm error\nnpm error   --foreground-scripts\nnpm error     Run all build scripts (ie, \u0060preinstall\u0060, \u0060install\u0060, and\nnpm error\nnpm error   --ignore-scripts\nnpm error     If true, npm does not run scripts specified in package.json files.\nnpm error\nnpm error   --allow-directory\nnpm error     Limits the ability for npm to install dependencies from directories.\nnpm error\nnpm error   --allow-file\nnpm error     Limits the ability for npm to install dependencies from tarball files.\nnpm error\nnpm error   --allow-git\nnpm error     Limits the ability for npm to fetch dependencies from git references.\nnpm error\nnpm error   --allow-remote\nnpm error     Limits the ability for npm to fetch dependencies from urls.\nnpm error\nnpm error   --allow-scripts\nnpm error     Comma-separated list of packages whose install-time lifecycle scripts\nnpm error\nnpm error   --strict-allow-scripts\nnpm error     If \u0060true\u0060, turn the install-script policy from a warning into a hard\nnpm error\nnpm error   --dangerously-allow-all-scripts\nnpm error     If \u0060true\u0060, bypass the \u0060allowScripts\u0060 policy entirely and run every\nnpm error\nnpm error   --audit\nnpm error     When \u0022true\u0022 submit audit reports alongside the current npm command to the\nnpm error\nnpm error   --bin-links\nnpm error     Tells npm to create symlinks (or \u0060.cmd\u0060 shims on Windows) for package\nnpm error\nnpm error   --fund\nnpm error     When \u0022true\u0022 displays the message at the end of each \u0060npm install\u0060\nnpm error\nnpm error   --dry-run\nnpm error     Indicates that you don\u0027t want npm to make any changes and that it should\nnpm error\nnpm error   -w|--workspace\nnpm error     Enable running a command in the context of the configured workspaces of the\nnpm error\nnpm error   --workspaces\nnpm error     Set to true to run the command in the context of **all** configured\nnpm error\nnpm error   --include-workspace-root\nnpm error     Include the workspace root when workspaces are enabled for a command.\nnpm error\nnpm error   --install-links\nnpm error     When set file: protocol dependencies will be packed and installed\n\u2026[truncated]",
+    "assertions": [],
+    "executions": [
+      {
+        "source": "setup[0]",
+        "resolvedExecutable": "/home/syahril/.nvm/versions/node/v22.23.2/bin/npm",
+        "args": [
+          "ci"
+        ],
+        "cwd": "/home/syahril/dev/core_project/frontend/umkm-web",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      }
+    ]
+  }
+}

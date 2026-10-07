@@ -16,6 +16,7 @@ Detailed specifications untuk feature kompleks di WCH Platform. File-file di dir
 | F058 | Superadmin Impersonate + Grafana | [F058_superadmin_impersonate_grafana_monitoring.md](F058_superadmin_impersonate_grafana_monitoring.md) |
 | F064 | Platform WA Provider Detection | [F064_platform_wa_provider_detection_otp_routing.md](F064_platform_wa_provider_detection_otp_routing.md) |
 | F065 | Landing Page CMS | [F065_landing_page_content_management_superadmin_json_ed.md](F065_landing_page_content_management_superadmin_json_ed.md) |
+| F075 | UMKM Cash Flow Forecast & Early Warning *(In Review)* | [F075_cash_flow_forecast_early_warning.md](F075_cash_flow_forecast_early_warning.md) |
 
 ## 📝 Spec Format
 

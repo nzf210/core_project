@@ -141,6 +141,7 @@ Format per feature:
 | F072 | Modular Business Workflow — Restaurant KOT & Table Management | ✅ Approved | ✅ Done | 2026-10-04 |
 | F073 | Modular Business Workflow — Bengkel & Servis SPK Tracking | ✅ Approved | ✅ Done | 2026-10-04 |
 | F074 | Dynamic Business Type Chatbot Skills & Context Enrichment | ✅ Approved | ✅ Done | 2026-10-04 |
+| F075 | UMKM Cash Flow Forecast & Early Warning | 🔍 In Review | ⏸ Not Started | 2026-10-08 |
 
 ---
 
@@ -1977,8 +1978,10 @@ GET /v1/models
 - `services/ai-gateway/main.go` — embeddings endpoint
 - `n8n/workflows/rag_indexer.json` — index workflow
 - `n8n/workflows/universal_chatbot.json` — chatbot workflow
+- `apps/umkm/accounting/conversation_history_handlers.go` — tenant/customer-scoped recent conversation history retrieval
 
 **Notes:** Embeddings via OpenAI/Anthropic melalui ai-gateway.
+**2026-10-07:** Workflow now loads the latest bounded history for the active tenant/customer session before the LLM call.
 
 ---
 
@@ -2004,8 +2007,10 @@ GET /v1/models
 **Files:**
 - `n8n/workflows/escalation_handler.json` — escalation workflow
 - `shared/migrations/000029_n8n_queue_mode.up.sql` — escalation_history table
+- `infra/n8n/workflows/universal_chatbot.json` — attach a private recent conversation transcript to Chatwoot escalation
 
 **Notes:** Chatwoot running di port 3000 (docker-compose).
+**2026-10-07:** Escalated tickets include recent conversation context plus the triggering customer message and AI reply.
 
 ---
 
@@ -3451,6 +3456,44 @@ CanUseFeature(ctx, tenantID, "feature_key")
 
 ---
 
+## F075: UMKM Cash Flow Forecast & Early Warning
+
+**Spec Status:** 🔍 In Review
+**Implementation:** ⏸ Not Started — implementation is blocked until this SPEC is explicitly approved
+**Last Updated:** 2026-10-08
+**Detailed Spec:** [F075 Cash Flow Forecast & Early Warning](specs/F075_cash_flow_forecast_early_warning.md)
+
+**Deskripsi:** Menampilkan estimasi saldo kas harian selama 30 hari ke depan, berdasarkan tren linear dan pola musiman mingguan dari histori arus kas tenant. Memberi peringatan dalam aplikasi ketika saldo kas terproyeksi mencapai nol atau negatif.
+
+**Scope draft:**
+- Membaca arus kas akun kas/bank yang sama dengan laporan kas yang ada, terisolasi per tenant.
+- Memakai hingga 90 hari kalender histori; model memerlukan sekurangnya 56 hari data.
+- Menggunakan regresi linear dengan faktor musiman hari-dalam-minggu; tanpa koreksi hari libur.
+- Menampilkan status data belum cukup bila histori kurang dari 56 hari.
+- Hanya menampilkan peringatan risiko di UI; tidak mengirim notifikasi eksternal atau membuat transaksi otomatis.
+- Tidak menggunakan LLM dan tidak menyimpan data forecast secara persisten.
+
+**Acceptance Criteria (draft):**
+- [ ] AC-1: Endpoint forecast mengembalikan saldo kas saat ini dan 30 titik saldo proyeksi harian untuk tenant terautentikasi.
+- [ ] AC-2: Perhitungan memakai net cash harian dari akun 100/101 (`debit - credit`), mengisi hari tanpa transaksi dengan nol, serta memisahkan tren linear dan efek weekday.
+- [ ] AC-3: Histori kurang dari 56 hari menghasilkan status insufficient-data tanpa menyajikan proyeksi sebagai prediksi yang valid.
+- [ ] AC-4: Peringatan ditampilkan jika saldo penutupan pada salah satu dari 30 hari proyeksi mencapai nol atau negatif.
+- [ ] AC-5: Hasil tidak mencampur transaksi antar-tenant dan direkonsiliasi dengan saldo kas pada laporan akuntansi.
+- [ ] AC-6: Unit tests mencakup tren, faktor weekday, saldo negatif, histori kurang, hari tanpa transaksi, dan isolasi tenant.
+- [ ] AC-7: UI menyatakan tanggal cut-off, periode data, metode estimasi, dan disclaimer bahwa transaksi masa depan yang belum dicatat tidak diketahui.
+
+**Files yang direncanakan berubah setelah SPEC disetujui:**
+- `apps/umkm/accounting/cash_flow_forecast_handlers.go` — endpoint tenant-scoped dan query histori berbatas.
+- `apps/umkm/accounting/cash_flow_forecast.go` — kalkulasi forecast murni dan hasil/status typed.
+- `apps/umkm/accounting/cash_flow_forecast_test.go` — pengujian kalkulasi dan validasi perilaku.
+- `apps/umkm/accounting/main.go` — registrasi route saja.
+- `frontend/umkm-web/src/api.ts` — client dan tipe response forecast.
+- `frontend/umkm-web/src/components/Reports.vue` — tampilan proyeksi dan early warning.
+
+**Catatan:** Ini adalah draft proposal, bukan persetujuan untuk implementasi. Rincian model dan acceptance criteria menunggu review/persetujuan user.
+
+---
+
 ## F070: Smart Dynamic QRIS (0% Fee) & Struk Digital WhatsApp POS
 
 **Spec Status:** ✅ Approved  
@@ -3772,6 +3815,4 @@ Menjawab kebutuhan chatbot AI WhatsApp agar memiliki spesialisasi dan "keterampi
 - `frontend/umkm-web/src/components/LaundryTracking.vue`
 - `frontend/umkm-web/src/components/LaundryOrderModal.vue`
 - `frontend/umkm-web/src/api.ts`
-
-
 

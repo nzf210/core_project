@@ -1,0 +1,116 @@
+{
+  "planHash": "e397ef04c4f3e8ad62f7c5d551ca40747a0f101f1547a060a4b45d8f957f98a1",
+  "phase": "postupgrade",
+  "recordedAtUtc": "2026-10-06T14:50:04.8562905Z",
+  "retryCount": 1,
+  "resetBaseline": false,
+  "complete": true,
+  "result": {
+    "setupSucceeded": true,
+    "setupDurationMs": 3025,
+    "setupFailureOutput": null,
+    "assertions": [
+      {
+        "name": "production-build",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "npm notice run superadmin-web@0.1.0 build\nnpm notice run vue-tsc -b \u0026\u0026 vite build\nvite v8.3.3 building client environment for production...\ntransforming...\n\u2713 75 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                   0.47 kB \u2502 gzip:   0.31 kB\ndist/assets/index-CfIgdmZr.css   44.28 kB \u2502 gzip:   7.02 kB\ndist/assets/index-CZ2_Bxow.js   350.78 kB \u2502 gzip: 120.19 kB\n\n\u2713 built in 384ms\n",
+        "durationMs": 3287
+      },
+      {
+        "name": "tests-pass",
+        "kind": "process",
+        "verificationMethod": "test-results",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "npm notice run superadmin-web@0.1.0 test\nnpm notice run vitest --run\n\n\u001B[1m\u001B[30m\u001B[46m RUN \u001B[49m\u001B[39m\u001B[22m \u001B[36mv5.0.3 \u001B[39m\u001B[90m/home/syahril/dev/core_project/frontend/superadmin-web\u001B[39m\n\n \u001B[32m\u2713\u001B[39m src/__tests__/superadmin.spec.ts \u001B[2m(\u001B[22m\u001B[2m17 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 19\u001B[2mms\u001B[22m\u001B[39m\n\n\u001B[2m Test Files \u001B[22m \u001B[1m\u001B[32m1 passed\u001B[39m\u001B[22m\u001B[90m (1)\u001B[39m\n\u001B[2m      Tests \u001B[22m \u001B[1m\u001B[32m17 passed\u001B[39m\u001B[22m\u001B[90m (17)\u001B[39m\n\u001B[2m   Start at \u001B[22m 23:50:03\n\u001B[2m   Duration \u001B[22m 631ms\u001B[2m (environment 90%, transform 4%, tests 3%, import 2%, worker 1%)\u001B[22m\n\n",
+        "durationMs": 1097,
+        "testResults": {
+          "testFramework": "vitest",
+          "runnerDetectedFrom": "package_json",
+          "testsTotal": 17,
+          "testsPassed": 17,
+          "testsFailed": 0,
+          "testsSkipped": 0,
+          "parseFailed": false
+        }
+      },
+      {
+        "name": "dev-server-serves-home",
+        "kind": "http-probe",
+        "verificationMethod": "http-status",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": null,
+        "outputSample": "HTTP 200\n\u003C!DOCTYPE html\u003E\n\u003Chtml lang=\u0022id\u0022\u003E\n  \u003Chead\u003E\n    \u003Cscript type=\u0022module\u0022 src=\u0022/@vite/client\u0022\u003E\u003C/script\u003E\n\n    \u003Cmeta charset=\u0022UTF-8\u0022 /\u003E\n    \u003Clink rel=\u0022icon\u0022 type=\u0022image/svg\u002Bxml\u0022 href=\u0022/vite.svg\u0022 /\u003E\n    \u003Cmeta name=\u0022viewport\u0022 content=\u0022width=device-width, initial-scale=1.0\u0022 /\u003E\n    \u003Ctitle\u003EWCH Superadmin Dashboard\u003C/title\u003E\n  \u003C/head\u003E\n  \u003Cbody\u003E\n    \u003Cdiv id=\u0022app\u0022\u003E\u003C/div\u003E\n    \u003Cscript type=\u0022module\u0022 src=\u0022/src/main.ts\u0022\u003E\u003C/script\u003E\n  \u003C/body\u003E\n\u003C/html\u003E\n\n--- server output ---\nnpm notice run superadmin-web@0.1.0 dev\nnpm notice run vite --host 127.0.0.1 --port 3401 --strictPort\n\n  VITE v8.3.3  ready in 211 ms\n\n  \u279C  Local:   http://127.0.0.1:3401/\n",
+        "durationMs": 519
+      }
+    ],
+    "executions": [
+      {
+        "source": "setup[0]",
+        "resolvedExecutable": "/home/syahril/.nvm/versions/node/v22.23.2/bin/npm",
+        "args": [
+          "ci"
+        ],
+        "cwd": "/home/syahril/dev/core_project/frontend/superadmin-web",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      },
+      {
+        "source": "production-build",
+        "resolvedExecutable": "/home/syahril/.nvm/versions/node/v22.23.2/bin/npm",
+        "args": [
+          "run",
+          "build"
+        ],
+        "cwd": "/home/syahril/dev/core_project/frontend/superadmin-web",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      },
+      {
+        "source": "tests-pass",
+        "resolvedExecutable": "/home/syahril/.nvm/versions/node/v22.23.2/bin/npm",
+        "args": [
+          "test",
+          "--",
+          "--run"
+        ],
+        "cwd": "/home/syahril/dev/core_project/frontend/superadmin-web",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      },
+      {
+        "source": "dev-server-serves-home",
+        "resolvedExecutable": "/home/syahril/.nvm/versions/node/v22.23.2/bin/npm",
+        "args": [
+          "run",
+          "dev",
+          "--",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "3401",
+          "--strictPort"
+        ],
+        "cwd": "/home/syahril/dev/core_project/frontend/superadmin-web",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      }
+    ]
+  }
+}
